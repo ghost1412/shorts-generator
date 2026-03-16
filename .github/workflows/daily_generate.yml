@@ -2,8 +2,25 @@ name: Daily Short Generator
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Every 2 hours (12 videos/day) - The viral sweet spot!
+    - cron: '0 */6 * * *' # Every 6 hours (4 videos/day) - Conservative to avoid YouTube limits!
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Generation Mode (FACTS or STORY)'
+        required: false
+        default: 'AUTO'
+      category:
+        description: 'Specific Category'
+        required: false
+        default: 'random'
+      custom_script:
+        description: 'Manual Script Content'
+        required: false
+        default: ''
+      vibe:
+        description: 'Music Vibe (suspense, spooky, cinematic, upbeat)'
+        required: false
+        default: 'suspense'
 
 jobs:
   generate-and-post:
@@ -39,14 +56,41 @@ jobs:
       run: |
         echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
 
-    - name: Run Video Generator (Alternating Mode)
+    - name: Run Video Generator (SaaS Bridge)
       run: |
-        # Use run_number to alternate (Odd = FACTS, Even = STORY)
-        RUN_COUNT=${{ github.run_number }}
-        if [ $((RUN_COUNT % 2)) -eq 0 ]; then
-          MODE="STORY"
+        # Decide Mode
+        INPUT_MODE="${{ github.event.inputs.mode }}"
+        if [ "$INPUT_MODE" = "FACTS" ] || [ "$INPUT_MODE" = "STORY" ]; then
+          MODE="$INPUT_MODE"
         else
-          MODE="FACTS"
+          # Fallback to alternating logic
+          RUN_COUNT=${{ github.run_number }}
+          if [ $((RUN_COUNT % 2)) -eq 0 ]; then MODE="STORY"; else MODE="FACTS"; fi
         fi
-        echo "🎬 Running in $MODE mode..."
-        python main.py --mode $MODE
+        
+        # Decide Category
+        INPUT_CAT="${{ github.event.inputs.category }}"
+        if [ "$INPUT_CAT" != "" ] && [ "$INPUT_CAT" != "random" ]; then
+          ARG_CAT="--category $INPUT_CAT"
+        else
+          ARG_CAT=""
+        fi
+
+        # Decide Script
+        INPUT_SCRIPT="${{ github.event.inputs.custom_script }}"
+        if [ "$INPUT_SCRIPT" != "" ]; then
+          ARG_SCRIPT="--script '$INPUT_SCRIPT'"
+        else
+          ARG_SCRIPT=""
+        fi
+
+        # Decide Vibe
+        INPUT_VIBE="${{ github.event.inputs.vibe }}"
+        if [ "$INPUT_VIBE" != "" ]; then
+          ARG_VIBE="--vibe $INPUT_VIBE"
+        else
+          ARG_VIBE=""
+        fi
+        
+        echo "🎬 Generating $MODE Video..."
+        python main.py --mode $MODE $ARG_CAT $ARG_SCRIPT $ARG_VIBE

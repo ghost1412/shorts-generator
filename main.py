@@ -9,30 +9,50 @@ from engine.video_gen import create_shorts_video
 def main():
     parser = argparse.ArgumentParser(description="Generate either FACTS or STORY shorts.")
     parser.add_argument("--mode", choices=["FACTS", "STORY"], help="Force a specific mode.")
+    parser.add_argument("--category", help="Specify content category.")
+    parser.add_argument("--script", help="Provide a manual script to skip generation.")
+    parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
     args = parser.parse_args()
 
     print("🚀 Starting Shorts Generator...")
     
-    # 1. Choose Mode: FACTS or STORY (Manual override or random)
-    mode = args.mode if args.mode else random.choice(["FACTS", "STORY"])
-    print(f"🎯 Mode selected: {mode}")
-    
-    category = random.choice(["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks"])
-    print(f"📝 Generating content for category: {category}...")
-    
-    if mode == "FACTS":
-        facts_data = generate_mixed_facts(category)
-        # Construct the script with strategic pauses
-        script_parts = ["SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it? ... ..."]
-        for i, f in enumerate(facts_data):
-            script_parts.append(f"Fact {i+1}: {f['fact']} ...")
-        script_parts.append("... CAN YOU FIND IT? 👇 Comment your guess!")
-        full_script = " ".join(script_parts)
-    else:
-        story_data = generate_story(category)
-        full_script = f"{story_data['title']}! ... {story_data['story']} ... Like and Subscribe for more true stories!"
+    # 0. Manual Script Override
+    if args.script:
+        print("📝 Manual script detected. Skipping generation...")
+        full_script = args.script
+        mode = "STORY" # Default to story-style branding for manual scripts
+        category = "general"
+        story_data = {"title": "Manual Upload", "story": full_script}
         facts_data = [] # Not used in story mode but kept for metadata function compatibility
-        print(f"📖 Story: {story_data['story']}")
+    else:
+        # 1. Choose Mode: FACTS or STORY (Manual override or random)
+        mode = args.mode if args.mode else random.choice(["FACTS", "STORY"])
+        print(f"🎯 Mode selected: {mode}")
+        
+        # 2. Choose Category
+        categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks"]
+        category = args.category if args.category and args.category in categories else random.choice(categories)
+        print(f"📝 Generating content for category: {category}...")
+        
+        if mode == "FACTS":
+            facts_data = generate_mixed_facts(category)
+            # Construct the script with strategic pauses
+            full_script = f"SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it? ... ... "
+            full_script += f"Fact 1: {facts_data[0]['fact']} ... "
+            full_script += f"Fact 2: {facts_data[1]['fact']} ... "
+            full_script += f"Fact 3: {facts_data[2]['fact']} ... ... "
+            full_script += "CAN YOU FIND IT? 👇 Comment below! ... ... "
+            # Reveal part (to be handled by video gen reveal window)
+            truth_idx = [i+1 for i, f in enumerate(facts_data) if f['truth']]
+            full_script += f"The answer is Fact {truth_idx[0]} and {truth_idx[1]} were true! You just got smarter!"
+        else:
+            story_data = generate_story(category)
+            if not story_data: return
+            
+            # Construct script with strategic viral pauses
+            full_script = f"{story_data['title']}! ... {story_data['story']} ... Like and Subscribe for more true stories!"
+            facts_data = [] # Not used in story mode but kept for metadata function compatibility
+            print(f"📖 Story: {story_data['story']}")
 
     print(f"✅ Full Script: \"{full_script}\"")
     
@@ -69,9 +89,18 @@ def main():
         return
 
     # 4. Compose Video
-    print("🎞️ Composing final interactive video with background music...")
+    print(f"🎞️ Composing final interactive video with {args.vibe} mood...")
     output_filename = f"interactive_short_{random.randint(100,999)}.mp4"
-    bg_music = "music/bg_music.mp3" if os.path.exists("music/bg_music.mp3") else None
+    
+    # Dynamic Music Selection based on Vibe
+    vibe_music_map = {
+        "suspense": "music/bg_music.mp3",
+        "spooky": "music/spooky.mp3",
+        "cinematic": "music/cinematic.mp3",
+        "upbeat": "music/upbeat.mp3"
+    }
+    music_file = vibe_music_map.get(args.vibe, "music/bg_music.mp3")
+    bg_music = music_file if os.path.exists(music_file) else "music/bg_music.mp3"
     
     final_video = create_shorts_video(
         audio_path, 
