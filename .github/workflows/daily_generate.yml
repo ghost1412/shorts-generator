@@ -1,0 +1,40 @@
+name: Daily Short Generator
+
+on:
+  schedule:
+    - cron: '0 12 * * *' # Runs at 12:00 UTC every day
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  generate-and-post:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install FFmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Setup Environment Variables
+      run: |
+        echo "HF_API_KEY=${{ secrets.HF_API_KEY }}" >> .env
+        echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
+
+    - name: Setup Google Client Secrets
+      run: |
+        echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
+
+    - name: Run Short Generator
+      run: python main.py

@@ -20,9 +20,12 @@ def generate_mixed_facts(category="science"):
     
     model = "meta-llama/Llama-3.2-1B-Instruct" 
     
-    prompt = f"""Generate three short, shocking facts about {category}. 
-Exactly two must be true and one must be a believable lie.
-Format as JSON ONLY. No other text. Use variety - don't repeat common facts.
+    prompt = f"""SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it?
+Generate three short, shocking facts about {category}. Exactly two must be true and one must be a believable lie.
+If the category is '{category}' and it relates to anime/media, focus on specific plot points or "lore" (e.g., character actions or twists).
+If the category relates to health or biology, focus on surprising scientific facts.
+If the category relates to cooking, focus on kitchen secrets or food science.
+Format as JSON ONLY. No other text. 
 Example format:
 [
   {{"fact": "...", "truth": true}},
@@ -54,7 +57,7 @@ Example format:
     except Exception as e:
         print(f"💡 API unavailable or failed ({e}). Using expanded facts pool for variety.")
         
-    # MASSIVE FALLBACK POOL (60+ facts)
+    # MASSIVE FALLBACK POOL (80+ facts)
     import random
     pool = {
         "science": [
@@ -77,7 +80,7 @@ Example format:
             {"fact": "Sunflowers follow the sun across the sky all day.", "truth": False},
             {"fact": "Lightning never strikes the same place twice.", "truth": False},
             {"fact": "Cracking your knuckles gives you arthritis.", "truth": False},
-            {"fact": "Mount Everest is the closest point on Earth to space.", "truth": False} # It's Mt Chimborazo
+            {"fact": "Mount Everest is the closest point on Earth to space.", "truth": False} 
         ],
         "space": [
             {"fact": "One day on Venus is longer than one year on Earth.", "truth": True},
@@ -95,8 +98,8 @@ Example format:
             {"fact": "The Sun is yellow in color.", "truth": False},
             {"fact": "Black holes are literal holes in space.", "truth": False},
             {"fact": "A 'light year' measures time.", "truth": False},
-            {"fact": "The North Star is the brightest star in the night sky.", "truth": False}, # It's Sirius
-            {"fact": "Astronauts get taller in space because there is zero gravity.", "truth": False}, # Microgravity
+            {"fact": "The North Star is the brightest star in the night sky.", "truth": False}, 
+            {"fact": "Astronauts get taller in space because there is zero gravity.", "truth": False}, 
             {"fact": "The Moon has a 'dark side' that never sees the sun.", "truth": False},
             {"fact": "Sound travels faster in space than on Earth.", "truth": False}
         ],
@@ -117,7 +120,7 @@ Example format:
             {"fact": "Dogs only see in black and white.", "truth": False},
             {"fact": "Chameleons change color to blend into their surroundings.", "truth": False},
             {"fact": "Bats are blind.", "truth": False},
-            {"fact": "An elephant is the only animal that can't jump.", "truth": False}, # Sloths, hippos etc
+            {"fact": "An elephant is the only animal that can't jump.", "truth": False}, 
             {"fact": "Touching a toad will give you warts.", "truth": False},
             {"fact": "Sharks can't get cancer.", "truth": False}
         ],
@@ -133,29 +136,41 @@ Example format:
             {"fact": "Christopher Columbus discovered America.", "truth": False},
             {"fact": "The Titanic was advertised as 'unsinkable'.", "truth": False}
         ],
-        "anime": [
-            {"fact": "One Piece has over 1,000 episodes and is still ongoing.", "truth": True},
-            {"fact": "Spirited Away was the first non-English animated film to win an Oscar.", "truth": True},
-            {"fact": "Dragon Ball's Goku was inspired by the Monkey King from Journey to the West.", "truth": True},
-            {"fact": "Attack on Titan's creator says the Titans were inspired by a drunk customer at a cafe.", "truth": True},
-            {"fact": "The name 'Naruto' refers to a type of Japanese fishcake.", "truth": True},
-            {"fact": "Death Note was banned in some schools in China for allegedly influencing kids.", "truth": True},
-            {"fact": "Astro Boy was the first anime to be broadcast overseas.", "truth": True},
-            {"fact": "Pokémon started as a localized Japanese TV show before becoming a game.", "truth": False},
-            {"fact": "Super Saiyan hair is yellow because it was cheaper to animate in color.", "truth": False},
-            {"fact": "Luffy's signature straw hat was originally owned by his father.", "truth": False}
+        "anime_lore": [
+            {"fact": "Luffy defeated Crocodile in Alabasta by using blood to harden sand.", "truth": True},
+            {"fact": "Zoro's sword, Shusui, was once considered a national treasure of Wano.", "truth": True},
+            {"fact": "Itachi Uchiha killed his entire clan to prevent a civil war in the Hidden Leaf Village.", "truth": True},
+            {"fact": "Goku's signature move, the Kamehameha, was invented by Master Roshi.", "truth": True},
+            {"fact": "In Naruto, the Fourth Hokage was actually Naruto's father.", "truth": True},
+            {"fact": "Luffy saved Crocodile in Alabasta to help him defeat the Marines.", "truth": False},
+            {"fact": "Sasuke was the first person in the village to acknowledge Naruto's existence.", "truth": False},
+            {"fact": "Light Yagami originally wanted to be a detective to find the real Kira.", "truth": False},
+            {"fact": "Vegeta was the first character to reach Super Saiyan 3 in Dragon Ball Z.", "truth": False},
+            {"fact": "One Piece is named after the 'One Piece' of advice Gold Roger gave to Luffy.", "truth": False}
         ],
-        "superheroes": [
-            {"fact": "Batman was originally supposed to have a bright red suit with wings.", "truth": True},
-            {"fact": "The Hulk was originally gray, but printing issues made him green.", "truth": True},
-            {"fact": "Black Widow is over 70 years old due to a version of the Super Soldier Serum.", "truth": True},
-            {"fact": "Wonder Woman's creator also helped invent the polygraph lie detector.", "truth": True},
-            {"fact": "Spider-Man was almost rejected because the editor thought people hated spiders.", "truth": True},
-            {"fact": "Thor's hammer, Mjolnir, was forged in the heart of a dying star.", "truth": True},
-            {"fact": "Captain America was not an original member of the Avengers.", "truth": True},
-            {"fact": "Superman was originally a villain who wanted to take over the world.", "truth": True},
-            {"fact": "Iron Man's armor is made of solid gold to prevent rusting.", "truth": False},
-            {"fact": "The Flash is the only superhero who can travel faster than the speed of light.", "truth": False}
+        "intimacy_facts": [
+            {"fact": "The human brain releases oxytocin during physical touch, often called the 'cuddle hormone'.", "truth": True},
+            {"fact": "Kissing can burn up to 6.4 calories per minute.", "truth": True},
+            {"fact": "Studies show that holding hands can significantly reduce stress and physical pain.", "truth": True},
+            {"fact": "The smell of a partner can lower cortisol levels and induce relaxation.", "truth": True},
+            {"fact": "Physical intimacy has been linked to a stronger immune system due to increased antibodies.", "truth": True},
+            {"fact": "Humans are the only animals that have sex for pleasure rather than just procreation.", "truth": False},
+            {"fact": "The average human spends one continuous month of their life kissing.", "truth": False},
+            {"fact": "You can catch a cold just by thinking about someone who has one during a date.", "truth": False},
+            {"fact": "The heart physically changes shape into a heart symbol when you fall in love.", "truth": False},
+            {"fact": "Men and women have the exact same physiological response to romantic movies.", "truth": False}
+        ],
+        "cooking_hacks": [
+            {"fact": "Adding a pinch of salt to coffee can reduce its bitterness.", "truth": True},
+            {"fact": "Storing potatoes with apples can prevent the potatoes from sprouting.", "truth": True},
+            {"fact": "You can use a glass of water in the microwave to keep pizza crust from getting soggy.", "truth": True},
+            {"fact": "Putting an onion in the freezer for 15 minutes before cutting can stop the crying effect.", "truth": True},
+            {"fact": "Mushrooms are made of 90% water, which is why they shrink so much when cooked.", "truth": True},
+            {"fact": "Adding olive oil to boiling water prevents pasta from sticking together.", "truth": False},
+            {"fact": "White chocolate is technically chocolate because it contains cocoa solids.", "truth": False},
+            {"fact": "Putting a wooden spoon over a boiling pot of water will always stop it from overflowing.", "truth": False},
+            {"fact": "Sealing the tail of a banana with plastic wrap will keep it fresh for an extra month.", "truth": False},
+            {"fact": "Adding baking soda to onions makes them caramelize slower.", "truth": False}
         ]
     }
     

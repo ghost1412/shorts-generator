@@ -9,16 +9,16 @@ def main():
     print("🚀 Starting 2 Truths & 1 Lie Generator...")
     
     # 1. Generate Interactive Content
-    category = random.choice(["science", "space", "animals", "history", "anime", "superheroes"])
+    category = random.choice(["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks"])
     print(f"📝 Generating facts for category: {category}...")
     facts_data = generate_mixed_facts(category)
     
     # Construct the script
-    script_parts = ["Here are three shocking facts. But be careful... one of them is a total lie!"]
+    script_parts = ["SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it?"]
     for i, f in enumerate(facts_data):
         script_parts.append(f"Fact {i+1}: {f['fact']}")
     
-    script_parts.append("Which one is the lie? Comment your guess below!")
+    script_parts.append("CAN YOU FIND IT? 👇 Comment your guess!")
     
     full_script = " ".join(script_parts)
     print(f"✅ Script: \"{full_script}\"")
@@ -31,13 +31,22 @@ def main():
         print("❌ Voice generation failed.")
         return
         
-    # 3. Source Media
-    print("🎬 Searching for relevant background video...")
-    bg_filename = f"assets/bg_{random.randint(1000,9999)}.mp4"
-    bg_video_path = download_background_video(facts_data[0]['fact'], output_path=bg_filename)
+    # 3. Source Media (Dynamic Backgrounds)
+    print("🎬 Searching for relevant background videos for each fact...")
+    bg_video_paths = []
     
-    if not bg_video_path:
-        print("❌ Failed to download background video.")
+    # Download 3 different clips for variety
+    for i, fact in enumerate(facts_data):
+        bg_filename = f"assets/bg_fact_{i+1}_{random.randint(1000,9999)}.mp4"
+        path = download_background_video(fact['fact'], output_path=bg_filename)
+        if path:
+            bg_video_paths.append(path)
+        else:
+            # Fallback to a general one if specific download fails
+            bg_video_paths.append(download_background_video("nature", output_path=f"assets/bg_fallback_{i}.mp4"))
+
+    if not any(bg_video_paths):
+        print("❌ Failed to download any background videos.")
         return
 
     # 4. Compose Video
@@ -48,7 +57,7 @@ def main():
     final_video = create_shorts_video(
         audio_path, 
         subs_path, 
-        bg_video_path, 
+        bg_video_paths, # Now a list
         output_filename,
         music_path=bg_music
     )
