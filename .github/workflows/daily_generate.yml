@@ -2,8 +2,8 @@ name: Daily Short Generator
 
 on:
   schedule:
-    - cron: '*/30 * * * *' # Runs every 30 minutes
-  workflow_dispatch: # Allow manual trigger
+    - cron: '0 */2 * * *' # Every 2 hours (12 videos/day) - The viral sweet spot!
+  workflow_dispatch:
 
 jobs:
   generate-and-post:
