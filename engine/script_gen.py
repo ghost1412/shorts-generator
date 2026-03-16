@@ -52,7 +52,20 @@ Example format:
         start = output.find("[")
         end = output.rfind("]") + 1
         facts = json.loads(output[start:end])
-        if len(facts) >= 3: return facts
+        
+        # VALIDATION: Ensure exactly 2 True and 1 False
+        trues = [f for f in facts if f.get("truth") == True]
+        falses = [f for f in facts if f.get("truth") == False]
+        
+        if len(trues) == 2 and len(falses) == 1:
+            for f in facts:
+                # Remove common AI prefixes like "Fact 1: ", "1. ", "Fact: " etc.
+                f["fact"] = f["fact"].split(": ", 1)[-1] if ": " in f["fact"] else f["fact"]
+                if f["fact"].startswith(("1. ", "2. ", "3. ")):
+                    f["fact"] = f["fact"][3:]
+            return facts[:3]
+        else:
+            print(f"⚠️ LLM generated wrong counts ({len(trues)}T, {len(falses)}F). Reverting to fallback pool.")
         
     except Exception as e:
         print(f"💡 API unavailable or failed ({e}). Using expanded facts pool for variety.")

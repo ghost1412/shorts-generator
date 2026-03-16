@@ -156,3 +156,64 @@ class YouTubeUploader:
 
         print(f"✅ Upload successful! Video ID: {response.get('id')}")
         return response.get("id")
+
+class InstagramUploader:
+    """
+    Handles uploads to Instagram Business using the Graph API.
+    Requires: FACEBOOK_PAGE_ID and INSTAGRAM_ACCESS_TOKEN
+    """
+    def __init__(self):
+        self.page_id = os.getenv("FACEBOOK_PAGE_ID")
+        self.access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+        self.base_url = "https://graph.facebook.com/v19.0"
+
+    def upload_reel(self, video_file_path, caption):
+        """
+        Instagram requires the video to be publicly hosted.
+        We use file.io as a temporary host for the Instagram API to pull from.
+        """
+        if not self.page_id or not self.access_token:
+            print("💡 Instagram credentials missing. Skipping IG upload.")
+            return None
+
+        print(f"📸 Preparing Instagram Reel (Temporary Hosting)...")
+        
+        try:
+            # Step 0: Upload to temporary host
+            with open(video_file_path, "rb") as f:
+                host_res = requests.post("https://file.io", files={"file": f})
+                host_res.raise_for_status()
+                video_url = host_res.json().get("link")
+            
+            print(f"✅ Temporary URL generated: {video_url}")
+
+            # Step 1: Create Media Container
+            container_url = f"{self.base_url}/{self.page_id}/media"
+            payload = {
+                "media_type": "REELS",
+                "video_url": video_url,
+                "caption": caption,
+                "access_token": self.access_token
+            }
+            
+            res = requests.post(container_url, data=payload)
+            res.raise_for_status()
+            container_id = res.json().get("id")
+            
+            print(f"✅ Container created: {container_id}. Publishing (can take 30-60s)...")
+            
+            # Step 2: Publish
+            publish_url = f"{self.base_url}/{self.page_id}/media_publish"
+            publish_payload = {
+                "creation_id": container_id,
+                "access_token": self.access_token
+            }
+            pub_res = requests.post(publish_url, data=publish_payload)
+            pub_res.raise_for_status()
+            
+            print("🚀 Successfully published to Instagram!")
+            return pub_res.json()
+            
+        except Exception as e:
+            print(f"❌ Instagram Error: {e}")
+            return None
