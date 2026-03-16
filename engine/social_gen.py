@@ -2,12 +2,13 @@ import os
 import requests
 import json
 from dotenv import load_dotenv
-
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import pickle
 
 load_dotenv()
 HF_API_KEY = os.getenv("HF_API_KEY")
@@ -70,23 +71,54 @@ Format as JSON ONLY:
     }
 
 class YouTubeUploader:
-    def __init__(self, secrets_file="client_secrets.json"):
+    def __init__(self, secrets_file="client_secrets.json", token_file="token.json"):
         self.secrets_file = secrets_file
+        self.token_file = token_file
         self.scopes = ["https://www.googleapis.com/auth/youtube.upload"]
         self.youtube = None
 
     def authenticate(self):
-        if not os.path.exists(self.secrets_file):
-            print(f"❌ Error: {self.secrets_file} not found. YouTube upload will be skipped.")
-            return False
+        creds = None
+        # token.json stores the user's access and refresh tokens
+        if os.path.exists(self.token_file):
+            try:
+                from google.oauth2.credentials import Credentials
+                creds = Credentials.from_authorized_user_file(self.token_file, self.scopes)
+            except Exception as e:
+                print(f"💡 Could not load existing token: {e}")
+
+        # If there are no (valid) credentials available, let the user log in.
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                except Exception as e:
+                    print(f"💡 Token refresh failed: {e}")
+                    creds = None
             
+            if not creds:
+                if not os.path.exists(self.secrets_file):
+                    print(f"❌ Error: {self.secrets_file} not found and no valid token available.")
+                    return False
+                
+                try:
+                    flow = InstalledAppFlow.from_client_secrets_file(self.secrets_file, self.scopes)
+                    # This will attempt to open a browser
+                    creds = flow.run_local_server(port=0)
+                except Exception as e:
+                    print(f"❌ Auth failed (Browser might be missing): {e}")
+                    print("💡 Tip: If running on GitHub, make sure to provide GOOGLE_YOUTUBE_TOKEN secret.")
+                    return False
+
+            # Save the credentials for the next run
+            with open(self.token_file, 'w') as token:
+                token.write(creds.to_json())
+
         try:
-            flow = InstalledAppFlow.from_client_secrets_file(self.secrets_file, self.scopes)
-            credentials = flow.run_local_server(port=0)
-            self.youtube = build("youtube", "v3", credentials=credentials)
+            self.youtube = build("youtube", "v3", credentials=creds)
             return True
         except Exception as e:
-            print(f"❌ Auth failed: {e}")
+            print(f"❌ YouTube API build failed: {e}")
             return False
 
     def upload_video(self, file_path, title, description, tags, category_id="27", privacy="private"):
