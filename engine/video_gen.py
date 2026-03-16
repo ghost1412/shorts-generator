@@ -67,7 +67,7 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
 
     return np.array(img)
 
-def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None):
+def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, is_story=False):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
@@ -121,26 +121,33 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     # viral_color = (255, 230, 0) # Bright Yellow
     
-    # 1. TOP HEADER: SPOT THE LIE!
-    header_img = create_text_image("SPOT THE LIE! 🔍", font_size=90, color="yellow", y_pos=150)
-    top_header = ImageClip(header_img).with_start(0).with_duration(duration)
-    persistent_clips.append(top_header)
-    
-    # 2. BOTTOM FOOTER: 👇 COMMENT YOUR GUESS
-    footer_img = create_text_image("👇 COMMENT YOUR GUESS", font_size=70, color="white", y_pos=1700)
-    bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
-    persistent_clips.append(bottom_footer)
+    if not is_story:
+        # 1. TOP HEADER: SPOT THE LIE!
+        header_img = create_text_image("SPOT THE LIE! 🔍", font_size=90, color="yellow", y_pos=150)
+        top_header = ImageClip(header_img).with_start(0).with_duration(duration)
+        persistent_clips.append(top_header)
+        
+        # 2. BOTTOM FOOTER: 👇 COMMENT YOUR GUESS
+        footer_img = create_text_image("👇 COMMENT YOUR GUESS", font_size=70, color="white", y_pos=1700)
+        bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
+        persistent_clips.append(bottom_footer)
+    else:
+        # STORY MODE HEADER
+        header_img = create_text_image("UNBELIEVABLE BUT TRUE 🤯", font_size=80, color="orange", y_pos=150)
+        top_header = ImageClip(header_img).with_start(0).with_duration(duration)
+        persistent_clips.append(top_header)
 
     if subtitles:
-        # 1. Fact Indicators (e.g., FACT 1/3)
+        # 1. Fact Indicators (e.g., FACT 1/3) - Only for FACT Mode
         fact_header_times = []
-        for j, entry in enumerate(subtitles):
-            word = entry["word"].upper()
-            if "FACT" in word and j + 1 < len(subtitles):
-                next_word = subtitles[j+1]["word"].strip(":,.")
-                if "1" == next_word: fact_header_times.append((entry["start"], "FACT 1/3"))
-                elif "2" == next_word: fact_header_times.append((entry["start"], "FACT 2/3"))
-                elif "3" == next_word: fact_header_times.append((entry["start"], "FACT 3/3"))
+        if not is_story:
+            for j, entry in enumerate(subtitles):
+                word = entry["word"].upper()
+                if "FACT" in word and j + 1 < len(subtitles):
+                    next_word = subtitles[j+1]["word"].strip(":,.")
+                    if "1" == next_word: fact_header_times.append((entry["start"], "FACT 1/3"))
+                    elif "2" == next_word: fact_header_times.append((entry["start"], "FACT 2/3"))
+                    elif "3" == next_word: fact_header_times.append((entry["start"], "FACT 3/3"))
 
         for start, txt in fact_header_times:
             next_header_start = fact_header_times[fact_header_times.index((start, txt)) + 1][0] if fact_header_times.index((start, txt)) + 1 < len(fact_header_times) else duration
@@ -181,10 +188,16 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 current_sentence = []
                 sentence_start = None
 
-        # 3. FINAL REVEAL OVERLAY (Flash "REVEALING..." at the very end)
-        reveal_img = create_text_image("REVEALING IN COMMENTS... 🤫", font_size=80, color="orange", y_pos=900)
-        reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
-        word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
+        # 3. FINAL REVEAL OVERLAY (Only for FACTS)
+        if not is_story:
+            reveal_img = create_text_image("REVEALING IN COMMENTS... 🤫", font_size=80, color="orange", y_pos=900)
+            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
+            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
+        else:
+            # Story Mode Outro
+            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=90, color="yellow", y_pos=900)
+            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
+            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
 
     # Final Composition
     final_video = CompositeVideoClip([bg_clip, dark_overlay, bg_bar, progress_bar] + persistent_clips + header_clips + word_clips)

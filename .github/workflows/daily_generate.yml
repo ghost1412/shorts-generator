@@ -2,7 +2,7 @@ name: Daily Short Generator
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # Every 2 hours (12 videos/day) - The viral sweet spot!
+    - cron: '0 */6 * * *' # Every 2 hours (12 videos/day) - The viral sweet spot!
   workflow_dispatch:
 
 jobs:
@@ -39,5 +39,14 @@ jobs:
       run: |
         echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
 
-    - name: Run Short Generator
-      run: python main.py
+    - name: Run Video Generator (Alternating Mode)
+      run: |
+        # Use run_number to alternate (Odd = FACTS, Even = STORY)
+        RUN_COUNT=${{ github.run_number }}
+        if [ $((RUN_COUNT % 2)) -eq 0 ]; then
+          MODE="STORY"
+        else
+          MODE="FACTS"
+        fi
+        echo "🎬 Running in $MODE mode..."
+        python main.py --mode $MODE
