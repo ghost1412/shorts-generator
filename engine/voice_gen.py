@@ -1,80 +1,80 @@
-import subprocess
 import json
 import os
-import re
-
-def parse_vtt(vtt_content):
-    """
-    Parses a VTT file content into a list of word-level timings.
-    Handles both . and , as decimal separators.
-    """
-    subs = []
-    # Standard VTT blocks are separated by double newlines or single newlines with indices
-    # We'll use a more robust regex for the timestamp line
-    timestamp_pattern = re.compile(r'(\d{2}:\d{2}:\d{2}[\.,]\d{3}) --> (\d{2}:\d{2}:\d{2}[\.,]\d{3})')
-    
-    lines = vtt_content.strip().split('\n')
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        match = timestamp_pattern.search(line)
-        if match:
-            start_str = match.group(1).replace(',', '.')
-            end_str = match.group(2).replace(',', '.')
-            
-            def to_sec(s):
-                h, m, s = s.split(':')
-                return int(h)*3600 + int(m)*60 + float(s)
-            
-            start = to_sec(start_str)
-            end = to_sec(end_str)
-            
-            # The next line should be the text
-            if i + 1 < len(lines):
-                word = lines[i+1].strip()
-                if word:
-                    subs.append({
-                        "word": word,
-                        "start": start,
-                        "duration": max(0.1, end - start)
-                    })
-                i += 1
-        i += 1
-    return subs
+import asyncio
+import edge_tts
 
 def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json"):
     """
-    Generates voice and subtitles using edge-tts CLI for maximum reliability.
+    Generates voice and precise word-level subtitles using edge-tts Python API.
     """
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
-    vtt_path = output_audio.replace(".mp3", ".vtt")
     
-    # Use CLI to generate both media and subtitles
-    # --words-per-minute or specifically for word-level timing
-    voice = "en-US-AndrewNeural"
-    try:
-        subprocess.run([
-            "edge-tts", 
-            "--text", text, 
-            "--voice", voice, 
-            "--write-media", output_audio, 
-            "--write-subtitles", vtt_path
-        ], check=True, capture_output=True)
+    async def amain():
+        voice = "en-US-AriaNeural"
+        communicate = edge_tts.Communicate(text, voice)
+        subtitles = []
         
-        if os.path.exists(vtt_path):
-            with open(vtt_path, "r", encoding="utf-8") as f:
-                vtt_content = f.read()
+        with open(output_audio, "wb") as f:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    f.write(chunk["data"])
+                elif chunk["type"] in ["WordBoundary", "word_boundary"]:
+                    subtitles.append({
+                        "word": chunk["text"],
+                        "start": chunk["offset"] / 10_000_000,
+                        "duration": max(0.05, chunk["duration"] / 10_000_000)
+                    })
+                elif chunk["type"] in ["SentenceBoundary", "sentence_boundary"]:
+                    if not subtitles or subtitles[-1]["word"] != chunk["text"]:
+                        # If we aren't getting word boundaries, we can use these
+                        # We'll actually handle this post-stream if word boundaries are missing
+                        pass
+
+        # VERY ROBUST FALLBACK: If we have NO word boundaries, we must split the text manually
+        # and estimate timings based on the audio duration.
+        if not subtitles:
+            print("⚠️ No word boundaries found. Estimating word timings from text.")
+            audio_duration = 0
+            try:
+                from moviepy import AudioFileClip
+                ac = AudioFileClip(output_audio)
+                audio_duration = ac.duration
+                ac.close()
+            except Exception as e:
+                print(f"⚠️ MoviePy failed to get duration: {e}. Using char-count estimation.")
+                audio_duration = len(text) * 0.08 # very rough estimate
             
-            subtitles = parse_vtt(vtt_content)
+            words = text.split()
+            avg_word_dur = audio_duration / max(1, len(words))
+            for i, word in enumerate(words):
+                subtitles.append({
+                    "word": word,
+                    "start": i * avg_word_dur,
+                    "duration": max(0.1, avg_word_dur)
+                })
+
+        with open(output_subs, "w") as f:
+            json.dump(subtitles, f, indent=2)
             
-            with open(output_subs, "w") as f:
-                json.dump(subtitles, f, indent=2)
-                
-            return output_audio, output_subs
+        return output_audio, output_subs
+
+    try:
+        # Modern way to run async code in sync context
+        return asyncio.run(amain())
+    except RuntimeError:
+        # Fallback if an event loop is already running (e.g., in some REPLs or frameworks)
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        import nest_asyncio
+        nest_asyncio.apply()
+        return loop.run_until_complete(amain())
     except Exception as e:
         print(f"Error in generate_voice: {e}")
-        
-    return None, None
+        return None, None
 
 if __name__ == "__main__":
     text = "Did you know? Octopuses have three hearts and blue blood."
