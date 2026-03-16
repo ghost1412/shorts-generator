@@ -31,6 +31,7 @@ jobs:
       run: |
         echo "HF_API_KEY=${{ secrets.HF_API_KEY }}" >> .env
         echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
+        echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
 
     - name: Setup Google Client Secrets
       run: |
