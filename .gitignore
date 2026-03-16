@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Project Assets (Generated dynamically)
+assets/bg_*.mp4
+assets/voice.mp3
+assets/subs.json
+*.mp4
+*.mp4.txt
+
+# Secrets
+client_secrets.json
+token.json
+
+# IDE
+.vscode/
+.idea/
