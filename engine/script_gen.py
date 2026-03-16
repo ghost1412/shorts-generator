@@ -205,6 +205,64 @@ Example format:
     
     return selected[:3]
 
+def generate_story(category="history"):
+    """
+    Generates a single, shocking true story about the category.
+    Returns: {"story": str, "title": str}
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    model = "meta-llama/Llama-3.2-1B-Instruct"
+    
+    prompt = f"""Generate a short, shocking, and 100% TRUE story about {category}. 
+Requirements:
+1. Start with a massive hook.
+2. Tell the story in a fast-paced, engaging way.
+3. End with a shocking realization or fact.
+4. Keep it under 100 words.
+5. Format as JSON ONLY:
+{{
+  "title": "A short viral title",
+  "story": "The full story text..."
+}}
+"""
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 500,
+        "temperature": 0.8
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        output = response.json()["choices"][0]["message"]["content"]
+        
+        # Robust JSON extraction
+        start = output.find("{")
+        end = output.rfind("}") + 1
+        json_str = output[start:end].strip()
+        
+        # Handle common LLM trailing comma error
+        if json_str.endswith(",}"):
+            json_str = json_str.replace(",}", "}")
+            
+        return json.loads(json_str)
+    except Exception as e:
+        print(f"💡 Story API failed ({e}). Using fallback story.")
+
+    stories = {
+        "science": {"title": "The Particle Accelerator Incident", "story": "In 1978, Soviet scientist Anatoli Bugorski put his head inside a particle accelerator. A proton beam traveling at the speed of light shot through his skull! He felt no pain, but saw a flash 'brighter than a thousand suns.' Miraculously, he survived, though the left half of his face remains perfectly young today—it never aged because the nerves were frozen by the radiation!"},
+        "history": {"title": "The Great Emu War", "story": "In 1932, Australia declared war on emus! After the birds destroyed crops, the military was sent in with machine guns. But the emus were too nimble, splitting into small groups and vanishing. After thousands of rounds of ammunition, only a few hundred birds were killed. The military eventually retreated, making the emus the only animals to ever win a war against humans!"},
+        "space": {"title": "The Silent Voyager", "story": "Voyager 1 is the farthest man-made object from Earth, currently 15 billion miles away in interstellar space. It carries a 'Golden Record' with sounds of Earth, meant for aliens. If found, it would be the only surviving evidence that humans ever existed, as it is projected to outlast the Earth itself, floating through the silent void for billions of years!"}
+    }
+    return stories.get(category.lower(), stories["history"])
+
 if __name__ == "__main__":
     facts = generate_mixed_facts("science")
     for i, f in enumerate(facts):
