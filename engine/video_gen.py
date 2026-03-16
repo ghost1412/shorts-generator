@@ -72,7 +72,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
     audio_clip = AudioFileClip(audio_path)
-    duration = audio_clip.duration + 0.3
+    # Extension for "Suspense Reveal" - add 2.5 seconds of silence/music at the end
+    duration = audio_clip.duration + 2.5 
     
     # 1. Multi-Background Stitching
     if isinstance(video_paths, str): video_paths = [video_paths]
@@ -179,6 +180,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 word_clips.append(c_clip)
                 current_sentence = []
                 sentence_start = None
+
+        # 3. FINAL REVEAL OVERLAY (Flash "REVEALING..." at the very end)
+        reveal_img = create_text_image("REVEALING IN COMMENTS... 🤫", font_size=80, color="orange", y_pos=900)
+        reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
+        word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
 
     # Final Composition
     final_video = CompositeVideoClip([bg_clip, dark_overlay, bg_bar, progress_bar] + persistent_clips + header_clips + word_clips)
