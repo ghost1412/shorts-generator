@@ -2,7 +2,7 @@ name: Daily Short Generator
 
 on:
   schedule:
-    - cron: '0 12 * * *' # Runs at 12:00 UTC every day
+    - cron: '*/30 * * * *' # Runs every 30 minutes
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -31,6 +31,8 @@ jobs:
       run: |
         echo "HF_API_KEY=${{ secrets.HF_API_KEY }}" >> .env
         echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
+        echo "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" >> .env
+        echo "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" >> .env
         echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
 
     - name: Setup Google Client Secrets

@@ -13,12 +13,12 @@ def main():
     print(f"📝 Generating facts for category: {category}...")
     facts_data = generate_mixed_facts(category)
     
-    # Construct the script
-    script_parts = ["SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it?"]
+    # Construct the script with strategic pauses
+    script_parts = ["SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it? ... ..."]
     for i, f in enumerate(facts_data):
-        script_parts.append(f"Fact {i+1}: {f['fact']}")
+        script_parts.append(f"Fact {i+1}: {f['fact']} ...")
     
-    script_parts.append("CAN YOU FIND IT? 👇 Comment your guess!")
+    script_parts.append("... CAN YOU FIND IT? 👇 Comment your guess!")
     
     full_script = " ".join(script_parts)
     print(f"✅ Script: \"{full_script}\"")
@@ -66,7 +66,7 @@ def main():
     
     # 5. Social Media Automation
     print("📱 Generating viral metadata...")
-    from engine.social_gen import generate_viral_metadata, YouTubeUploader
+    from engine.social_gen import generate_viral_metadata, YouTubeUploader, InstagramUploader
     
     metadata = generate_viral_metadata(facts_data, category)
     print(f"🔥 Viral Title: {metadata['title']}")
@@ -81,7 +81,11 @@ def main():
             metadata['tags']
         )
     else:
-        print("💡 Automation ready. Metadata saved. Skipping upload as secrets not found.")
+        print("💡 YouTube Auth skipped.")
+
+    print("📸 Checking Instagram...")
+    ig_uploader = InstagramUploader()
+    ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
         with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
             f.write(f"Title: {metadata['title']}\n")
             f.write(f"Description: {metadata['description']}\n")
