@@ -1,0 +1,10 @@
+requests
+python-dotenv
+moviepy
+Pillow
+numpy
+edge-tts
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+nest_asyncio
