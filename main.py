@@ -86,10 +86,11 @@ def main():
     print("📸 Checking Instagram...")
     ig_uploader = InstagramUploader()
     ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
-        with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
-            f.write(f"Title: {metadata['title']}\n")
-            f.write(f"Description: {metadata['description']}\n")
-            f.write(f"Tags: {', '.join(metadata['tags'])}\n")
+    
+    with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
+        f.write(f"Title: {metadata['title']}\n")
+        f.write(f"Description: {metadata['description']}\n")
+        f.write(f"Tags: {', '.join(metadata['tags'])}\n")
 
 if __name__ == "__main__":
     main()
