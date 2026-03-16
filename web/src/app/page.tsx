@@ -15,7 +15,11 @@ import {
   TrendingUp,
   Clock,
   Lock,
-  ArrowRight
+  ArrowRight,
+  PlayCircle,
+  Download,
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
 
 export default function Dashboard() {
