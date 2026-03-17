@@ -12,6 +12,8 @@ assets/subs.json
 *.png
 *.mp4
 *.mp4.txt
+*.json
+*.mp3
 
 # Secrets
 client_secrets.json
