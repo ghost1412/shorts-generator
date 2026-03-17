@@ -15,15 +15,21 @@ Welcome to **ShortsFlow**, the lean SaaS for generating viral YouTube Shorts aut
 ## 🛠️ How to Run
 
 ### 1. The Python Engine (Backend)
-To generate a video locally:
+To generate a video manually:
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the generator
 python main.py --mode FACTS --category history
 ```
-*Note: Requires FFmpeg installed on your system.*
+
+### 2. The Dedicated Render Server (Optional)
+If you don't want to use GitHub Actions, run this to start an HTTP listener for the website:
+```bash
+# Install server dependencies
+pip install flask python-dotenv
+
+# Start the server
+python server.py
+```
+*The server will listen on port 5000 by default.*
 
 ### 2. The Web Dashboard (Frontend)
 To launch the SaaS interface:
@@ -54,6 +60,24 @@ Rename `.env` and `web/.env.local` and add your keys:
 - `PEXELS_API_KEY`: Pexels (Background Videos).
 - `STRIPE_SECRET_KEY`: Stripe (Payments).
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase (Auth).
+
+---
+
+## 🔑 Authentication
+ShortsFlow uses **Supabase Auth** for secure user management:
+- **Service**: Supabase (Free Tier).
+- **Login Methods**: Supports Email/Password and Social Login (Google/GitHub).
+- **Security**: Next.js Middleware protects dashboard routes, and Supabase RLS (Row Level Security) ensures users can only see their own videos.
+
+## ⚙️ Backend Architecture
+We use a **Dual-Server** approach:
+1.  **API Server (Next.js)**: 
+    - Handles logins, database queries, and Stripe payments.
+    - Path: `web/`
+2.  **Rendering Worker (Python/FFmpeg)**:
+    - Handles the heavy processing of video generation.
+    - Default: Runs for free on **GitHub Actions**.
+    - Optional: Can be run on your own dedicated VPS (via the `RENDER_TARGET=server` setting).
 
 ---
 *Developed by Antigravity*
