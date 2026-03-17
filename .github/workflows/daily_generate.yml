@@ -2,7 +2,7 @@ name: Daily Short Generator
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Every 6 hours (4 videos/day) - Conservative to avoid YouTube limits!
+  0 */2 * * *' # Every 2 hours (12 videos/day) - The viral sweet spot!
   workflow_dispatch:
     inputs:
       mode:
