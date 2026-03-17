@@ -76,7 +76,7 @@ export async function POST(request: Request) {
             inputs: {
               mode,
               category,
-              script: customScript,
+              custom_script: customScript,
               vibe,
               video_id: videoId,
               user_id: user.id

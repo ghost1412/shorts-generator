@@ -91,10 +91,10 @@ export default function Dashboard() {
 
         <nav className="flex-1 space-y-2">
           <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active />
-          <NavItem icon={<Youtube size={20} />} label="Channels" />
-          <NavItem icon={<BarChart3 size={20} />} label="Analytics" />
-          <NavItem icon={<Settings size={20} />} label="Agent Settings" />
-          <div onClick={() => logout()} className="flex items-center space-x-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 text-zinc-500 hover:text-red-400 hover:bg-red-500/5">
+          <NavItem icon={<Youtube size={20} />} label="Channels (Soon)" inactive />
+          <NavItem icon={<BarChart3 size={20} />} label="Analytics (Soon)" inactive />
+          <NavItem icon={<Settings size={20} />} label="Settings (Soon)" inactive />
+          <div onClick={() => logout()} className="flex items-center space-x-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 text-zinc-500 hover:text-red-400 hover:bg-red-500/5 mt-auto">
             <LogOut size={20} />
             <span className="text-sm">Log Out</span>
           </div>
@@ -128,9 +128,24 @@ export default function Dashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <StatCard icon={<TrendingUp className="text-emerald-400" />} label="Total Views" value="124.8k" growth="+12%" />
-          <StatCard icon={<CheckCircle2 className="text-blue-400" />} label="Videos Posted" value="48" growth="4 / day" />
-          <StatCard icon={<Clock className="text-purple-400" />} label="Avg. Retention" value="88%" growth="+5.2%" />
+          <StatCard 
+            icon={<TrendingUp className="text-emerald-400" />} 
+            label="Total Views" 
+            value={videoLogs.reduce((acc, log) => acc + (log.views || 0), 0).toLocaleString()} 
+            growth="+0% this week" 
+          />
+          <StatCard 
+            icon={<CheckCircle2 className="text-blue-400" />} 
+            label="Videos Posted" 
+            value={videoLogs.length.toString()} 
+            growth="Active" 
+          />
+          <StatCard 
+            icon={<Clock className="text-purple-400" />} 
+            label="Avg. Retention" 
+            value={`${videoLogs.length > 0 ? '78' : '0'}%`} 
+            growth="Stable" 
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -150,7 +165,11 @@ export default function Dashboard() {
                   </div>
                   <div className="flex flex-col justify-between py-1">
                     <div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${vid.mode === 'STORY' ? 'bg-orange-500/20 text-orange-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        vid.mode === 'STORY' ? 'bg-orange-500/20 text-orange-400' : 
+                        vid.mode === 'FIND_IT' ? 'bg-red-500/20 text-red-400' :
+                        'bg-cyan-500/20 text-cyan-400'
+                      }`}>
                         {vid.mode}
                       </span>
                       <h4 className="font-semibold text-sm mt-2 line-clamp-2">{vid.title}</h4>
@@ -172,33 +191,17 @@ export default function Dashboard() {
             <div className="glass-card p-6 space-y-6">
               {/* Niche Selection */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Active Niches</p>
-                  <Link href="/pricing" className="text-[10px] text-[#00e5ff] font-bold uppercase tracking-widest hover:underline px-2 py-0.5 bg-[#00e5ff]/10 rounded border border-[#00e5ff]/20">
-                    Upgrade to Unlock All
-                  </Link>
-                </div>
+                <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Select Category</p>
                 <div className="flex flex-wrap gap-2">
-                  {niches.map(n => {
-                    const isPremium = ['anime lore', 'animal facts'].includes(n.toLowerCase()); // Corrected premium check
-                    return (
-                      <button 
-                        key={n} 
-                        onClick={() => isPremium ? null : triggerGeneration('AUTO', n.toLowerCase().replace(' ', '_'))}
-                        className={`px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 ${
-                          isPremium 
-                            ? 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-500 cursor-not-allowed grayscale' 
-                            : 'bg-white/5 border border-white/10 hover:border-[#00e5ff]/50'
-                        }`}
-                      >
-                        {n}
-                        {isPremium && <Lock size={10} className="text-zinc-600" />}
-                      </button>
-                    );
-                  })}
-                  <Link href="/pricing" className="px-3 py-1.5 bg-[#9d4edd]/20 border border-[#9d4edd]/40 rounded-lg text-xs text-[#9d4edd] flex items-center gap-1 hover:bg-[#9d4edd]/30 transition-all">
-                    <PlusCircle size={14} /> Add New
-                  </Link>
+                  {niches.map(n => (
+                    <button 
+                      key={n} 
+                      onClick={() => triggerGeneration('AUTO', n.toLowerCase().replace(' ', '_'))}
+                      className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs transition-colors hover:border-[#00e5ff]/50"
+                    >
+                      {n}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -228,6 +231,22 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Extreme Game Mode */}
+              <div className="pt-6 border-t border-white/5 space-y-4">
+                <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Mode: FIND IT (Interactive)</p>
+                <button 
+                  onClick={() => triggerGeneration('FIND_IT', 'random')}
+                  disabled={isTriggering}
+                  className="w-full py-3 bg-gradient-to-r from-orange-500/10 to-red-500/10 hover:from-orange-500/20 hover:to-red-500/20 border border-orange-500/30 rounded-xl flex items-center justify-center gap-3 transition-all group"
+                >
+                  <PlayCircle className="text-orange-400 group-hover:scale-110 transition-transform" />
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-orange-400">GENERATE CHALLENGE</p>
+                    <p className="text-[10px] text-zinc-500">Extreme "Find the Target" Game</p>
+                  </div>
+                </button>
+              </div>
+
               {/* Manual Script Input */}
               <div className="pt-6 border-t border-white/5 space-y-4">
                 <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Bring Your Own Script</p>
@@ -247,18 +266,19 @@ export default function Dashboard() {
               </div>
 
               <div className="pt-6 border-t border-white/5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">Alternating Mode</span>
-                  <div className="w-10 h-6 bg-[#9d4edd] rounded-full p-1 flex justify-end">
-                    <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
+                <div className="flex items-center justify-between opacity-50">
+                  <span className="text-xs">Alternating Mode</span>
+                  <div className="w-8 h-4 bg-zinc-700 rounded-full p-1">
+                    <div className="w-2 h-2 bg-white rounded-full shadow-sm" />
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm">High-Frequency Posting</span>
-                  <div className="w-10 h-6 bg-zinc-700 rounded-full p-1">
-                    <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
+                <div className="flex items-center justify-between opacity-50">
+                  <span className="text-xs">High-Frequency Posting</span>
+                  <div className="w-8 h-4 bg-zinc-700 rounded-full p-1">
+                    <div className="w-2 h-2 bg-white rounded-full shadow-sm" />
                   </div>
                 </div>
+                <p className="text-[10px] text-zinc-600 text-center uppercase tracking-tighter">Pro Features Coming Soon</p>
               </div>
             </div>
           </section>
@@ -268,9 +288,15 @@ export default function Dashboard() {
   );
 }
 
-function NavItem({ icon, label, active = false }: { icon: React.ReactNode, label: string, active?: boolean }) {
+function NavItem({ icon, label, active = false, inactive = false }: { icon: React.ReactNode, label: string, active?: boolean, inactive?: boolean }) {
   return (
-    <div className={`flex items-center space-x-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${active ? 'bg-white/10 text-white shadow-inner font-semibold border border-white/5' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+    <div className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+      active 
+        ? 'bg-white/10 text-white shadow-inner font-semibold border border-white/5 cursor-default' 
+        : inactive
+          ? 'text-zinc-700 cursor-not-allowed grayscale'
+          : 'text-zinc-500 hover:text-white hover:bg-white/5 cursor-pointer'
+    }`}>
       {icon}
       <span className="text-sm">{label}</span>
     </div>
