@@ -132,7 +132,7 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
                 img_content = requests.get(img_url, timeout=30).content
                 with open(obj_path, "wb") as f:
                     f.write(img_content)
-                if not isinstance(assets["objects"], list):
+                if "objects" not in assets or not isinstance(assets["objects"], list):
                     assets["objects"] = []
                 assets["objects"].append(obj_path)
     except Exception as e:
