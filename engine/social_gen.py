@@ -147,7 +147,7 @@ class YouTubeUploader:
             print(f"[Error] YouTube API build failed: {e}")
             return False
 
-    def upload_video(self, file_path, title, description, tags, category_id="27", privacy="private"):
+    def upload_video(self, file_path, title, description, tags, category_id="27", privacy="public"):
         if not self.youtube:
             print("[Error] Not authenticated.")
             return None
