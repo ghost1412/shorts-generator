@@ -23,7 +23,7 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science"):
         "Content-Type": "application/json"
     }
     
-    model = "meta-llama/Llama-3.2-1B-Instruct"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
     
     if mode == "FACTS":
         input_text = "\n".join([f"- {f['fact']}" for f in content_info])
@@ -35,17 +35,17 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science"):
         input_text = str(content_info)
         task_desc = "a story."
 
-    prompt = f"""You are a funny, high-energy YouTube Channel Manager. 
-Generate a viral title, description, and tags for {task_desc}:
+    prompt = f"""You are a top-tier YouTube Shorts Growth Expert and Channel Manager. 
+Generate a VIRAL title, high-retention description, and trending SEO tags for {task_desc}:
 {input_text}
 
-Tone: Viral, humorous, clickbaity, "Channel Manager" style.
-Hooks: Use things like "ONLY GIGACHADS FOUND HIM", "BRO IS HIDING FROM THE IRS", "99% WILL FAIL".
-
-Requirements:
-1. Title: Viral, under 50 characters, includes emojis, extreme hooks.
-2. Description: Engaging, includes humorous CTA like "Comment WON if you found him in 5s or you owe me a sub!".
-3. Tags: 10 relevant viral SEO tags.
+CRITICAL SEO RULES:
+1. Title: Must be "Pattern-Interrupting" (e.g., "STOP SCROLLING! 🛑", "I was lied to... 💀", "99% MISS THIS"). Use extreme emotional hooks. Keep it under 60 chars.
+2. Description: 
+   - First line must be a CTA (e.g., "Comment your guess or you owe me a sub!").
+   - Include 3 paragraphs: The Hook, The Challenge, The Community Call.
+   - Include EXPLICIT tags in description: #shorts #trending #viral #challenge + 3 specific to {category}.
+3. Tags: 15-20 highly relevant, high-volume SEO keywords.
 
 Format as JSON ONLY:
 {{
@@ -58,8 +58,8 @@ Format as JSON ONLY:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 500,
-        "temperature": 0.8
+        "max_tokens": 1000,
+        "temperature": 0.9
     }
 
     try:

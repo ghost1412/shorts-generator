@@ -5,24 +5,39 @@ import random
 from moviepy import VideoFileClip, AudioFileClip, ColorClip, ImageClip, CompositeVideoClip, CompositeAudioClip, vfx, afx
 from PIL import Image, ImageDraw, ImageFont
 
-def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None):
+def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None, add_box=True):
     """
     Creates a transparent PNG with text using Pillow.
-    Optimized for readability with a premium, clean feel.
+    Optimized for readability with viral shorts-style background boxes.
     """
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Try to load Arial Black for that "Shorts" look
+    # Robust font loading for Windows/Linux
     try:
-        font_path = "C:/Windows/Fonts/ariblk.ttf"
-        if not os.path.exists(font_path):
-            font_path = "C:/Windows/Fonts/impact.ttf"
-        font = ImageFont.truetype(font_path, font_size)
-    except:
+        font_paths = [
+            "C:/Windows/Fonts/ariblk.ttf", # Arial Black
+            "C:/Windows/Fonts/impact.ttf", # Impact
+            "C:/Windows/Fonts/arialbd.ttf", # Arial Bold
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "C:/Windows/Fonts/arial.ttf"
+        ]
+        font_path = None
+        for path in font_paths:
+            if os.path.exists(path):
+                font_path = path
+                break
+        
+        if font_path:
+            font = ImageFont.truetype(font_path, font_size)
+        else:
+            print("[Warning] No professional fonts found. Falling back to default.")
+            font = ImageFont.load_default()
+    except Exception as e:
+        print(f"[Warning] Font loading error: {e}")
         font = ImageFont.load_default()
 
-    max_width = size[0] - 200 
+    max_width = size[0] - 160 
     words = text.split()
     lines = []
     current_line = []
@@ -42,30 +57,37 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
     if current_line:
         lines.append(" ".join(current_line))
 
-    line_spacing = 10
-    total_h = sum([draw.textbbox((0, 0), l, font=font)[3] - draw.textbbox((0, 0), l, font=font)[1] for l in lines]) + (len(lines)-1) * line_spacing
-    
-    if y_pos is None:
-        start_y = (size[1] - total_h) / 2 # Vertically centered by default
-    else:
-        start_y = y_pos
-
+    line_spacing = 15
+    # Calculate each line's dimensions for box drawing
+    line_metrics = []
+    total_h = 0
     for line in lines:
         bbox = draw.textbbox((0, 0), line, font=font)
         w = bbox[2] - bbox[0]
         h = bbox[3] - bbox[1]
+        line_metrics.append((w, h))
+        total_h += h + line_spacing
+    total_h -= line_spacing
+
+    if y_pos is None:
+        start_y = (size[1] - total_h) / 2
+    else:
+        start_y = y_pos
+
+    for i, line in enumerate(lines):
+        w, h = line_metrics[i]
         x = (size[0] - w) / 2
         
-        # Cleaner stroke
-        sw = int(stroke_width)
-        if sw > 0:
-            for ox in range(-sw, sw + 1):
-                for oy in range(-sw, sw + 1):
-                    if ox != 0 or oy != 0:
-                        draw.text((x + ox, start_y + oy), line, font=font, fill=stroke_color)
+        # Add a stylish background box for each line
+        if add_box:
+            padding_x = 35
+            padding_y = 15
+            box_coords = [x - padding_x, start_y - padding_y, x + w + padding_x, start_y + h + padding_y]
+            draw.rectangle(box_coords, fill=(0, 0, 0, 180)) # Semi-transparent black
 
+        # Draw text
         draw.text((x, start_y), line, font=font, fill=color)
-        start_y += int(h + line_spacing)
+        start_y += h + line_spacing
 
     return np.array(img)
 
@@ -125,17 +147,17 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     if not is_story:
         # 1. TOP HEADER: SPOT THE LIE!
-        header_img = create_text_image("SPOT THE LIE! 🔍", font_size=110, color="yellow", y_pos=150)
+        header_img = create_text_image("SPOT THE LIE! 🔍", font_size=110, color="yellow", y_pos=100)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         persistent_clips.append(top_header)
         
         # 2. BOTTOM FOOTER: 👇 COMMENT YOUR GUESS
-        footer_img = create_text_image("👇 COMMENT YOUR GUESS", font_size=85, color="white", y_pos=1700)
+        footer_img = create_text_image("👇 COMMENT YOUR GUESS", font_size=80, color="white", y_pos=1750)
         bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
         persistent_clips.append(bottom_footer)
     else:
         # STORY MODE HEADER
-        header_img = create_text_image("UNBELIEVABLE BUT TRUE 🤯", font_size=110, color="orange", y_pos=150)
+        header_img = create_text_image("UNBELIEVABLE BUT TRUE 🤯", font_size=110, color="orange", y_pos=100)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         persistent_clips.append(top_header)
 
@@ -152,9 +174,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                     elif "3" == next_word: fact_header_times.append((entry["start"], "FACT 3/3"))
 
         for start, txt in fact_header_times:
-            next_header_start = fact_header_times[fact_header_times.index((start, txt)) + 1][0] if fact_header_times.index((start, txt)) + 1 < len(fact_header_times) else duration
+            idx = fact_header_times.index((start, txt))
+            next_header_start = fact_header_times[idx + 1][0] if idx + 1 < len(fact_header_times) else duration
             h_duration = next_header_start - start
-            h_img = create_text_image(txt, font_size=100, color="cyan", y_pos=280)
+            # Move this lower to avoid overlap with SPOT THE LIE
+            h_img = create_text_image(txt, font_size=110, color="cyan", y_pos=260, add_box=True)
             h_clip = ImageClip(h_img).with_start(start).with_duration(h_duration).with_position((0, 0))
             header_clips.append(h_clip.with_effects([vfx.CrossFadeIn(0.1)]))
 
@@ -174,16 +198,19 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 text = " ".join(current_sentence)
                 end = entry["start"] + entry["duration"]
                 
-                dynamic_font_size = 130
-                if len(text) > 50: dynamic_font_size = 110
-                if len(text) > 80: dynamic_font_size = 90
+                # Dynamic sizing but more constrained
+                dynamic_font_size = 110
+                if len(text) > 50: dynamic_font_size = 90
+                if len(text) > 80: dynamic_font_size = 75
                 
-                c_img = create_text_image(text, font_size=dynamic_font_size, color="white")
+                # Start from a fixed Y position to avoid overlapping headers/footers
+                # We'll use y_pos=550 which is a safe "middle zone"
+                c_img = create_text_image(text, font_size=dynamic_font_size, color="white", y_pos=500)
                 c_clip = ImageClip(c_img).with_start(sentence_start).with_duration(end - sentence_start).with_position((0, 0))
                 
                 # Add POP-IN effect (Scale from 0.8 to 1.0 quickly)
                 c_clip = c_clip.with_effects([
-                    vfx.Resize(lambda t: min(1.0, 0.8 + 2.0 * t))
+                    vfx.Resize(lambda t: min(1.0, 0.82 + 2.0 * t))
                 ])
                 
                 word_clips.append(c_clip)
@@ -192,12 +219,12 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
 
         # 3. FINAL REVEAL OVERLAY (Only for FACTS)
         if not is_story:
-            reveal_img = create_text_image("REVEALING IN COMMENTS... 🤫", font_size=110, color="orange", y_pos=900)
+            reveal_img = create_text_image("LIKE & SUB TO REVEAL! 👇", font_size=110, color="orange", y_pos=900)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
         else:
             # Story Mode Outro
-            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=120, color="yellow", y_pos=900)
+            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=120, color="yellow", y_pos=850)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
 

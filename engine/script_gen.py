@@ -22,13 +22,17 @@ def generate_mixed_facts(category="science"):
         print("DEBUG: HF_API_KEY is missing!")
         raise RuntimeError("HF_API_KEY is missing. Cannot generate facts.")
 
-    model = "meta-llama/Llama-3.2-1B-Instruct" 
+    model = "meta-llama/Llama-3.1-8B-Instruct" 
     
     prompt = f"""SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it?
 Generate three short, shocking facts about {category}. Exactly two must be true and one must be a believable lie.
-If the category is '{category}' and it relates to anime/media, focus on specific plot points or "lore" (e.g., character actions or twists).
-If the category relates to health or biology, focus on surprising scientific facts.
-If the category relates to cooking, focus on kitchen secrets or food science.
+
+CRITICAL: YOU MUST DOUBLE CHECK YOUR KNOWLEDGE. 
+- If a fact is marked as 'true', it must be 100% FACTUALLY ACCURATE and VERIFIABLE.
+- If it relates to anime/media lore, ensure the plot points are actually in the source material.
+- If it relates to science, it must be the current scientific consensus.
+- The lie must be believable but objectively false.
+
 Format as JSON ONLY. No other text. 
 Example format:
 [
@@ -43,8 +47,8 @@ Example format:
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 500,
-            "temperature": 0.7 + (attempt * 0.1)
+            "max_tokens": 800,
+            "temperature": 0.1 + (attempt * 0.2)
         }
         
         try:
@@ -109,7 +113,7 @@ def generate_story(category="history"):
         print("DEBUG: HF_API_KEY is missing for story!")
         raise RuntimeError("HF_API_KEY is missing. Cannot generate story.")
 
-    model = "meta-llama/Llama-3.2-1B-Instruct"
+    model = "meta-llama/Llama-3.1-8B-Instruct"
     
     prompt = f"""Generate a short, shocking, and 100% TRUE story about {category}. 
 Requirements:
