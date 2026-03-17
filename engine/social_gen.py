@@ -13,10 +13,9 @@ import pickle
 load_dotenv()
 HF_API_KEY = os.getenv("HF_API_KEY")
 
-def generate_viral_metadata(facts_list, category="science"):
+def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     """
-    Generates viral metadata for YouTube Shorts using LLM.
-    Returns: { "title": str, "description": str, "tags": list }
+    Generates viral, humorous metadata for YouTube Shorts as a "Channel Manager".
     """
     url = "https://router.huggingface.co/v1/chat/completions"
     headers = {
@@ -24,18 +23,29 @@ def generate_viral_metadata(facts_list, category="science"):
         "Content-Type": "application/json"
     }
     
-    model = "meta-llama/Llama-3.2-1B-Instruct"
-    facts_text = "\n".join([f"- {f['fact']}" for f in facts_list])
+    model = "meta-llama/Llama-3.1-8B-Instruct"
     
-    prompt = f"""You are a viral YouTube Shorts creator. 
-Generate a title, description, and tags for a video about these 3 facts (one is a lie):
-{facts_text}
+    if mode == "FACTS":
+        input_text = "\n".join([f"- {f['fact']}" for f in content_info])
+        task_desc = f"a '2 Truths and 1 Lie' challenge about {category}."
+    elif mode == "FIND_IT":
+        input_text = f"Target: {content_info['target_name']}"
+        task_desc = f"a 'Find the {content_info['target_name']}' extreme challenge game."
+    else:
+        input_text = str(content_info)
+        task_desc = "a story."
 
-Video Format: Interactive "2 Truths and 1 Lie" challenge.
-Requirements:
-1. Title: Catchy, under 50 characters, includes emojis, mentions the challenge.
-2. Description: Engaging, includes timestamps for each fact, hashtags like #shorts #challenge #facts.
-3. Tags: 10 relevant SEO tags.
+    prompt = f"""You are a top-tier YouTube Shorts Growth Expert and Channel Manager. 
+Generate a VIRAL title, high-retention description, and trending SEO tags for {task_desc}:
+{input_text}
+
+CRITICAL SEO RULES:
+1. Title: Must be "Pattern-Interrupting" (e.g., "STOP SCROLLING! 🛑", "I was lied to... 💀", "99% MISS THIS"). Use extreme emotional hooks. Keep it under 60 chars.
+2. Description: 
+   - First line must be a CTA (e.g., "Comment your guess or you owe me a sub!").
+   - Include 3 paragraphs: The Hook, The Challenge, The Community Call.
+   - Include EXPLICIT tags in description: #shorts #trending #viral #challenge + 3 specific to {category}.
+3. Tags: 15-20 highly relevant, high-volume SEO keywords.
 
 Format as JSON ONLY:
 {{
@@ -48,8 +58,8 @@ Format as JSON ONLY:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 500,
-        "temperature": 0.8
+        "max_tokens": 1000,
+        "temperature": 0.9
     }
 
     try:
@@ -60,13 +70,29 @@ Format as JSON ONLY:
         start = output.find("{")
         end = output.rfind("}") + 1
         metadata = json.loads(output[start:end])
+        
+        # Validation
+        if not metadata.get("title"):
+             raise ValueError("Empty title in LLM response")
+             
+        # YouTube title limit is 100, let's keep it safe at 90
+        metadata["title"] = metadata["title"][:90]
         return metadata
     except Exception as e:
-        print(f"💡 Metadata API failed ({e}). Using generic viral metadata.")
+        print(f"[Log] Metadata API failed or invalid ({e}). Using generic viral metadata.")
         
+    # Improved fallback based on mode
+    if mode == "FIND_IT":
+        target = content_info.get('target_name', 'Meme').upper()
+        return {
+            "title": f"WHERE IS {target}?!! 🕵️‍♂️ (99% FAIL) #shorts #challenge",
+            "description": f"Can you spot the {target} in 5 seconds? Comment 'DONE' or you owe me a sub! 🗿\n\n#game #findit #trending",
+            "tags": ["shorts", "challenge", "game", "meme", "trending", target.lower()]
+        }
+    
     return {
-        "title": f"The SHOCKING truth about {category.upper()}! 😱 #shorts",
-        "description": f"Can you spot the lie? One of these 3 {category} facts is a fake! \n\n#trivia #challenge #interesting",
+        "title": f"The SHOCKING truth! 😱 #shorts #facts",
+        "description": f"Can you spot the lie? One of these is a fake! \n\n#trivia #challenge #interesting",
         "tags": [category, "shorts", "challenge", "facts", "trivia", "didyouknow"]
     }
 
@@ -85,7 +111,7 @@ class YouTubeUploader:
                 from google.oauth2.credentials import Credentials
                 creds = Credentials.from_authorized_user_file(self.token_file, self.scopes)
             except Exception as e:
-                print(f"💡 Could not load existing token: {e}")
+                print(f"[Log] Could not load existing token: {e}")
 
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
@@ -93,12 +119,12 @@ class YouTubeUploader:
                 try:
                     creds.refresh(Request())
                 except Exception as e:
-                    print(f"💡 Token refresh failed: {e}")
+                    print(f"[Log] Token refresh failed: {e}")
                     creds = None
             
             if not creds:
                 if not os.path.exists(self.secrets_file):
-                    print(f"❌ Error: {self.secrets_file} not found and no valid token available.")
+                    print(f"[Error] {self.secrets_file} not found and no valid token available.")
                     return False
                 
                 try:
@@ -106,8 +132,8 @@ class YouTubeUploader:
                     # This will attempt to open a browser
                     creds = flow.run_local_server(port=0)
                 except Exception as e:
-                    print(f"❌ Auth failed (Browser might be missing): {e}")
-                    print("💡 Tip: If running on GitHub, make sure to provide GOOGLE_YOUTUBE_TOKEN secret.")
+                    print(f"[Error] Auth failed (Browser might be missing): {e}")
+                    print("[Log] Tip: If running on GitHub, make sure to provide GOOGLE_YOUTUBE_TOKEN secret.")
                     return False
 
             # Save the credentials for the next run
@@ -118,12 +144,12 @@ class YouTubeUploader:
             self.youtube = build("youtube", "v3", credentials=creds)
             return True
         except Exception as e:
-            print(f"❌ YouTube API build failed: {e}")
+            print(f"[Error] YouTube API build failed: {e}")
             return False
 
-    def upload_video(self, file_path, title, description, tags, category_id="27", privacy="private"):
+    def upload_video(self, file_path, title, description, tags, category_id="27", privacy="public"):
         if not self.youtube:
-            print("❌ Not authenticated.")
+            print("[Error] Not authenticated.")
             return None
 
         body = {
@@ -141,7 +167,7 @@ class YouTubeUploader:
 
         media = MediaFileUpload(file_path, chunksize=-1, resumable=True)
         
-        print(f"🚀 Uploading {file_path} as {privacy}...")
+        print(f"[Log] Uploading {file_path} as {privacy}...")
         request = self.youtube.videos().insert(
             part="snippet,status",
             body=body,
@@ -154,7 +180,7 @@ class YouTubeUploader:
             if status:
                 print(f"  Progress: {int(status.progress() * 100)}%")
 
-        print(f"✅ Upload successful! Video ID: {response.get('id')}")
+        print(f"[Log] Upload successful! Video ID: {response.get('id')}")
         return response.get("id")
 
 class InstagramUploader:
@@ -173,10 +199,10 @@ class InstagramUploader:
         We use file.io as a temporary host for the Instagram API to pull from.
         """
         if not self.page_id or not self.access_token:
-            print("💡 Instagram credentials missing. Skipping IG upload.")
+            print("[Log] Instagram credentials missing. Skipping IG upload.")
             return None
 
-        print(f"📸 Preparing Instagram Reel (Temporary Hosting)...")
+        print(f"[Log] Preparing Instagram Reel (Temporary Hosting)...")
         
         try:
             # Step 0: Upload to temporary host
@@ -185,7 +211,7 @@ class InstagramUploader:
                 host_res.raise_for_status()
                 video_url = host_res.json().get("link")
             
-            print(f"✅ Temporary URL generated: {video_url}")
+            print(f"[Log] Temporary URL generated: {video_url}")
 
             # Step 1: Create Media Container
             container_url = f"{self.base_url}/{self.page_id}/media"
@@ -200,7 +226,7 @@ class InstagramUploader:
             res.raise_for_status()
             container_id = res.json().get("id")
             
-            print(f"✅ Container created: {container_id}. Publishing (can take 30-60s)...")
+            print(f"[Log] Container created: {container_id}. Publishing (can take 30-60s)...")
             
             # Step 2: Publish
             publish_url = f"{self.base_url}/{self.page_id}/media_publish"
@@ -211,9 +237,9 @@ class InstagramUploader:
             pub_res = requests.post(publish_url, data=publish_payload)
             pub_res.raise_for_status()
             
-            print("🚀 Successfully published to Instagram!")
+            print("[Log] Successfully published to Instagram!")
             return pub_res.json()
             
         except Exception as e:
-            print(f"❌ Instagram Error: {e}")
+            print(f"[Error] Instagram Error: {e}")
             return None

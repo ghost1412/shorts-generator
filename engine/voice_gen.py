@@ -3,15 +3,28 @@ import os
 import asyncio
 import edge_tts
 
+def strip_emojis(text):
+    """
+    Strips emojis from text to prevent TTS from reading them verbally.
+    """
+    result = []
+    for c in text:
+        if ord(c) < 127 or c.isalnum() or c.isspace() or c in ".,!?;:()-'\"":
+            result.append(c)
+    return "".join(result)
+
 def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json"):
     """
     Generates voice and precise word-level subtitles using edge-tts Python API.
     """
+    # Clean text for TTS
+    tts_text = strip_emojis(text)
+    
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     
     async def amain():
         voice = "en-US-AriaNeural"
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(tts_text, voice)
         subtitles = []
         
         with open(output_audio, "wb") as f:
@@ -33,7 +46,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
         # VERY ROBUST FALLBACK: If we have NO word boundaries, we must split the text manually
         # and estimate timings based on the audio duration.
         if not subtitles:
-            print("⚠️ No word boundaries found. Estimating word timings from text.")
+            print("[Warning] No word boundaries found. Estimating word timings from text.")
             audio_duration = 0
             try:
                 from moviepy import AudioFileClip
@@ -41,7 +54,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
                 audio_duration = ac.duration
                 ac.close()
             except Exception as e:
-                print(f"⚠️ MoviePy failed to get duration: {e}. Using char-count estimation.")
+                print(f"[Warning] MoviePy failed to get duration: {e}. Using char-count estimation.")
                 audio_duration = len(text) * 0.08 # very rough estimate
             
             words = text.split()
