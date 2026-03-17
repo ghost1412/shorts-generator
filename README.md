@@ -80,4 +80,3 @@ We use a **Dual-Server** approach:
     - Optional: Can be run on your own dedicated VPS (via the `RENDER_TARGET=server` setting).
 
 ---
-*Developed by Antigravity*
