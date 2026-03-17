@@ -114,6 +114,25 @@ def cover_resize(clip, target_size=(1080, 1920)):
     
     return clip.cropped(x_center=new_w/2, y_center=new_h/2, width=target_w, height=target_h)
 
+def apply_ken_burns(clip, duration):
+    """
+    Applies a dynamic camera zoom (Ken Burns effect) to a clip.
+    Randomly chooses between zoom-in and zoom-out.
+    """
+    start_scale = random.uniform(1.0, 1.15)
+    end_scale = random.uniform(1.0, 1.15)
+    
+    # Ensure there's actually a motion
+    if abs(start_scale - end_scale) < 0.05:
+        end_scale = start_scale + 0.1 if start_scale < 1.1 else start_scale - 0.1
+
+    def resize_func(t):
+        # Linear interpolation of scale over time
+        current_scale = start_scale + (end_scale - start_scale) * (t / duration)
+        return current_scale
+
+    return clip.with_effects([vfx.Resize(resize_func)])
+
 def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, is_story=False):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
@@ -147,7 +166,9 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     if not bg_segments:
         bg_clip = ColorClip(size=(1080, 1920), color=(20, 20, 30)).with_duration(duration)
     else:
+        # Apply Ken Burns to the combined background for extra energy
         bg_clip = CompositeVideoClip(bg_segments, size=(1080, 1920)).with_duration(duration)
+        bg_clip = apply_ken_burns(bg_clip, duration)
     
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.25).with_duration(duration)
     
@@ -230,9 +251,9 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 c_img = create_text_image(text, font_size=dynamic_font_size, color="white", y_pos=650)
                 c_clip = ImageClip(c_img).with_start(sentence_start).with_duration(end - sentence_start).with_position((0, 0))
                 
-                # Add POP-IN effect (Scale from 0.8 to 1.0 quickly)
+                # Add AGGRESSIVE POP-IN effect (Scale from 0.7 to 1.1 quickly then settle)
                 c_clip = c_clip.with_effects([
-                    vfx.Resize(lambda t: min(1.0, 0.82 + 2.0 * t))
+                    vfx.Resize(lambda t: min(1.0, 0.75 + 3.0 * t) if t < 0.15 else 1.0)
                 ])
                 
                 word_clips.append(c_clip)

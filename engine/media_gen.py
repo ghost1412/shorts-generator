@@ -8,6 +8,18 @@ load_dotenv()
 
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
+# Viral high-retention background types
+HIGH_RETENTION_QUERIES = [
+    "minecraft parkour", 
+    "gta 5 ramp jump", 
+    "satisfying sand", 
+    "hydraulic press", 
+    "kinetic sand", 
+    "slime asmr", 
+    "subway surfers gameplay", 
+    "soap cutting"
+]
+
 def extract_keywords(text):
     """
     Simple keyword extraction by removing common words.
@@ -19,11 +31,17 @@ def extract_keywords(text):
 
 def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4"):
     """
-    Downloads a background video based on keywords from the fact.
+    downloads a background video based on keywords from the fact.
+    Higher priority given to high-retention gameplay/satisfying clips to boost AVD.
     """
-    keywords = extract_keywords(fact_text)
-    query = " ".join(keywords) if keywords else fallback_query
-    print(f"[Log] Searching Pexels for: '{query}'")
+    # 50% chance to force a high-retention background instead of a literal one
+    if random.random() > 0.5:
+        query = random.choice(HIGH_RETENTION_QUERIES)
+        print(f"[Log] Forcing HIGH-RETENTION background: '{query}'")
+    else:
+        keywords = extract_keywords(fact_text)
+        query = " ".join(keywords) if keywords else fallback_query
+        print(f"[Log] Searching Pexels for: '{query}'")
     
     url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
     headers = {"Authorization": PEXELS_API_KEY}

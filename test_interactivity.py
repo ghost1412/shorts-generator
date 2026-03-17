@@ -56,8 +56,7 @@ def verify_interactivity():
                 actual_voice, 
                 actual_subs, 
                 test_video, 
-                output_path=output, 
-                lie_index=2
+                output_path=output
             )
             print(f"✅ Export successful: {output}")
         except Exception as e:
