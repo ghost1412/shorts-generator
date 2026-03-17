@@ -3,15 +3,28 @@ import os
 import asyncio
 import edge_tts
 
+def strip_emojis(text):
+    """
+    Strips emojis from text to prevent TTS from reading them verbally.
+    """
+    result = []
+    for c in text:
+        if ord(c) < 127 or c.isalnum() or c.isspace() or c in ".,!?;:()-'\"":
+            result.append(c)
+    return "".join(result)
+
 def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json"):
     """
     Generates voice and precise word-level subtitles using edge-tts Python API.
     """
+    # Clean text for TTS
+    tts_text = strip_emojis(text)
+    
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     
     async def amain():
         voice = "en-US-AriaNeural"
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(tts_text, voice)
         subtitles = []
         
         with open(output_audio, "wb") as f:
