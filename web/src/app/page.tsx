@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   BarChart3,
@@ -19,13 +19,40 @@ import {
   PlayCircle,
   Download,
   Eye,
-  CheckCircle2
+  CheckCircle2,
+  LogOut
 } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
+import { logout } from './login/actions';
 
 export default function Dashboard() {
   const [isTriggering, setIsTriggering] = useState(false);
   const [customScript, setCustomScript] = useState('');
   const [vibe, setVibe] = useState('suspense');
+  const [videoLogs, setVideoLogs] = useState<any[]>([]);
+  const [user, setUser] = useState<any>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function getSession() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    }
+    getSession();
+
+    async function fetchLogs() {
+      const { data } = await supabase
+        .from('video_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (data) setVideoLogs(data);
+    }
+    fetchLogs();
+
+    // Polling or Realtime can be added here
+    const interval = setInterval(fetchLogs, 10000);
+    return () => clearInterval(interval);
+  }, [supabase]);
 
   async function triggerGeneration(mode = 'AUTO', category = 'random', script = '') {
     setIsTriggering(true);
@@ -48,11 +75,6 @@ export default function Dashboard() {
     }
   }
 
-  const recentVideos = [
-    { id: 1, title: "The Hidden Truth of Mars 🪐", status: "Published", views: "12.4k", date: "2h ago", mode: "STORY" },
-    { id: 2, title: "SPOT THE LIE: Space Myths 🚀", status: "Published", views: "8.1k", date: "8h ago", mode: "FACTS" },
-    { id: 3, title: "The Great Emu War Legend 🐦", status: "Processing", views: "0", date: "Just now", mode: "STORY" },
-  ];
 
   const niches = ["Science", "Space", "Anime Lore", "Cooking Hacks", "History", "Animal Facts"];
 
@@ -72,6 +94,10 @@ export default function Dashboard() {
           <NavItem icon={<Youtube size={20} />} label="Channels" />
           <NavItem icon={<BarChart3 size={20} />} label="Analytics" />
           <NavItem icon={<Settings size={20} />} label="Agent Settings" />
+          <div onClick={() => logout()} className="flex items-center space-x-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 text-zinc-500 hover:text-red-400 hover:bg-red-500/5">
+            <LogOut size={20} />
+            <span className="text-sm">Log Out</span>
+          </div>
         </nav>
 
         <div className="p-4 bg-white/5 rounded-xl border border-white/10">
@@ -87,7 +113,7 @@ export default function Dashboard() {
       <main className="flex-1 p-8 overflow-y-auto">
         <header className="flex justify-between items-center mb-10">
           <div>
-            <h2 className="text-3xl font-bold">Welcome back, Manager 👋</h2>
+            <h2 className="text-3xl font-bold">Welcome back, {user?.email?.split('@')[0] || 'Manager'} 👋</h2>
             <p className="text-zinc-500 mt-1">Your automated channels are performing 24% better this week.</p>
           </div>
           <button 
@@ -115,7 +141,7 @@ export default function Dashboard() {
               <button className="text-sm text-[#00e5ff] hover:underline">View all</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {recentVideos.map((vid) => (
+              {videoLogs.length > 0 ? videoLogs.slice(0, 4).map((vid) => (
                 <div key={vid.id} className="glass-card p-4 flex gap-4 hover:bg-white/10 transition-colors cursor-pointer group">
                   <div className="w-24 h-32 bg-zinc-800 rounded-lg overflow-hidden relative flex-shrink-0">
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
@@ -129,10 +155,14 @@ export default function Dashboard() {
                       </span>
                       <h4 className="font-semibold text-sm mt-2 line-clamp-2">{vid.title}</h4>
                     </div>
-                    <p className="text-xs text-zinc-500">{vid.views} views • {vid.date}</p>
+                    <p className="text-xs text-zinc-500">{vid.views || 0} views • {new Date(vid.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
-              ))}
+              )) : (
+                <div className="md:col-span-2 py-10 text-center border-2 border-dashed border-white/5 rounded-2xl">
+                  <p className="text-zinc-500 text-sm italic">No videos generated yet. Press "Trigger Live Run" to start!</p>
+                </div>
+              )}
             </div>
           </section>
 

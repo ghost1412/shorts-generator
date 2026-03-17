@@ -1,10 +1,11 @@
 import json
 import os
 import numpy as np
+import random
 from moviepy import VideoFileClip, AudioFileClip, ColorClip, ImageClip, CompositeVideoClip, CompositeAudioClip, vfx, afx
 from PIL import Image, ImageDraw, ImageFont
 
-def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=4, y_pos=None):
+def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None):
     """
     Creates a transparent PNG with text using Pillow.
     Optimized for readability with a premium, clean feel.
@@ -56,9 +57,10 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
         x = (size[0] - w) / 2
         
         # Cleaner stroke
-        if stroke_width > 0:
-            for ox in range(-stroke_width, stroke_width + 1):
-                for oy in range(-stroke_width, stroke_width + 1):
+        sw = int(stroke_width)
+        if sw > 0:
+            for ox in range(-sw, sw + 1):
+                for oy in range(-sw, sw + 1):
                     if ox != 0 or oy != 0:
                         draw.text((x + ox, start_y + oy), line, font=font, fill=stroke_color)
 
@@ -96,7 +98,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             clip = clip.with_start(i * segment_duration)
             bg_segments.append(clip)
         except Exception as e:
-            print(f"⚠️ Error processing background {path}: {e}")
+            print(f"[Warning] Error processing background {path}: {e}")
     
     if not bg_segments:
         bg_clip = ColorClip(size=(1080, 1920), color=(20, 20, 30)).with_duration(duration)
@@ -123,17 +125,17 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     if not is_story:
         # 1. TOP HEADER: SPOT THE LIE!
-        header_img = create_text_image("SPOT THE LIE! 🔍", font_size=90, color="yellow", y_pos=150)
+        header_img = create_text_image("SPOT THE LIE! 🔍", font_size=110, color="yellow", y_pos=150)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         persistent_clips.append(top_header)
         
         # 2. BOTTOM FOOTER: 👇 COMMENT YOUR GUESS
-        footer_img = create_text_image("👇 COMMENT YOUR GUESS", font_size=70, color="white", y_pos=1700)
+        footer_img = create_text_image("👇 COMMENT YOUR GUESS", font_size=85, color="white", y_pos=1700)
         bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
         persistent_clips.append(bottom_footer)
     else:
         # STORY MODE HEADER
-        header_img = create_text_image("UNBELIEVABLE BUT TRUE 🤯", font_size=80, color="orange", y_pos=150)
+        header_img = create_text_image("UNBELIEVABLE BUT TRUE 🤯", font_size=110, color="orange", y_pos=150)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         persistent_clips.append(top_header)
 
@@ -152,7 +154,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         for start, txt in fact_header_times:
             next_header_start = fact_header_times[fact_header_times.index((start, txt)) + 1][0] if fact_header_times.index((start, txt)) + 1 < len(fact_header_times) else duration
             h_duration = next_header_start - start
-            h_img = create_text_image(txt, font_size=80, color="cyan", y_pos=280)
+            h_img = create_text_image(txt, font_size=100, color="cyan", y_pos=280)
             h_clip = ImageClip(h_img).with_start(start).with_duration(h_duration).with_position((0, 0))
             header_clips.append(h_clip.with_effects([vfx.CrossFadeIn(0.1)]))
 
@@ -172,9 +174,9 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 text = " ".join(current_sentence)
                 end = entry["start"] + entry["duration"]
                 
-                dynamic_font_size = 90
-                if len(text) > 50: dynamic_font_size = 80
-                if len(text) > 80: dynamic_font_size = 70
+                dynamic_font_size = 130
+                if len(text) > 50: dynamic_font_size = 110
+                if len(text) > 80: dynamic_font_size = 90
                 
                 c_img = create_text_image(text, font_size=dynamic_font_size, color="white")
                 c_clip = ImageClip(c_img).with_start(sentence_start).with_duration(end - sentence_start).with_position((0, 0))
@@ -190,12 +192,12 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
 
         # 3. FINAL REVEAL OVERLAY (Only for FACTS)
         if not is_story:
-            reveal_img = create_text_image("REVEALING IN COMMENTS... 🤫", font_size=80, color="orange", y_pos=900)
+            reveal_img = create_text_image("REVEALING IN COMMENTS... 🤫", font_size=110, color="orange", y_pos=900)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
         else:
             # Story Mode Outro
-            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=90, color="yellow", y_pos=900)
+            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=120, color="yellow", y_pos=900)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
 
@@ -209,11 +211,123 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     final_video = final_video.with_audio(audio_clip)
     
-    print(f"🎬 Exporting polished eye-candy short: {output_path}")
+    print(f"[Log] Exporting polished eye-candy short: {output_path}")
     final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="6000k")
+    
+    return output_path
+
+def create_game_video(audio_path, subs_path, target_path, object_paths, output_path="game_short.mp4", target_name="Cat", music_path=None):
+    """
+    Composes an EXTREMELY CHALLENGING "Find the Target" game video.
+    Uses circular masking and a solid background (greenscreen).
+    """
+    audio_clip = AudioFileClip(audio_path)
+    # Give it a 3-second reveal window at the end
+    duration = audio_clip.duration + 3.0
+    
+    # 1. Background - Solid Green (Greenscreen) as requested
+    bg_clip = ColorClip(size=(1080, 1920), color=(0, 177, 64)).with_duration(duration)
+    
+    # 2. Progress Bar
+    bar_height = 20
+    bg_bar = ColorClip(size=(1080, bar_height), color=(30, 30, 30)).with_duration(duration).with_position(("center", 1880))
+    progress_bar = ColorClip(size=(1080, bar_height), color=(255, 230, 0)).with_duration(duration).with_position(("center", 1880))
+    progress_bar = progress_bar.with_effects([vfx.Resize(lambda t: (max(1, int(1080 * t / duration)), bar_height))])
+    
+    # 3. Persistent UI - HUMOROUS HOOKS
+    header_titles = [
+        f"SPOT THE {target_name.upper()}!",
+        f"WHERE IS {target_name.upper()}??",
+        f"FIND {target_name.upper()} = GIGACHAD 🗿",
+        f"BRO HIDING FROM THE IRS 🤫",
+        f"99% FAIL TO FIND {target_name.upper()}"
+    ]
+    header_img = create_text_image(random.choice(header_titles), font_size=95, color="white", stroke_color="#1a1a1a", y_pos=150)
+    top_header = ImageClip(header_img).with_start(0).with_duration(duration)
+    
+    footer_texts = [
+        "ONLY 1% CAN FIND IT! 🕵️‍♂️",
+        "STOP THE VIDEO WHEN FOUND! 🛑",
+        "FAILED? YOU OWE ME A SUB! 🤝",
+        "I BET YOU CAN'T SPOT HIM 💀"
+    ]
+    footer_img = create_text_image(random.choice(footer_texts), font_size=70, color="yellow", stroke_color="#1a1a1a", y_pos=1700)
+    bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
+    
+    # 4. Scatter Objects (EXERTME Density)
+    game_clips = []
+    
+    # Random spawning in the middle 70% of the screen
+    num_total_slots = 150 
+    positions = []
+    for _ in range(num_total_slots):
+        x = random.randint(50, 930)
+        y = random.randint(300, 1600)
+        positions.append((x, y))
+    
+    # Sort positions by Y to get some pseudo-depth if we wanted, but random is better for challenge
+    random.shuffle(positions)
+    
+    # Target: The Object (Place it somewhere randomly among the pack)
+    target_idx = random.randint(50, 120)
+    target_pos = positions[target_idx]
+    
+    def prepare_sticker(path, width=100):
+        clip = ImageClip(path).resized(width=width)
+        return clip.with_duration(duration)
+
+    # Place Distractors
+    num_distractors = len(object_paths)
+    for i in range(num_total_slots):
+        pos = positions[i]
+        
+        if i == target_idx:
+            # Place Target
+            obj_clip = prepare_sticker(target_path, width=85) # Tiny target
+        else:
+            # Place Distractor
+            obj_path = object_paths[i % num_distractors]
+            obj_clip = prepare_sticker(obj_path, width=95)
+            
+            # More intense randomization
+            if random.random() > 0.5:
+                obj_clip = obj_clip.with_effects([vfx.MirrorX()])
+            
+            rotation = random.randint(-45, 45)
+            if rotation != 0:
+                obj_clip = obj_clip.with_effects([vfx.Rotate(rotation)])
+
+        if i == target_idx:
+            target_clip_for_reveal = obj_clip # Store for coordinate calculation
+        
+        obj_clip = (obj_clip.with_start(0)
+                    .with_position(pos))
+        game_clips.append(obj_clip)
+    # 5. Result Pop-up (at the end)
+    reveal_start = audio_clip.duration
+    
+    found_text_img = create_text_image("FOUND IT! 🎯", font_size=120, color="lime", stroke_color="black", y_pos=900)
+    found_clip = (ImageClip(found_text_img)
+                  .with_start(reveal_start)
+                  .with_duration(3.0)
+                  .with_effects([vfx.CrossFadeIn(0.3)]))
+    
+    # Final Composition
+    final_video = CompositeVideoClip([bg_clip] + game_clips + [bg_bar, progress_bar, top_header, bottom_footer, found_clip])
+    
+    if music_path and os.path.exists(music_path):
+        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
+        music = music.with_volume_scaled(0.18)
+        audio_clip = CompositeAudioClip([audio_clip, music])
+    
+    final_video = final_video.with_audio(audio_clip)
+    
+    print(f"[Log] Exporting EXTREME Challenge: {output_path}")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="8000k")
     
     return output_path
 
 if __name__ == "__main__":
     # Test call
-    create_shorts_video("assets/voice.mp3", "assets/subs.json", ["assets/bg.mp4"])
+    # create_shorts_video("assets/voice.mp3", "assets/subs.json", ["assets/bg.mp4"])
+    pass

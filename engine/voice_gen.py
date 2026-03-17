@@ -33,7 +33,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
         # VERY ROBUST FALLBACK: If we have NO word boundaries, we must split the text manually
         # and estimate timings based on the audio duration.
         if not subtitles:
-            print("⚠️ No word boundaries found. Estimating word timings from text.")
+            print("[Warning] No word boundaries found. Estimating word timings from text.")
             audio_duration = 0
             try:
                 from moviepy import AudioFileClip
@@ -41,7 +41,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
                 audio_duration = ac.duration
                 ac.close()
             except Exception as e:
-                print(f"⚠️ MoviePy failed to get duration: {e}. Using char-count estimation.")
+                print(f"[Warning] MoviePy failed to get duration: {e}. Using char-count estimation.")
                 audio_duration = len(text) * 0.08 # very rough estimate
             
             words = text.split()

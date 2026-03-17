@@ -1,10 +1,16 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, use } from 'react'
 import Link from 'next/link'
 import { Sparkles, Mail, Lock, ArrowRight, Github, Chrome } from 'lucide-react'
+import { login } from './actions'
 
-export default function LoginPage() {
+export default function LoginPage({ 
+  searchParams 
+}: { 
+  searchParams: Promise<{ error?: string }> 
+}) {
+  const resolvedParams = use(searchParams)
   const [loading, setLoading] = useState(false)
 
   return (
@@ -30,42 +36,59 @@ export default function LoginPage() {
 
         {/* Auth Card */}
         <div className="glass-card p-8 space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-zinc-400 ml-1">Email Address</label>
-              <div className="relative group">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 group-focus-within:text-[#00e5ff] transition-colors" />
-                <input 
-                  type="email" 
-                  placeholder="name@company.com"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:border-[#00e5ff]/50 focus:ring-1 focus:ring-[#00e5ff]/50 transition-all placeholder:text-zinc-600"
-                />
+          <form className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-zinc-400 ml-1">Email Address</label>
+                <div className="relative group">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 group-focus-within:text-[#00e5ff] transition-colors" />
+                  <input 
+                    name="email"
+                    type="email" 
+                    required
+                    placeholder="name@company.com"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:border-[#00e5ff]/50 focus:ring-1 focus:ring-[#00e5ff]/50 transition-all placeholder:text-zinc-600"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-sm font-medium text-zinc-400">Password</label>
+                  <Link href="#" className="text-xs text-[#00e5ff] hover:underline">Forgot password?</Link>
+                </div>
+                <div className="relative group">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 group-focus-within:text-[#9d4edd] transition-colors" />
+                  <input 
+                    name="password"
+                    type="password" 
+                    required
+                    placeholder="••••••••"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:border-[#9d4edd]/50 focus:ring-1 focus:ring-[#9d4edd]/50 transition-all placeholder:text-zinc-600"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between items-center ml-1">
-                <label className="text-sm font-medium text-zinc-400">Password</label>
-                <Link href="#" className="text-xs text-[#00e5ff] hover:underline">Forgot password?</Link>
+            {resolvedParams?.error && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-3 rounded-lg text-center font-medium">
+                {resolvedParams.error}
               </div>
-              <div className="relative group">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500 group-focus-within:text-[#9d4edd] transition-colors" />
-                <input 
-                  type="password" 
-                  placeholder="••••••••"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 focus:outline-none focus:border-[#9d4edd]/50 focus:ring-1 focus:ring-[#9d4edd]/50 transition-all placeholder:text-zinc-600"
-                />
-              </div>
-            </div>
-          </div>
+            )}
 
-          <button 
-            className="w-full btn-primary py-4 text-lg flex items-center justify-center gap-2 group"
-            onClick={() => setLoading(true)}
-          >
-            {loading ? 'Authenticating...' : 'Launch Dashboard'}
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </button>
+            <button 
+              formAction={async (formData) => {
+                setLoading(true)
+                await login(formData)
+                setLoading(false)
+              }}
+              className="w-full btn-primary py-4 text-lg flex items-center justify-center gap-2 group disabled:opacity-50"
+              disabled={loading}
+            >
+              {loading ? 'Authenticating...' : 'Launch Dashboard'}
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </form>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
