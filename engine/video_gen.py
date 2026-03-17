@@ -13,7 +13,8 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
     """
     # 1. Clean emojis from visual text
     result = []
-    for c in text:
+    for char in text:
+        c = str(char)
         if ord(c) < 127 or c.isalnum() or c.isspace() or c in ".,!?;:()-'\"":
             result.append(c)
     clean_text = "".join(result)
@@ -95,6 +96,24 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
 
     return np.array(img)
 
+def cover_resize(clip, target_size=(1080, 1920)):
+    """
+    Resizes and crops a clip to cover the target size while maintaining aspect ratio.
+    Equivalent to CSS 'background-size: cover'.
+    """
+    w, h = clip.size
+    target_w, target_h = target_size
+    
+    # Calculate scale factor to cover the target area
+    scale = max(target_w / w, target_h / h)
+    
+    # Resize and then center crop
+    new_w, new_h = int(w * scale), int(h * scale)
+    # Use a small buffer if needed, but int should be fine
+    clip = clip.resized(width=new_w, height=new_h)
+    
+    return clip.cropped(x_center=new_w/2, y_center=new_h/2, width=target_w, height=target_h)
+
 def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, is_story=False):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
@@ -116,20 +135,19 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             n_loops = int(np.ceil(segment_duration / clip.duration)) if clip.duration > 0 else 1
             clip = clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(segment_duration)
             
-            # High-quality resize and crop
-            clip = clip.resized(height=1920)
-            w, h = clip.size
-            clip = clip.cropped(x_center=w/2, width=1080)
+            # Robust resize to cover 1080x1920
+            clip = cover_resize(clip, (1080, 1920))
             
             clip = clip.with_start(i * segment_duration)
             bg_segments.append(clip)
         except Exception as e:
             print(f"[Warning] Error processing background {path}: {e}")
     
+    # Force size=(1080, 1920) on all composites to avoid aspect ratio drifting
     if not bg_segments:
         bg_clip = ColorClip(size=(1080, 1920), color=(20, 20, 30)).with_duration(duration)
     else:
-        bg_clip = CompositeVideoClip(bg_segments).with_duration(duration)
+        bg_clip = CompositeVideoClip(bg_segments, size=(1080, 1920)).with_duration(duration)
     
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.25).with_duration(duration)
     
@@ -232,8 +250,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
 
-    # Final Composition
-    final_video = CompositeVideoClip([bg_clip, dark_overlay, bg_bar, progress_bar] + persistent_clips + header_clips + word_clips)
+    # Final Composition - Force (1080, 1920) size
+    final_video = CompositeVideoClip([bg_clip, dark_overlay, bg_bar, progress_bar] + persistent_clips + header_clips + word_clips, size=(1080, 1920))
     
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -343,8 +361,8 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
                   .with_duration(3.0)
                   .with_effects([vfx.CrossFadeIn(0.3)]))
     
-    # Final Composition
-    final_video = CompositeVideoClip([bg_clip] + game_clips + [bg_bar, progress_bar, top_header, bottom_footer, found_clip])
+    # Final Composition - Force (1080, 1920) size
+    final_video = CompositeVideoClip([bg_clip] + game_clips + [bg_bar, progress_bar, top_header, bottom_footer, found_clip], size=(1080, 1920))
     
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])

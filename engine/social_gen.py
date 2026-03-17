@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import re
 from dotenv import load_dotenv
 import google.oauth2.credentials
 import google_auth_oauthlib.flow
@@ -43,7 +44,8 @@ CRITICAL SEO RULES:
 1. Title: Must be "Pattern-Interrupting" (e.g., "STOP SCROLLING! 🛑", "I was lied to... 💀", "99% MISS THIS"). Use extreme emotional hooks. Keep it under 60 chars.
 2. Description: 
    - First line must be a CTA (e.g., "Comment your guess or you owe me a sub!").
-   - Include 3 paragraphs: The Hook, The Challenge, The Community Call.
+   - Include 3 paragraphs: The Hook, The Challenge, The Community Call. 
+   - Use emojis liberally but strategically.
    - Include EXPLICIT tags in description: #shorts #trending #viral #challenge + 3 specific to {category}.
 3. Tags: 15-20 highly relevant, high-volume SEO keywords.
 
@@ -55,31 +57,45 @@ Format as JSON ONLY:
 }}
 """
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1000,
-        "temperature": 0.9
-    }
+    def clean_json_string(s):
+        # Remove control characters that break JSON
+        s_clean = str(re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', s))
+        # Try to find the JSON block
+        start = s_clean.find("{")
+        end = s_clean.rfind("}") + 1
+        if start != -1 and end != 0:
+            return s_clean[start:end]
+        return s_clean
 
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        
-        start = output.find("{")
-        end = output.rfind("}") + 1
-        metadata = json.loads(output[start:end])
-        
-        # Validation
-        if not metadata.get("title"):
-             raise ValueError("Empty title in LLM response")
-             
-        # YouTube title limit is 100, let's keep it safe at 90
-        metadata["title"] = metadata["title"][:90]
-        return metadata
-    except Exception as e:
-        print(f"[Log] Metadata API failed or invalid ({e}). Using generic viral metadata.")
+    for attempt in range(3):
+        try:
+            temp = 0.7 + (attempt * 0.1)
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 1000,
+                "temperature": temp
+            }
+            
+            response = requests.post(url, headers=headers, json=payload, timeout=20)
+            response.raise_for_status()
+            output = response.json()["choices"][0]["message"]["content"]
+            
+            clean_output = clean_json_string(output)
+            metadata = json.loads(clean_output)
+            
+            # Validation
+            if not metadata.get("title"):
+                raise ValueError("Empty title in LLM response")
+                
+            # YouTube title limit is 100
+            metadata["title"] = metadata["title"][:95]
+            return metadata
+            
+        except Exception as e:
+            print(f"[Warning] Metadata attempt {attempt+1} failed ({e}).")
+            if attempt == 2:
+                print(f"[Log] Metadata API failed after 3 attempts. Using generic fallback.")
         
     # Improved fallback based on mode
     if mode == "FIND_IT":
