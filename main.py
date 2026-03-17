@@ -7,6 +7,13 @@ from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video
 from engine.video_gen import create_shorts_video
 
+VIBE_VOICE_MAP = {
+    "suspense": "en-US-ChristopherNeural", # Deep, intense
+    "spooky": "en-US-ChristopherNeural",   # Also good for spooky
+    "cinematic": "en-US-JennyNeural",       # Emotional, softer
+    "upbeat": "en-US-GuyNeural"             # Energetic, punchy
+}
+
 def main():
     parser = argparse.ArgumentParser(description="Generate either FACTS or STORY shorts.")
     parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "AUTO"], help="Force a specific mode.")
@@ -15,6 +22,7 @@ def main():
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
     parser.add_argument("--user_id", help="The Supabase user ID triggering the generation.")
     parser.add_argument("--video_id", help="The unique ID for this video job.")
+    parser.add_argument("--skip_upload", action="store_true", help="Generate video but do not upload to social media.")
     args = parser.parse_args()
 
     # Force UTF-8 encoding for Windows terminals to handle emojis if possible, 
@@ -84,7 +92,12 @@ def main():
     
     voice_file = os.path.join(session_dir, "voice.mp3")
     subs_file = os.path.join(session_dir, "subs.json")
-    audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file)
+    
+    # Map vibe to an emotional voice
+    selected_voice = VIBE_VOICE_MAP.get(args.vibe, "en-US-AriaNeural")
+    print(f"[Log] Selected voice for '{args.vibe}' vibe: {selected_voice}")
+    
+    audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file, voice_name=selected_voice)
     
     if not audio_path or not subs_path:
         print("[Error] Voice generation failed.")
@@ -164,33 +177,44 @@ def main():
     print(f"[Log] SUCCESS! Interactive video created: {final_video}")
     
     # 5. Social Media Automation
-    print("[Log] Generating viral metadata...")
-    from engine.social_gen import generate_viral_metadata, YouTubeUploader, InstagramUploader
-    
-    if mode == "FACTS":
-        metadata = generate_viral_metadata(facts_data, category=category)
-    elif mode == "FIND_IT" or mode == "FIND_CAT":
-        metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
-    else:
-        # For STORY mode
-        metadata = generate_viral_metadata(story_data['story'], mode="STORY", category=category)
-    print(f"[Log] Viral Title: {metadata['title']}")
-    
-    print("[Log] Would you like to upload this to YouTube? (Requires client_secrets.json)")
-    uploader = YouTubeUploader()
-    if uploader.authenticate():
-        uploader.upload_video(
-            final_video, 
-            metadata['title'],
-            metadata['description'],
-            metadata['tags']
-        )
-    else:
-        print("💡 YouTube Auth skipped.")
+    if not args.skip_upload:
+        print("[Log] Generating viral metadata...")
+        from engine.social_gen import generate_viral_metadata, YouTubeUploader, InstagramUploader
+        
+        if mode == "FACTS":
+            metadata = generate_viral_metadata(facts_data, category=category)
+        elif mode == "FIND_IT" or mode == "FIND_CAT":
+            metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
+        else:
+            # For STORY mode
+            metadata = generate_viral_metadata(story_data['story'], mode="STORY", category=category)
+        print(f"[Log] Viral Title: {metadata['title']}")
+        
+        print("[Log] Uploading to YouTube...")
+        uploader = YouTubeUploader()
+        if uploader.authenticate():
+            uploader.upload_video(
+                final_video, 
+                metadata['title'],
+                metadata['description'],
+                metadata['tags']
+            )
+        else:
+            print("💡 YouTube Auth skipped.")
 
-    print("[Log] Instagram uploader ready.")
-    ig_uploader = InstagramUploader()
-    # ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
+        print("[Log] Instagram uploader ready.")
+        ig_uploader = InstagramUploader()
+        # ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
+    else:
+        print("[Log] Skip Upload flag detected. Social media steps ignored.")
+        # We still need metadata for the local .txt file
+        from engine.social_gen import generate_viral_metadata
+        if mode == "FACTS":
+            metadata = generate_viral_metadata(facts_data, category=category)
+        elif mode == "FIND_IT" or mode == "FIND_CAT":
+            metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
+        else:
+            metadata = generate_viral_metadata(story_data['story'], mode="STORY", category=category)
     
     # 6. Report Success to Dashboard
     if args.video_id and args.user_id:
