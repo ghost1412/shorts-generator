@@ -1,0 +1,8 @@
+meta-llama/Llama-3.2-3B-Instruct: 400
+  Error: {"error":{"message":"The requested model 'meta-llama/Llama-3.2-3B-Instruct' is not supported by any provider you have enabled.","type":"invalid_request_error","param":"model","code":"model_not_supported"}}
+meta-llama/Llama-3.2-1B-Instruct: 200
+  Success: How can I assist you today?
+google/gemma-2-2b-it: 400
+  Error: {"error":{"message":"The requested model 'google/gemma-2-2b-it' is not supported by any provider you have enabled.","type":"invalid_request_error","param":"model","code":"model_not_supported"}}
+HuggingFaceH4/zephyr-7b-beta: 400
+  Error: {"error":{"message":"The requested model 'HuggingFaceH4/zephyr-7b-beta' is not supported by any provider you have enabled.","type":"invalid_request_error","param":"model","code":"model_not_supported"}}
