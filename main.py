@@ -51,9 +51,7 @@ def main():
             full_script += f"Fact 2: {facts_data[1]['fact']} ... "
             full_script += f"Fact 3: {facts_data[2]['fact']} ... ... "
             full_script += "CAN YOU FIND IT? 👇 Comment below! ... ... "
-            # Reveal part (to be handled by video gen reveal window)
-            truth_idx = [i+1 for i, f in enumerate(facts_data) if f['truth']]
-            full_script += f"The answer is Fact {truth_idx[0]} and {truth_idx[1]} were true! You just got smarter!"
+            full_script += "Like and Subscribe for more daily facts! You just got smarter!"
         elif mode == "STORY":
             story_data = generate_story(category)
             if not story_data: return
