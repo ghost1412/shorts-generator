@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Generation Mode (FACTS or STORY)'
+        description: 'Generation Mode (FACTS, STORY, WYR, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT)'
         required: false
         default: 'AUTO'
       category:
@@ -60,14 +60,12 @@ jobs:
       run: |
         # Decide Mode
         INPUT_MODE="${{ github.event.inputs.mode }}"
-        if [ "$INPUT_MODE" = "FACTS" ] || [ "$INPUT_MODE" = "STORY" ]; then
-          MODE="$INPUT_MODE"
+        if [ "$INPUT_MODE" != "" ] && [ "$INPUT_MODE" != "AUTO" ]; then
+          ARG_MODE="--mode $INPUT_MODE"
         else
-          # Fallback to alternating logic
-          RUN_COUNT=${{ github.run_number }}
-          if [ $((RUN_COUNT % 2)) -eq 0 ]; then MODE="STORY"; else MODE="FACTS"; fi
+          ARG_MODE="--mode AUTO"
         fi
-        
+
         # Decide Category
         INPUT_CAT="${{ github.event.inputs.category }}"
         if [ "$INPUT_CAT" != "" ] && [ "$INPUT_CAT" != "random" ]; then
@@ -92,5 +90,5 @@ jobs:
           ARG_VIBE=""
         fi
         
-        echo "🎬 Generating $MODE Video..."
-        python main.py --mode $MODE $ARG_CAT $ARG_SCRIPT $ARG_VIBE
+        echo "🎬 Generating Video..."
+        python main.py $ARG_MODE $ARG_CAT $ARG_SCRIPT $ARG_VIBE

@@ -163,6 +163,268 @@ Requirements:
     print(f"❌ Story API failed after all attempts.")
     raise RuntimeError(f"LLM Story Generation failed.")
 
+def generate_wyr(category="general"):
+    """
+    Generates a 'Would You Rather' scenario with fake percentages.
+    Returns: {"option_a": str, "option_b": str, "percent_a": int, "percent_b": int}
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    if not HF_API_KEY:
+        print("DEBUG: HF_API_KEY is missing for WYR!")
+        raise RuntimeError("HF_API_KEY is missing. Cannot generate WYR.")
+
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    
+    prompt = f"""Generate a HILARIOUS, highly social-media-engaging "Would you rather" question for a YouTube Shorts audience. The topic is {category}.
+Requirements:
+1. Make it EXTREMELY funny or awkward — the kind of question that makes people immediately want to comment their answer.
+2. Both options should be equally terrible or absurd in a funny way (classic WYR style). 
+3. Examples of great formats:
+  - "Sneeze glitter for the rest of your life" vs "Hiccup a fart sound every time you laugh"
+  - "Your loud chewing partner gets promoted above you" vs "Your most embarrassing memory plays on the TV at your wedding"
+4. Keep each option under 20 words.
+5. No percentages needed. Just the two options.
+6. Format as JSON ONLY. Escape all double quotes inside the text.
+JSON Structure:
+{{
+  "option_a": "Option A text here",
+  "option_b": "Option B text here",
+  "percent_a": 50,
+  "percent_b": 50
+}}
+"""
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 400,
+        "temperature": 0.85
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        response_json = response.json()
+        output = response_json["choices"][0]["message"]["content"]
+        
+        start = output.find("{")
+        end = output.rfind("}") + 1
+        if start == -1 or end == 0:
+            raise RuntimeError("LLM WYR Generation failed to produce valid JSON.")
+
+        json_str = output[start:end].strip()
+        wyr = json.loads(json_str)
+        
+        # Validation
+        if "option_a" in wyr and "option_b" in wyr and "percent_a" in wyr and "percent_b" in wyr:
+             if wyr["percent_a"] + wyr["percent_b"] != 100:
+                  # Fix it if math is wrong
+                  wyr["percent_b"] = 100 - wyr["percent_a"]
+             return wyr
+        else:
+            raise ValueError("Missing keys in JSON")
+            
+    except Exception as e:
+        print(f"❌ WYR API failed: {e}")
+        # Fallback
+        return {
+            "option_a": "Lose all your memories",
+            "option_b": "Never make new memories again",
+            "percent_a": 45,
+            "percent_b": 55
+        }
+
+def generate_reddit_story(category="general"):
+    """
+    Generates a dramatic, first-person Reddit-style story (e.g. AITA).
+    Returns: {"title": str, "story": str}
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    if not HF_API_KEY:
+        print("DEBUG: HF_API_KEY is missing for REDDIT!")
+        raise RuntimeError("HF_API_KEY is missing. Cannot generate REDDIT story.")
+
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    
+    prompt = f"""Generate a highly dramatic, controversial, or shocking 1st-person story like you would see on r/AmItheAsshole or r/TrueOffMyChest regarding {category}. 
+Requirements:
+1. Start with a hook that clearly states the conflict (e.g., "Am I the jerk for kicking my sister out of my wedding?").
+2. Tell the story in a fast-paced, emotional way.
+3. Keep it under 120 words.
+4. End on a cliffhanger or a controversial note asking for judgment.
+5. Format as JSON ONLY. Escape all double quotes inside the text.
+JSON Structure:
+{{
+  "title": "A short viral title",
+  "story": "The full story text..."
+}}
+"""
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 600,
+        "temperature": 0.85
+    }
+
+    # Try up to 2 times
+    for attempt in range(2):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=25)
+            response.raise_for_status()
+            output = response.json()["choices"][0]["message"]["content"]
+            
+            # Robust JSON extraction
+            start = output.find("{")
+            end = output.rfind("}") + 1
+            if start == -1 or end == 0:
+                continue
+
+            json_str = output[start:end].strip()
+            # Basic sanitization for common LLM escape errors
+            json_str = json_str.replace("\n", " ").replace("\r", "")
+            return json.loads(json_str)
+        except Exception as e:
+            print(f"[Warning] Reddit attempt {attempt+1} failed: {e}")
+            continue
+
+    print(f"❌ REDDIT API failed after retries. Using fallback.")
+    return {
+        "title": "AITA for eating my roommate's food?",
+        "story": "Am I the jerk? My roommate bought a custom $100 cake for her dog's birthday. It was sitting in the fridge, looking delicious. I came home starving after a 12-hour shift, and I just ate half of it. When she found out, she screamed and demanded I pay $200 for emotional damages. I told her it's just a dog, and she's being ridiculous. Now the entire house won't speak to me. Whose side are you on?"
+    }
+
+def generate_trivia(category="general knowledge"):
+    """
+    Generates a Trivia question with 3 options and the correct answer index.
+    Returns: {"question": str, "opt_a": str, "opt_b": str, "opt_c": str, "answer": str}
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    if not HF_API_KEY:
+        print("DEBUG: HF_API_KEY is missing for TRIVIA!")
+        raise RuntimeError("HF_API_KEY is missing. Cannot generate TRIVIA.")
+
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    
+    prompt = f"""Generate a difficult but fun trivia question about {category}.
+Requirements:
+1. Provide the question.
+2. Provide exactly three short options (A, B, and C).
+3. State the correct option letter (A, B, or C).
+4. Format as JSON ONLY:
+{{
+  "question": "What is the capital of Australia?",
+  "opt_a": "Sydney",
+  "opt_b": "Melbourne",
+  "opt_c": "Canberra",
+  "answer": "C"
+}}
+"""
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 400,
+        "temperature": 0.7
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        response_json = response.json()
+        output = response_json["choices"][0]["message"]["content"]
+        
+        start = output.find("{")
+        end = output.rfind("}") + 1
+        if start == -1 or end == 0:
+            raise RuntimeError("LLM TRIVIA Generation failed to produce valid JSON.")
+
+        json_str = output[start:end].strip()
+        return json.loads(json_str)
+    except Exception as e:
+        print(f"❌ TRIVIA API failed: {e}")
+        return {
+            "question": "Which planet is known as the Red Planet?",
+            "opt_a": "Venus",
+            "opt_b": "Jupiter",
+            "opt_c": "Mars",
+            "answer": "C"
+        }
+
+def generate_quote(category="stoic"):
+    """
+    Generates a deep, motivational, or philosophical quote.
+    Returns: {"quote": str, "author": str}
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    if not HF_API_KEY:
+        print("DEBUG: HF_API_KEY is missing for QUOTE!")
+        raise RuntimeError("HF_API_KEY is missing. Cannot generate QUOTE.")
+
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    
+    prompt = f"""Generate a profound, highly emotional or stoic quote about {category}.
+Requirements:
+1. Provide the quote text (around 10-25 words).
+2. Provide the author's name (can be a real historical figure or "Unknown").
+3. Make it incredibly cinematic and thought-provoking.
+4. Format as JSON ONLY. Escape all double quotes inside the text.
+JSON Structure:
+{{
+  "quote": "The only way to achieve the impossible is to believe it is possible.",
+  "author": "Charles Kingsleigh"
+}}
+"""
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 400,
+        "temperature": 0.8
+    }
+
+    for attempt in range(2):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=20)
+            response.raise_for_status()
+            output = response.json()["choices"][0]["message"]["content"]
+            
+            start = output.find("{")
+            end = output.rfind("}") + 1
+            if start == -1 or end == 0:
+                continue
+
+            json_str = output[start:end].strip()
+            return json.loads(json_str)
+        except Exception as e:
+            print(f"[Warning] Quote attempt {attempt+1} failed: {e}")
+            continue
+
+    return {
+        "quote": "If you are going through hell, keep going.",
+        "author": "Winston Churchill"
+    }
+
 if __name__ == "__main__":
     facts = generate_mixed_facts("science")
     for i, f in enumerate(facts):
