@@ -2,7 +2,7 @@ import os
 import sys
 import random
 import argparse
-from engine.script_gen import generate_mixed_facts, generate_story
+from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video
 from engine.video_gen import create_shorts_video
@@ -15,8 +15,8 @@ VIBE_VOICE_MAP = {
 }
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate either FACTS or STORY shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "AUTO"], help="Force a specific mode.")
+    parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, or ODD_ONE_OUT shorts.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
@@ -42,8 +42,8 @@ def main():
         story_data = {"title": "Manual Upload", "story": full_script}
         facts_data = [] # Not used in story mode but kept for metadata function compatibility
     else:
-        # 1. Choose Mode: FACTS or STORY (Manual override or random)
-        mode = args.mode if args.mode and args.mode != "AUTO" else random.choice(["FACTS", "STORY"])
+        # 1. Choose Mode (Manual override or random)
+        mode = args.mode if args.mode and args.mode != "AUTO" else random.choice(["FACTS", "STORY", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT"])
         print(f"[Log] Mode selected: {mode}", flush=True)
         
         # 2. Choose Category
@@ -80,6 +80,30 @@ def main():
             full_script = f"{random.choice(intros)} ... 🔍 Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
             facts_data = []
             print(f"[Log] Game mode: {mode}", flush=True)
+        elif mode == "WYR":
+            wyr_data = generate_wyr(category)
+            full_script = f"Would you rather? 🔴 {wyr_data['option_a']} ... OR ... 🔵 {wyr_data['option_b']} ... ... What did you choose? Let me know in the comments!"
+            facts_data = [] # Not used
+            print(f"[Log] WYR Data: {wyr_data}")
+        elif mode == "REDDIT":
+            reddit_data = generate_reddit_story(category)
+            full_script = f"{reddit_data['title']} ... {reddit_data['story']} ... Whose side are you on? Let me know!"
+            facts_data = []
+            print(f"[Log] Reddit Data: {reddit_data}")
+        elif mode == "TRIVIA":
+            trivia_data = generate_trivia(category)
+            full_script = f"Are you a genius? Let's find out! ... {trivia_data['question']} ... A: {trivia_data['opt_a']} ... B: {trivia_data['opt_b']} ... C: {trivia_data['opt_c']} ... ... Answer is ... {trivia_data['answer']}. Did you get it right?"
+            facts_data = [] # Not used
+            print(f"[Log] TRIVIA Data: {trivia_data}")
+        elif mode == "QUOTE":
+            quote_data = generate_quote(category)
+            full_script = f"Listen closely... ... {quote_data['quote']} ... ... ... ... Do you agree?"
+            facts_data = []
+            print(f"[Log] QUOTE Data: {quote_data}")
+        elif mode == "ODD_ONE_OUT":
+            full_script = "Spot the odd one out! 🧐 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
+            facts_data = []
+            print(f"[Log] ODD_ONE_OUT Selected")
 
     print(f"[Log] Full Script: \"{full_script}\"", flush=True)
     
@@ -134,8 +158,41 @@ def main():
         if not target_path:
             print(f"[Error] Failed to download {target_name} image.", flush=True)
             return
+    elif mode == "WYR":
+        # Two backgrounds for split screen
+        search_query = f"{category} satisfying"
+        for i in range(2):
+            bg_filename = os.path.join(session_dir, f"bg_wyr_{i}.mp4")
+            path = download_background_video(search_query if i == 0 else "minecraft parkour", output_path=bg_filename)
+            if not path:
+                path = download_background_video("nature", output_path=os.path.join(session_dir, f"bg_fallback_wyr_{i}.mp4"))
+            if path: bg_video_paths.append(path)
+    elif mode == "REDDIT":
+        # One high-retention satisfying video
+        bg_filename = os.path.join(session_dir, "bg_reddit.mp4")
+        path = download_background_video("satisfying sand", output_path=bg_filename)
+        if path: bg_video_paths.append(path)
+    elif mode == "TRIVIA":
+        # Engaging background like Minecraft parkour
+        bg_filename = os.path.join(session_dir, "bg_trivia.mp4")
+        path = download_background_video("minecraft parkour", output_path=bg_filename)
+        if path: bg_video_paths.append(path)
+    elif mode == "QUOTE":
+        # Moody dark aesthetic
+        bg_filename = os.path.join(session_dir, "bg_quote.mp4")
+        path = download_background_video("dark cinematic moody slow motion", output_path=bg_filename)
+        if path: bg_video_paths.append(path)
+    elif mode == "ODD_ONE_OUT":
+        from engine.media_gen import get_game_assets
+        # We reuse the logic that grabs a single target image for the Odd One Out grid
+        game_assets = get_game_assets(1, output_dir=session_dir)
+        target_path = game_assets["target_path"]
+        target_name = game_assets["target_name"]
+        if not target_path:
+            print(f"[Error] Failed to download {target_name} image for ODD_ONE_OUT.", flush=True)
+            return
 
-    if mode not in ["FIND_IT", "FIND_CAT"] and not any(bg_video_paths):
+    if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
         print("[Error] Failed to download any background videos.")
         return
 
@@ -164,6 +221,51 @@ def main():
             target_name=target_name,
             music_path=bg_music
         )
+    elif mode == "WYR":
+        from engine.video_gen import create_wyr_video
+        final_video = create_wyr_video(
+            audio_path,
+            wyr_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music
+        )
+    elif mode == "REDDIT":
+        from engine.video_gen import create_reddit_video
+        final_video = create_reddit_video(
+            audio_path,
+            subs_path,
+            reddit_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music
+        )
+    elif mode == "TRIVIA":
+        from engine.video_gen import create_trivia_video
+        final_video = create_trivia_video(
+            audio_path,
+            trivia_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music
+        )
+    elif mode == "QUOTE":
+        from engine.video_gen import create_quote_video
+        final_video = create_quote_video(
+            audio_path,
+            quote_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music
+        )
+    elif mode == "ODD_ONE_OUT":
+        from engine.video_gen import create_odd_one_out_video
+        final_video = create_odd_one_out_video(
+            audio_path,
+            target_path,
+            output_filename,
+            music_path=bg_music
+        )
     else:
         final_video = create_shorts_video(
             audio_path, 
@@ -185,6 +287,17 @@ def main():
             metadata = generate_viral_metadata(facts_data, category=category)
         elif mode == "FIND_IT" or mode == "FIND_CAT":
             metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
+        elif mode == "WYR":
+            metadata = generate_viral_metadata(f"Would You Rather: {wyr_data['option_a']} OR {wyr_data['option_b']}", mode="STORY", category=category)
+        elif mode == "REDDIT":
+            metadata = generate_viral_metadata(reddit_data['story'], mode="STORY", category=category)
+            metadata['title'] = reddit_data['title'] # Override AI title with strong hook
+        elif mode == "TRIVIA":
+            metadata = generate_viral_metadata(f"Trivia: {trivia_data['question']} Did you guess right?", mode="STORY", category=category)
+        elif mode == "QUOTE":
+            metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
+        elif mode == "ODD_ONE_OUT":
+            metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
         else:
             # For STORY mode
             metadata = generate_viral_metadata(story_data['story'], mode="STORY", category=category)
@@ -213,6 +326,17 @@ def main():
             metadata = generate_viral_metadata(facts_data, category=category)
         elif mode == "FIND_IT" or mode == "FIND_CAT":
             metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
+        elif mode == "WYR":
+            metadata = generate_viral_metadata(f"Would You Rather: {wyr_data['option_a']} OR {wyr_data['option_b']}", mode="STORY", category=category)
+        elif mode == "REDDIT":
+            metadata = generate_viral_metadata(reddit_data['story'], mode="STORY", category=category)
+            metadata['title'] = reddit_data['title']
+        elif mode == "TRIVIA":
+            metadata = generate_viral_metadata(f"Trivia: {trivia_data['question']} Did you guess right?", mode="STORY", category=category)
+        elif mode == "QUOTE":
+            metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
+        elif mode == "ODD_ONE_OUT":
+            metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
         else:
             metadata = generate_viral_metadata(story_data['story'], mode="STORY", category=category)
     
