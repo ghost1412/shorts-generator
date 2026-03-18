@@ -43,7 +43,17 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
         query = " ".join(keywords) if keywords else fallback_query
         print(f"[Log] Searching Pexels for: '{query}'")
     
+    # Check if we already have this query in assets (caching)
+    safe_query = re.sub(r'[^a-zA-Z0-9]', '_', query).lower()
+    cached_path = f"assets/bg_{safe_query}.mp4"
+    if os.path.exists(cached_path):
+        print(f"[Log] Cache Hit: Using existing video for '{query}'")
+        import shutil
+        shutil.copy(cached_path, output_path)
+        return output_path
+
     url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
+
     headers = {"Authorization": PEXELS_API_KEY}
     
     try:
@@ -74,6 +84,11 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             with open(output_path, "wb") as f:
                 f.write(video_content)
+            
+            # Save to cache as well
+            with open(cached_path, "wb") as f:
+                f.write(video_content)
+                
             return output_path
             
     except Exception as e:
@@ -84,7 +99,18 @@ def download_image(query, output_path="assets/obj.png"):
     Downloads an image based on a query from Pexels.
     """
     print(f"[Log] Searching Pexels Image for: '{query}'")
+    
+    # Cache Check
+    safe_query = re.sub(r'[^a-zA-Z0-9]', '_', query).lower()
+    cached_path = f"assets/img_{safe_query}.png"
+    if os.path.exists(cached_path):
+        print(f"[Log] Cache Hit: Using existing image for '{query}'")
+        import shutil
+        shutil.copy(cached_path, output_path)
+        return output_path
+
     url = f"https://api.pexels.com/v1/search?query={query}&per_page=1"
+
     headers = {"Authorization": PEXELS_API_KEY}
     
     try:
@@ -100,6 +126,11 @@ def download_image(query, output_path="assets/obj.png"):
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 with open(output_path, "wb") as f:
                     f.write(img_content)
+                
+                # Save to cache
+                with open(cached_path, "wb") as f:
+                    f.write(img_content)
+                    
                 return output_path
     except Exception as e:
         print(f"Error downloading image: {e}")

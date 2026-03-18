@@ -34,6 +34,17 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Cache dependencies and media
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/pip
+          assets/
+        key: ${{ runner.os }}-shorts-${{ hashFiles('**/requirements.txt') }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-shorts-${{ hashFiles('**/requirements.txt') }}-
+          ${{ runner.os }}-shorts-
+
     - name: Install FFmpeg
       run: |
         sudo apt-get update
