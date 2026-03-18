@@ -279,31 +279,41 @@ def main():
     print(f"[Log] SUCCESS! Interactive video created: {final_video}")
     
     # 5. Social Media Automation
+    # 5. Viral Metadata Generation (Required for both Upload and Local Report)
+    print("[Log] Generating viral metadata...")
+    from engine.social_gen import generate_viral_metadata, YouTubeUploader, InstagramUploader
+        
+    if mode == "FACTS":
+        metadata = generate_viral_metadata(facts_data, category=category)
+    elif mode == "FIND_IT" or mode == "FIND_CAT":
+        metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
+    elif mode == "WYR":
+        metadata = generate_viral_metadata(f"Would You Rather: {wyr_data['option_a']} OR {wyr_data['option_b']}", mode="STORY", category=category)
+    elif mode == "REDDIT":
+        metadata = generate_viral_metadata(reddit_data['story'], mode="STORY", category=category)
+        # Use reddit title but enforce YouTube's length limit (100 chars max, use 95 for safety)
+        metadata['title'] = reddit_data['title'][:95]
+    elif mode == "TRIVIA":
+        metadata = generate_viral_metadata(f"Trivia: {trivia_data['question']} Did you guess right?", mode="STORY", category=category)
+    elif mode == "QUOTE":
+        metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
+    elif mode == "ODD_ONE_OUT":
+        metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
+    else:
+        # For STORY or other modes
+        story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"
+        metadata = generate_viral_metadata(story_content, mode="STORY", category=category)
+    
+    # Ensure title is never empty or too long
+    if not metadata.get("title"):
+        metadata["title"] = f"Shocking {category} reveal! 😱"
+    metadata["title"] = (metadata["title"] or "Viral Short")[:95]
+    
+    print(f"[Log] Viral Title: {metadata['title']}")
+    # 6. Social Media Automation
     if not args.skip_upload:
-        print("[Log] Generating viral metadata...")
-        from engine.social_gen import generate_viral_metadata, YouTubeUploader, InstagramUploader
-        
-        if mode == "FACTS":
-            metadata = generate_viral_metadata(facts_data, category=category)
-        elif mode == "FIND_IT" or mode == "FIND_CAT":
-            metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
-        elif mode == "WYR":
-            metadata = generate_viral_metadata(f"Would You Rather: {wyr_data['option_a']} OR {wyr_data['option_b']}", mode="STORY", category=category)
-        elif mode == "REDDIT":
-            metadata = generate_viral_metadata(reddit_data['story'], mode="STORY", category=category)
-            metadata['title'] = reddit_data['title'] # Override AI title with strong hook
-        elif mode == "TRIVIA":
-            metadata = generate_viral_metadata(f"Trivia: {trivia_data['question']} Did you guess right?", mode="STORY", category=category)
-        elif mode == "QUOTE":
-            metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
-        elif mode == "ODD_ONE_OUT":
-            metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
-        else:
-            # For STORY mode
-            metadata = generate_viral_metadata(story_data['story'], mode="STORY", category=category)
-        print(f"[Log] Viral Title: {metadata['title']}")
-        
         print("[Log] Uploading to YouTube...")
+        from engine.social_gen import YouTubeUploader, InstagramUploader
         uploader = YouTubeUploader()
         if uploader.authenticate():
             uploader.upload_video(
@@ -320,26 +330,6 @@ def main():
         # ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
     else:
         print("[Log] Skip Upload flag detected. Social media steps ignored.")
-        # We still need metadata for the local .txt file
-        from engine.social_gen import generate_viral_metadata
-        if mode == "FACTS":
-            metadata = generate_viral_metadata(facts_data, category=category)
-        elif mode == "FIND_IT" or mode == "FIND_CAT":
-            metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
-        elif mode == "WYR":
-            metadata = generate_viral_metadata(f"Would You Rather: {wyr_data['option_a']} OR {wyr_data['option_b']}", mode="STORY", category=category)
-        elif mode == "REDDIT":
-            metadata = generate_viral_metadata(reddit_data['story'], mode="STORY", category=category)
-            metadata['title'] = reddit_data['title']
-        elif mode == "TRIVIA":
-            metadata = generate_viral_metadata(f"Trivia: {trivia_data['question']} Did you guess right?", mode="STORY", category=category)
-        elif mode == "QUOTE":
-            metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
-        elif mode == "ODD_ONE_OUT":
-            metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
-        else:
-            metadata = generate_viral_metadata(story_data['story'], mode="STORY", category=category)
-    
     # 6. Report Success to Dashboard
     if args.video_id and args.user_id:
         print(f"[Log] Reporting success to dashboard for Job {args.video_id}...")
