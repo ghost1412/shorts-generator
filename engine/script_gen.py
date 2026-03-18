@@ -3,9 +3,37 @@ import requests
 import json
 from dotenv import load_dotenv
 
+import re
 load_dotenv()
 
 HF_API_KEY = os.getenv("HF_API_KEY")
+
+def robust_json_parse(output):
+    """
+    Tries to extract and fix a JSON block from LLM output.
+    Handles unescaped newlines, control characters, and common LLM quirks.
+    """
+    # Remove control characters that break JSON (except for newline/tab/carriage-return)
+    clean_output = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', output)
+    
+    # Try to find the inner JSON block (starts with { or [ and ends with } or ])
+    match = re.search(r'([\[\{].*[\]\}])', clean_output, re.DOTALL)
+    if not match:
+        raise ValueError("No JSON-like structure found in response.")
+        
+    json_str = match.group(1).strip()
+    
+    # Common fixes for LLM-generated JSON
+    # 1. Unescaped newlines inside strings
+    def fix_newlines(m):
+        return m.group(0).replace('\n', '\\n')
+    json_str = re.sub(r'"[^"]*?"', fix_newlines, json_str, flags=re.DOTALL)
+    
+    # 2. Fix trailing commas (e.g. [1, 2, ])
+    json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)
+    
+    return json.loads(json_str)
+
 
 def generate_mixed_facts(category="science"):
     """
@@ -66,13 +94,7 @@ Example format:
 
             output = response_json["choices"][0]["message"]["content"]
             
-            start = output.find("[")
-            end = output.rfind("]") + 1
-            if start == -1 or end <= 0:
-                print(f"DEBUG: Attempt {attempt+1} - No JSON array found in output.")
-                continue
-
-            facts = json.loads(output[start:end])
+            facts = robust_json_parse(output)
             
             # VALIDATION: Ensure exactly 2 True and 1 False
             trues = [f for f in facts if f.get("truth") is True]
@@ -146,16 +168,7 @@ Requirements:
 
         output = response_json["choices"][0]["message"]["content"]
         
-        # Robust JSON extraction
-        start = output.find("{")
-        end = output.rfind("}") + 1
-        if start == -1 or end == 0:
-            print(f"DEBUG: Story No JSON found in output: {output}")
-            raise RuntimeError("LLM Story Generation failed to produce valid JSON.")
-
-        json_str = output[start:end].strip()
-            
-        return json.loads(json_str)
+        return robust_json_parse(output)
     except Exception as e:
         print(f"❌ Story API failed after all attempts ({e}).")
         raise RuntimeError(f"LLM Story Generation failed: {e}")
@@ -212,13 +225,7 @@ JSON Structure:
         response_json = response.json()
         output = response_json["choices"][0]["message"]["content"]
         
-        start = output.find("{")
-        end = output.rfind("}") + 1
-        if start == -1 or end == 0:
-            raise RuntimeError("LLM WYR Generation failed to produce valid JSON.")
-
-        json_str = output[start:end].strip()
-        wyr = json.loads(json_str)
+        wyr = robust_json_parse(output)
         
         # Validation
         if "option_a" in wyr and "option_b" in wyr and "percent_a" in wyr and "percent_b" in wyr:
@@ -231,13 +238,7 @@ JSON Structure:
             
     except Exception as e:
         print(f"❌ WYR API failed: {e}")
-        # Fallback
-        return {
-            "option_a": "Lose all your memories",
-            "option_b": "Never make new memories again",
-            "percent_a": 45,
-            "percent_b": 55
-        }
+        raise RuntimeError(f"LLM WYR Generation failed after all attempts: {e}")
 
 def generate_reddit_story(category="general"):
     """
@@ -284,25 +285,13 @@ JSON Structure:
             response.raise_for_status()
             output = response.json()["choices"][0]["message"]["content"]
             
-            # Robust JSON extraction
-            start = output.find("{")
-            end = output.rfind("}") + 1
-            if start == -1 or end == 0:
-                continue
-
-            json_str = output[start:end].strip()
-            # Basic sanitization for common LLM escape errors
-            json_str = json_str.replace("\n", " ").replace("\r", "")
-            return json.loads(json_str)
+            return robust_json_parse(output)
         except Exception as e:
-            print(f"[Warning] Reddit attempt {attempt+1} failed: {e}")
+            print(f"[Warning] Reddit attempt {attempt+1} failed ({type(e).__name__}: {e})")
             continue
 
-    print(f"❌ REDDIT API failed after retries. Using fallback.")
-    return {
-        "title": "AITA for eating my roommate's food?",
-        "story": "Am I the jerk? My roommate bought a custom $100 cake for her dog's birthday. It was sitting in the fridge, looking delicious. I came home starving after a 12-hour shift, and I just ate half of it. When she found out, she screamed and demanded I pay $200 for emotional damages. I told her it's just a dog, and she's being ridiculous. Now the entire house won't speak to me. Whose side are you on?"
-    }
+    print(f"❌ REDDIT API failed after retries.")
+    raise RuntimeError("LLM REDDIT Generation failed to produce valid JSON after retries.")
 
 def generate_trivia(category="general knowledge"):
     """
@@ -349,22 +338,10 @@ Requirements:
         response_json = response.json()
         output = response_json["choices"][0]["message"]["content"]
         
-        start = output.find("{")
-        end = output.rfind("}") + 1
-        if start == -1 or end == 0:
-            raise RuntimeError("LLM TRIVIA Generation failed to produce valid JSON.")
-
-        json_str = output[start:end].strip()
-        return json.loads(json_str)
+        return robust_json_parse(output)
     except Exception as e:
         print(f"❌ TRIVIA API failed: {e}")
-        return {
-            "question": "Which planet is known as the Red Planet?",
-            "opt_a": "Venus",
-            "opt_b": "Jupiter",
-            "opt_c": "Mars",
-            "answer": "C"
-        }
+        raise RuntimeError(f"LLM TRIVIA Generation failed after all attempts: {e}")
 
 def generate_quote(category="stoic"):
     """
@@ -409,21 +386,13 @@ JSON Structure:
             response.raise_for_status()
             output = response.json()["choices"][0]["message"]["content"]
             
-            start = output.find("{")
-            end = output.rfind("}") + 1
-            if start == -1 or end == 0:
-                continue
-
-            json_str = output[start:end].strip()
-            return json.loads(json_str)
+            return robust_json_parse(output)
         except Exception as e:
             print(f"[Warning] Quote attempt {attempt+1} failed: {e}")
             continue
 
-    return {
-        "quote": "If you are going through hell, keep going.",
-        "author": "Winston Churchill"
-    }
+    print(f"❌ QUOTE API failed after retries.")
+    raise RuntimeError("LLM QUOTE Generation failed to produce valid JSON after retries.")
 
 if __name__ == "__main__":
     facts = generate_mixed_facts("science")
