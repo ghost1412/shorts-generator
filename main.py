@@ -43,7 +43,7 @@ def main():
         facts_data = [] # Not used in story mode but kept for metadata function compatibility
     else:
         # 1. Choose Mode (Manual override or random)
-        mode = args.mode if args.mode and args.mode != "AUTO" else random.choice(["FACTS", "STORY", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT"])
+        mode = args.mode if args.mode and args.mode != "AUTO" else random.choice(["FACTS", "FACTS", "STORY", "STORY","FACTS", "STORY", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT"])
         print(f"[Log] Mode selected: {mode}", flush=True)
         
         # 2. Choose Category
