@@ -8,10 +8,12 @@ def test_distribution():
     for cat in categories:
         print(f"\n--- Category: {cat} ---")
         for i in range(3):
-            facts = generate_mixed_facts(cat)
+            res = generate_mixed_facts(cat)
+            facts = res["facts"]
+            hook = res["hook"]
             trues = [f for f in facts if f['truth']]
             falses = [f for f in facts if not f['truth']]
-            print(f"Run {i+1}: {len(trues)}T, {len(falses)}F")
+            print(f"Run {i+1}: {len(trues)}T, {len(falses)}F | Hook: {hook[:40]}...")
             for j, f in enumerate(facts):
                 print(f"  {j+1}. [{f['truth']}] {f['fact'][:60]}...")
             

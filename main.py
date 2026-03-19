@@ -43,7 +43,14 @@ def main():
         facts_data = [] # Not used in story mode but kept for metadata function compatibility
     else:
         # 1. Choose Mode (Manual override or random)
-        mode = args.mode if args.mode and args.mode != "AUTO" else random.choice(["FACTS", "FACTS", "STORY", "STORY","FACTS", "STORY", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT"])
+        # GROWTH UPDATE: Favoring high-engagement "Challenge" modes based on analytics (FACTS, FIND_IT, WYR)
+        if args.mode and args.mode != "AUTO":
+            mode = args.mode
+        else:
+            mode = random.choices(
+                ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE"],
+                weights=[35, 15, 15, 10, 10, 5, 5, 5]
+            )[0]
         print(f"[Log] Mode selected: {mode}", flush=True)
         
         # 2. Choose Category
@@ -52,14 +59,17 @@ def main():
         print(f"[Log] Generating content for category: {category}...", flush=True)
         
         if mode == "FACTS":
-            facts_data = generate_mixed_facts(category)
-            # Construct the script with strategic pauses
-            full_script = f"SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it? ... ... "
+            facts_res = generate_mixed_facts(category)
+            hook = facts_res["hook"]
+            facts_data = facts_res["facts"]
+            
+            # Construct the script: Hook -> Challenge Intro -> Fact 1, 2, 3 -> Outro
+            full_script = f"{hook} ... One of these facts is a fake! Can you find it? ... ... "
             full_script += f"Fact 1: {facts_data[0]['fact']} ... "
             full_script += f"Fact 2: {facts_data[1]['fact']} ... "
             full_script += f"Fact 3: {facts_data[2]['fact']} ... ... "
-            full_script += "CAN YOU FIND IT? 👇 Comment below! ... ... "
-            full_script += "Like and Subscribe for more daily facts! You just got smarter!"
+            full_script += "CAN YOU FIND THE LIE? 👇 Comment below! ... ... "
+            full_script += "Like and Subscribe for more daily challenges! You just got smarter!"
         elif mode == "STORY":
             story_data = generate_story(category)
             if not story_data: return

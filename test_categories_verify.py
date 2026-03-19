@@ -9,7 +9,9 @@ from engine.script_gen import generate_mixed_facts
 def test_category(category):
     print(f"\n--- Testing Category: {category} ---")
     try:
-        facts = generate_mixed_facts(category)
+        res = generate_mixed_facts(category)
+        facts = res["facts"]
+        hook = res["hook"]
         if not facts or len(facts) < 3:
             print(f"❌ Error: {category} returned less than 3 facts.")
             return False
