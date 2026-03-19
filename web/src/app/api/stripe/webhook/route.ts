@@ -3,14 +3,20 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia' as any,
-});
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is missing');
+  return new Stripe(key, {
+    apiVersion: '2024-12-18.acacia' as any,
+  });
+}
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Supabase admin credentials missing');
+  return createClient(url, key);
+}
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -19,6 +25,7 @@ export async function POST(request: Request) {
   let event: Stripe.Event;
 
   try {
+    const stripe = getStripe();
     event = stripe.webhooks.constructEvent(
       body,
       signature,
@@ -41,6 +48,7 @@ export async function POST(request: Request) {
         
         const maxVideos = planName.toLowerCase() === 'agency' ? 500 : 100;
 
+        const supabaseAdmin = getSupabaseAdmin();
         const { error } = await supabaseAdmin
           .from('user_configs')
           .update({
@@ -63,6 +71,7 @@ export async function POST(request: Request) {
       if (subUserId) {
         console.log(`❌ Subscription cancelled for user ${subUserId}. Downgrading to free.`);
         
+        const supabaseAdmin = getSupabaseAdmin();
         await supabaseAdmin
           .from('user_configs')
           .update({
