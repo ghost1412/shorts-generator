@@ -10,16 +10,16 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-50 glass-card !rounded-none border-b border-white/5 px-6 py-4 flex justify-between items-center backdrop-blur-xl">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#9d4edd] to-[#00e5ff] rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
-            <Sparkles className="text-white w-6 h-6" />
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-[#9d4edd] to-[#00e5ff] rounded-lg md:rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+            <Sparkles className="text-white w-5 h-5 md:w-6 md:h-6" />
           </div>
-          <span className="text-2xl font-bold tracking-tight premium-gradient">ShortsFlow</span>
+          <span className="text-xl md:text-2xl font-bold tracking-tight premium-gradient">ShortsFlow</span>
         </div>
-        <div className="hidden md:flex items-center space-x-8 text-sm font-medium text-zinc-400">
-          <Link href="#features" className="hover:text-white transition-colors">Features</Link>
-          <Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link>
-          <Link href="/login" className="px-5 py-2 hover:bg-white/5 rounded-lg transition-all">Login</Link>
-          <Link href="/signup" className="btn-primary px-6 py-2">Get Started</Link>
+        <div className="flex items-center space-x-4 md:space-x-8 text-sm font-medium text-zinc-400">
+          <Link href="#features" className="hidden md:block hover:text-white transition-colors">Features</Link>
+          <Link href="/pricing" className="hidden md:block hover:text-white transition-colors">Pricing</Link>
+          <Link href="/login" className="px-3 md:px-5 py-2 hover:bg-white/5 rounded-lg transition-all">Login</Link>
+          <Link href="/signup" className="btn-primary px-4 md:px-6 py-2">Get Started</Link>
         </div>
       </nav>
 
@@ -34,12 +34,12 @@ export default function LandingPage() {
               <span>Version 2.0 is now live</span>
             </div>
             
-            <h1 className="text-6xl md:text-8xl font-black tracking-tight leading-[1.1]">
+            <h1 className="text-4xl md:text-8xl font-black tracking-tight leading-[1.2] md:leading-[1.1]">
               Automate Your <br />
               <span className="premium-gradient">Shorts Empire</span>
             </h1>
             
-            <p className="text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-base md:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed px-4">
               The world's first AI-powered engine that creates, edits, and schedules viral shorts while you sleep. No more manual editing. Just pure growth.
             </p>
 
@@ -54,11 +54,11 @@ export default function LandingPage() {
               </button>
             </div>
 
-            <div className="pt-12 flex items-center justify-center gap-8 opacity-40 grayscale hover:grayscale-0 transition-all">
-              <span className="text-sm font-bold tracking-widest uppercase">Trusted by</span>
-              <Youtube className="w-8 h-8" />
-              <div className="font-bold text-xl italic uppercase">IG Reels</div>
-              <div className="font-bold text-xl uppercase tracking-tighter">TikTok</div>
+            <div className="pt-12 flex flex-wrap items-center justify-center gap-6 md:gap-8 opacity-40 grayscale hover:grayscale-0 transition-all">
+              <span className="text-[10px] md:text-sm font-bold tracking-widest uppercase w-full md:w-auto">Trusted by</span>
+              <Youtube className="w-6 h-6 md:w-8 md:h-8" />
+              <div className="font-bold text-lg md:text-xl italic uppercase">IG Reels</div>
+              <div className="font-bold text-lg md:text-xl uppercase tracking-tighter">TikTok</div>
             </div>
           </div>
         </section>
@@ -93,11 +93,11 @@ export default function LandingPage() {
 
         {/* Call to Action */}
         <section className="py-20 px-6">
-          <div className="max-w-4xl mx-auto glass-card p-12 text-center relative overflow-hidden">
+          <div className="max-w-4xl mx-auto glass-card p-8 md:p-12 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-[#00e5ff]/10 rounded-full blur-3xl -z-10" />
-            <h2 className="text-4xl font-bold mb-6">Ready to dominate the algorithm?</h2>
-            <p className="text-zinc-400 mb-10 text-lg">Join 2,500+ creators who are saving 20+ hours every week.</p>
-            <Link href="/signup" className="btn-primary px-10 py-4 text-lg inline-flex items-center gap-2">
+            <h2 className="text-2xl md:text-4xl font-bold mb-6">Ready to dominate the algorithm?</h2>
+            <p className="text-zinc-400 mb-10 text-base md:text-lg">Join 2,500+ creators who are saving 20+ hours every week.</p>
+            <Link href="/signup" className="btn-primary px-8 md:px-10 py-4 text-base md:text-lg inline-flex items-center gap-2 w-full md:w-auto justify-center">
               Get Started Now
               <CheckCircle2 className="w-5 h-5" />
             </Link>

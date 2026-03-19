@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [userConfig, setUserConfig] = useState<any>(null);
   const [selectedMode, setSelectedMode] = useState('AUTO');
   const [selectedCategory, setSelectedCategory] = useState('random');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const modes = [
     { id: 'AUTO', label: 'Magic Auto', icon: <Sparkles size={16} />, color: 'text-purple-400' },
@@ -120,27 +121,45 @@ export default function Dashboard() {
   const niches = ["Science", "Space", "Anime Lore", "Cooking Hacks", "History", "Animal Facts"];
 
   return (
-    <div className="flex h-screen bg-[#0a0a0c] text-[#f0f0f5] overflow-hidden">
+    <div className="flex h-screen bg-[#0a0a0c] text-[#f0f0f5] overflow-hidden relative">
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-72 glass-card m-4 mr-0 flex flex-col p-6 space-y-8">
-        <div className="flex items-center space-x-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#9d4edd] to-[#00e5ff] rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
-            <Sparkles className="text-white w-6 h-6" />
+      <aside className={`
+        fixed lg:relative lg:flex lg:w-72
+        w-80 h-full glass-card m-0 lg:m-4 lg:mr-0 
+        flex-col p-6 space-y-8 z-50 transition-transform duration-300
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-[#9d4edd] to-[#00e5ff] rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+              <Sparkles className="text-white w-6 h-6" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight premium-gradient">ShortsFlow</h1>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight premium-gradient">ShortsFlow</h1>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-zinc-500 hover:text-white">
+            <PlusCircle className="rotate-45" size={24} />
+          </button>
         </div>
 
         <nav className="flex-1 space-y-2">
-          <Link href="/dashboard">
+          <Link href="/dashboard" onClick={() => setSidebarOpen(false)}>
             <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active />
           </Link>
           <div className="opacity-50 cursor-not-allowed">
             <NavItem icon={<Youtube size={20} />} label="Channels (Soon)" inactive />
           </div>
-          <Link href="/analytics">
+          <Link href="/analytics" onClick={() => setSidebarOpen(false)}>
             <NavItem icon={<BarChart3 size={20} />} label="Analytics" />
           </Link>
-          <Link href="/settings">
+          <Link href="/settings" onClick={() => setSidebarOpen(false)}>
             <NavItem icon={<Settings size={20} />} label="Settings" />
           </Link>
           <div onClick={() => logout()} className="flex items-center space-x-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 text-zinc-500 hover:text-red-400 hover:bg-red-500/5 mt-auto">
@@ -154,7 +173,7 @@ export default function Dashboard() {
           <p className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest font-bold">Current Plan</p>
           <div className="flex justify-between items-end mb-3">
             <p className="font-extrabold text-sm capitalize">{userConfig?.plan || 'Free'}</p>
-            <p className="text-[10px] text-zinc-400">{videoLogs.length} / {userConfig?.max_videos || 3} videos</p>
+            <p className="text-[10px] text-zinc-400">{videoLogs.length} / {userConfig?.max_videos || 3} vids</p>
           </div>
           <div className="w-full bg-zinc-800 h-1.5 rounded-full mb-4 overflow-hidden">
             <div 
@@ -169,24 +188,37 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        <header className="flex justify-between items-center mb-10">
-          <div>
-            <h2 className="text-3xl font-bold">Welcome back, {user?.email?.split('@')[0] || 'Manager'} 👋</h2>
-            <p className="text-zinc-500 mt-1">Your automated channels are performing 24% better this week.</p>
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+        <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-6 mb-10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden p-2 bg-white/5 border border-white/10 rounded-lg"
+              >
+                <LayoutDashboard size={20} className="text-[#00e5ff]" />
+              </button>
+              <div>
+                <h2 className="text-xl md:text-3xl font-bold">Welcome back, {user?.email?.split('@')[0] || 'Manager'} 👋</h2>
+                <p className="text-xs md:text-sm text-zinc-500 mt-1">Performing 24% better this week.</p>
+              </div>
+            </div>
           </div>
+          
           <button 
             onClick={() => triggerGeneration(selectedMode, selectedCategory)}
             disabled={isTriggering}
-            className="btn-primary flex items-center gap-2 disabled:opacity-50"
+            className="w-full md:w-auto btn-primary flex items-center justify-center gap-2 disabled:opacity-50 py-4 md:py-3"
           >
             <Youtube size={20} />
-            {isTriggering ? 'Triggering...' : `Trigger ${selectedMode} (${selectedCategory.replace('_', ' ')})`}
+            <span className="text-sm font-bold truncate">
+              {isTriggering ? 'Triggering...' : `Trigger ${selectedMode} (${selectedCategory.replace('_', ' ')})`}
+            </span>
           </button>
         </header>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-10">
           <StatCard 
             icon={<TrendingUp className="text-emerald-400" />} 
             label="Total Views" 
@@ -417,13 +449,13 @@ function NavItem({ icon, label, active = false, inactive = false }: { icon: Reac
 
 function StatCard({ icon, label, value, growth }: { icon: React.ReactNode, label: string, value: string, growth: string }) {
   return (
-    <div className="glass-card p-6 flex items-center justify-between">
-      <div className="space-y-1">
-        <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold">{label}</p>
-        <p className="text-3xl font-bold">{value}</p>
-        <span className="text-xs text-emerald-400 font-medium">{growth}</span>
+    <div className="glass-card p-4 md:p-6 flex items-center justify-between">
+      <div className="space-y-1 overflow-hidden">
+        <p className="text-[10px] md:text-xs text-zinc-500 uppercase tracking-widest font-bold truncate">{label}</p>
+        <p className="text-2xl md:text-3xl font-bold truncate">{value}</p>
+        <span className="text-[10px] md:text-xs text-emerald-400 font-medium truncate inline-block">{growth}</span>
       </div>
-      <div className="p-3 bg-white/5 rounded-2xl border border-white/5">
+      <div className="p-2 md:p-3 bg-white/5 rounded-2xl border border-white/5 flex-shrink-0 text-[#00e5ff]">
         {icon}
       </div>
     </div>
