@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia' as any,
-});
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    throw new Error('STRIPE_SECRET_KEY is not defined in environment variables.');
+  }
+  return new Stripe(key, {
+    apiVersion: '2024-12-18.acacia' as any,
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +28,7 @@ export async function POST(request: Request) {
     }
 
     // Create Stripe Checkout Session
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
