@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import random
 from dotenv import load_dotenv
 
 import re
@@ -35,12 +36,30 @@ def robust_json_parse(output):
     return json.loads(json_str)
 
 
+def get_sub_topic(category):
+    """
+    Returns a granular sub-topic for a given category to ensure LLM variety.
+    """
+    sub_topics = {
+        "science": ["deep sea biology", "quantum mechanics", "forgotten inventors", "human body anomalies", "microscopic life", "unexpected chemistry", "bizarre psychology experiments"],
+        "space": ["exoplanets", "black holes", "moon landing secrets", "stellar phenomena", "alien life theories", "the edge of the universe", "rogue planets"],
+        "animals": ["creatures of the abyss", "weird mating rituals", "animal intelligence", "parasites", "extinct monsters", "animal camouflage", "venomous oddities"],
+        "history": ["bizarre royal laws", "untold warfare", "lost civilizations", "the middle ages", "secret societies", "forgotten plagues", "ancient technology"],
+        "anime_lore": ["hidden easter eggs", "banned episodes", "mangaka secrets", "budget cuts", "pilot episodes differences", "lost media anime", "censorship history"],
+        "intimacy_facts": ["historical dating rituals", "psychology of attraction", "weird laws about love", "evolutionary biology", "hormonal secrets", "body language myths"],
+        "cooking_hacks": ["molecular gastronomy", "forgotten ancient recipes", "food chemistry", "industrial food secrets", "chef shortcuts", "dangerous ingredients in history"]
+    }
+    return random.choice(sub_topics.get(category, [category]))
+
 def generate_mixed_facts(category="science"):
     """
     Generates 2 True facts and 1 False fact using LLM with robust fallbacks.
-    Returns a list of dicts: {"fact": str, "truth": bool}
+    Returns a dict: {"hook": str, "facts": list}
     """
     url = "https://router.huggingface.co/v1/chat/completions"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] Selected sub-topic for variety: {selected_sub}")
+
     headers = {
         "Authorization": f"Bearer {HF_API_KEY}",
         "Content-Type": "application/json"
@@ -53,7 +72,8 @@ def generate_mixed_facts(category="science"):
     model = "meta-llama/Llama-3.1-8B-Instruct" 
     
     prompt = f"""SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it?
-Generate three short, shocking facts about {category}. Exactly two must be true and one must be a believable lie.
+Generate three short, shocking, and OBSCURE facts about {selected_sub}. Exactly two must be true and one must be a believable lie.
+REQUIREMENT: Focus on RARE information that most people don't know. Avoid common trivia.
 
 VIRAL HOOK REQUIREMENT:
 The start of the video MUST be a high-engagement hook. 
@@ -147,12 +167,15 @@ def generate_story(category="history"):
         raise RuntimeError("HF_API_KEY is missing. Cannot generate story.")
 
     model = "meta-llama/Llama-3.1-8B-Instruct"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
     
-    prompt = f"""Generate a short, shocking, and 100% TRUE story about {category}. 
+    prompt = f"""Generate a short, shocking, and 100% TRUE story about {selected_sub}. 
 VIRAL REQUIREMENTS:
-1. START WITH A MASSIVE CURIOSITY GAP (e.g., "The government doesn't want you to know about this {category} incident...").
+1. START WITH A MASSIVE CURIOSITY GAP (e.g., "The government doesn't want you to know about this {selected_sub} incident...").
 2. USE AGGRESSIVE HOOKS: "99% have no idea this happened," "This will keep you up at night," etc.
-3. Tell the story in a fast-paced, engaging way.
+3. Focus on an OBSCURE and RARE event. Avoid common stories or well-known events.
+4. Tell the story in a fast-paced, engaging way.
 4. End on a shocking twist or realization.
 5. Keep it under 100 words.
 
@@ -208,17 +231,20 @@ def generate_wyr(category="general"):
         raise RuntimeError("HF_API_KEY is missing. Cannot generate WYR.")
 
     model = "meta-llama/Llama-3.1-8B-Instruct"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] WYR: Selected sub-topic: {selected_sub}")
     
-    prompt = f"""Generate a HILARIOUS and highly engaging "Would you rather" question about {category}.
+    prompt = f"""Generate a HILARIOUS and highly engaging "Would you rather" question about {selected_sub}.
 REQUIREMENTS:
-1. Make it EXTREMELY funny or awkward to encourage comments.
-2. Both options must be equally absurd but realistic to the theme.
-3. CRITICAL: Ensure the options make sense and are well-phrased.
+1. Make it EXTREMELY funny, awkward, or mind-blowing to encourage comments.
+2. Focus on OBSCURE scenarios. Avoid common "Would you rather" tropes.
+3. Both options must be equally absurd but realistic to the theme.
+4. CRITICAL: Ensure the options make sense and are well-phrased.
 
 Format as JSON ONLY:
 {{
-  "option_a": "Option A relating to {category}",
-  "option_b": "Option B relating to {category}",
+  "option_a": "Option A relating to {selected_sub}",
+  "option_b": "Option B relating to {selected_sub}",
   "percent_a": 50,
   "percent_b": 50
 }}
@@ -268,17 +294,20 @@ def generate_reddit_story(category="general"):
         raise RuntimeError("HF_API_KEY is missing. Cannot generate REDDIT story.")
 
     model = "meta-llama/Llama-3.1-8B-Instruct"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] REDDIT: Selected sub-topic: {selected_sub}")
     
-    prompt = f"""Generate a highly dramatic, controversial, or shocking 1st-person story like you would see on r/AmItheAsshole or r/TrueOffMyChest regarding {category}. 
+    prompt = f"""Generate a highly dramatic, controversial, or shocking 1st-person story like you would see on r/AmItheAsshole or r/TrueOffMyChest regarding {selected_sub}. 
 Requirements:
-1. Start with a hook that clearly states the conflict (e.g., "Am I the jerk for kicking my sister out of my wedding?").
-2. Tell the story in a fast-paced, emotional way.
-3. Keep it under 120 words.
-4. End on a cliffhanger or a controversial note asking for judgment.
-5. Format as JSON ONLY. Escape all double quotes inside the text.
+1. Start with a hook that clearly states the conflict (e.g., "Am I the jerk for banning my {selected_sub} from my wedding?").
+2. Focus on OBSCURE and RARE scenarios. Avoid generic drama.
+3. Tell the story in a fast-paced, emotional way.
+4. Keep it under 120 words.
+5. End on a cliffhanger or a controversial note asking for judgment.
+6. Format as JSON ONLY. Escape all double quotes inside the text.
 JSON Structure:
 {{
-  "title": "A short viral title",
+  "title": "A short viral title regarding {selected_sub}",
   "story": "The full story text..."
 }}
 """
@@ -321,10 +350,12 @@ def generate_trivia(category="general knowledge"):
         raise RuntimeError("HF_API_KEY is missing. Cannot generate TRIVIA.")
 
     model = "meta-llama/Llama-3.1-8B-Instruct"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] TRIVIA: Selected sub-topic: {selected_sub}")
     
-    prompt = f"""Generate a difficult but fun trivia question about {category}.
+    prompt = f"""Generate a difficult but fun trivia question about {selected_sub}.
 REQUIREMENTS:
-1. Provide one challenging question.
+1. Provide one challenging, OBSCURE question. Avoid common trivia.
 2. Provide exactly three short options (A, B, and C).
 3. State the correct option letter (A, B, or C).
 4. CRITICAL: The question and answer MUST be 100% FACTUALLY ACCURATE and VERIFIABLE.
@@ -373,9 +404,12 @@ def generate_quote(category="stoic"):
         raise RuntimeError("HF_API_KEY is missing. Cannot generate QUOTE.")
 
     model = "meta-llama/Llama-3.1-8B-Instruct"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] QUOTE: Selected sub-topic: {selected_sub}")
     
-    prompt = f"""Generate a profound, highly emotional or stoic quote about {category}.
+    prompt = f"""Generate a profound, highly emotional or stoic quote about {selected_sub}.
 Requirements:
+1. Focus on an OBSCURE but powerful perspective.
 1. Provide the quote text (around 10-25 words).
 2. Provide the author's name (can be a real historical figure or "Unknown").
 3. Make it incredibly cinematic and thought-provoking.
