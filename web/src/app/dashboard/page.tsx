@@ -204,6 +204,22 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* YouTube Connection Warning */}
+          {!userConfig?.youtube_refresh_token && !isTriggering && (
+            <div className="flex-1 md:max-w-md bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 flex items-center gap-4 animate-pulse">
+              <div className="p-2 bg-orange-500/20 rounded-lg">
+                <Youtube size={20} className="text-orange-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-orange-400 uppercase tracking-wider">Channel Not Connected</p>
+                <p className="text-[10px] text-zinc-400 mt-0.5">Connect your YouTube channel in settings to enable auto-posting.</p>
+              </div>
+              <Link href="/settings" className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 text-[10px] font-bold rounded-lg transition-colors border border-orange-500/20">
+                FIX NOW
+              </Link>
+            </div>
+          )}
           
           <button 
             onClick={() => triggerGeneration(selectedMode, selectedCategory)}
@@ -268,9 +284,9 @@ export default function Dashboard() {
                          )}
                       </div>
                     </div>
-                    <div className="flex flex-col justify-between py-1 flex-1">
+                    <div className="flex flex-col justify-between py-1 flex-1 min-w-0">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-1">
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           vid.mode === 'STORY' ? 'bg-orange-500/20 text-orange-400' : 
                           vid.mode === 'FIND_IT' ? 'bg-red-500/20 text-red-400' :
@@ -284,9 +300,20 @@ export default function Dashboard() {
                           </span>
                         )}
                       </div>
-                      <h4 className="font-semibold text-sm mt-2 line-clamp-2">{vid.title}</h4>
+                      <h4 className="font-semibold text-sm line-clamp-1">{vid.title}</h4>
+                      {vid.download_url && (
+                        <a 
+                          href={vid.download_url} 
+                          download 
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1.5 text-[10px] font-bold text-[#00e5ff] mt-2 hover:bg-[#00e5ff]/10 px-2 py-1 rounded-lg border border-[#00e5ff]/20 transition-all uppercase tracking-wider"
+                        >
+                          <Download size={12} />
+                          Download MP4
+                        </a>
+                      )}
                     </div>
-                    <p className="text-xs text-zinc-500">
+                    <p className="text-xs text-zinc-500 mt-2 truncate">
                       {vid.status === 'Processing' ? 'Rendering AI media...' : `${vid.views || 0} views • ${new Date(vid.created_at).toLocaleDateString()}`}
                     </p>
                   </div>
