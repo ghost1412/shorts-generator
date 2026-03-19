@@ -49,7 +49,7 @@ def main():
         else:
             mode = random.choices(
                 ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE"],
-                weights=[35, 15, 15, 10, 10, 5, 5, 5]
+                weights=[35, 0, 15, 15, 15, 5, 10, 5]
             )[0]
         print(f"[Log] Mode selected: {mode}", flush=True)
         
