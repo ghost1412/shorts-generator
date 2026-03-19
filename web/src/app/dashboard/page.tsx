@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [userConfig, setUserConfig] = useState<any>(null);
   const [selectedMode, setSelectedMode] = useState('AUTO');
+  const [selectedCategory, setSelectedCategory] = useState('random');
 
   const modes = [
     { id: 'AUTO', label: 'Magic Auto', icon: <Sparkles size={16} />, color: 'text-purple-400' },
@@ -175,12 +176,12 @@ export default function Dashboard() {
             <p className="text-zinc-500 mt-1">Your automated channels are performing 24% better this week.</p>
           </div>
           <button 
-            onClick={() => triggerGeneration(selectedMode)}
+            onClick={() => triggerGeneration(selectedMode, selectedCategory)}
             disabled={isTriggering}
             className="btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             <Youtube size={20} />
-            {isTriggering ? 'Triggering...' : `Trigger ${selectedMode} Run`}
+            {isTriggering ? 'Triggering...' : `Trigger ${selectedMode} (${selectedCategory.replace('_', ' ')})`}
           </button>
         </header>
 
@@ -226,23 +227,36 @@ export default function Dashboard() {
                     onClick={() => { if (vid.download_url) window.open(vid.download_url, '_blank'); }}
                     className="flex w-full gap-4"
                   >
-                    <div className="w-24 h-32 bg-zinc-800 rounded-lg overflow-hidden relative flex-shrink-0">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-                         <PlayCircle className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className={`w-24 h-32 bg-zinc-800 rounded-lg overflow-hidden relative flex-shrink-0 ${vid.status === 'Processing' ? 'animate-pulse' : ''}`}>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 flex-col justify-center items-center">
+                         {vid.status === 'Processing' ? (
+                           <div className="w-6 h-6 border-2 border-[#00e5ff] border-t-transparent rounded-full animate-spin" />
+                         ) : (
+                           <PlayCircle className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                         )}
                       </div>
                     </div>
                     <div className="flex flex-col justify-between py-1 flex-1">
                     <div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        vid.mode === 'STORY' ? 'bg-orange-500/20 text-orange-400' : 
-                        vid.mode === 'FIND_IT' ? 'bg-red-500/20 text-red-400' :
-                        'bg-cyan-500/20 text-cyan-400'
-                      }`}>
-                        {vid.mode}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          vid.mode === 'STORY' ? 'bg-orange-500/20 text-orange-400' : 
+                          vid.mode === 'FIND_IT' ? 'bg-red-500/20 text-red-400' :
+                          'bg-cyan-500/20 text-cyan-400'
+                        }`}>
+                          {vid.mode}
+                        </span>
+                        {vid.status === 'Processing' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-500 animate-pulse border border-yellow-500/30">
+                            Processing...
+                          </span>
+                        )}
+                      </div>
                       <h4 className="font-semibold text-sm mt-2 line-clamp-2">{vid.title}</h4>
                     </div>
-                    <p className="text-xs text-zinc-500">{vid.views || 0} views • {new Date(vid.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-zinc-500">
+                      {vid.status === 'Processing' ? 'Rendering AI media...' : `${vid.views || 0} views • ${new Date(vid.created_at).toLocaleDateString()}`}
+                    </p>
                   </div>
                   </div>
                 </div>
@@ -284,15 +298,22 @@ export default function Dashboard() {
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Select Category</p>
                 <div className="flex flex-wrap gap-2">
-                  {niches.map(n => (
-                    <button 
-                      key={n} 
-                      onClick={() => triggerGeneration('AUTO', n.toLowerCase().replace(' ', '_'))}
-                      className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs transition-colors hover:border-[#00e5ff]/50"
-                    >
-                      {n}
-                    </button>
-                  ))}
+                  {niches.map(n => {
+                    const norm_n = n.toLowerCase().replace(' ', '_');
+                    return (
+                      <button 
+                        key={n} 
+                        onClick={() => setSelectedCategory(norm_n)}
+                        className={`px-3 py-1.5 border rounded-lg text-xs transition-colors ${
+                          selectedCategory === norm_n 
+                            ? 'bg-[#00e5ff]/10 border-[#00e5ff] text-[#00e5ff]' 
+                            : 'bg-white/5 border-white/10 text-zinc-400 hover:border-white/20'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

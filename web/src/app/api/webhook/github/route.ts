@@ -10,7 +10,7 @@ const supabaseAdmin = createClient(
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    const { video_id, title, mode, status, download_url, user_id } = payload;
+    const { video_id, title, mode, status, download_url, user_id, youtube_video_id } = payload;
 
     // Security Check: You should add a secret token/signature check here from GitHub
     // to ensure only your GitHub Actions can call this endpoint.
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
         mode: mode,
         status: status || 'Published',
         download_url: download_url,
+        youtube_video_id: youtube_video_id,
         created_at: new Date().toISOString(),
       });
 

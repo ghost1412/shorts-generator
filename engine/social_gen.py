@@ -119,17 +119,36 @@ class YouTubeUploader:
         self.scopes = ["https://www.googleapis.com/auth/youtube.upload"]
         self.youtube = None
 
-    def authenticate(self):
+    def authenticate(self, creds_dict=None):
+        """
+        Authenticates with YouTube API using either a creds_dict (SaaS mode)
+        or local json files (test/local mode).
+        """
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
         creds = None
-        # token.json stores the user's access and refresh tokens
-        if os.path.exists(self.token_file):
-            try:
-                from google.oauth2.credentials import Credentials
-                creds = Credentials.from_authorized_user_file(self.token_file, self.scopes)
-            except Exception as e:
-                print(f"[Log] Could not load existing token: {e}")
 
-        # If there are no (valid) credentials available, let the user log in.
+        # 1. SAAS MODE: Use credentials provided from Supabase
+        if creds_dict and all(k in creds_dict for k in ["client_id", "client_secret", "refresh_token"]):
+            print(f"[Log] Authenticating with user-provided credentials (BYOK Mode)")
+            creds = Credentials(
+                None,  # access_token is None, will be refreshed
+                refresh_token=creds_dict["refresh_token"],
+                client_id=creds_dict["client_id"],
+                client_secret=creds_dict["client_secret"],
+                token_uri="https://oauth2.googleapis.com/token",
+                scopes=self.scopes
+            )
+        
+        # 2. LOCAL/LEGACY MODE: Use files
+        if not creds:
+            if os.path.exists(self.token_file):
+                try:
+                    creds = Credentials.from_authorized_user_file(self.token_file, self.scopes)
+                except Exception as e:
+                    print(f"[Log] Could not load existing token: {e}")
+
+        # Refresh if needed
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 try:
@@ -139,21 +158,24 @@ class YouTubeUploader:
                     creds = None
             
             if not creds:
+                # Manual flow as a last resort
                 if not os.path.exists(self.secrets_file):
-                    print(f"[Error] {self.secrets_file} not found and no valid token available.")
+                    print(f"[Error] No valid credentials found for YouTube upload.")
                     return False
                 
                 try:
+                    from google_auth_oauthlib.flow import InstalledAppFlow
                     flow = InstalledAppFlow.from_client_secrets_file(self.secrets_file, self.scopes)
-                    # This will attempt to open a browser
                     creds = flow.run_local_server(port=0)
                 except Exception as e:
+                    print(f"[Error] Manual authentication failed: {e}")
+                    return False
                     print(f"[Error] Auth failed (Browser might be missing): {e}")
                     print("[Log] Tip: If running on GitHub, make sure to provide GOOGLE_YOUTUBE_TOKEN secret.")
                     return False
 
             # Save the credentials for the next run
-            with open(self.token_file, 'w') as token:
+            with open(self.token_file, 'w', encoding="utf-8") as token:
                 token.write(creds.to_json())
 
         try:

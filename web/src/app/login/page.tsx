@@ -3,7 +3,7 @@
 import React, { useState, use } from 'react'
 import Link from 'next/link'
 import { Sparkles, Mail, Lock, ArrowRight, Github, Chrome } from 'lucide-react'
-import { login } from './actions'
+import { login, signInWithOAuth } from './actions'
 
 export default function LoginPage({ 
   searchParams 
@@ -12,6 +12,12 @@ export default function LoginPage({
 }) {
   const resolvedParams = use(searchParams)
   const [loading, setLoading] = useState(false)
+
+  const handleOAuthSignIn = async (provider: 'google' | 'github') => {
+    setLoading(true)
+    await signInWithOAuth(provider)
+    setLoading(false)
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-[#f0f0f5] flex flex-col justify-center items-center p-6 bg-gradient-to-br from-[#0a0a0c] via-[#0f0c29] to-[#0a0a0c]">
@@ -100,11 +106,19 @@ export default function LoginPage({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
+            <button 
+              onClick={() => handleOAuthSignIn('google')}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-50"
+            >
               <Chrome className="w-5 h-5" />
               <span className="text-sm">Google</span>
             </button>
-            <button className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors">
+            <button 
+              onClick={() => handleOAuthSignIn('github')}
+              disabled={loading}
+              className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-50"
+            >
               <Github className="w-5 h-5" />
               <span className="text-sm">GitHub</span>
             </button>

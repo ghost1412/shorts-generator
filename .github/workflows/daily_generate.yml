@@ -78,6 +78,9 @@ jobs:
     - name: Run Video Generator (SaaS Bridge)
       env:
         DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL || 'https://shorts-generator.vercel.app/api/webhook/github' }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
         # Decide Mode
         INPUT_MODE="${{ github.event.inputs.mode }}"

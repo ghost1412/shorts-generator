@@ -8,6 +8,7 @@ const tiers = [
   {
     name: 'Free',
     price: '$0',
+    priceId: '', // No Stripe for free
     description: 'Perfect for starters and hobbyists.',
     features: [
       '3 Videos per month',
@@ -15,12 +16,13 @@ const tiers = [
       'Basic Subtitles',
       'Community Support'
     ],
-    cta: 'Start for Free',
+    cta: 'Continue Free',
     highlighted: false
   },
   {
     name: 'Pro',
     price: '$19',
+    priceId: 'price_1QvExamplePro', // Placeholder
     description: 'The viral secret weapon for creators.',
     features: [
       'Unlimited Videos',
@@ -36,6 +38,7 @@ const tiers = [
   {
     name: 'Agency',
     price: '$49',
+    priceId: 'price_1QvExampleAgency', // Placeholder
     description: 'Build your automated empire at scale.',
     features: [
       'Managing Multi-Channels',
@@ -45,12 +48,45 @@ const tiers = [
       'API Access',
       '24/7 Priority Support'
     ],
-    cta: 'Contact Sales',
+    cta: 'Get Agency Access',
     highlighted: false
   }
 ]
 
 export default function PricingPage() {
+  const [loading, setLoading] = React.useState<string | null>(null)
+
+  const handleSubscription = async (tier: typeof tiers[0]) => {
+    if (tier.name === 'Free') {
+      window.location.href = '/dashboard'
+      return
+    }
+
+    setLoading(tier.name)
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          priceId: tier.priceId,
+          planName: tier.name 
+        })
+      })
+
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        throw new Error(data.error || 'Checkout failed')
+      }
+    } catch (err) {
+      console.error('Subscription error:', err)
+      alert('Failed to start checkout. Please try again.')
+    } finally {
+      setLoading(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-[#f0f0f5] py-20 px-6 bg-gradient-to-b from-[#0a0a0c] via-[#0f0c29] to-[#0a0a0c]">
       {/* Background Orbs */}
@@ -114,14 +150,16 @@ export default function PricingPage() {
               </div>
 
               <button 
+                onClick={() => handleSubscription(tier)}
+                disabled={loading !== null}
                 className={`w-full py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2 group ${
                   tier.highlighted 
                     ? 'btn-primary' 
                     : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white'
-                }`}
+                } ${loading === tier.name ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {tier.cta}
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                {loading === tier.name ? 'Redirecting...' : tier.cta}
+                {loading !== tier.name && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
               </button>
             </div>
           ))}

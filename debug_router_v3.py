@@ -14,7 +14,7 @@ models = [
     "HuggingFaceH4/zephyr-7b-beta"
 ]
 
-with open("router_results.txt", "w") as f:
+with open("router_results.txt", "w", encoding="utf-8") as f:
     for model in models:
         payload = {"model": model, "messages": [{"role": "user", "content": "hi"}], "max_tokens": 10}
         try:

@@ -11,19 +11,28 @@ import {
   Filter,
   Download,
   Calendar,
-  Sparkles
+  Sparkles,
+  RefreshCcw,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { syncYouTubeAnalytics } from './actions';
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalViews: 0,
     totalVideos: 0,
-    avgRetention: 78,
-    modeDistribution: { FACTS: 0, STORY: 0, FIND_IT: 0 }
+    avgRetention: 0,
+    viralRate: 0,
+    topMode: 'N/A',
+    weeklyViews: [0,0,0,0,0,0,0,0,0,0,0,0] as number[],
+    modeDistribution: { FACTS: 0, STORY: 0, FIND_IT: 0 } as Record<string,number>
   });
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
   const supabase = createClient();
 
@@ -41,10 +50,39 @@ export default function AnalyticsPage() {
           return acc;
         }, { FACTS: 0, STORY: 0, FIND_IT: 0 });
 
+        // Real average retention
+        const retained = logs.filter(l => l.retention_rate > 0);
+        const avgRet = retained.length > 0
+          ? Math.round(retained.reduce((acc, l) => acc + l.retention_rate, 0) / retained.length)
+          : 0;
+
+        // Viral rate: % of videos with views > 10,000
+        const viralVideos = logs.filter(l => (l.views || 0) > 10000).length;
+        const viralRate = logs.length > 0 ? Math.round((viralVideos / logs.length) * 100) : 0;
+
+        // Top mode by count
+        const topMode = Object.entries(modeDistribution).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || 'N/A';
+
+        // Weekly views chart — last 12 weeks
+        const now = Date.now();
+        const WEEK = 7 * 24 * 60 * 60 * 1000;
+        const weeklyViews = Array(12).fill(0).map((_, i) => {
+          const start = now - (11 - i + 1) * WEEK;
+          const end = now - (11 - i) * WEEK;
+          return logs
+            .filter(l => { const t = new Date(l.created_at).getTime(); return t >= start && t < end; })
+            .reduce((acc, l) => acc + (l.views || 0), 0);
+        });
+        const maxWeekly = Math.max(...weeklyViews, 1);
+        const weeklyNorm = weeklyViews.map(v => Math.round((v / maxWeekly) * 100));
+
         setStats({
           totalViews,
           totalVideos: logs.length,
-          avgRetention: logs.length > 0 ? 78 : 0, // Mocked for now
+          avgRetention: avgRet,
+          viralRate,
+          topMode,
+          weeklyViews: weeklyNorm,
           modeDistribution
         });
         setRecentLogs(logs.slice(0, 5));
@@ -53,6 +91,66 @@ export default function AnalyticsPage() {
     }
     fetchData();
   }, [supabase]);
+
+  async function handleSync() {
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const result = await syncYouTubeAnalytics();
+      if (result.success) {
+        setMessage({ type: 'success', text: `Successfully synced ${result.updated} videos! 🚀` });
+        // Re-fetch data
+        const { data: logs } = await supabase
+          .from('video_logs')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (logs) {
+          const totalViews = logs.reduce((acc, log) => acc + (log.views || 0), 0);
+          const modeDistribution = logs.reduce((acc: any, log) => {
+            acc[log.mode] = (acc[log.mode] || 0) + 1;
+            return acc;
+          }, { FACTS: 0, STORY: 0, FIND_IT: 0 });
+
+          const retained = logs.filter(l => l.retention_rate > 0);
+          const avgRet = retained.length > 0
+            ? Math.round(retained.reduce((acc, l) => acc + l.retention_rate, 0) / retained.length)
+            : 0;
+
+          const viralVideos = logs.filter(l => (l.views || 0) > 10000).length;
+          const viralRate = logs.length > 0 ? Math.round((viralVideos / logs.length) * 100) : 0;
+          const topMode = Object.entries(modeDistribution).sort((a, b) => (b[1] as number) - (a[1] as number))[0]?.[0] || 'N/A';
+
+          const now = Date.now();
+          const WEEK = 7 * 24 * 60 * 60 * 1000;
+          const weeklyViews = Array(12).fill(0).map((_, i) => {
+            const start = now - (11 - i + 1) * WEEK;
+            const end = now - (11 - i) * WEEK;
+            return logs
+              .filter(l => { const t = new Date(l.created_at).getTime(); return t >= start && t < end; })
+              .reduce((acc, l) => acc + (l.views || 0), 0);
+          });
+          const maxWeekly = Math.max(...weeklyViews, 1);
+          const weeklyNorm = weeklyViews.map(v => Math.round((v / maxWeekly) * 100));
+
+          setStats({
+            totalViews,
+            totalVideos: logs.length,
+            avgRetention: avgRet,
+            viralRate,
+            topMode,
+            weeklyViews: weeklyNorm,
+            modeDistribution
+          });
+          setRecentLogs(logs.slice(0, 5));
+        }
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Sync failed' });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   if (loading) return (
     <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center">
@@ -80,37 +178,60 @@ export default function AnalyticsPage() {
               <Calendar size={14} />
               Last 30 Days
             </button>
-            <button className="px-4 py-2 bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] rounded-xl text-xs font-semibold flex items-center gap-2 hover:bg-[#00e5ff]/20 transition-all">
+            <button 
+              onClick={handleSync}
+              disabled={syncing}
+              className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                syncing 
+                ? 'bg-zinc-800 text-zinc-500 animate-pulse' 
+                : 'bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] hover:bg-[#00e5ff]/20 cursor-pointer'
+              }`}
+            >
+              <RefreshCcw size={14} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync Data'}
+            </button>
+            <button className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-semibold flex items-center gap-2 hover:bg-white/10 transition-all">
               <Download size={14} />
               Export Report
             </button>
           </div>
         </header>
 
+        {message && (
+          <div className={`p-4 rounded-xl flex items-center gap-3 border animate-in fade-in slide-in-from-top-2 ${
+            message.type === 'success' 
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+              : 'bg-red-500/10 border-red-500/20 text-red-400'
+          }`}>
+            {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            <span className="text-sm font-medium">{message.text}</span>
+          </div>
+        )}
+
         {/* Hero Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <AnalyticsStatCard 
             label="Total Views" 
             value={stats.totalViews.toLocaleString()} 
-            growth="+12.5%" 
+            growth={stats.totalVideos > 0 ? `${stats.totalVideos} videos` : 'No data'}
             icon={<TrendingUp className="text-emerald-400" />} 
           />
           <AnalyticsStatCard 
             label="Content Output" 
             value={stats.totalVideos.toString()} 
-            growth="+3 this week" 
+            growth={stats.totalVideos > 0 ? `${stats.totalVideos} total` : 'No videos yet'}
             icon={<PlayCircle className="text-blue-400" />} 
           />
           <AnalyticsStatCard 
             label="Avg. Retention" 
             value={`${stats.avgRetention}%`} 
-            growth="Stable" 
+            growth={stats.avgRetention > 0 ? 'From synced data' : 'Sync to update'}
             icon={<Clock className="text-purple-400" />} 
           />
           <AnalyticsStatCard 
             label="Viral Rate" 
-            value="4.2%" 
-            growth="+0.8%" 
+            value={`${stats.viralRate}%`} 
+            growth={stats.totalVideos > 0 ? `${stats.totalVideos > 0 ? 'Videos >10K views' : 'No data'}` : 'No data'}
             icon={<Sparkles className="text-yellow-400" />} 
           />
         </div>
@@ -127,12 +248,12 @@ export default function AnalyticsPage() {
             </div>
             
             <div className="h-64 flex items-end justify-between gap-4 pt-4">
-              {[40, 70, 45, 90, 65, 80, 55, 95, 75, 85, 60, 100].map((h, i) => (
+              {stats.weeklyViews.map((h, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-2 group">
                   <div className="w-full relative bg-white/5 rounded-t-lg overflow-hidden h-full">
                     <div 
                       className="absolute bottom-0 w-full bg-gradient-to-t from-[#00e5ff]/40 to-[#00e5ff] transition-all duration-1000 group-hover:brightness-125" 
-                      style={{ height: `${h}%` }}
+                      style={{ height: `${h || 2}%` }}
                     />
                   </div>
                   <span className="text-[10px] text-zinc-600 font-bold">W{i+1}</span>
@@ -149,10 +270,12 @@ export default function AnalyticsPage() {
               <DistributionRow label="Story Mode" count={stats.modeDistribution.STORY} total={stats.totalVideos} color="bg-orange-400" />
               <DistributionRow label="Interactive" count={stats.modeDistribution.FIND_IT} total={stats.totalVideos} color="bg-red-400" />
             </div>
-            <div className="mt-8 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-              <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1">Top Performing</p>
-              <p className="font-bold text-[#00e5ff]">STORY MODE (88% RT)</p>
-            </div>
+              <div className="mt-8 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold mb-1">Top Performing</p>
+                <p className="font-bold text-[#00e5ff]">
+                  {stats.topMode !== 'N/A' ? `${stats.topMode} MODE` : 'No data yet'}
+                </p>
+              </div>
           </section>
         </div>
 

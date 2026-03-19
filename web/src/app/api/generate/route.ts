@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     }
 
     const { mode, category, customScript, vibe } = await request.json();
-    const renderTarget = process.env.RENDER_TARGET || 'server'; 
+    const renderTarget = process.env.RENDER_TARGET || 'github'; 
     const videoId = crypto.randomUUID();
 
     // 0. Security & Plan Limit Check (Backend enforcement)
@@ -75,13 +75,6 @@ export async function POST(request: Request) {
     // 2. GITHUB ACTIONS RENDERING (Default Cloud)
     let GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     let GITHUB_REPO = process.env.GITHUB_REPO;
-
-    // Use user-specific credentials if available in their config
-    if (userConfig?.github_token && userConfig?.github_repo) {
-      console.log(`🔑 Using user-provided GitHub credentials for ${user.id}`);
-      GITHUB_TOKEN = userConfig.github_token;
-      GITHUB_REPO = userConfig.github_repo;
-    }
 
     if (!GITHUB_TOKEN || !GITHUB_REPO) {
       return NextResponse.json({ error: 'GitHub configuration missing for cloud rendering' }, { status: 500 });
