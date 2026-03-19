@@ -29,19 +29,19 @@ export default function LoginPage({
         {/* Logo Section */}
         <div className="text-center">
           <Link href="/" className="inline-flex items-center space-x-3 group">
-            <div className="w-12 h-12 bg-gradient-to-br from-[#9d4edd] to-[#00e5ff] rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 group-hover:scale-105 transition-transform">
-              <Sparkles className="text-white w-7 h-7" />
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-[#9d4edd] to-[#00e5ff] rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20 group-hover:scale-105 transition-transform">
+              <Sparkles className="text-white w-6 h-6 md:w-7 md:h-7" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight premium-gradient">ShortsFlow</h1>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight premium-gradient">ShortsFlow</h1>
           </Link>
-          <h2 className="mt-6 text-2xl font-bold tracking-tight text-white">Welcome Back</h2>
-          <p className="mt-2 text-sm text-zinc-400">
+          <h2 className="mt-6 text-xl md:text-2xl font-bold tracking-tight text-white">Welcome Back</h2>
+          <p className="mt-2 text-xs md:text-sm text-zinc-400 px-4">
             Log in to manage your automated video empire.
           </p>
         </div>
 
         {/* Auth Card */}
-        <div className="glass-card p-8 space-y-6">
+        <div className="glass-card p-6 md:p-8 space-y-6">
           <form className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">

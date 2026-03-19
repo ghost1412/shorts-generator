@@ -99,10 +99,10 @@ export default function PricingPage() {
             <ArrowRight className="w-4 h-4 rotate-180" />
             <span className="text-sm">Back to Dashboard</span>
           </Link>
-          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight premium-gradient">
+          <h1 className="text-3xl md:text-6xl font-extrabold tracking-tight premium-gradient px-4">
             Pick Your Growth Plan
           </h1>
-          <p className="text-xl text-zinc-400 max-w-2xl mx-auto">
+          <p className="text-base md:text-xl text-zinc-400 max-w-2xl mx-auto px-4">
             Scale your reach with fully automated shorts. Choose the plan that fits your ambition.
           </p>
         </div>
@@ -111,7 +111,7 @@ export default function PricingPage() {
           {tiers.map((tier) => (
             <div 
               key={tier.name}
-              className={`relative glass-card p-8 rounded-3xl border transition-all duration-500 hover:scale-[1.02] flex flex-col ${
+              className={`relative glass-card p-6 md:p-8 rounded-3xl border transition-all duration-500 hover:scale-[1.02] flex flex-col ${
                 tier.highlighted 
                   ? 'border-[#00e5ff]/50 bg-[#00e5ff]/5 shadow-[0_0_40px_rgba(0,229,255,0.15)] ring-1 ring-[#00e5ff]/50' 
                   : 'border-white/10 bg-white/5'
