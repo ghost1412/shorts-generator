@@ -1,27 +1,38 @@
--- Video Logs Table
--- Stores information about every generated video for the dashboard
+-- Existing tables and policies
 CREATE TABLE IF NOT EXISTS video_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID REFERENCES auth.users(id),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
-    mode TEXT CHECK (mode IN ('FACTS', 'STORY', 'AUTO')),
-    status TEXT DEFAULT 'Processing' CHECK (status IN ('Processing', 'Published', 'Failed')),
+    mode TEXT,
+    status TEXT DEFAULT 'Pending',
     views INTEGER DEFAULT 0,
     download_url TEXT,
-    thumbnail_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- RLS (Row Level Security)
 ALTER TABLE video_logs ENABLE ROW LEVEL SECURITY;
 
--- Policy: Users can only see their own logs
-CREATE POLICY "Users can view own video logs" 
-ON video_logs FOR SELECT 
+CREATE POLICY "Users can manage their own video logs"
+ON video_logs
+FOR ALL
 USING (auth.uid() = user_id);
 
--- Policy: System/Admin can insert/update logs (Service Role)
-CREATE POLICY "Service role can manage all logs" 
-ON video_logs FOR ALL 
-USING (true)
-WITH CHECK (true);
+-- New user configuration table
+CREATE TABLE IF NOT EXISTS user_configs (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    github_token TEXT,
+    github_repo TEXT,
+    youtube_api_key TEXT,
+    default_vibe TEXT DEFAULT 'suspense',
+    plan TEXT DEFAULT 'free',
+    max_videos INTEGER DEFAULT 3,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE user_configs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage their own configurations"
+ON user_configs
+FOR ALL
+USING (auth.uid() = user_id);

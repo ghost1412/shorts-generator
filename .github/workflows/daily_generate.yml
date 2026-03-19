@@ -2,11 +2,11 @@ name: Daily Short Generator
 
 on:
   schedule:
-    - cron: '0 */4 * * *' # Every 2 hours (12 videos/day) - The viral sweet spot!
+    - cron: '0 */4 * * *' # Every 4 hours
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Generation Mode (FACTS, STORY, WYR, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT)'
+        description: 'Generation Mode (FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT)'
         required: false
         default: 'AUTO'
       category:
@@ -21,6 +21,14 @@ on:
         description: 'Music Vibe (suspense, spooky, cinematic, upbeat)'
         required: false
         default: 'suspense'
+      user_id:
+        description: 'Supabase User ID'
+        required: false
+        default: ''
+      video_id:
+        description: 'Unique Video/Job ID'
+        required: false
+        default: ''
 
 jobs:
   generate-and-post:
@@ -68,6 +76,8 @@ jobs:
         echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
 
     - name: Run Video Generator (SaaS Bridge)
+      env:
+        DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL || 'https://shorts-generator.vercel.app/api/webhook/github' }}
       run: |
         # Decide Mode
         INPUT_MODE="${{ github.event.inputs.mode }}"
@@ -100,6 +110,22 @@ jobs:
         else
           ARG_VIBE=""
         fi
-        
-        echo "🎬 Generating Video..."
-        python main.py $ARG_MODE $ARG_CAT $ARG_SCRIPT $ARG_VIBE
+
+        # Decide User ID
+        INPUT_USER_ID="${{ github.event.inputs.user_id }}"
+        if [ "$INPUT_USER_ID" != "" ]; then
+          ARG_USER_ID="--user_id $INPUT_USER_ID"
+        else
+          ARG_USER_ID=""
+        fi
+
+        # Decide Video ID
+        INPUT_VIDEO_ID="${{ github.event.inputs.video_id }}"
+        if [ "$INPUT_VIDEO_ID" != "" ]; then
+          ARG_VIDEO_ID="--video_id $INPUT_VIDEO_ID"
+        else
+          ARG_VIDEO_ID=""
+        fi
+
+        echo "🎬 Generating Video for User $INPUT_USER_ID..."
+        python main.py $ARG_MODE $ARG_CAT $ARG_SCRIPT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID
