@@ -29,12 +29,8 @@ export async function GET(request: Request) {
           })
       }
 
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-      if (isLocalEnv) {
-        return NextResponse.redirect(`${origin}${next}`)
-      } else {
-        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}${next}`)
-      }
+      // Always redirect to the request origin for robustness
+      return NextResponse.redirect(`${origin}${next}`)
     }
   }
 

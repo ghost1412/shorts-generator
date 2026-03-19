@@ -64,10 +64,13 @@ export async function logout() {
 
 export async function signInWithOAuth(provider: 'google' | 'github') {
   const supabase = await createClient()
+  const { headers } = await import('next/headers');
+  const origin = (await headers()).get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
     options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/api/auth/callback`,
+      redirectTo: `${origin}/api/auth/callback`,
     },
   })
 
