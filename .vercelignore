@@ -1,0 +1,13 @@
+# Ignore Python scripts and other non-frontend files on Vercel
+*.py
+*.mp4
+*.mp3
+requirements.txt
+assets/
+music/
+client_secrets.json
+token.json
+.env
+.python-version
+__pycache__/
+node_modules/
