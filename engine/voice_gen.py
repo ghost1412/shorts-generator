@@ -68,7 +68,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
                     "duration": max(0.1, avg_word_dur)
                 })
 
-        with open(output_subs, "w") as f:
+        with open(output_subs, "w", encoding="utf-8") as f:
             json.dump(subtitles, f, indent=2)
             
         return output_audio, output_subs

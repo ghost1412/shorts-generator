@@ -42,7 +42,7 @@ def verify_interactivity():
             {"word": "THAT", "start": 2.0, "duration": 0.5},
             {"word": "ANSWER", "start": 5.0, "duration": 0.5}
         ]
-        with open(subs_path, "w") as f:
+        with open(subs_path, "w", encoding="utf-8") as f:
             json.dump(mock_subs, f)
         actual_subs = subs_path
         # We need a real mp3 for AudioFileClip to not fail

@@ -2,6 +2,12 @@ import os
 import sys
 import random
 import argparse
+from dotenv import load_dotenv
+from supabase import create_client, Client
+from engine.utils import decrypt_secret
+
+load_dotenv()
+
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video
@@ -322,18 +328,56 @@ def main():
     print(f"[Log] Viral Title: {metadata['title']}")
     # 6. Social Media Automation
     if not args.skip_upload:
-        print("[Log] Uploading to YouTube...")
+        print("[Log] Checking for user-specific upload credentials...")
         from engine.social_gen import YouTubeUploader, InstagramUploader
+        
+        youtube_creds = None
+        if args.user_id:
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") # Use Service Role for backend
+            
+            if supabase_url and supabase_key:
+                supabase: Client = create_client(supabase_url, supabase_key)
+                user_res = supabase.from_("user_configs").select("*").eq("user_id", args.user_id).execute()
+                
+                if user_res.data:
+                    config = user_res.data[0]
+                    # Logic: If user has a refresh token, we need a client_id/secret to use it.
+                    # We check for User-Specific (BYOK) first, then fallback to Global (Platform) env vars.
+                    refresh_token = decrypt_secret(config.get("youtube_refresh_token"))
+                    
+                    if refresh_token:
+                        client_id = decrypt_secret(config.get("youtube_client_id")) or os.getenv("GOOGLE_CLIENT_ID")
+                        client_secret = decrypt_secret(config.get("youtube_client_secret")) or os.getenv("GOOGLE_CLIENT_SECRET")
+                        
+                        if client_id and client_secret:
+                            youtube_creds = {
+                                "client_id": client_id,
+                                "client_secret": client_secret,
+                                "refresh_token": refresh_token
+                            }
+                            print(f"[Log] YouTube credentials initialized for user: {args.user_id}")
+                        else:
+                            print("[Warning] Refresh token present but GOOGLE_CLIENT_ID/SECRET missing from env.")
+                    else:
+                        print(f"[Log] No YouTube refresh token found for user {args.user_id}.")
+                else:
+                    print(f"[Log] No configuration found for user {args.user_id} in Supabase.")
+            else:
+                print("[Warning] SUPABASE_URL or SERVICE_ROLE_KEY missing for secret retrieval.")
+
+        print("[Log] Initializing YouTube Uploader...")
         uploader = YouTubeUploader()
-        if uploader.authenticate():
-            uploader.upload_video(
+        youtube_video_id = None
+        if uploader.authenticate(creds_dict=youtube_creds):
+            youtube_video_id = uploader.upload_video(
                 final_video, 
                 metadata['title'],
                 metadata['description'],
                 metadata['tags']
             )
         else:
-            print("💡 YouTube Auth skipped.")
+            print("💡 YouTube Auth failed or skipped.")
 
         print("[Log] Instagram uploader ready.")
         ig_uploader = InstagramUploader()
@@ -349,7 +393,8 @@ def main():
             metadata['title'], 
             "Published", 
             output_filename, # This would be a cloud URL in production
-            args.mode or mode
+            args.mode or mode,
+            youtube_video_id
         )
 
     with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
@@ -357,7 +402,7 @@ def main():
         f.write(f"Description: {metadata['description']}\n")
         f.write(f"Tags: {', '.join(metadata['tags'])}\n")
 
-def report_status(video_id, user_id, title, status, download_url, mode):
+def report_status(video_id, user_id, title, status, download_url, mode, youtube_video_id=None):
     """Reports video generation status back to the Next.js dashboard."""
     import requests
     webhook_url = os.getenv("DASHBOARD_WEBHOOK_URL", "http://localhost:3000/api/webhook/github")
@@ -368,7 +413,8 @@ def report_status(video_id, user_id, title, status, download_url, mode):
             "title": title,
             "status": status,
             "download_url": download_url,
-            "mode": mode
+            "mode": mode,
+            "youtube_video_id": youtube_video_id
         }
         res = requests.post(webhook_url, json=payload)
         if res.ok:

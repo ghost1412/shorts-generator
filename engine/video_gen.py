@@ -174,7 +174,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.25).with_duration(duration)
     
     # 2. Process Subtitles: Word-by-Word Animation
-    with open(subs_path, "r") as f:
+    with open(subs_path, "r", encoding="utf-8") as f:
         subtitles = json.load(f)
     
     persistent_clips = []
@@ -511,7 +511,7 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
     # 3. Dynamic Subtitles (Word-by-word or sentence)
     word_clips = []
     try:
-        with open(subs_path, "r") as f:
+        with open(subs_path, "r", encoding="utf-8") as f:
             subtitles = json.load(f)
             
         current_sentence = []

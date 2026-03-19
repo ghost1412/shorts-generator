@@ -30,8 +30,8 @@ def run_generation(mode, category, script, vibe, video_id, user_id):
     print(f"[Log] Starting Render Job [{video_id}]: {' '.join(cmd)}")
     
     try:
-        # Run the command and capture output
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Run the command and capture output with UTF-8 encoding
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
         
         if result.returncode == 0:
             print(f"[Log] Render Job [{video_id}] Completed Successfully.")

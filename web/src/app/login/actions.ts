@@ -30,10 +30,25 @@ export async function signup(formData: FormData) {
     password: formData.get('password') as string,
   }
 
-  const { error } = await supabase.auth.signUp(data)
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp(data)
 
-  if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`)
+  if (signUpError) {
+    redirect(`/signup?error=${encodeURIComponent(signUpError.message)}`)
+  }
+
+  // Initialize user_configs for the new user
+  if (signUpData.user) {
+    const { error: configError } = await supabase
+      .from('user_configs')
+      .insert({
+        user_id: signUpData.user.id,
+        plan: 'free',
+        max_videos: 3
+      })
+
+    if (configError) {
+      console.error('Error initializing user config:', configError.message)
+    }
   }
 
   revalidatePath('/', 'layout')
@@ -45,4 +60,22 @@ export async function logout() {
   await supabase.auth.signOut()
   revalidatePath('/', 'layout')
   redirect('/login')
+}
+
+export async function signInWithOAuth(provider: 'google' | 'github') {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/api/auth/callback`,
+    },
+  })
+
+  if (error) {
+    redirect(`/login?error=${encodeURIComponent(error.message)}`)
+  }
+
+  if (data.url) {
+    redirect(data.url)
+  }
 }
