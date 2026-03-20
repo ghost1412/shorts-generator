@@ -3,13 +3,14 @@ CREATE TABLE IF NOT EXISTS video_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
-    mode TEXT,
+    mode TEXT, -- FACTS, STORY, WYR, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT, FIND_IT
     status TEXT DEFAULT 'Pending',
     views INTEGER DEFAULT 0,
     retention_rate FLOAT DEFAULT 0, -- Percentage (0-100)
     engagement_score INTEGER DEFAULT 0, -- Likes + Comments + Shares
     download_url TEXT,
     youtube_video_id TEXT,
+    storage_path TEXT, -- Persistent path for fresh Signed URLs
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

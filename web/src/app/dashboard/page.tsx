@@ -281,7 +281,7 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {videoLogs.length > 0 ? videoLogs.slice(0, 4).map((vid) => (
-                <div key={vid.id} className="glass-card p-4 flex gap-4 hover:bg-white/10 transition-colors cursor-pointer group relative">
+                <div key={vid.id} className="group relative bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-all">
                   <button 
                     onClick={(e) => { e.stopPropagation(); deleteVideo(vid.id); }}
                     className="absolute top-2 right-2 p-1.5 bg-red-500/10 text-red-500 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white z-10"
@@ -289,8 +289,15 @@ export default function Dashboard() {
                     <Trash2 size={14} />
                   </button>
                   <div 
-                    onClick={() => { if (vid.download_url) window.open(vid.download_url, '_blank'); }}
-                    className="flex w-full gap-4"
+                    onClick={async () => {
+                      if (vid.storage_path) {
+                        const { data, error } = await supabase.storage.from('videos').createSignedUrl(vid.storage_path, 300);
+                        if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                      } else if (vid.download_url) {
+                        window.open(vid.download_url, '_blank');
+                      }
+                    }} 
+                    className="flex w-full gap-4 p-4 cursor-pointer"
                   >
                     <div className={`w-24 h-32 bg-zinc-800 rounded-lg overflow-hidden relative flex-shrink-0 ${vid.status === 'Processing' ? 'animate-pulse' : ''}`}>
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 flex-col justify-center items-center">
@@ -323,17 +330,23 @@ export default function Dashboard() {
                         )}
                       </div>
                       <h4 className="font-semibold text-sm line-clamp-1">{vid.title}</h4>
-                      {vid.download_url && (
-                        <a 
-                          href={vid.download_url} 
-                          download 
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1.5 text-[10px] font-bold text-[#00e5ff] mt-2 hover:bg-[#00e5ff]/10 px-2 py-1 rounded-lg border border-[#00e5ff]/20 transition-all uppercase tracking-wider"
-                        >
-                          <Download size={12} />
-                          Download MP4
-                        </a>
-                      )}
+                        {vid.status === 'Published' && (
+                          <button 
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (vid.storage_path) {
+                                const { data } = await supabase.storage.from('videos').createSignedUrl(vid.storage_path, 300);
+                                if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                              } else if (vid.download_url) {
+                                window.open(vid.download_url, '_blank');
+                              }
+                            }}
+                            className="p-1 px-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-lg text-[10px] font-medium transition-colors flex items-center gap-1.5"
+                          >
+                            <Download className="w-3 h-3" />
+                            Download MP4
+                          </button>
+                        )}
                     </div>
                     <p className="text-xs text-zinc-500 mt-2 truncate">
                       {vid.status === 'Processing' ? 'Rendering AI media...' : `${vid.views || 0} views • ${vid.created_at ? new Date(vid.created_at).toLocaleDateString() : 'Just now'}`}
