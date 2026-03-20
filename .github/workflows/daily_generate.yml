@@ -32,7 +32,11 @@ on:
 
 jobs:
   generate-and-post:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && 'self-hosted' || 'ubuntu-latest' }}
+    # Note: Using self-hosted for manual triggers, ubuntu-latest for cron fallback
+    defaults:
+      run:
+        shell: bash
 
     steps:
     - uses: actions/checkout@v4
@@ -55,13 +59,19 @@ jobs:
 
     - name: Install FFmpeg
       run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+        else
+          ffmpeg -version || echo "FFmpeg should be pre-installed on self-hosted Windows"
+        fi
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f requirements.txt ]; then
+           pip install -r requirements.txt
+        fi
 
     - name: Setup Environment Variables
       run: |
@@ -79,7 +89,9 @@ jobs:
       env:
         DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL || 'https://shorts-generator.vercel.app/api/webhook/github' }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
         # Decide Mode
