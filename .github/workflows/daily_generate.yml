@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Generation Mode (FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT)'
+        description: 'Generation Mode (FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT, NEWS)'
         required: false
         default: 'AUTO'
       category:

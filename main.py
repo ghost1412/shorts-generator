@@ -8,7 +8,7 @@ from engine.utils import decrypt_secret
 
 load_dotenv()
 
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote
+from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video
 from engine.video_gen import create_shorts_video
@@ -16,14 +16,14 @@ from engine.storage import upload_to_storage
 
 VIBE_VOICE_MAP = {
     "suspense": "en-US-ChristopherNeural", # Deep, intense
-    "spooky": "en-US-ChristopherNeural",   # Also good for spooky
-    "cinematic": "en-US-JennyNeural",       # Emotional, softer
-    "upbeat": "en-US-GuyNeural"             # Energetic, punchy
+    "spooky": "en-US-AndrewNeural",       # Atmospheric
+    "cinematic": "en-GB-SoniaNeural",      # Sophisticated narrator
+    "upbeat": "en-US-AvaNeural"             # Energetic, modern
 }
 
 def main():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
@@ -122,6 +122,13 @@ def main():
             full_script = "Spot the odd one out! 🧐 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
             facts_data = []
             print(f"[Log] ODD_ONE_OUT Selected")
+        elif mode == "NEWS":
+            news_tone = random.choice(["funny", "funny", "funny", "serious", "serious"])  # 60/40
+            news_data = generate_funny_news(category, tone=news_tone)
+            news_source = news_data.get('source', 'Unknown')
+            full_script = f"{news_data['hook']} ... {news_data['story']}"
+            facts_data = []
+            print(f"[Log] NEWS ({news_tone}) Data: {news_data}")
 
     print(f"[Log] Full Script: \"{full_script}\"", flush=True)
     
@@ -212,6 +219,14 @@ def main():
         if not target_path:
             print(f"[Error] Failed to download {target_name} image for ODD_ONE_OUT.", flush=True)
             return
+    elif mode == "NEWS":
+        # Use the search_term from the news data for relevant backgrounds
+        search_query = news_data.get('search_term', 'breaking news broadcast') if 'news_data' in dir() else 'breaking news broadcast'
+        bg_filename = os.path.join(session_dir, "bg_news.mp4")
+        path = download_background_video(search_query, output_path=bg_filename)
+        if not path:
+            path = download_background_video("news studio broadcast", output_path=os.path.join(session_dir, "bg_news_fallback.mp4"))
+        if path: bg_video_paths.append(path)
 
     if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
         print("[Error] Failed to download any background videos.")
@@ -323,6 +338,12 @@ def main():
         metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
     elif mode == "ODD_ONE_OUT":
         metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
+    elif mode == "NEWS":
+        metadata = generate_viral_metadata(news_data.get('story', 'Funny News'), mode="STORY", category=category)
+        # Append source credit to description
+        source_credit = news_data.get('source', '')
+        if source_credit:
+            metadata['description'] = metadata.get('description', '') + f"\n\n📰 Source: {source_credit}"
     else:
         # For STORY or other modes
         story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"

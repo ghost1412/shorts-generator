@@ -15,9 +15,10 @@ def strip_emojis(text):
                 result.append(c)
     return "".join(result)
 
-def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AriaNeural"):
+def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+10%"):
     """
     Generates voice and precise word-level subtitles using edge-tts Python API.
+    Added 'rate' support for punchy social media flow.
     """
     # Clean text for TTS
     tts_text = strip_emojis(text)
@@ -26,7 +27,8 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     
     async def amain():
         voice = voice_name
-        communicate = edge_tts.Communicate(tts_text, voice)
+        # Apply rate for higher energy
+        communicate = edge_tts.Communicate(tts_text, voice, rate=rate)
         subtitles = []
         
         with open(output_audio, "wb") as f:
