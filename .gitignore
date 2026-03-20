@@ -14,6 +14,7 @@ assets/subs.json
 *.mp4.txt
 *.json
 *.mp3
+actions-runner/*
 
 # Secrets
 client_secrets.json

@@ -40,7 +40,7 @@ def upload_video_to_storage(file_path: str, video_id: str) -> tuple:
     Uploads a video to Supabase Storage and returns (storage_path, signed_url).
     Bucket name: 'videos'
     """
-    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     user_id = os.getenv("USER_ID", "default_user")
 
