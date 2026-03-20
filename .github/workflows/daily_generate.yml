@@ -102,13 +102,17 @@ jobs:
         USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
-        $mode = if ('${{ github.event.inputs.mode }}' -and '${{ github.event.inputs.mode }}' -ne 'AUTO') { "--mode ${{ github.event.inputs.mode }}" } else { "--mode AUTO" }
-        $cat = if ('${{ github.event.inputs.category }}' -and '${{ github.event.inputs.category }}' -ne 'random') { "--category ${{ github.event.inputs.category }}" } else { "" }
-        $vibe = if ('${{ github.event.inputs.vibe }}') { "--vibe ${{ github.event.inputs.vibe }}" } else { "" }
-        $user_id = if ('${{ github.event.inputs.user_id }}') { "--user_id ${{ github.event.inputs.user_id }}" } else { "" }
-        $video_id = if ('${{ github.event.inputs.video_id }}') { "--video_id ${{ github.event.inputs.video_id }}" } else { "" }
+        $params = @()
+        if ('${{ github.event.inputs.mode }}' -and '${{ github.event.inputs.mode }}' -ne 'AUTO') { $params += "--mode"; $params += "${{ github.event.inputs.mode }}" } else { $params += "--mode"; $params += "AUTO" }
+        if ('${{ github.event.inputs.category }}' -and '${{ github.event.inputs.category }}' -ne 'random') { $params += "--category"; $params += "${{ github.event.inputs.category }}" }
+        if ('${{ github.event.inputs.vibe }}') { $params += "--vibe"; $params += "${{ github.event.inputs.vibe }}" }
+        if ('${{ github.event.inputs.user_id }}') { $params += "--user_id"; $params += "${{ github.event.inputs.user_id }}" }
+        if ('${{ github.event.inputs.video_id }}') { $params += "--video_id"; $params += "${{ github.event.inputs.video_id }}" }
         
-        python main.py $mode $cat $vibe $user_id $video_id
+        # Add skip_upload for manual triggers from dashboard
+        if ('${{ github.event_name }}' -eq 'workflow_dispatch') { $params += "--skip_upload" }
+
+        python main.py @params
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
