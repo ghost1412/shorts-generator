@@ -373,11 +373,10 @@ def main():
                             print(f"[Log] YouTube credentials initialized for user: {args.user_id}")
                         else:
                             print("[Warning] Refresh token present but GOOGLE_CLIENT_ID/SECRET missing from env.")
+                            actually_skip_upload = True
                     else:
-                        print(f"[Log] No YouTube refresh token found for user {args.user_id}.")
-                    # REQUIRED FIX: If triggered from frontend but no user creds, skip global upload
-                    print("[Log] Skipping global upload fallback for user-triggered run.")
-                    actually_skip_upload = True
+                        print(f"[Log] No YouTube refresh token found for user {args.user_id}. Skipping global upload fallback.")
+                        actually_skip_upload = True
                 else:
                     print(f"[Log] No configuration found for user {args.user_id} in Supabase.")
                     actually_skip_upload = True
