@@ -142,8 +142,10 @@ export default function AnalyticsPage() {
             weeklyViews: weeklyNorm,
             modeDistribution
           });
-          setRecentLogs(logs.slice(0, 5));
+        setRecentLogs(logs.slice(0, 5));
         }
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Sync failed' });
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message || 'Sync failed' });
