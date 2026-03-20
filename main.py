@@ -12,7 +12,7 @@ from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video
 from engine.video_gen import create_shorts_video
-from engine.storage import upload_video_to_storage
+from engine.storage import upload_to_storage
 
 VIBE_VOICE_MAP = {
     "suspense": "en-US-ChristopherNeural", # Deep, intense

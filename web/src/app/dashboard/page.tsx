@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [selectedMode, setSelectedMode] = useState('AUTO');
   const [selectedCategory, setSelectedCategory] = useState('random');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
 
   const modes = [
     { id: 'AUTO', label: 'Magic Auto', icon: <Sparkles size={16} />, color: 'text-purple-400' },
@@ -85,12 +86,32 @@ export default function Dashboard() {
       if (config) setUserConfig(config);
     }
 
+    // Fetch thumbnails for logs that have them
+    const logsWithThumbs = videoLogs.filter(log => log.thumbnail_path && !thumbnailUrls[log.id]);
+    if (logsWithThumbs.length > 0) {
+      logsWithThumbs.forEach(async (log) => {
+        try {
+          const res = await fetch('/api/video/signed-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storage_path: log.thumbnail_path })
+          });
+          const json = await res.json();
+          if (json.signedUrl) {
+            setThumbnailUrls(prev => ({ ...prev, [log.id]: json.signedUrl }));
+          }
+        } catch (e) {
+          console.error('Thumbnail fetch error:', e);
+        }
+      });
+    }
+
     // Smart Polling Logic
     const hasProcessing = videoLogs.some(log => !['Published', 'Failed'].includes(log.status));
     const interval = setInterval(fetchLogs, hasProcessing ? 5000 : 15000);
     
     return () => clearInterval(interval);
-  }, [user, supabase, videoLogs.length, videoLogs.some(log => log.status === 'Processing')]);
+  }, [user, supabase, videoLogs.length, videoLogs.some(log => log.status === 'Processing'), Object.keys(thumbnailUrls).length]);
 
   async function triggerGeneration(mode = 'AUTO', category = 'random', script = '') {
     const generationsUsed = userConfig?.generations_used || 0;
@@ -256,7 +277,7 @@ export default function Dashboard() {
           >
             <Youtube size={20} />
             <span className="text-sm font-bold truncate">
-              {isTriggering ? 'Triggering...' : `Trigger ${selectedMode} (${selectedCategory.replace('_', ' ')})`}
+              {isTriggering ? 'Triggering...' : `Trigger {selectedMode} ({selectedCategory.replace('_', ' ')})`}
             </span>
           </button>
         </header>
@@ -269,7 +290,7 @@ export default function Dashboard() {
             value={videoLogs.reduce((acc, log) => acc + (log.views || 0), 0).toLocaleString()} 
             growth="+0% this week" 
           />
-          <StatCard 
+          <CheckCard 
             icon={<CheckCircle2 className="text-blue-400" />} 
             label="Videos Posted" 
             value={videoLogs.length.toString()} 
@@ -318,7 +339,14 @@ export default function Dashboard() {
                     className="flex w-full gap-4 p-4 cursor-pointer"
                   >
                     <div className={`w-24 h-32 bg-zinc-800 rounded-lg overflow-hidden relative flex-shrink-0 ${vid.status === 'Processing' ? 'animate-pulse' : ''}`}>
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 flex-col justify-center items-center">
+                      {thumbnailUrls[vid.id] ? (
+                        <img 
+                          src={thumbnailUrls[vid.id]} 
+                          alt={vid.title} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 flex-col justify-center items-center">
                           { !['Published', 'Failed'].includes(vid.status) ? (
                             <div className="flex flex-col items-center gap-1 group-hover:scale-110 transition-transform">
                               <div className="w-8 h-8 border-2 border-[#00e5ff] border-t-transparent rounded-full animate-spin" />
@@ -329,7 +357,8 @@ export default function Dashboard() {
                           ) : (
                             <PlayCircle className="text-white opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8" />
                           )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-col justify-between py-1 flex-1 min-w-0">
                     <div>
@@ -548,3 +577,18 @@ function StatCard({ icon, label, value, growth }: { icon: React.ReactNode, label
     </div>
   );
 }
+
+function CheckCard({ icon, label, value, growth }: { icon: React.ReactNode, label: string, value: string, growth: string }) {
+    return (
+      <div className="glass-card p-4 md:p-6 flex items-center justify-between">
+        <div className="space-y-1 overflow-hidden">
+          <p className="text-[10px] md:text-xs text-zinc-500 uppercase tracking-widest font-bold truncate">{label}</p>
+          <p className="text-2xl md:text-3xl font-bold truncate">{value}</p>
+          <span className="text-[10px] md:text-xs text-blue-400 font-medium truncate inline-block">{growth}</span>
+        </div>
+        <div className="p-2 md:p-3 bg-white/5 rounded-2xl border border-white/5 flex-shrink-0 text-[#00e5ff]">
+          {icon}
+        </div>
+      </div>
+    );
+  }
