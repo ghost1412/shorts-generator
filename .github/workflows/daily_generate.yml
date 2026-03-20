@@ -34,9 +34,6 @@ jobs:
   generate-and-post:
     runs-on: ${{ github.event_name == 'workflow_dispatch' && 'self-hosted' || 'ubuntu-latest' }}
     # Note: Using self-hosted for manual triggers, ubuntu-latest for cron fallback
-    defaults:
-      run:
-        shell: bash
 
     steps:
     - uses: actions/checkout@v4
@@ -69,9 +66,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then
-           pip install -r requirements.txt
-        fi
+        pip install -r requirements.txt
 
     - name: Setup Environment Variables
       run: |
@@ -85,7 +80,8 @@ jobs:
       run: |
         echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
 
-    - name: Run Video Generator (SaaS Bridge)
+    - name: Run Video Generator (Windows)
+      if: runner.os == 'Windows'
       env:
         DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL || 'https://shorts-generator.vercel.app/api/webhook/github' }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -94,53 +90,29 @@ jobs:
         USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
-        # Decide Mode
-        INPUT_MODE="${{ github.event.inputs.mode }}"
-        if [ "$INPUT_MODE" != "" ] && [ "$INPUT_MODE" != "AUTO" ]; then
-          ARG_MODE="--mode $INPUT_MODE"
-        else
-          ARG_MODE="--mode AUTO"
-        fi
+        $mode = if ('${{ github.event.inputs.mode }}' -and '${{ github.event.inputs.mode }}' -ne 'AUTO') { "--mode ${{ github.event.inputs.mode }}" } else { "--mode AUTO" }
+        $cat = if ('${{ github.event.inputs.category }}' -and '${{ github.event.inputs.category }}' -ne 'random') { "--category ${{ github.event.inputs.category }}" } else { "" }
+        $vibe = if ('${{ github.event.inputs.vibe }}') { "--vibe ${{ github.event.inputs.vibe }}" } else { "" }
+        $user_id = if ('${{ github.event.inputs.user_id }}') { "--user_id ${{ github.event.inputs.user_id }}" } else { "" }
+        $video_id = if ('${{ github.event.inputs.video_id }}') { "--video_id ${{ github.event.inputs.video_id }}" } else { "" }
+        
+        python main.py $mode $cat $vibe $user_id $video_id
 
-        # Decide Category
-        INPUT_CAT="${{ github.event.inputs.category }}"
-        if [ "$INPUT_CAT" != "" ] && [ "$INPUT_CAT" != "random" ]; then
-          ARG_CAT="--category $INPUT_CAT"
-        else
-          ARG_CAT=""
-        fi
-
-        # Decide Script
-        INPUT_SCRIPT="${{ github.event.inputs.custom_script }}"
-        if [ "$INPUT_SCRIPT" != "" ]; then
-          ARG_SCRIPT="--script '$INPUT_SCRIPT'"
-        else
-          ARG_SCRIPT=""
-        fi
-
-        # Decide Vibe
-        INPUT_VIBE="${{ github.event.inputs.vibe }}"
-        if [ "$INPUT_VIBE" != "" ]; then
-          ARG_VIBE="--vibe $INPUT_VIBE"
-        else
-          ARG_VIBE=""
-        fi
-
-        # Decide User ID
-        INPUT_USER_ID="${{ github.event.inputs.user_id }}"
-        if [ "$INPUT_USER_ID" != "" ]; then
-          ARG_USER_ID="--user_id $INPUT_USER_ID"
-        else
-          ARG_USER_ID=""
-        fi
-
-        # Decide Video ID
-        INPUT_VIDEO_ID="${{ github.event.inputs.video_id }}"
-        if [ "$INPUT_VIDEO_ID" != "" ]; then
-          ARG_VIDEO_ID="--video_id $INPUT_VIDEO_ID"
-        else
-          ARG_VIDEO_ID=""
-        fi
-
-        echo "🎬 Generating Video for User $INPUT_USER_ID..."
-        python main.py $ARG_MODE $ARG_CAT $ARG_SCRIPT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID
+    - name: Run Video Generator (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        DASHBOARD_WEBHOOK_URL: ${{ secrets.DASHBOARD_WEBHOOK_URL || 'https://shorts-generator.vercel.app/api/webhook/github' }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        USER_ID: ${{ github.event.inputs.user_id }}
+        ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      run: |
+        ARG_MODE="--mode ${{ github.event.inputs.mode || 'AUTO' }}"
+        ARG_CAT="${{ github.event.inputs.category != 'random' && format('--category {0}', github.event.inputs.category) || '' }}"
+        ARG_VIBE="${{ github.event.inputs.vibe && format('--vibe {0}', github.event.inputs.vibe) || '' }}"
+        ARG_USER_ID="${{ github.event.inputs.user_id && format('--user_id {0}', github.event.inputs.user_id) || '' }}"
+        ARG_VIDEO_ID="${{ github.event.inputs.video_id && format('--video_id {0}', github.event.inputs.video_id) || '' }}"
+        
+        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID
