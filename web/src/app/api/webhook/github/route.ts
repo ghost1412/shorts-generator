@@ -10,7 +10,7 @@ const supabaseAdmin = createClient(
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
-    const { video_id, title, mode, status, download_url, user_id, youtube_video_id } = payload;
+    const { video_id, title, mode, status, download_url, user_id, youtube_video_id, storage_path } = payload;
 
     // Security Check: You should add a secret token/signature check here from GitHub
     // to ensure only your GitHub Actions can call this endpoint.
@@ -18,12 +18,13 @@ export async function POST(request: Request) {
     const { data, error } = await supabaseAdmin
       .from('video_logs')
       .upsert({
-        id: video_id, // Use the ID passed from the generator
+        id: video_id,
         user_id: user_id,
         title: title,
         mode: mode,
         status: status || 'Published',
-        download_url: download_url,
+        download_url: download_url, 
+        storage_path: storage_path, // Save the persistent path
         youtube_video_id: youtube_video_id,
         created_at: new Date().toISOString(),
       });

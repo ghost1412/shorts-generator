@@ -1,81 +1,84 @@
 import os
+import time
+from datetime import datetime, timedelta
 from supabase import create_client, Client
 
-def upload_video_to_storage(file_path: str, video_id: str) -> str:
+def cleanup_old_videos(supabase: Client, user_id: str):
+    """Deletes videos older than 30 minutes in the user's storage folder."""
+    bucket_name = 'videos'
+    try:
+        # List files in the user's folder
+        res = supabase.storage.from_(bucket_name).list(user_id)
+        if not res:
+            return
+
+        now = datetime.utcnow()
+        expiry_limit = now - timedelta(minutes=30)
+
+        for file in res:
+            # Supabase 'list' returns metadata including 'created_at'
+            created_at_str = file.get('created_at')
+            if created_at_str:
+                # Format: 2024-03-20T12:34:56.789123+00:00 or similar
+                try:
+                    # Strip 'Z' if present and convert to datetime
+                    clean_ts = created_at_str.replace('Z', '+00:00')
+                    # fromisoformat handles +00:00 but might struggle with some sub-second variants in older python
+                    # but usually it's fine for Supabase timestamps.
+                    created_at = datetime.fromisoformat(clean_ts).replace(tzinfo=None)
+                    if created_at < expiry_limit:
+                        file_path = f"{user_id}/{file['name']}"
+                        print(f"[Cleanup] Deleting expired video: {file_path}")
+                        supabase.storage.from_(bucket_name).remove([file_path])
+                except Exception as ex:
+                    print(f"[Warning] Failed to parse timestamp {created_at_str}: {ex}")
+    except Exception as e:
+        print(f"[Warning] Cleanup failed: {e}")
+
+def upload_video_to_storage(file_path: str, video_id: str) -> tuple:
     """
-    Uploads a video to Supabase Storage and returns the public URL.
+    Uploads a video to Supabase Storage and returns (storage_path, signed_url).
     Bucket name: 'videos'
     """
-    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    
+    user_id = os.getenv("USER_ID", "default_user")
+
     if not supabase_url or not supabase_key:
         print("[Error] Supabase credentials missing for storage upload.")
-        return file_path # Fallback to local name
+        return None, None
 
     try:
         supabase: Client = create_client(supabase_url, supabase_key)
-        
-        bucket_name = "videos"
-        file_name = os.path.basename(file_path)
-        # Use a folder structure based on video_id if possible, or just the filename
-        storage_path = f"{video_id}/{file_name}"
-        
+        bucket_name = 'videos'
+        storage_path = f"{user_id}/{video_id}.mp4"
+
+        # 1. Run cleanup first to keep bucket clean
+        cleanup_old_videos(supabase, user_id)
+
+        # 2. Perform upload
         with open(file_path, 'rb') as f:
-            res = supabase.storage.from_(bucket_name).upload(
+            supabase.storage.from_(bucket_name).upload(
                 path=storage_path,
                 file=f,
                 file_options={"content-type": "video/mp4"}
             )
         
-        # Get SIGNED URL with 30-minute expiry (1800 seconds)
-        # Note: In newer supabase-py versions, it is storage.from_().create_signed_url()
-        signed_res = supabase.storage.from_(bucket_name).create_signed_url(storage_path, expires_in=1800)
+        # 3. Get INITIAL SIGNED URL (30-minute expiry)
+        signed_url_res = supabase.storage.from_(bucket_name).create_signed_url(
+            path=storage_path,
+            expires_in=1800
+        )
         
-        # Check if signed_res is a dict (newer) or a string (older)
-        if isinstance(signed_res, dict):
-            public_url = signed_res.get('signedURL', signed_res.get('signed_url'))
+        signed_url = None
+        if isinstance(signed_url_res, dict):
+            signed_url = signed_url_res.get('signedURL') or signed_url_res.get('signed_url')
         else:
-            public_url = signed_res
+            signed_url = str(signed_url_res)
 
-        print(f"[Log] Video uploaded to storage (30m Signed URL): {public_url}")
-        
-        # PROACTIVE CLEANUP: Remove files older than 1 hour to keep storage free
-        cleanup_old_videos(supabase, bucket_name)
-        
-        return public_url
-        
+        print(f"[Log] Video uploaded to cloud storage: {storage_path}")
+        return storage_path, signed_url
+
     except Exception as e:
         print(f"[Error] Storage upload failed: {e}")
-        return file_path # Fallback to local name
-
-def cleanup_old_videos(supabase: Client, bucket_name: str):
-    """
-    Lists files in the bucket and deletes those older than 1 hour.
-    """
-    from datetime import datetime, timedelta, timezone
-    try:
-        # List files in the root (depth=1)
-        files = supabase.storage.from_(bucket_name).list("", {"limit": 100})
-        if not files: return
-
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-        
-        to_delete = []
-        for f in files:
-            # Supabase list() returns dicts with 'name', 'created_at', etc.
-            created_at_str = f.get('created_at')
-            if created_at_str:
-                # Example: 2024-03-20T10:00:00.000Z
-                created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                if created_at < cutoff:
-                    # Note: We assumed a flat folder structure or 'id/file'
-                    # Actually, our structure is 'id/file'. list("") might return folders.
-                    # This simple cleanup handles files in the root or just lists everything.
-                    to_delete.append(f['name'])
-        
-        if to_delete:
-            print(f"[Log] Cleaning up {len(to_delete)} old videos from storage...")
-            supabase.storage.from_(bucket_name).remove(to_delete)
-    except Exception as e:
-        print(f"[Warning] Storage cleanup failed: {e}")
+        return None, None

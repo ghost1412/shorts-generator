@@ -408,7 +408,7 @@ def main():
 
     # 7. Permanent Storage Persistence (New Step)
     print(f"[Log] Persisting video to cloud storage...")
-    final_video_url = upload_video_to_storage(final_video, args.video_id or str(session_id))
+    storage_path, signed_url = upload_video_to_storage(final_video, args.video_id or str(session_id))
 
     # 8. Report Success to Dashboard
     if args.video_id and args.user_id:
@@ -418,9 +418,10 @@ def main():
             args.user_id, 
             metadata['title'], 
             "Published", 
-            final_video_url, # Now using cloud storage URL!
+            signed_url,  # Initial signed link
             args.mode or mode,
-            youtube_video_id
+            youtube_video_id,
+            storage_path  # New field!
         )
 
     with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
@@ -428,7 +429,7 @@ def main():
         f.write(f"Description: {metadata['description']}\n")
         f.write(f"Tags: {', '.join(metadata['tags'])}\n")
 
-def report_status(video_id, user_id, title="Shorts Video", status="Processing", download_url=None, mode="AUTO", youtube_video_id=None):
+def report_status(video_id, user_id, title="Shorts Video", status="Processing", download_url=None, mode="AUTO", youtube_video_id=None, storage_path=None):
     """Reports video generation status back to the Next.js dashboard."""
     import requests
     webhook_url = os.getenv("DASHBOARD_WEBHOOK_URL", "http://localhost:3000/api/webhook/github")
@@ -440,7 +441,8 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
             "status": status,
             "download_url": download_url,
             "mode": mode,
-            "youtube_video_id": youtube_video_id
+            "youtube_video_id": youtube_video_id,
+            "storage_path": storage_path
         }
         res = requests.post(webhook_url, json=payload)
         if res.ok:
