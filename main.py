@@ -372,17 +372,13 @@ def main():
                             }
                             print(f"[Log] YouTube credentials initialized for user: {args.user_id}")
                         else:
-                            print("[Warning] Refresh token present but GOOGLE_CLIENT_ID/SECRET missing from env.")
-                            actually_skip_upload = True
+                            print("[Warning] Refresh token present but GOOGLE_CLIENT_ID/SECRET missing from env. Falling back to global/admin channel.")
                     else:
-                        print(f"[Log] No YouTube refresh token found for user {args.user_id}. Skipping global upload fallback.")
-                        actually_skip_upload = True
+                        print(f"[Log] No YouTube refresh token found for user {args.user_id}. Falling back to global/admin channel.")
                 else:
-                    print(f"[Log] No configuration found for user {args.user_id} in Supabase.")
-                    actually_skip_upload = True
+                    print(f"[Log] No configuration found for user {args.user_id} in Supabase. Falling back to global/admin channel.")
             else:
-                print("[Warning] SUPABASE_URL or SERVICE_ROLE_KEY missing for secret retrieval.")
-                actually_skip_upload = True
+                print("[Warning] SUPABASE_URL or SERVICE_ROLE_KEY missing for secret retrieval. Falling back to global/admin channel.")
 
         if not actually_skip_upload:
             print("[Log] Initializing YouTube Uploader...")
