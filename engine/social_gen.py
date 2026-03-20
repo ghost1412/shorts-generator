@@ -32,6 +32,9 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     elif mode == "FIND_IT":
         input_text = f"Target: {content_info['target_name']}"
         task_desc = f"a 'Find the {content_info['target_name']}' extreme challenge game."
+    elif mode.startswith("NEWS"):
+        input_text = str(content_info)
+        task_desc = "a serious news report."
     else:
         input_text = str(content_info)
         task_desc = "a story."
@@ -42,11 +45,13 @@ Generate a VIRAL title, high-retention description, and trending SEO tags for {t
 
 CRITICAL SEO RULES:
 1. Title: Must be "Pattern-Interrupting" (e.g., "STOP SCROLLING! 🛑", "I was lied to... 💀", "99% MISS THIS"). Use extreme emotional hooks. Keep it under 60 chars.
+   - NOTE: For NEWS reports, avoid game titles. Use reporting hooks like "BREAKING: [Headline] 🚨" or "DEVELOPING: [Headline]".
 2. Description: 
    - First line must be a CTA (e.g., "Comment your guess or you owe me a sub!").
-   - Include 3 paragraphs: The Hook, The Challenge, The Community Call. 
+   - For NEWS, first line should be "Stay tuned for more updates on this! 🚨"
+   - Include 3 paragraphs: The Hook, The Details, The Community Call. 
    - Use emojis liberally but strategically.
-   - Include EXPLICIT tags in description: #shorts #trending #viral #challenge + 3 specific to {category}.
+   - Include EXPLICIT tags in description: #shorts #trending #viral #news + 3 specific to {category}.
 3. Tags: 15-20 highly relevant, high-volume SEO keywords.
 
 Format as JSON ONLY:
@@ -113,10 +118,10 @@ Format as JSON ONLY:
             "tags": [category, "shorts", "story", "mystery", "storytime", "wow"]
         }
 
-    if mode == "NEWS":
+    if mode.startswith("NEWS"):
         return {
-            "title": f"BREAKING: This just happened! 🚨 #shorts #news",
-            "description": f"New developing story. Make sure you're following for more daily updates on this! 🗿\n\n#breakingnews #latest #updates",
+            "title": f"BREAKING NEWS: {category.upper()} UPDATE! 🚨 #shorts #news",
+            "description": f"New developing story. Make sure you're following for more daily updates on this! 🚨\n\n#breakingnews #latest #updates",
             "tags": [category, "shorts", "news", "breaking", "latest", "update"]
         }
     
