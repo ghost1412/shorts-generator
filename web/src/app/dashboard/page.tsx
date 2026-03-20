@@ -104,6 +104,13 @@ export default function Dashboard() {
       if (res.ok) {
         alert('🚀 Video generation triggered on GitHub Actions!');
         if (script || customScript) setCustomScript('');
+        // Immediately fetch logs to show the "Processing" row
+        const { data: updatedLogs } = await supabase
+          .from('video_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        if (updatedLogs) setVideoLogs(updatedLogs);
       }
       else alert(`❌ Failed: ${data.error}`);
     } catch (err) {

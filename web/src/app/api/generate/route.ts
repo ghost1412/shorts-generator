@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     }
 
     // 1. Create the 'Processing' entry in the DB immediately
-    await supabase.from('video_logs').insert({
+    const { error: insertError } = await supabase.from('video_logs').insert({
       id: videoId,
       user_id: user.id,
       title: customScript?.substring(0, 30) || `${category} Video`,
@@ -46,6 +46,11 @@ export async function POST(request: Request) {
       status: 'Processing',
       created_at: new Date().toISOString()
     });
+
+    if (insertError) {
+      console.error('DB Insert Error:', insertError);
+      return NextResponse.json({ error: 'Failed to create video log' }, { status: 500 });
+    }
 
     if (renderTarget === 'server') {
       const serverUrl = process.env.SERVER_RENDER_URL || 'http://localhost:5000/render';
