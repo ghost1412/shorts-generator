@@ -142,7 +142,7 @@ def main():
     audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file, voice_name=selected_voice)
     
     if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, "In-Progress Video", "Generating Media...", None, mode)
+        report_status(args.video_id, args.user_id, "In-Progress Video", "Processing", None, mode)
     
     if not audio_path or not subs_path:
         print("[Error] Voice generation failed.")
@@ -218,7 +218,7 @@ def main():
         return
 
     if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, "In-Progress Video", "Rendering AI Video...", None, mode)
+        report_status(args.video_id, args.user_id, "In-Progress Video", "Processing", None, mode)
 
     # 4. Compose Video
     print(f"[Log] Composing final interactive video with {args.vibe} mood (Job ID: {session_id})...", flush=True)
@@ -336,7 +336,7 @@ def main():
     print(f"[Log] Viral Title: {metadata['title']}")
 
     if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, metadata['title'], "Optimizing & Uploading...", None, mode)
+        report_status(args.video_id, args.user_id, metadata['title'], "Processing", None, mode)
 
     # 6. Social Media Automation
     actually_skip_upload = args.skip_upload
