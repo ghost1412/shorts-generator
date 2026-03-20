@@ -442,6 +442,157 @@ JSON Structure:
     print(f"❌ QUOTE API failed after retries.")
     raise RuntimeError("LLM QUOTE Generation failed to produce valid JSON after retries.")
 
+def generate_funny_news(category="general", tone="funny"):
+    """
+    Fetches REAL news from RSS feeds, then uses LLM to rewrite in the chosen tone.
+    tone: "funny" = bizarre/sarcastic, "serious" = dramatic/informative
+    Returns: {"title": str, "hook": str, "story": str, "source": str, "search_term": str, "tone": str}
+    """
+    import xml.etree.ElementTree as ET
+    
+    # --- STEP 1: Fetch real news from RSS feeds based on tone ---
+    if tone == "funny":
+        rss_feeds = [
+            "https://www.reddit.com/r/nottheonion/.rss?limit=20",
+            "https://www.reddit.com/r/offbeat/.rss?limit=20",
+            "https://news.google.com/rss/search?q=weird+bizarre+funny+news&hl=en&gl=US&ceid=US:en",
+        ]
+    else:
+        rss_feeds = [
+            "https://feeds.bbci.co.uk/news/world/rss.xml",
+            "https://news.google.com/rss?hl=en&gl=US&ceid=US:en",
+            "https://www.reddit.com/r/worldnews/.rss?limit=20",
+        ]
+    
+    headlines = []
+    
+    for feed_url in rss_feeds:
+        try:
+            resp = requests.get(feed_url, timeout=10, headers={
+                "User-Agent": "ShortsFlow/1.0 (News Aggregator)"
+            })
+            if resp.status_code != 200:
+                continue
+            
+            root = ET.fromstring(resp.text)
+            
+            # Handle Atom feeds (Reddit)
+            atom_ns = {"atom": "http://www.w3.org/2005/Atom"}
+            for entry in root.findall("atom:entry", atom_ns):
+                title_el = entry.find("atom:title", atom_ns)
+                link_el = entry.find("atom:link", atom_ns)
+                if title_el is not None and title_el.text:
+                    link = link_el.get("href", feed_url) if link_el is not None else feed_url
+                    headlines.append({
+                        "headline": title_el.text.strip(),
+                        "source": link,
+                        "feed": feed_url
+                    })
+            
+            # Handle RSS 2.0 feeds (BBC, Google News)
+            for item in root.findall(".//item"):
+                title_el = item.find("title")
+                link_el = item.find("link")
+                source_el = item.find("source")
+                if title_el is not None and title_el.text:
+                    source_name = source_el.text if source_el is not None else "News"
+                    link = link_el.text if link_el is not None else feed_url
+                    headlines.append({
+                        "headline": title_el.text.strip(),
+                        "source": f"{source_name} ({link})",
+                        "feed": feed_url
+                    })
+                    
+        except Exception as e:
+            print(f"[Warning] RSS fetch failed for {feed_url}: {e}")
+            continue
+    
+    if not headlines:
+        print("[Warning] No RSS headlines fetched. Using fallback.")
+        headlines = [{
+            "headline": "Scientists discover New Planet that Rains Diamonds" if tone == "serious" else "Man tries to rob bank with a banana, gets arrested immediately",
+            "source": "Associated Press",
+            "feed": "fallback"
+        }]
+    
+    # Pick a random headline
+    chosen = random.choice(headlines)
+    real_headline = chosen["headline"]
+    real_source = chosen["source"]
+    print(f"[Log] NEWS ({tone}): Real headline: \"{real_headline}\" (Source: {real_source})")
+    
+    # --- STEP 2: Use LLM to rewrite based on tone ---
+    url = "https://router.huggingface.co/v1/chat/completions"
+    api_headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    if not HF_API_KEY:
+        raise RuntimeError("HF_API_KEY is missing. Cannot rewrite news.")
+    
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    
+    if tone == "funny":
+        tone_instruction = """TONE: Sarcastic, funny, disbelief-filled. End with a punchline or "Bro, this actually happened."
+HOOK: Rewrite headline as a shocking 6-word hook."""
+    else:
+        tone_instruction = """TONE: Dramatic, clear, informative. Like a professional anchor delivering breaking news.
+HOOK: Rewrite headline as an urgent 6-word hook."""
+    
+    prompt = f"""Rewrite this REAL news headline as a YouTube Shorts script:
+
+REAL HEADLINE: "{real_headline}"
+
+RULES:
+1. DO NOT change the facts. Keep it accurate to the headline.
+2. STORY: Retell it in under 45 words. Fast-paced.
+3. Do NOT add fake details. Only elaborate on what the headline says.
+{tone_instruction}
+
+Format as JSON ONLY:
+{{
+  "title": "Viral title with emoji",
+  "hook": "Short 6-word hook",
+  "story": "The retelling of the real news...",
+  "search_term": "keyword for background video"
+}}
+"""
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 400,
+        "temperature": 0.9 if tone == "funny" else 0.7
+    }
+
+    for attempt in range(3):
+        try:
+            response = requests.post(url, headers=api_headers, json=payload, timeout=20)
+            response.raise_for_status()
+            output = response.json()["choices"][0]["message"]["content"]
+            data = robust_json_parse(output)
+            if data.get("story") and data.get("hook"):
+                data["source"] = real_source
+                data["original_headline"] = real_headline
+                data["tone"] = tone
+                return data
+        except Exception as e:
+            print(f"[Warning] News rewrite attempt {attempt+1} failed: {e}")
+            continue
+
+    # If LLM fails, return the raw headline as-is
+    return {
+        "title": f"🚨 {real_headline}",
+        "hook": real_headline[:50],
+        "story": f"{real_headline}. {'Bro, this actually happened!' if tone == 'funny' else 'More on this developing story.'}",
+        "source": real_source,
+        "original_headline": real_headline,
+        "search_term": "breaking news",
+        "tone": tone
+    }
+
+
 if __name__ == "__main__":
     facts = generate_mixed_facts("science")
     for i, f in enumerate(facts):
