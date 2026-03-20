@@ -12,6 +12,7 @@ from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video
 from engine.video_gen import create_shorts_video
+from engine.storage import upload_video_to_storage
 
 VIBE_VOICE_MAP = {
     "suspense": "en-US-ChristopherNeural", # Deep, intense
@@ -327,7 +328,9 @@ def main():
     
     print(f"[Log] Viral Title: {metadata['title']}")
     # 6. Social Media Automation
-    if not args.skip_upload:
+    actually_skip_upload = args.skip_upload
+    
+    if not actually_skip_upload:
         print("[Log] Checking for user-specific upload credentials...")
         from engine.social_gen import YouTubeUploader, InstagramUploader
         
@@ -361,30 +364,42 @@ def main():
                             print("[Warning] Refresh token present but GOOGLE_CLIENT_ID/SECRET missing from env.")
                     else:
                         print(f"[Log] No YouTube refresh token found for user {args.user_id}.")
+                    # REQUIRED FIX: If triggered from frontend but no user creds, skip global upload
+                    print("[Log] Skipping global upload fallback for user-triggered run.")
+                    actually_skip_upload = True
                 else:
                     print(f"[Log] No configuration found for user {args.user_id} in Supabase.")
+                    actually_skip_upload = True
             else:
                 print("[Warning] SUPABASE_URL or SERVICE_ROLE_KEY missing for secret retrieval.")
+                actually_skip_upload = True
 
-        print("[Log] Initializing YouTube Uploader...")
-        uploader = YouTubeUploader()
-        youtube_video_id = None
-        if uploader.authenticate(creds_dict=youtube_creds):
-            youtube_video_id = uploader.upload_video(
-                final_video, 
-                metadata['title'],
-                metadata['description'],
-                metadata['tags']
-            )
-        else:
-            print("💡 YouTube Auth failed or skipped.")
+        if not actually_skip_upload:
+            print("[Log] Initializing YouTube Uploader...")
+            uploader = YouTubeUploader()
+            youtube_video_id = None
+            if uploader.authenticate(creds_dict=youtube_creds):
+                youtube_video_id = uploader.upload_video(
+                    final_video, 
+                    metadata['title'],
+                    metadata['description'],
+                    metadata['tags']
+                )
+            else:
+                print("💡 YouTube Auth failed or skipped.")
 
-        print("[Log] Instagram uploader ready.")
-        ig_uploader = InstagramUploader()
-        # ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
-    else:
-        print("[Log] Skip Upload flag detected. Social media steps ignored.")
-    # 6. Report Success to Dashboard
+            print("[Log] Instagram uploader ready.")
+            ig_uploader = InstagramUploader()
+            # ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
+    
+    if actually_skip_upload:
+        print("[Log] Skip Upload flag detected (or forced). Social media steps ignored.")
+
+    # 7. Permanent Storage Persistence (New Step)
+    print(f"[Log] Persisting video to cloud storage...")
+    final_video_url = upload_video_to_storage(final_video, args.video_id or str(session_id))
+
+    # 8. Report Success to Dashboard
     if args.video_id and args.user_id:
         print(f"[Log] Reporting success to dashboard for Job {args.video_id}...")
         report_status(
@@ -392,7 +407,7 @@ def main():
             args.user_id, 
             metadata['title'], 
             "Published", 
-            output_filename, # This would be a cloud URL in production
+            final_video_url, # Now using cloud storage URL!
             args.mode or mode,
             youtube_video_id
         )

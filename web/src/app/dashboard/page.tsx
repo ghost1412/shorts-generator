@@ -56,27 +56,32 @@ export default function Dashboard() {
     }
     getSession();
 
-    async function fetchLogs() {
-      const { data } = await supabase
-        .from('video_logs')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (data) setVideoLogs(data);
-    }
-    fetchLogs();
-
     async function fetchConfig() {
       const { data } = await supabase.from('user_configs').select('*').single();
       if (data) setUserConfig(data);
     }
     fetchConfig();
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    async function fetchLogs() {
+      const { data } = await supabase
+        .from('video_logs')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (data) setVideoLogs(data);
+    }
+    
+    fetchLogs();
 
     const interval = setInterval(() => {
       fetchLogs();
-      fetchConfig();
     }, 15000);
     return () => clearInterval(interval);
-  }, [supabase]);
+  }, [user, supabase]);
 
   async function triggerGeneration(mode = 'AUTO', category = 'random', script = '') {
     if (userConfig?.plan === 'free' && videoLogs.length >= (userConfig?.max_videos || 3)) {
