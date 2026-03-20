@@ -449,22 +449,38 @@ def generate_funny_news(category="general", tone="funny"):
     Returns: {"title": str, "hook": str, "story": str, "source": str, "search_term": str, "tone": str}
     """
     import xml.etree.ElementTree as ET
+    import email.utils
+    from datetime import datetime, timedelta, timezone
+
+    # --- STEP 1: Fetch real news from RSS feeds based on tone and category ---
+    category_queries = {
+        "world": "world news international",
+        "politics": "politics world politics election",
+        "celebrities": "celebrities entertainment pop culture hollywood",
+        "tech": "technology ai gadgets tech news",
+        "sports": "sports world sports results",
+        "business": "business finance economy stock market",
+        "science": "science research scientific discovery"
+    }
     
-    # --- STEP 1: Fetch real news from RSS feeds based on tone ---
+    query = category_queries.get(category, f"{category} news")
+    
     if tone == "funny":
         rss_feeds = [
-            "https://www.reddit.com/r/nottheonion/.rss?limit=20",
-            "https://www.reddit.com/r/offbeat/.rss?limit=20",
-            "https://news.google.com/rss/search?q=weird+bizarre+funny+news&hl=en&gl=US&ceid=US:en",
+            f"https://news.google.com/rss/search?q={query}+weird+bizarre+funny&hl=en&gl=US&ceid=US:en",
+            "https://www.reddit.com/r/nottheonion/.rss?limit=30",
+            "https://www.reddit.com/r/offbeat/.rss?limit=30",
         ]
     else:
         rss_feeds = [
+            f"https://news.google.com/rss/search?q={query}+latest+breaking&hl=en&gl=US&ceid=US:en",
             "https://feeds.bbci.co.uk/news/world/rss.xml",
-            "https://news.google.com/rss?hl=en&gl=US&ceid=US:en",
-            "https://www.reddit.com/r/worldnews/.rss?limit=20",
+            "https://www.reddit.com/r/worldnews/.rss?limit=30",
         ]
     
     headlines = []
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=48)
     
     for feed_url in rss_feeds:
         try:
@@ -481,45 +497,69 @@ def generate_funny_news(category="general", tone="funny"):
             for entry in root.findall("atom:entry", atom_ns):
                 title_el = entry.find("atom:title", atom_ns)
                 link_el = entry.find("atom:link", atom_ns)
+                updated_el = entry.find("atom:updated", atom_ns)
+                
                 if title_el is not None and title_el.text:
-                    link = link_el.get("href", feed_url) if link_el is not None else feed_url
-                    headlines.append({
-                        "headline": title_el.text.strip(),
-                        "source": link,
-                        "feed": feed_url
-                    })
+                    # Date check for recency
+                    is_fresh = True
+                    if updated_el is not None and updated_el.text:
+                        try:
+                            updated_text = str(updated_el.text).strip()
+                            updated_dt = datetime.fromisoformat(updated_text.replace("Z", "+00:00"))
+                            if updated_dt < cutoff: is_fresh = False
+                        except: pass
+                    
+                    if is_fresh:
+                        link = link_el.get("href", feed_url) if link_el is not None else feed_url
+                        headlines.append({
+                            "headline": title_el.text.strip(),
+                            "source": link,
+                            "feed": feed_url
+                        })
             
             # Handle RSS 2.0 feeds (BBC, Google News)
             for item in root.findall(".//item"):
                 title_el = item.find("title")
                 link_el = item.find("link")
                 source_el = item.find("source")
+                pubDate_el = item.find("pubDate")
+                
                 if title_el is not None and title_el.text:
-                    source_name = source_el.text if source_el is not None else "News"
-                    link = link_el.text if link_el is not None else feed_url
-                    headlines.append({
-                        "headline": title_el.text.strip(),
-                        "source": f"{source_name} ({link})",
-                        "feed": feed_url
-                    })
+                    # Date check for recency
+                    is_fresh = True
+                    if pubDate_el is not None and pubDate_el.text:
+                        try:
+                            pub_text = str(pubDate_el.text).strip()
+                            pub_dt = email.utils.parsedate_to_datetime(pub_text)
+                            if pub_dt < cutoff: is_fresh = False
+                        except: pass
+                    
+                    if is_fresh:
+                        source_name = source_el.text if source_el is not None else "News"
+                        link = link_el.text if link_el is not None else feed_url
+                        headlines.append({
+                            "headline": title_el.text.strip(),
+                            "source": f"{source_name} ({link})",
+                            "feed": feed_url
+                        })
                     
         except Exception as e:
             print(f"[Warning] RSS fetch failed for {feed_url}: {e}")
             continue
     
     if not headlines:
-        print("[Warning] No RSS headlines fetched. Using fallback.")
+        print(f"[Warning] No fresh headlines for {category} ({tone}). Using fallback.")
         headlines = [{
-            "headline": "Scientists discover New Planet that Rains Diamonds" if tone == "serious" else "Man tries to rob bank with a banana, gets arrested immediately",
-            "source": "Associated Press",
+            "headline": f"Breaking development in {category} today" if tone == "serious" else f"Unbelievable {category} story catches everyone off guard",
+            "source": "Global News Network",
             "feed": "fallback"
         }]
     
-    # Pick a random headline
+    # Pick a random fresh headline
     chosen = random.choice(headlines)
     real_headline = chosen["headline"]
     real_source = chosen["source"]
-    print(f"[Log] NEWS ({tone}): Real headline: \"{real_headline}\" (Source: {real_source})")
+    print(f"[Log] NEWS ({tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     
     # --- STEP 2: Use LLM to rewrite based on tone ---
     url = "https://router.huggingface.co/v1/chat/completions"
