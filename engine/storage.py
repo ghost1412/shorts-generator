@@ -25,8 +25,7 @@ def upload_video_to_storage(file_path: str, video_id: str) -> str:
             res = supabase.storage.from_(bucket_name).upload(
                 path=storage_path,
                 file=f,
-                file_options={"content-type": "video/mp4"},
-                upsert=True
+                file_options={"content-type": "video/mp4"}
             )
         
         # Get SIGNED URL with 30-minute expiry (1800 seconds)

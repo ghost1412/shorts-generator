@@ -41,6 +41,7 @@ def main():
     print("--- Starting Shorts Generator ---", flush=True)
     
     # 0. Manual Script Override
+    youtube_video_id = None
     if args.script:
         print("[Log] Manual script detected. Skipping generation...")
         full_script = args.script
@@ -140,6 +141,9 @@ def main():
     
     audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file, voice_name=selected_voice)
     
+    if args.video_id and args.user_id:
+        report_status(args.video_id, args.user_id, "In-Progress Video", "Generating Media...", None, mode)
+    
     if not audio_path or not subs_path:
         print("[Error] Voice generation failed.")
         return
@@ -212,6 +216,9 @@ def main():
     if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
         print("[Error] Failed to download any background videos.")
         return
+
+    if args.video_id and args.user_id:
+        report_status(args.video_id, args.user_id, "In-Progress Video", "Rendering AI Video...", None, mode)
 
     # 4. Compose Video
     print(f"[Log] Composing final interactive video with {args.vibe} mood (Job ID: {session_id})...", flush=True)
@@ -327,6 +334,10 @@ def main():
     metadata["title"] = (metadata["title"] or "Viral Short")[:95]
     
     print(f"[Log] Viral Title: {metadata['title']}")
+
+    if args.video_id and args.user_id:
+        report_status(args.video_id, args.user_id, metadata['title'], "Optimizing & Uploading...", None, mode)
+
     # 6. Social Media Automation
     actually_skip_upload = args.skip_upload
     
@@ -417,7 +428,7 @@ def main():
         f.write(f"Description: {metadata['description']}\n")
         f.write(f"Tags: {', '.join(metadata['tags'])}\n")
 
-def report_status(video_id, user_id, title, status, download_url, mode, youtube_video_id=None):
+def report_status(video_id, user_id, title="Shorts Video", status="Processing", download_url=None, mode="AUTO", youtube_video_id=None):
     """Reports video generation status back to the Next.js dashboard."""
     import requests
     webhook_url = os.getenv("DASHBOARD_WEBHOOK_URL", "http://localhost:3000/api/webhook/github")
