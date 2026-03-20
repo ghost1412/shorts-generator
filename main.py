@@ -344,7 +344,7 @@ def main():
     elif mode == "ODD_ONE_OUT":
         metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
     elif mode in ("NEWS", "NEWS_SERIOUS"):
-        metadata = generate_viral_metadata(news_data.get('story', 'Breaking News'), mode="STORY", category=category)
+        metadata = generate_viral_metadata(news_data.get('story', 'Breaking News'), mode="NEWS", category=category)
         # Append source credit to description
         source_credit = news_data.get('source', '')
         if source_credit:
