@@ -54,31 +54,43 @@ jobs:
           ${{ runner.os }}-shorts-${{ hashFiles('**/requirements.txt') }}-
           ${{ runner.os }}-shorts-
 
-    - name: Install FFmpeg
+    - name: Install FFmpeg (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
       run: |
-        if [ "$RUNNER_OS" == "Linux" ]; then
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-        else
-          ffmpeg -version || echo "FFmpeg should be pre-installed on self-hosted Windows"
-        fi
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
+    - name: Verify FFmpeg (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        ffmpeg -version
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Setup Environment Variables
+    - name: Setup Environment Variables (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
       run: |
         echo "HF_API_KEY=${{ secrets.HF_API_KEY }}" >> .env
         echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
         echo "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" >> .env
         echo "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" >> .env
         echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
-
-    - name: Setup Google Client Secrets
-      run: |
         echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
+
+    - name: Setup Environment Variables (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        "HF_API_KEY=${{ secrets.HF_API_KEY }}" | Out-File -Append -Encoding ascii .env
+        "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" | Out-File -Append -Encoding ascii .env
+        "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" | Out-File -Append -Encoding ascii .env
+        "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" | Out-File -Append -Encoding ascii .env
+        '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' | Out-File -Encoding ascii token.json
+        '${{ secrets.GOOGLE_CLIENT_SECRETS }}' | Out-File -Encoding ascii client_secrets.json
 
     - name: Run Video Generator (Windows)
       if: runner.os == 'Windows'
