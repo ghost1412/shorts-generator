@@ -50,17 +50,23 @@ export default function Dashboard() {
   const supabase = createClient();
 
   useEffect(() => {
-    async function getSession() {
+    async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
-    }
-    getSession();
+      
+      if (user) {
+        const { data: logs } = await supabase
+          .from('video_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        if (logs) setVideoLogs(logs);
 
-    async function fetchConfig() {
-      const { data } = await supabase.from('user_configs').select('*').single();
-      if (data) setUserConfig(data);
+        const { data: config } = await supabase.from('user_configs').select('*').single();
+        if (config) setUserConfig(config);
+      }
     }
-    fetchConfig();
+    init();
   }, [supabase]);
 
   useEffect(() => {
@@ -74,14 +80,13 @@ export default function Dashboard() {
         .order('created_at', { ascending: false });
       if (data) setVideoLogs(data);
     }
-    
-    fetchLogs();
 
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, 15000);
+    // Smart Polling Logic
+    const hasProcessing = videoLogs.some(log => !['Published', 'Failed'].includes(log.status));
+    const interval = setInterval(fetchLogs, hasProcessing ? 5000 : 15000);
+    
     return () => clearInterval(interval);
-  }, [user, supabase]);
+  }, [user, supabase, videoLogs.length, videoLogs.some(log => log.status === 'Processing')]);
 
   async function triggerGeneration(mode = 'AUTO', category = 'random', script = '') {
     if (userConfig?.plan === 'free' && videoLogs.length >= (userConfig?.max_videos || 3)) {
@@ -282,11 +287,16 @@ export default function Dashboard() {
                   >
                     <div className={`w-24 h-32 bg-zinc-800 rounded-lg overflow-hidden relative flex-shrink-0 ${vid.status === 'Processing' ? 'animate-pulse' : ''}`}>
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2 flex-col justify-center items-center">
-                         {vid.status === 'Processing' ? (
-                           <div className="w-6 h-6 border-2 border-[#00e5ff] border-t-transparent rounded-full animate-spin" />
-                         ) : (
-                           <PlayCircle className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                         )}
+                          { !['Published', 'Failed'].includes(vid.status) ? (
+                            <div className="flex flex-col items-center gap-1 group-hover:scale-110 transition-transform">
+                              <div className="w-8 h-8 border-2 border-[#00e5ff] border-t-transparent rounded-full animate-spin" />
+                              <span className="text-[10px] font-medium text-[#00e5ff] animate-pulse">
+                                {vid.status || 'Processing...'}
+                              </span>
+                            </div>
+                          ) : (
+                            <PlayCircle className="text-white opacity-0 group-hover:opacity-100 transition-opacity w-8 h-8" />
+                          )}
                       </div>
                     </div>
                     <div className="flex flex-col justify-between py-1 flex-1 min-w-0">
@@ -319,7 +329,7 @@ export default function Dashboard() {
                       )}
                     </div>
                     <p className="text-xs text-zinc-500 mt-2 truncate">
-                      {vid.status === 'Processing' ? 'Rendering AI media...' : `${vid.views || 0} views • ${new Date(vid.created_at).toLocaleDateString()}`}
+                      {vid.status === 'Processing' ? 'Rendering AI media...' : `${vid.views || 0} views • ${vid.created_at ? new Date(vid.created_at).toLocaleDateString() : 'Just now'}`}
                     </p>
                   </div>
                   </div>
