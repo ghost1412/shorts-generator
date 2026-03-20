@@ -165,7 +165,7 @@ export default function Dashboard() {
     }
   }
 
-  const niches = ["Science", "Space", "Anime Lore", "Cooking Hacks", "History", "Animal Facts"];
+  const niches = ["Science", "Space", "Anime Lore", "Cooking Hacks", "History", "Animal Facts", "World", "Politics", "Celebrities", "Tech", "Sports"];
 
   return (
     <div className="flex h-screen bg-[#0a0a0c] text-[#f0f0f5] overflow-hidden relative">

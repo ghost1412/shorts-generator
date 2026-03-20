@@ -62,7 +62,7 @@ def main():
         print(f"[Log] Mode selected: {mode}", flush=True)
         
         # 2. Choose Category
-        categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks"]
+        categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports"]
         category = args.category if args.category and args.category in categories else random.choice(categories)
         print(f"[Log] Generating content for category: {category}...", flush=True)
         
