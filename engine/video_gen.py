@@ -120,12 +120,12 @@ def apply_ken_burns(clip, duration):
     Applies a dynamic camera zoom (Ken Burns effect) to a clip.
     Randomly chooses between zoom-in and zoom-out.
     """
-    start_scale = random.uniform(1.0, 1.15)
-    end_scale = random.uniform(1.0, 1.15)
+    start_scale = random.uniform(1.0, 1.25)
+    end_scale = random.uniform(1.0, 1.25)
     
     # Ensure there's actually a motion
-    if abs(start_scale - end_scale) < 0.05:
-        end_scale = start_scale + 0.1 if start_scale < 1.1 else start_scale - 0.1
+    if abs(start_scale - end_scale) < 0.1:
+        end_scale = start_scale + 0.15 if start_scale < 1.15 else start_scale - 0.15
 
     def resize_func(t):
         # Linear interpolation of scale over time
@@ -139,8 +139,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
     audio_clip = AudioFileClip(audio_path)
-    # Extension for "Suspense Reveal" - add 2.5 seconds of silence/music at the end
-    duration = audio_clip.duration + 2.5 
+    # Extension for "Suspense Reveal" - Tighten to 1.5s for retention
+    duration = audio_clip.duration + 1.5 
     
     # 1. Multi-Background Stitching
     if isinstance(video_paths, str): video_paths = [video_paths]
@@ -252,9 +252,9 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 c_img = create_text_image(text, font_size=dynamic_font_size, color="white", y_pos=650)
                 c_clip = ImageClip(c_img).with_start(sentence_start).with_duration(end - sentence_start).with_position((0, 0))
                 
-                # Add AGGRESSIVE POP-IN effect (Scale from 0.7 to 1.1 quickly then settle)
+                # Add AGGRESSIVE POP-IN effect (Rapid scale from 0.4 to 1.0)
                 c_clip = c_clip.with_effects([
-                    vfx.Resize(lambda t: min(1.0, 0.75 + 3.0 * t) if t < 0.15 else 1.0)
+                    vfx.Resize(lambda t: min(1.0, 0.4 + 6.0 * t) if t < 0.1 else 1.0)
                 ])
                 
                 word_clips.append(c_clip)
