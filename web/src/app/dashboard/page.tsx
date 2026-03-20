@@ -79,6 +79,10 @@ export default function Dashboard() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (data) setVideoLogs(data);
+
+      // Also refresh user_configs to get updated generations_used
+      const { data: config } = await supabase.from('user_configs').select('*').single();
+      if (config) setUserConfig(config);
     }
 
     // Smart Polling Logic
@@ -193,7 +197,11 @@ export default function Dashboard() {
           <p className="text-[10px] text-zinc-500 mb-1 uppercase tracking-widest font-bold">Current Plan</p>
           <div className="flex justify-between items-end mb-3">
             <p className="font-extrabold text-sm capitalize">{userConfig?.plan || 'Free'}</p>
-            <p className="text-[10px] text-zinc-400">{videoLogs.length} / {userConfig?.max_videos || 3} vids</p>
+              {userConfig?.plan === 'free' && (
+                <div className="text-sm font-medium text-slate-400">
+                  {userConfig?.generations_used || 0} / {userConfig?.max_videos || 3} generations used
+                </div>
+              )}
           </div>
           <div className="w-full bg-zinc-800 h-1.5 rounded-full mb-4 overflow-hidden">
             <div 
