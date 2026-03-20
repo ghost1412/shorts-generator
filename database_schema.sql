@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS user_configs (
     default_vibe TEXT DEFAULT 'suspense',
     plan TEXT DEFAULT 'free',
     max_videos INTEGER DEFAULT 3,
+    generations_used INTEGER DEFAULT 0, -- Total count that doesn't reset on delete
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );

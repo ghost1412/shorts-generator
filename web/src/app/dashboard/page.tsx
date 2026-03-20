@@ -89,8 +89,11 @@ export default function Dashboard() {
   }, [user, supabase, videoLogs.length, videoLogs.some(log => log.status === 'Processing')]);
 
   async function triggerGeneration(mode = 'AUTO', category = 'random', script = '') {
-    if (userConfig?.plan === 'free' && videoLogs.length >= (userConfig?.max_videos || 3)) {
-      alert('⚠️ Video Limit Reached! You have used all 3 free monthly videos. Please upgrade to Pro for unlimited generation!');
+    const generationsUsed = userConfig?.generations_used || 0;
+    const maxVideos = userConfig?.max_videos || 3;
+
+    if (userConfig?.plan === 'free' && generationsUsed >= maxVideos) {
+      alert(`❌ Usage limit reached! You have used all ${maxVideos} generations in your free plan. Upgrade to Pro for unlimited!`);
       return;
     }
     setIsTriggering(true);

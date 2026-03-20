@@ -17,24 +17,20 @@ export async function POST(request: Request) {
     // 0. Security & Plan Limit Check (Backend enforcement)
     const { data: userConfig, error: configError } = await supabase
       .from('user_configs')
-      .select('plan, max_videos, github_token, github_repo')
+      .select('plan, max_videos, github_token, github_repo, generations_used')
       .eq('user_id', user.id)
       .single();
 
-    const plan = userConfig?.plan || 'free';
+    // 2. Plan Limits (Usage-based check)
+    const generationsUsed = userConfig?.generations_used || 0;
     const maxVideos = userConfig?.max_videos || 3;
+    const plan = userConfig?.plan || 'free';
 
-    if (plan === 'free') {
-      const { count } = await supabase
-        .from('video_logs')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-      
-      if (count !== null && count >= maxVideos) {
-        return NextResponse.json({ 
-          error: 'Video limit reached for Free plan. Please upgrade to Pro for unlimited generation.' 
-        }, { status: 403 });
-      }
+    if (plan === 'free' && generationsUsed >= maxVideos) {
+      return NextResponse.json({ 
+        error: 'Usage limit reached', 
+        details: `You have used all ${maxVideos} generations in your free plan. Upgrade to Pro for unlimited!` 
+      }, { status: 403 });
     }
 
     // 1. Create the 'Processing' entry in the DB immediately
@@ -74,7 +70,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: errorData.message || 'Server render failed' }, { status: 500 });
       }
 
-      return NextResponse.json({ message: 'Render started on dedicated server' });
+      // 5. Update usage counter (Increment by 1)
+      if (plan === 'free') {
+        await supabase
+          .from('user_configs')
+          .update({ generations_used: generationsUsed + 1 })
+          .eq('user_id', user.id);
+      }
+
+      return NextResponse.json({ 
+        message: 'Generation triggered successfully', 
+        video_id: videoId 
+      });
     }
 
     // 2. GITHUB ACTIONS RENDERING (Default Cloud)
