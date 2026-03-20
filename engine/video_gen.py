@@ -189,7 +189,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     # viral_color = (255, 230, 0) # Bright Yellow
     
-    if mode == "NEWS":
+    if mode.startswith("NEWS"):
         # 1. TOP HEADER: BREAKING NEWS!
         header_img = create_text_image("BREAKING NEWS!", font_size=110, color="red", y_pos=70)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
@@ -276,7 +276,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             reveal_img = create_text_image("LIKE & SUB TO REVEAL! 👇", font_size=110, color="orange", y_pos=900)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
-        elif mode == "NEWS":
+        elif mode.startswith("NEWS"):
             reveal_img = create_text_image("STAY TUNED FOR MORE! 🚨", font_size=110, color="red", y_pos=900)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
