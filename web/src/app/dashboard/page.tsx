@@ -300,10 +300,17 @@ export default function Dashboard() {
                     <Trash2 size={14} />
                   </button>
                   <div 
-                    onClick={async () => {
+                        onClick={async () => {
                       if (vid.storage_path) {
-                        const { data, error } = await supabase.storage.from('videos').createSignedUrl(vid.storage_path, 300);
-                        if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                        const res = await fetch('/api/video/signed-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: vid.storage_path }) });
+                        const json = await res.json();
+                        console.log('[Dashboard] Signed URL response:', json);
+                        if (json.signedUrl) {
+                          window.open(json.signedUrl, '_blank');
+                        } else {
+                          console.error('[Dashboard] Failed to get signed URL:', json.error);
+                          alert(`Failed to get download link: ${json.error || 'Unknown error'}`);
+                        }
                       } else if (vid.download_url) {
                         window.open(vid.download_url, '_blank');
                       }
@@ -343,11 +350,18 @@ export default function Dashboard() {
                       <h4 className="font-semibold text-sm line-clamp-1">{vid.title}</h4>
                         {vid.status === 'Published' && (
                           <button 
-                            onClick={async (e) => {
+                                      onClick={async (e) => {
                               e.stopPropagation();
                               if (vid.storage_path) {
-                                const { data } = await supabase.storage.from('videos').createSignedUrl(vid.storage_path, 300);
-                                if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+                                const res = await fetch('/api/video/signed-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ storage_path: vid.storage_path }) });
+                                const json = await res.json();
+                                console.log('[Dashboard] Signed URL response:', json);
+                                if (json.signedUrl) {
+                                  window.open(json.signedUrl, '_blank');
+                                } else {
+                                  console.error('[Dashboard] Failed to get signed URL:', json.error);
+                                  alert(`Failed to get download link: ${json.error || 'Unknown error'}`);
+                                }
                               } else if (vid.download_url) {
                                 window.open(vid.download_url, '_blank');
                               }
