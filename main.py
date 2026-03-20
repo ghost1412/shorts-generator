@@ -407,21 +407,42 @@ def main():
         print("[Log] Skip Upload flag detected (or forced). Social media steps ignored.")
 
     # 7. Permanent Storage Persistence (New Step)
-    print(f"[Log] Persisting video to cloud storage...")
-    storage_path, signed_url = upload_video_to_storage(final_video, args.video_id or str(session_id))
-
-    # 8. Report Success to Dashboard
     if args.video_id and args.user_id:
+        print(f"[Log] Persisting video and thumbnail to cloud storage...")
+        from engine.storage import upload_to_storage
+        
+        # 7a. Extract thumbnail first
+        thumbnail_file = f"thumb_{session_id}.jpg"
+        thumbnail_path = None
+        try:
+            import subprocess
+            print(f"[Log] Extracting thumbnail from {final_video}...")
+            subprocess.run([
+                'ffmpeg', '-y', '-i', final_video, 
+                '-ss', '00:00:01', '-vframes', '1', 
+                thumbnail_file
+            ], check=True, capture_output=True)
+            thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
+            try: os.remove(thumbnail_file)
+            except: pass
+        except Exception as te:
+            print(f"[Warning] Thumbnail extraction/upload failed: {te}")
+
+        # 7b. Upload video
+        storage_path = upload_to_storage(final_video, args.video_id, is_video=True)
+
+        # 8. Report Success to Dashboard
         print(f"[Log] Reporting success to dashboard for Job {args.video_id}...")
         report_status(
             args.video_id, 
             args.user_id, 
             metadata['title'], 
             "Published", 
-            signed_url,  # Initial signed link
+            None, 
             args.mode or mode,
             youtube_video_id,
-            storage_path  # New field!
+            storage_path,
+            thumbnail_path
         )
 
     with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
@@ -429,7 +450,7 @@ def main():
         f.write(f"Description: {metadata['description']}\n")
         f.write(f"Tags: {', '.join(metadata['tags'])}\n")
 
-def report_status(video_id, user_id, title="Shorts Video", status="Processing", download_url=None, mode="AUTO", youtube_video_id=None, storage_path=None):
+def report_status(video_id, user_id, title="Shorts Video", status="Processing", download_url=None, mode="AUTO", youtube_video_id=None, storage_path=None, thumbnail_path=None):
     """Updates video generation status directly in Supabase (no webhook needed)."""
     supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -447,6 +468,7 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
         if mode: update_data["mode"] = mode
         if download_url: update_data["download_url"] = download_url
         if storage_path: update_data["storage_path"] = storage_path
+        if thumbnail_path: update_data["thumbnail_path"] = thumbnail_path
         if youtube_video_id: update_data["youtube_video_id"] = youtube_video_id
 
         result = db.table("video_logs").update(update_data).eq("id", video_id).execute()
