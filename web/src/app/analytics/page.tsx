@@ -98,7 +98,11 @@ export default function AnalyticsPage() {
     try {
       const result = await syncYouTubeAnalytics();
       if (result.success) {
-        setMessage({ type: 'success', text: `Successfully synced ${result.updated} videos! 🚀` });
+        let text = `Successfully synced ${result.updated} videos! 🚀`;
+        if (result.diagnostics) {
+          text += ` (Matched ${result.diagnostics.localVideos} local videos with ${result.diagnostics.googleRows} Google report rows)`;
+        }
+        setMessage({ type: 'success', text });
         // Re-fetch data
         const { data: logs } = await supabase
           .from('video_logs')
@@ -199,14 +203,28 @@ export default function AnalyticsPage() {
           </div>
         </header>
 
+        {/* Latency Warning */}
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex items-center gap-4">
+          <div className="p-2 bg-blue-500/20 rounded-lg">
+            <Clock size={20} className="text-blue-400" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs font-bold text-blue-400 uppercase tracking-wider">YouTube Data Latency</p>
+            <p className="text-[11px] text-zinc-400 mt-0.5">Note: New videos typically take 24-48 hours to appear in Google's Analytics reports. If you just published, data will show up shortly.</p>
+          </div>
+        </div>
+
         {message && (
-          <div className={`p-4 rounded-xl flex items-center gap-3 border animate-in fade-in slide-in-from-top-2 ${
+          <div className={`p-4 rounded-xl flex items-center justify-between gap-3 border animate-in fade-in slide-in-from-top-2 ${
             message.type === 'success' 
               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
               : 'bg-red-500/10 border-red-500/20 text-red-400'
           }`}>
-            {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            <span className="text-sm font-medium">{message.text}</span>
+            <div className="flex items-center gap-3">
+              {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+              <span className="text-sm font-medium">{message.text}</span>
+            </div>
+            <button onClick={() => setMessage(null)} className="text-xs opacity-50 hover:opacity-100 uppercase font-bold tracking-widest">Dismiss</button>
           </div>
         )}
 

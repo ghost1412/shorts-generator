@@ -13,7 +13,7 @@ def cleanup_old_videos(supabase: Client, user_id: str):
             return
 
         now = datetime.utcnow()
-        expiry_limit = now - timedelta(minutes=30)
+        expiry_limit = now - timedelta(hours=24)
 
         for file in res:
             # Supabase 'list' returns metadata including 'created_at'
@@ -42,7 +42,9 @@ def upload_to_storage(file_path: str, video_id: str, is_video: bool = True) -> s
     """
     supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    user_id = os.getenv("USER_ID", "default_user")
+    user_id = os.getenv("USER_ID")
+    if not user_id or user_id == "":
+        user_id = "default_user"
 
     if not supabase_url or not supabase_key:
         print("[Error] Supabase credentials missing for storage upload.")

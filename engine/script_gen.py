@@ -465,18 +465,36 @@ def generate_funny_news(category="general", tone="funny"):
     
     query = category_queries.get(category, f"{category} news")
     
-    if tone == "funny":
-        rss_feeds = [
-            f"https://news.google.com/rss/search?q={query}+weird+bizarre+funny&hl=en&gl=US&ceid=US:en",
-            "https://www.reddit.com/r/nottheonion/.rss?limit=30",
-            "https://www.reddit.com/r/offbeat/.rss?limit=30",
-        ]
-    else:
-        rss_feeds = [
-            f"https://news.google.com/rss/search?q={query}+latest+breaking&hl=en&gl=US&ceid=US:en",
-            "https://feeds.bbci.co.uk/news/world/rss.xml",
-            "https://www.reddit.com/r/worldnews/.rss?limit=30",
-        ]
+    # --- Define category-specific subreddits ---
+    category_subreddits = {
+        "celebrities": ["entertainment", "popculture", "celebrities"],
+        "tech": ["technology", "programming", "gadgets"],
+        "sports": ["sports", "nba", "soccer"],
+        "politics": ["politics"],
+        "world": ["worldnews"],
+        "science": ["science", "space"],
+        "business": ["business", "economy"]
+    }
+
+    # 1. Base Google News RSS (Highly specific search)
+    google_search_suffix = "weird bizarre funny" if tone == "funny" else "latest breaking"
+    rss_feeds = [
+        f"https://news.google.com/rss/search?q={query}+{google_search_suffix}&hl=en&gl=US&ceid=US:en"
+    ]
+    
+    # 2. Category-specific subreddits
+    subs = category_subreddits.get(category, ["nottheonion" if tone == "funny" else "worldnews"])
+    for sub in subs:
+        rss_feeds.append(f"https://www.reddit.com/r/{sub}/.rss?limit=30")
+    
+    # 3. Dedicated niche feeds (Serious only)
+    if tone == "serious":
+        if category in ("world", "general"):
+            rss_feeds.append("https://feeds.bbci.co.uk/news/world/rss.xml")
+        elif category == "tech":
+            rss_feeds.append("https://feeds.feedburner.com/TechCrunch/")
+        elif category == "sports":
+            rss_feeds.append("https://www.espn.com/espn/rss/news")
     
     headlines = []
     now = datetime.now(timezone.utc)
