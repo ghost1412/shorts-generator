@@ -127,7 +127,7 @@ jobs:
         ARG_VIBE="${{ github.event.inputs.vibe && github.event.inputs.vibe != 'suspense' && format('--vibe {0}', github.event.inputs.vibe) || '' }}"
         ARG_USER_ID="${{ github.event.inputs.user_id && format('--user_id {0}', github.event.inputs.user_id) || '' }}"
         ARG_VIDEO_ID="${{ github.event.inputs.video_id && format('--video_id {0}', github.event.inputs.video_id) || '' }}"
-        ARG_SCRIPT='${{ github.event.inputs.custom_script || "" }}'
+        ARG_SCRIPT="${{ github.event.inputs.custom_script || '' }}"
         
         if [ ! -z "$ARG_SCRIPT" ]; then
           python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID --script "$ARG_SCRIPT"
