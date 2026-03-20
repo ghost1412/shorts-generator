@@ -23,7 +23,7 @@ VIBE_VOICE_MAP = {
 
 def main():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
@@ -123,12 +123,17 @@ def main():
             facts_data = []
             print(f"[Log] ODD_ONE_OUT Selected")
         elif mode == "NEWS":
-            news_tone = random.choice(["funny", "funny", "funny", "serious", "serious"])  # 60/40
-            news_data = generate_funny_news(category, tone=news_tone)
+            news_data = generate_funny_news(category, tone="funny")
             news_source = news_data.get('source', 'Unknown')
             full_script = f"{news_data['hook']} ... {news_data['story']}"
             facts_data = []
-            print(f"[Log] NEWS ({news_tone}) Data: {news_data}")
+            print(f"[Log] NEWS (funny) Data: {news_data}")
+        elif mode == "NEWS_SERIOUS":
+            news_data = generate_funny_news(category, tone="serious")
+            news_source = news_data.get('source', 'Unknown')
+            full_script = f"{news_data['hook']} ... {news_data['story']}"
+            facts_data = []
+            print(f"[Log] NEWS_SERIOUS Data: {news_data}")
 
     print(f"[Log] Full Script: \"{full_script}\"", flush=True)
     
@@ -219,7 +224,7 @@ def main():
         if not target_path:
             print(f"[Error] Failed to download {target_name} image for ODD_ONE_OUT.", flush=True)
             return
-    elif mode == "NEWS":
+    elif mode in ("NEWS", "NEWS_SERIOUS"):
         # Use the search_term from the news data for relevant backgrounds
         search_query = news_data.get('search_term', 'breaking news broadcast') if 'news_data' in dir() else 'breaking news broadcast'
         bg_filename = os.path.join(session_dir, "bg_news.mp4")
@@ -338,8 +343,8 @@ def main():
         metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
     elif mode == "ODD_ONE_OUT":
         metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
-    elif mode == "NEWS":
-        metadata = generate_viral_metadata(news_data.get('story', 'Funny News'), mode="STORY", category=category)
+    elif mode in ("NEWS", "NEWS_SERIOUS"):
+        metadata = generate_viral_metadata(news_data.get('story', 'Breaking News'), mode="STORY", category=category)
         # Append source credit to description
         source_credit = news_data.get('source', '')
         if source_credit:

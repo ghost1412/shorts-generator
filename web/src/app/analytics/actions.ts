@@ -51,10 +51,11 @@ export async function syncYouTubeAnalytics() {
     }
     const accessToken = tokenData.access_token;
 
-    // 4. Fetch Video Logs
+    // 4. Fetch Video Logs (only this user's videos)
     const { data: logs, error: logsError } = await supabase
       .from('video_logs')
       .select('id, youtube_video_id')
+      .eq('user_id', user.id)
       .not('youtube_video_id', 'is', null);
 
     if (logsError) throw logsError;
@@ -79,9 +80,12 @@ export async function syncYouTubeAnalytics() {
 
     const analyticsData = await analyticsRes.json();
     if (!analyticsRes.ok) {
-        console.error('[Sync] Google Analytics Error:', analyticsData);
-        if (analyticsRes.status === 403) throw new Error('Google Analytics API not enabled or insufficient permissions.');
-        return { success: true, updated: 0 };
+        const errReason = analyticsData?.error?.message || JSON.stringify(analyticsData);
+        console.error('[Sync] Google Analytics API Error:', analyticsData);
+        if (analyticsRes.status === 403) {
+          throw new Error(`Analytics API permission denied: ${errReason}. Make sure the YouTube Analytics API is enabled in Google Cloud, and re-connect your YouTube account in settings to refresh permissions.`);
+        }
+        throw new Error(`Analytics API returned ${analyticsRes.status}: ${errReason}`);
     }
 
     // 6. Update database

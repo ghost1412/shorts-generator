@@ -47,6 +47,8 @@ export default function Dashboard() {
     { id: 'TRIVIA', label: 'Genius Trivia', icon: <PlusCircle size={16} />, color: 'text-yellow-400' },
     { id: 'QUOTE', label: 'Daily Quotes', icon: <Clock size={16} />, color: 'text-pink-400' },
     { id: 'ODD_ONE_OUT', label: 'Spot the Odd', icon: <Users size={16} />, color: 'text-indigo-400' },
+    { id: 'NEWS', label: '😂 Funny News', icon: <TrendingUp size={16} />, color: 'text-green-400' },
+    { id: 'NEWS_SERIOUS', label: '📰 Serious News', icon: <TrendingUp size={16} />, color: 'text-blue-400' },
   ];
   const supabase = createClient();
 
@@ -277,7 +279,7 @@ export default function Dashboard() {
           >
             <Youtube size={20} />
             <span className="text-sm font-bold truncate">
-              {isTriggering ? 'Triggering...' : `Trigger {selectedMode} ({selectedCategory.replace('_', ' ')})`}
+              {isTriggering ? 'Triggering...' : `Trigger ${selectedMode} (${selectedCategory.replace('_', ' ')})`}
             </span>
           </button>
         </header>
