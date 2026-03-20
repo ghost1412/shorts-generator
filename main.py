@@ -429,7 +429,8 @@ def main():
 
     # 7. Permanent Storage Persistence (New Step)
     if args.video_id and args.user_id:
-        print(f"[Log] Persisting video and thumbnail to cloud storage...")
+        os.environ["USER_ID"] = args.user_id
+        print(f"[Log] Persisting video and thumbnail to cloud storage for user {args.user_id}...")
         from engine.storage import upload_to_storage
         
         # 7a. Extract thumbnail first

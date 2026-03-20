@@ -127,7 +127,15 @@ export async function syncYouTubeAnalytics() {
       }
     }
 
-    return { success: true, updated: updatedCount };
+    return { 
+        success: true, 
+        updated: updatedCount, 
+        diagnostics: {
+            localVideos: logs.length,
+            googleRows: rows.length,
+            sampleId: logs[0]?.youtube_video_id || 'none'
+        }
+    };
   } catch (err: any) {
     console.error('[Sync Action Error]:', err);
     // Return error message instead of throwing to avoid RSC crash
