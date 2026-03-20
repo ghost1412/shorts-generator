@@ -152,7 +152,11 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
         {"name": "Meme Cat", "query": "funny cat meme"},
         {"name": "Hasbulla", "query": "hasbulla"},
         {"name": "Among Us Red", "query": "among us character red"},
-        {"name": "Pepe", "query": "pepe the frog"}
+        {"name": "Pepe", "query": "pepe the frog"},
+        {"name": "Cheems", "query": "cheems meme"},
+        {"name": "SpongeBob", "query": "spongebob mockup"},
+        {"name": "Patrick", "query": "patrick star meme"},
+        {"name": "Spider-Man", "query": "spider man pointing meme"}
     ]
     
     selected_target = random.choice(targets) if not target_query else {"name": "Object", "query": target_query}
@@ -162,8 +166,12 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
     target_path = download_image(selected_target["query"], output_path=os.path.join(output_dir, f"target_{random.randint(100,999)}.png"))
     assets["target_path"] = target_path
     
-    # 2. Get Similar Distractors (Sketch faces/Portraits)
-    distractor_query = random.choice(["sketch face", "line art portrait", "cartoon face drawing", "human avatar"])
+    # 2. Get Similar Distractors (Context Aware)
+    if any(m in assets["target_name"].lower() for m in ["doge", "meme", "cat", "shrek", "pepe", "hasbulla", "cheems", "spongebob", "patrick", "spider"]):
+        distractor_query = random.choice(["funny meme sticker", "cartoon characters", "funny animal drawing", "famous memes bundle"])
+    else:
+        distractor_query = random.choice(["sketch face", "line art portrait", "cartoon face drawing", "human avatar"])
+    
     print(f"[Log] Fetching {num_objects} distractors for query: '{distractor_query}'")
     
     url = f"https://api.pexels.com/v1/search?query={distractor_query}&per_page={num_objects}"
