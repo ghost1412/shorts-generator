@@ -317,7 +317,7 @@ def main():
             bg_video_paths, 
             output_filename,
             music_path=bg_music,
-            is_story=(mode == "STORY")
+            mode=mode
         )
     
     print(f"[Log] SUCCESS! Interactive video created: {final_video}")
@@ -352,7 +352,7 @@ def main():
     else:
         # For STORY or other modes
         story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"
-        metadata = generate_viral_metadata(story_content, mode="STORY", category=category)
+        metadata = generate_viral_metadata(story_content, mode=mode, category=category)
     
     # Ensure title is never empty or too long
     if not metadata.get("title"):

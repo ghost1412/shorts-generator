@@ -134,7 +134,7 @@ def apply_ken_burns(clip, duration):
 
     return clip.with_effects([vfx.Resize(resize_func)])
 
-def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, is_story=False):
+def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS"):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
@@ -189,7 +189,22 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     # viral_color = (255, 230, 0) # Bright Yellow
     
-    if not is_story:
+    if mode == "NEWS":
+        # 1. TOP HEADER: BREAKING NEWS!
+        header_img = create_text_image("BREAKING NEWS!", font_size=110, color="red", y_pos=70)
+        top_header = ImageClip(header_img).with_start(0).with_duration(duration)
+        persistent_clips.append(top_header)
+        
+        # 2. BOTTOM FOOTER: FOLLOW FOR UPDATES
+        footer_img = create_text_image("FOLLOW FOR UPDATES", font_size=60, color="white", y_pos=1700)
+        bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
+        persistent_clips.append(bottom_footer)
+    elif mode == "STORY":
+        # STORY MODE HEADER
+        header_img = create_text_image("UNBELIEVABLE BUT TRUE", font_size=110, color="orange", y_pos=70)
+        top_header = ImageClip(header_img).with_start(0).with_duration(duration)
+        persistent_clips.append(top_header)
+    else: # FACTS mode
         # 1. TOP HEADER: SPOT THE LIE! (Stay high)
         header_img = create_text_image("SPOT THE LIE!", font_size=110, color="yellow", y_pos=70)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
@@ -199,16 +214,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         footer_img = create_text_image("COMMENT YOUR GUESS", font_size=60, color="white", y_pos=1700)
         bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
         persistent_clips.append(bottom_footer)
-    else:
-        # STORY MODE HEADER
-        header_img = create_text_image("UNBELIEVABLE BUT TRUE", font_size=110, color="orange", y_pos=70)
-        top_header = ImageClip(header_img).with_start(0).with_duration(duration)
-        persistent_clips.append(top_header)
 
     if subtitles:
         # 1. Fact Indicators (e.g., FACT 1/3) - Only for FACT Mode
         fact_header_times = []
-        if not is_story:
+        if mode == "FACTS":
             for j, entry in enumerate(subtitles):
                 word = entry["word"].upper()
                 if "FACT" in word and j + 1 < len(subtitles):
@@ -261,12 +271,16 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 current_sentence = []
                 sentence_start = None
 
-        # 3. FINAL REVEAL OVERLAY (Only for FACTS)
-        if not is_story:
+        # 3. FINAL REVEAL OVERLAY
+        if mode == "FACTS":
             reveal_img = create_text_image("LIKE & SUB TO REVEAL! 👇", font_size=110, color="orange", y_pos=900)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
-        else:
+        elif mode == "NEWS":
+            reveal_img = create_text_image("STAY TUNED FOR MORE! 🚨", font_size=110, color="red", y_pos=900)
+            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
+            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
+        else: # STORY mode
             # Story Mode Outro
             reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=120, color="yellow", y_pos=850)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
