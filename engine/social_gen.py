@@ -106,6 +106,21 @@ Format as JSON ONLY:
             "tags": ["shorts", "challenge", "game", "meme", "trending", target.lower()]
         }
     
+    if mode == "STORY":
+        return {
+            "title": f"You won't believe this STORY! 😱 #shorts #storytime",
+            "description": f"This is one of the most incredible stories I've ever heard. Stay until the end for the twist! 🗿\n\n#storytelling #mystery #trending",
+            "tags": [category, "shorts", "story", "mystery", "storytime", "wow"]
+        }
+
+    if mode == "NEWS":
+        return {
+            "title": f"BREAKING: This just happened! 🚨 #shorts #news",
+            "description": f"New developing story. Make sure you're following for more daily updates on this! 🗿\n\n#breakingnews #latest #updates",
+            "tags": [category, "shorts", "news", "breaking", "latest", "update"]
+        }
+    
+    # Default for FACTS or unknown
     return {
         "title": f"The SHOCKING truth! 😱 #shorts #facts",
         "description": f"Can you spot the lie? One of these is a fake! \n\n#trivia #challenge #interesting",
