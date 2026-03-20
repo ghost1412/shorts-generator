@@ -339,55 +339,54 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     footer_img = create_text_image(random.choice(footer_texts), font_size=70, color="yellow", stroke_color="#1a1a1a", y_pos=1700)
     bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
     
-    # 4. Scatter Objects (EXERTME Density)
-    game_clips = []
+    # 4. Scatter Objects (Smart Grid with Jitter)
+    distractor_clips = []
+    target_sticker = None
     
-    # Random spawning in the middle 70% of the screen
-    num_total_slots = 150 
+    # 8 columns x 12 rows = 96 slots
+    cols, rows = 8, 12
+    slot_w, slot_h = 950 // cols, 1300 // rows
+    
     positions = []
-    for _ in range(num_total_slots):
-        x = random.randint(50, 930)
-        y = random.randint(300, 1600)
-        positions.append((x, y))
+    for r in range(rows):
+        for c in range(cols):
+            x = 50 + c * slot_w + random.randint(0, 20)
+            y = 300 + r * slot_h + random.randint(0, 20)
+            positions.append((x, y))
     
-    # Sort positions by Y to get some pseudo-depth if we wanted, but random is better for challenge
     random.shuffle(positions)
-    
-    # Target: The Object (Place it somewhere randomly among the pack)
-    target_idx = random.randint(50, 120)
+    num_to_place = min(len(positions), 90)
+    target_idx = random.randint(10, num_to_place - 1)
     target_pos = positions[target_idx]
     
-    def prepare_sticker(path, width=100):
-        clip = ImageClip(path).resized(width=width)
-        return clip.with_duration(duration)
+    def prepare_sticker(path, width=110):
+        # Create a basic image clip
+        img_clip = ImageClip(path).resized(width=width).with_duration(duration)
+        return img_clip
 
-    # Place Distractors
     num_distractors = len(object_paths)
-    for i in range(num_total_slots):
+    for i in range(num_to_place):
         pos = positions[i]
-        
         if i == target_idx:
-            # Place Target
-            obj_clip = prepare_sticker(target_path, width=85) # Tiny target
+            target_sticker = prepare_sticker(target_path, width=105).with_position(pos).with_start(0)
         else:
-            # Place Distractor
             obj_path = object_paths[i % num_distractors]
-            obj_clip = prepare_sticker(obj_path, width=95)
-            
-            # More intense randomization
-            if random.random() > 0.5:
-                obj_clip = obj_clip.with_effects([vfx.MirrorX()])
-            
-            rotation = random.randint(-45, 45)
-            if rotation != 0:
-                obj_clip = obj_clip.with_effects([vfx.Rotate(rotation)])
+            obj_clip = prepare_sticker(obj_path, width=115).with_position(pos).with_start(0)
+            if random.random() > 0.5: obj_clip = obj_clip.with_effects([vfx.MirrorX()])
+            rotation = random.randint(-30, 30)
+            if rotation != 0: obj_clip = obj_clip.with_effects([vfx.Rotate(rotation)])
+            distractor_clips.append(obj_clip)
 
-        if i == target_idx:
-            target_clip_for_reveal = obj_clip # Store for coordinate calculation
-        
-        obj_clip = (obj_clip.with_start(0)
-                    .with_position(pos))
-        game_clips.append(obj_clip)
+    # 5. Result Pop-up & Highlight
+    reveal_start = audio_clip.duration
+    
+    # Simple Reveal Highlight (Red box/ring)
+    reveal_ring_img = create_text_image("○", font_size=180, color="red", y_pos=50)
+    reveal_highlight = (ImageClip(reveal_ring_img)
+                       .with_start(reveal_start)
+                       .with_duration(3.0)
+                       .with_position((target_pos[0]-35, target_pos[1]-35))
+                       .with_effects([vfx.CrossFadeIn(0.2)]))
     # 5. Result Pop-up (at the end)
     reveal_start = audio_clip.duration
     
@@ -398,7 +397,12 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
                   .with_effects([vfx.CrossFadeIn(0.3)]))
     
     # Final Composition - Force (1080, 1920) size
-    final_video = CompositeVideoClip([bg_clip] + game_clips + [bg_bar, progress_bar, top_header, bottom_footer, found_clip], size=(1080, 1920))
+    # Final Composition - Target is added AFTER distractors to be on top
+    final_video = CompositeVideoClip(
+        [bg_clip] + distractor_clips + [target_sticker] + 
+        [bg_bar, progress_bar, top_header, bottom_footer, reveal_highlight, found_clip], 
+        size=(1080, 1920)
+    )
     
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
