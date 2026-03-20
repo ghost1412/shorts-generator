@@ -11,41 +11,47 @@ export async function POST(request: Request) {
   try {
     const payload = await request.json();
     const { video_id, title, mode, status, download_url, user_id, youtube_video_id, storage_path } = payload;
-    console.log(`[Webhook] Received update for ${video_id}: status=${status}, path=${storage_path}`);
+    console.log(`[Webhook] Received update for ${video_id}: status=${status}, path=${storage_path}, user=${user_id}`);
 
     const finalStatus = status || 'Published';
 
-    // Build update object - no created_at on updates to avoid overwriting
-    const updateData: Record<string, any> = {
-      id: video_id,
-      user_id: user_id,
-      status: finalStatus,
-    };
-    if (title) updateData.title = title;
-    if (mode) updateData.mode = mode;
-    if (download_url) updateData.download_url = download_url;
-    if (storage_path) updateData.storage_path = storage_path;
-    if (youtube_video_id) updateData.youtube_video_id = youtube_video_id;
-
-    const { error } = await supabaseAdmin
+    // Direct UPDATE (not upsert) - row already created by /api/generate
+    const { data: updateResult, error: updateError } = await supabaseAdmin
       .from('video_logs')
-      .upsert(updateData, { onConflict: 'id', ignoreDuplicates: false });
+      .update({
+        status: finalStatus,
+        ...(title && { title }),
+        ...(mode && { mode }),
+        ...(download_url && { download_url }),
+        ...(storage_path && { storage_path }),
+        ...(youtube_video_id && { youtube_video_id }),
+      })
+      .eq('id', video_id)
+      .select();
 
-    if (error) throw error;
+    if (updateError) {
+      console.error('[Webhook] Update failed:', updateError);
+      throw updateError;
+    }
+    console.log(`[Webhook] Updated rows:`, updateResult?.length ?? 0);
 
     // If success, also increment the generations_used counter in user_configs
     if (finalStatus === 'Published' && user_id) {
-      const { data: config } = await supabaseAdmin
+      const { data: config, error: configError } = await supabaseAdmin
         .from('user_configs')
-        .select('generations_used, max_videos')
+        .select('generations_used')
         .eq('user_id', user_id)
         .single();
 
-      if (config) {
-        await supabaseAdmin
+      if (configError) {
+        console.error('[Webhook] Failed to fetch user_configs:', configError);
+      } else if (config) {
+        const { error: counterError } = await supabaseAdmin
           .from('user_configs')
           .update({ generations_used: (config.generations_used || 0) + 1 })
           .eq('user_id', user_id);
+        if (counterError) console.error('[Webhook] Counter update failed:', counterError);
+        else console.log('[Webhook] generations_used incremented to', (config.generations_used || 0) + 1);
       }
     }
 
