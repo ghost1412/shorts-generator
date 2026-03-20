@@ -71,29 +71,29 @@ def generate_mixed_facts(category="science"):
 
     model = "meta-llama/Llama-3.1-8B-Instruct" 
     
-    prompt = f"""SPOT THE LIE! 🔍 One of these facts is a fake. Can you find it?
-Generate three short, shocking, and OBSCURE facts about {selected_sub}. Exactly two must be true and one must be a believable lie.
-REQUIREMENT: Focus on RARE information that most people don't know. Avoid common trivia.
+    prompt = f"""SPOT THE LIE! 🔍 One of these facts about {selected_sub} is a fake. 
+Generate three short, shocking, and OBSCURE facts. Exactly two must be true and one must be a believable lie.
+
+RETENTION REQUIREMENTS (CRITICAL):
+1. TOTAL SCRIPT LENGTH: Must be under 40 words.
+2. INDIVIDUAL FACTS: Must be under 10 words each. Rapid-fire style.
+3. NO FILLER: Do not say 'Fact 1:' or 'Welcome back'. Start immediately with the hook.
 
 VIRAL HOOK REQUIREMENT:
-The start of the video MUST be a high-engagement hook. 
-Include a 'hook' field in your JSON response that uses one of these styles:
-- "99% of people get this WRONG... Can you spot the lie about {category}?"
-- "Only GIGACHADS can find the fake fact here! 😱"
-- "One of these {category} facts is a DEADLY LIE. Which one?"
+The hook must be under 6 words. Styles:
+- "99% FAIL this {category} challenge! 😱"
+- "Only GIGACHADS spot the fake! 🗿"
+- "Which {category} fact is the LIE? 🚨"
 
-CRITICAL: YOU MUST DOUBLE CHECK YOUR KNOWLEDGE. 
-- If a fact is marked as 'true', it must be 100% FACTUALLY ACCURATE and VERIFIABLE.
-- Do not invent or exaggerate details for 'true' facts.
-- The 'lie' must be believable but clearly false to an expert.
+CRITICAL: The story MUST be 100% FACTUALLY ACCURATE and VERIFIABLE for true facts.
 
-Format as JSON ONLY.
+Format as JSON ONLY:
 {{
-  "hook": "The aggressive viral hook here",
+  "hook": "Intense 5-word hook",
   "facts": [
-    {{"fact": "...", "truth": true}},
-    {{"fact": "...", "truth": true}},
-    {{"fact": "...", "truth": false}}
+    {{"fact": "Short punchy fact", "truth": true}},
+    {{"fact": "Short punchy fact", "truth": true}},
+    {{"fact": "Believable short lie", "truth": false}}
   ]
 }}
 """
