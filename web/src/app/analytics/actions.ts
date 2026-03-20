@@ -62,8 +62,11 @@ export async function syncYouTubeAnalytics() {
     if (!logs || logs.length === 0) return { success: true, updated: 0 };
 
     // 5. Fetch Analytics
-    const videoIds = logs.map(l => l.youtube_video_id).filter(id => !!id).join(',');
-    if (!videoIds) return { success: true, updated: 0 };
+    const videoIds = logs.map(l => l.youtube_video_id?.trim()).filter(id => !!id).join(',');
+    if (!videoIds) {
+        console.log('[Sync] No video IDs found to sync.');
+        return { success: true, updated: 0 };
+    }
 
     const analyticsUrl = `https://youtubeanalytics.googleapis.com/v2/reports?` + new URLSearchParams({
       ids: 'channel==MINE',
@@ -74,11 +77,15 @@ export async function syncYouTubeAnalytics() {
       filters: `video==${videoIds}`,
     });
 
+    console.log('[Sync] Requesting Google Analytics:', analyticsUrl);
+
     const analyticsRes = await fetch(analyticsUrl, {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
 
     const analyticsData = await analyticsRes.json();
+    console.log('[Sync] Raw Google Response:', JSON.stringify(analyticsData));
+
     if (!analyticsRes.ok) {
         const errReason = analyticsData?.error?.message || JSON.stringify(analyticsData);
         console.error('[Sync] Google Analytics API Error:', analyticsData);
@@ -90,6 +97,7 @@ export async function syncYouTubeAnalytics() {
 
     // 6. Update database
     const rows = analyticsData.rows || [];
+    console.log(`[Sync] Found ${rows.length} rows in Google reports.`);
     let updatedCount = 0;
 
     for (const row of rows) {
@@ -97,7 +105,8 @@ export async function syncYouTubeAnalytics() {
       if (!row || row.length < 2) continue;
       
       const [ytId, views, avgRetention, likes, comments] = row;
-      const log = logs.find(l => l.youtube_video_id === ytId);
+      console.log(`[Sync] Comparing Google ID "${ytId}" with local logs...`);
+      const log = logs.find(l => l.youtube_video_id?.trim() === ytId);
       
       if (log) {
         // Defensive values
