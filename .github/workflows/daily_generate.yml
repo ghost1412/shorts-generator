@@ -109,9 +109,6 @@ jobs:
         if ('${{ github.event.inputs.user_id }}') { $params += "--user_id"; $params += "${{ github.event.inputs.user_id }}" }
         if ('${{ github.event.inputs.video_id }}') { $params += "--video_id"; $params += "${{ github.event.inputs.video_id }}" }
         
-        # Add skip_upload for manual triggers from dashboard
-        if ('${{ github.event_name }}' -eq 'workflow_dispatch') { $params += "--skip_upload" }
-
         python main.py @params
 
     - name: Run Video Generator (Linux)
@@ -125,10 +122,15 @@ jobs:
         USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
-        ARG_MODE="--mode ${{ github.event.inputs.mode || 'AUTO' }}"
-        ARG_CAT="${{ github.event.inputs.category != 'random' && format('--category {0}', github.event.inputs.category) || '' }}"
-        ARG_VIBE="${{ github.event.inputs.vibe && format('--vibe {0}', github.event.inputs.vibe) || '' }}"
+        ARG_MODE="${{ github.event.inputs.mode && github.event.inputs.mode != 'AUTO' && format('--mode {0}', github.event.inputs.mode) || '--mode AUTO' }}"
+        ARG_CAT="${{ github.event.inputs.category && github.event.inputs.category != 'random' && format('--category {0}', github.event.inputs.category) || '' }}"
+        ARG_VIBE="${{ github.event.inputs.vibe && github.event.inputs.vibe != 'suspense' && format('--vibe {0}', github.event.inputs.vibe) || '' }}"
         ARG_USER_ID="${{ github.event.inputs.user_id && format('--user_id {0}', github.event.inputs.user_id) || '' }}"
         ARG_VIDEO_ID="${{ github.event.inputs.video_id && format('--video_id {0}', github.event.inputs.video_id) || '' }}"
+        ARG_SCRIPT='${{ github.event.inputs.custom_script || "" }}'
         
-        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID
+        if [ ! -z "$ARG_SCRIPT" ]; then
+          python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID --script "$ARG_SCRIPT"
+        else
+          python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID
+        fi
