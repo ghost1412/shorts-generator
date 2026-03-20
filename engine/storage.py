@@ -35,9 +35,9 @@ def cleanup_old_videos(supabase: Client, user_id: str):
     except Exception as e:
         print(f"[Warning] Cleanup failed: {e}")
 
-def upload_video_to_storage(file_path: str, video_id: str) -> tuple:
+def upload_to_storage(file_path: str, video_id: str, is_video: bool = True) -> str:
     """
-    Uploads a video to Supabase Storage and returns (storage_path, signed_url).
+    Uploads a file to Supabase Storage and returns the relative storage_path.
     Bucket name: 'videos'
     """
     supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
@@ -46,39 +46,30 @@ def upload_video_to_storage(file_path: str, video_id: str) -> tuple:
 
     if not supabase_url or not supabase_key:
         print("[Error] Supabase credentials missing for storage upload.")
-        return None, None
+        return None
 
     try:
         supabase: Client = create_client(supabase_url, supabase_key)
         bucket_name = 'videos'
-        storage_path = f"{user_id}/{video_id}.mp4"
+        ext = "mp4" if is_video else "jpg"
+        content_type = "video/mp4" if is_video else "image/jpeg"
+        storage_path = f"{user_id}/{video_id}.{ext}"
 
-        # 1. Run cleanup first to keep bucket clean
-        cleanup_old_videos(supabase, user_id)
+        # 1. Run cleanup if it's a video (prevent clutter)
+        if is_video:
+            cleanup_old_videos(supabase, user_id)
 
         # 2. Perform upload
         with open(file_path, 'rb') as f:
             supabase.storage.from_(bucket_name).upload(
                 path=storage_path,
                 file=f,
-                file_options={"content-type": "video/mp4"}
+                file_options={"content-type": content_type, "upsert": "true"}
             )
         
-        # 3. Get INITIAL SIGNED URL (30-minute expiry)
-        signed_url_res = supabase.storage.from_(bucket_name).create_signed_url(
-            path=storage_path,
-            expires_in=1800
-        )
-        
-        signed_url = None
-        if isinstance(signed_url_res, dict):
-            signed_url = signed_url_res.get('signedURL') or signed_url_res.get('signed_url')
-        else:
-            signed_url = str(signed_url_res)
-
-        print(f"[Log] Video uploaded to cloud storage: {storage_path}")
-        return storage_path, signed_url
+        print(f"[Log] File uploaded to cloud storage: {storage_path}")
+        return storage_path
 
     except Exception as e:
-        print(f"[Error] Storage upload failed: {e}")
-        return None, None
+        print(f"[Error] Storage upload failed ({file_path}): {e}")
+        return None
