@@ -19,13 +19,8 @@ def add_pattern_interrupt(duration):
         .with_opacity(0.4)
     return flash
 
-def bounce_scale(t):
-    """TikTok-style pop/bounce animation for captions."""
-    if t < 0.1:
-        return 0.5 + 8 * t
-    elif t < 0.2:
-        return 1.1 - 0.5 * (t - 0.1)
-    return 1.0
+def make_bounce_pos(st, y_base=0):
+    return lambda t: ("center", y_base + int(15 * np.sin((t - st) * 12)))
 
 def apply_blur(image, radius=2):
     """Applies Gaussian Blur to a numpy image array using Pillow."""
@@ -152,7 +147,9 @@ def cover_resize(clip, target_size=(1080, 1920)):
     
     clip = clip.resized(width=new_w, height=new_h)
     
-    return clip.cropped(x_center=new_w/2, y_center=new_h/2, width=target_w, height=target_h)
+    # Strictly enforce memory contiguity after crop (fixes FFMPEG diagonal tearing)
+    cropped = clip.cropped(x_center=new_w/2, y_center=new_h/2, width=target_w, height=target_h)
+    return cropped.image_transform(np.ascontiguousarray)
 
 def apply_ken_burns(clip, duration):
     """
@@ -169,7 +166,9 @@ def apply_ken_burns(clip, duration):
     h = int(h) + (int(h) % 2)
     zoomed = zoomed.resized(width=w, height=h)
     
-    return zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
+    # Strictly enforce memory contiguity after crop (fixes FFMPEG diagonal tearing)
+    cropped = zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
+    return cropped.image_transform(np.ascontiguousarray)
 
 def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS"):
     """
@@ -242,7 +241,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         ticker_clip = ImageClip(footer_img).with_start(0).with_duration(duration)
         
         ticker_width = ticker_clip.size[0]
-        ticker_clip = ticker_clip.with_position(lambda t: (1080 - (t * 400) % (ticker_width + 1080), SAFE_BOTTOM + 150))
+        ticker_clip = ticker_clip.with_position(lambda t: (int(1080 - (t * 400) % (ticker_width + 1080)), 0))
         persistent_clips.append(ticker_clip)
         
         # 3. URGENCY SHAKE (Synced to intense broadcast vibe) - Positional is much faster than Resize
@@ -324,10 +323,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         size=(1080, 1920)
     )
     
-    # Loopability Zoom Effect
-    final_video = final_video.with_effects([
-        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
-    ])
+    # Removed Loopability Zoom Effect: Dynamically resizing the final composite alters frame resolutions 
+    # mid-stream, breaking FFMPEG's fixed-pipe stride and causing severe diagonal tearing.
     
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -363,10 +360,11 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     # Visual Countdown Timer (Center of screen, shrinking circle or bar)
     timer_w = 400
     timer_bg = ColorClip(size=(timer_w, 40), color=(0, 0, 0, 100)).with_duration(audio_clip.duration).with_position(("center", 1600))
-    timer_fg = ColorClip(size=(timer_w, 40), color=(255, 0, 0)).with_duration(audio_clip.duration).with_position(("center", 1600))
-    timer_fg = timer_fg.with_effects([
-        vfx.Resize(lambda t: (max(1, int(timer_w * (1 - t / audio_clip.duration))), 40))
-    ])
+    # 0-cost sliding animation for countdown timer instead of glich-prone Resize
+    # To shrink from the center, we must shift position while using a mask, or simply shrink from the left
+    # Actually, a sliding position from center to left is trivial:
+    timer_fg = ColorClip(size=(timer_w, 40), color=(255, 0, 0)).with_duration(audio_clip.duration)
+    timer_fg = timer_fg.with_position(lambda t: (int((1080 - timer_w)/2 - timer_w * (t / audio_clip.duration)), 1600))
     
     # "HURRY!" text at 3s mark
     hurry_img = create_text_image("ONLY 3 SECONDS LEFT! ⏳", font_size=80, color="red", y_pos=1400, add_box=True)
@@ -539,8 +537,8 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
     # Progress bar for the think time
     bar_height = 20
     bg_bar = ColorClip(size=(1080, bar_height), color=(30, 30, 30)).with_duration(duration).with_position(("center", 1880))
-    progress_bar = ColorClip(size=(1080, bar_height), color=(255, 0, 0)).with_duration(duration).with_position(("center", 1880))
-    progress_bar = progress_bar.with_effects([vfx.Resize(lambda t: (max(1, int(1080 * t / duration)), bar_height))])
+    progress_bar = ColorClip(size=(1080, bar_height), color=(255, 0, 0)).with_duration(duration)
+    progress_bar = progress_bar.with_position(lambda t: (int(-1080 + 1080 * (t / duration)), 1880))
 
     final_video = CompositeVideoClip([clip1, clip2, dark1, dark2, divider, bg_bar, progress_bar, top_header, opt_a_clip, opt_b_clip, cta_clip], size=(1080, 1920))
 
@@ -607,8 +605,8 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
             c_dur = max(0.6, entry["duration"])
             c_clip = ImageClip(c_img).with_start(start).with_duration(c_dur).with_position((0, 0))
             
-            # Bounce scale effect
-            c_clip = c_clip.with_effects([vfx.Resize(bounce_scale)])
+            # Bounce positional effect
+            c_clip = c_clip.with_position(make_bounce_pos(start, 0))
             word_clips.append(c_clip)
     except Exception as e:
         print(f"[Warning] Failed to render Reddit subtitles: {e}")
@@ -616,10 +614,7 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
     # Composition
     final_video = CompositeVideoClip([bg_clip, dark_overlay, add_pattern_interrupt(duration), reddit_tag_clip, post_header] + word_clips, size=(1080, 1920))
 
-    # Loopability Zoom Effect
-    final_video = final_video.with_effects([
-        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
-    ])
+    # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -713,10 +708,8 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
     bar_height = 30
     timer_bg = ColorClip(size=(900, bar_height), color=(50, 50, 50)).with_duration(timer_duration).with_position(("center", 1650)).with_start(audio_clip.duration - timer_duration)
     
-    timer_fg = ColorClip(size=(900, bar_height), color=(255, 255, 0)).with_position(("center", 1650)).with_start(audio_clip.duration - timer_duration)
-    timer_fg = timer_fg.with_duration(timer_duration).with_effects([
-        vfx.Resize(lambda t: (max(1, int(900 * (1 - min(t / timer_duration, 1.0)))), bar_height))
-    ])
+    timer_fg = ColorClip(size=(900, bar_height), color=(255, 255, 0)).with_start(audio_clip.duration - timer_duration).with_duration(timer_duration)
+    timer_fg = timer_fg.with_position(lambda t: (int((1080 - 900)/2 - 900 * min(max(t - (audio_clip.duration - timer_duration), 0) / timer_duration, 1.0)), 1650))
     
     ans = trivia_data.get("answer", "A").upper()
     ans_idx = 0 if ans == "A" else (1 if ans == "B" else 2)
@@ -735,10 +728,7 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
     
     final_video = CompositeVideoClip([bg_clip, dark_overlay, add_pattern_interrupt(duration), q_clip] + boxes + [timer_bg, timer_fg, ans_clip, splash_clip], size=(1080, 1920))
 
-    # Loopability Zoom Effect
-    final_video = final_video.with_effects([
-        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
-    ])
+    # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -794,10 +784,7 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
     
     final_video = CompositeVideoClip([bg_clip, dark_overlay, add_pattern_interrupt(duration), q_clip, a_clip], size=(1080, 1920))
 
-    # Loopability Zoom Effect
-    final_video = final_video.with_effects([
-        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
-    ])
+    # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
     if music_path and os.path.exists(music_path):
         bg_music_clip = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -883,10 +870,8 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     timer_start_time = audio_clip.duration - 2.0 # Start timer a bit before audio ends
     timer_bg = ColorClip(size=(900, timer_h), color=(50, 50, 50)).with_duration(timer_duration).with_position(("center", 1750)).with_start(timer_start_time)
     
-    timer_fg = ColorClip(size=(900, timer_h), color=(255, 50, 50)).with_position(("center", 1750)).with_start(timer_start_time)
-    timer_fg = timer_fg.with_duration(timer_duration).with_effects([
-        vfx.Resize(lambda t: (max(1, int(900 * (1 - min(t / timer_duration, 1.0)))), timer_h))
-    ])
+    timer_fg = ColorClip(size=(900, timer_h), color=(255, 50, 50)).with_start(timer_start_time).with_duration(timer_duration)
+    timer_fg = timer_fg.with_position(lambda t: (int((1080 - 900)/2 - 900 * min(max(t - timer_start_time, 0) / timer_duration, 1.0)), 1750))
     
     # 7. Reveal (Replaced answer reveal with a final CTA)
     reveal_start = timer_start_time + timer_duration
@@ -960,14 +945,14 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
     # 4. Timer Bar (During sfx)
     bar_height = 25
     timer_bg = ColorClip(size=(800, bar_height), color=(50, 50, 50)).with_start(sfx_start).with_duration(sfx_duration).with_position(("center", 1600))
-    timer_fg = ColorClip(size=(800, bar_height), color=(255, 0, 0)).with_start(sfx_start).with_duration(sfx_duration).with_position(("center", 1600))
-    timer_fg = timer_fg.with_effects([vfx.Resize(lambda t: (max(1, int(800 * (1 - t / sfx_duration))), bar_height))])
+    timer_fg = ColorClip(size=(800, bar_height), color=(255, 0, 0)).with_start(sfx_start).with_duration(sfx_duration)
+    timer_fg = timer_fg.with_position(lambda t: (int((1080 - 800)/2 - 800 * min(max(t - sfx_start, 0) / sfx_duration, 1.0)), 1600))
     
     # 5. Reveal Object
     reveal_audio_start = reveal_start 
     try:
-        obj_clip = ImageClip(obj_path).resized(width=600).with_start(reveal_audio_start).with_duration(duration - reveal_audio_start).with_position(("center", "center"))
-        obj_clip = obj_clip.with_effects([vfx.Resize(bounce_scale)])
+        obj_clip = ImageClip(obj_path).resized(width=600).with_start(reveal_audio_start).with_duration(duration - reveal_audio_start)
+        obj_clip = obj_clip.with_position(make_bounce_pos(reveal_audio_start, 800))
     except:
         obj_clip = ColorClip(size=(1,1), color=(0,0,0,0)).with_duration(0.1)
 
@@ -977,15 +962,14 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
         text = entry["word"].upper()
         c_img = create_text_image(text, font_size=110, color="cyan", y_pos=SAFE_MID + 300)
         c_dur = max(0.6, entry["duration"])
-        c_clip = ImageClip(c_img).with_start(entry["start"]).with_duration(c_dur).with_position((0, 0)).with_effects([vfx.Resize(bounce_scale)])
+        c_clip = ImageClip(c_img).with_start(entry["start"]).with_duration(c_dur)
+        c_clip = c_clip.with_position(make_bounce_pos(entry["start"], 0))
         word_clips.append(c_clip)
 
     # Progress Bar (Urgency)
     bg_bar = ColorClip(size=(1080, 20), color=(40, 40, 40)).with_duration(duration).with_position(("center", 1880))
-    progress_bar = ColorClip(size=(1080, 20), color=(255, 255, 0)).with_duration(duration).with_position(("center", 1880))
-    progress_bar = progress_bar.with_effects([
-        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), 20))
-    ])
+    progress_bar = ColorClip(size=(1080, 20), color=(255, 255, 0)).with_duration(duration)
+    progress_bar = progress_bar.with_position(lambda t: (int(-1080 + 1080 * (t / duration) ** 0.7), 1880))
     progress_bar = progress_bar.transform(lambda gf, t: color_shift_green_kill(gf, t, duration))
 
     final_audio = CompositeAudioClip([voice_clip, sfx_clip])
