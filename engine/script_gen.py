@@ -72,12 +72,15 @@ def generate_mixed_facts(category="science"):
     model = "meta-llama/Llama-3.1-8B-Instruct" 
     
     prompt = f"""SPOT THE LIE! 🔍 One of these facts about {selected_sub} is a fake. 
-Generate three short, shocking, and OBSCURE facts. Exactly two must be true and one must be a believable lie.
+Generate three short, shocking, and OBSCURE facts. 
+Exactly two must be true, and one must be a FALSE statement that sounds true. 
+DO NOT produce three true facts. The "truth": false entry must be a demonstrably incorrect statement.
 
 RETENTION REQUIREMENTS (CRITICAL):
 1. TOTAL SCRIPT LENGTH: Must be under 40 words.
 2. INDIVIDUAL FACTS: Must be under 10 words each. Rapid-fire style.
 3. NO FILLER: Do not say 'Fact 1:' or 'Welcome back'. Start immediately with the hook.
+4. A GOOD LIE: Should be a specific incorrect detail (e.g., if true is 'released in 1991', lie could be 'released in 1985').
 
 VIRAL HOOK REQUIREMENT:
 The hook must be under 6 words. Styles:
