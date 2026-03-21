@@ -7,12 +7,18 @@ import re
 
 def strip_emojis(text):
     """
-    Strips emojis and URLs from text to prevent TTS from reading them.
+    Strips emojis, URLs, and common web noise from text.
     """
-    # 1. Strip URLs first
-    text = re.sub(r'https?://\S+', '', text)
+    # 1. Strip URLs (more aggressive)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    # 2. Strip standalone domains/versions like example.com or v1.0
+    text = re.sub(r'\b\S+\.com\S*|\b\S+\.net\S*|\bv\d+\.\d+\b', '', text)
     
-    # 2. Strip non-ASCII and emojis
+    # 3. Clean up stray punctuation like empty parentheses and extra spaces
+    text = re.sub(r'\(\s*\)', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # 4. Strip non-ASCII and emojis
     result = []
     allowed_chars = set(".,!?;:()-'\" ")
     for c in text:

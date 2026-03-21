@@ -86,6 +86,7 @@ The hook must be under 6 words. Styles:
 - "Which {category} fact is the LIE? 🚨"
 
 CRITICAL: The story MUST be 100% FACTUALLY ACCURATE and VERIFIABLE for true facts.
+5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 
 Format as JSON ONLY:
 {{
@@ -176,10 +177,11 @@ VIRAL REQUIREMENTS:
 2. USE AGGRESSIVE HOOKS: "99% have no idea this happened," "This will keep you up at night," etc.
 3. Focus on an OBSCURE and RARE event. Avoid common stories or well-known events.
 4. Tell the story in a fast-paced, engaging way.
-4. End on a shocking twist or realization.
-5. Keep it under 100 words.
+5. End on a shocking twist or realization.
+6. Keep it under 100 words.
 
 CRITICAL: The story MUST be 100% FACTUALLY ACCURATE and VERIFIABLE. 
+6. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 Do not hallucinate or embellish details.
 
 Format as JSON ONLY:
@@ -240,6 +242,7 @@ REQUIREMENTS:
 2. Focus on OBSCURE scenarios. Avoid common "Would you rather" tropes.
 3. Both options must be equally absurd but realistic to the theme.
 4. CRITICAL: Ensure the options make sense and are well-phrased.
+5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 
 Format as JSON ONLY:
 {{
@@ -304,7 +307,8 @@ Requirements:
 3. Tell the story in a fast-paced, emotional way.
 4. Keep it under 120 words.
 5. End on a cliffhanger or a controversial note asking for judgment.
-6. Format as JSON ONLY. Escape all double quotes inside the text.
+6. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
+7. Format as JSON ONLY. Escape all double quotes inside the text.
 JSON Structure:
 {{
   "title": "A short viral title regarding {selected_sub}",
@@ -359,6 +363,7 @@ REQUIREMENTS:
 2. Provide exactly three short options (A, B, and C).
 3. State the correct option letter (A, B, or C).
 4. CRITICAL: The question and answer MUST be 100% FACTUALLY ACCURATE and VERIFIABLE.
+5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 
 Format as JSON ONLY:
 {{
@@ -410,10 +415,11 @@ def generate_quote(category="stoic"):
     prompt = f"""Generate a profound, highly emotional or stoic quote about {selected_sub}.
 Requirements:
 1. Focus on an OBSCURE but powerful perspective.
-1. Provide the quote text (around 10-25 words).
-2. Provide the author's name (can be a real historical figure or "Unknown").
-3. Make it incredibly cinematic and thought-provoking.
-4. Format as JSON ONLY. Escape all double quotes inside the text.
+2. Provide the quote text (around 10-25 words).
+3. Provide the author's name (can be a real historical figure or "Unknown").
+4. Make it incredibly cinematic and thought-provoking.
+5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
+6. Format as JSON ONLY. Escape all double quotes inside the text.
 JSON Structure:
 {{
   "quote": "Profound quote text about {category}",
@@ -607,6 +613,7 @@ RULES:
 2. ANCHOR PERSONA: Start with a professional news intro (e.g., "This is your 60-second world report...") and end with a characteristic sign-off.
 3. STORY: Retell it in under 45 words. Fast-paced. Use '...' for dramatic pauses in the script.
 4. Do NOT add fake details. Only elaborate on what the headline says.
+5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys in the story.
 {tone_instruction}
 
 Format as JSON ONLY:
