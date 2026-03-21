@@ -221,36 +221,26 @@ def validate_sound_challenge(data):
     """Ensures the object and sound prompt are present."""
     return bool(data.get("object") and data.get("sound_query"))
 
-def with_retry(func, validator, max_retries=2, fallback=None):
-    """Generic retry wrapper for LLM calls with custom validation."""
-    for attempt in range(max_retries + 1):
-        try:
-            result = func(attempt)
-            if validator(result):
-                return result
-            print(f"⚠️ Attempt {attempt+1}: Validation failed. Retrying...")
-        except Exception as e:
-            print(f"💡 Attempt {attempt+1} failed ({type(e).__name__}: {e})")
-    
-    if fallback:
-        print("🚨 All retries failed. Using fallback.")
-        return fallback()
-    raise RuntimeError("LLM generation failed validation after all retries.")
-
-def generate_best_of_3(generator):
+def with_best_of_n(func, validator, n=3, fallback=None):
     """
-    Runs a generator 3 times and picks the one with the highest 'viral score'
-    (based on length and punchiness/exclamation).
+    Runs an LLM generator n times, filters for valid results,
+    and returns the one with the highest 'viral score'.
+    Fulfills both Quality (Best of N) and Validity (Retry) needs in one pass.
     """
     results = []
-    for _ in range(3):
+    for i in range(n):
         try:
-            results.append(generator())
-        except:
-            pass
-    
+            res = func(i)
+            if validator(res):
+                results.append(res)
+        except Exception as e:
+            print(f"⚠️ Attempt {i+1} failed ({type(e).__name__}): {e}")
+            
     if not results:
-        return generator() # Final attempt if all failed
+        if fallback:
+            print("🚨 All attempts failed or invalid. Using fallback.")
+            return fallback()
+        raise RuntimeError("LLM generation failed validation after all attempts.")
         
     def score(x):
         text = str(x)
@@ -258,8 +248,10 @@ def generate_best_of_3(generator):
         return len(text) + 12 * text.count("!") + 8 * text.count("?")
     
     best = max(results, key=score)
-    print(f"[Log] Best of 3 selected (Score: {score(best)})")
+    print(f"[Log] Best of {len(results)} valid results selected (Score: {score(best)})")
     return best
+
+# Removed redundant generate_best_of_3 function as it's now integrated into with_best_of_n
 
 def generate_fallback_facts(category):
     """Safely returns hardcoded obscure facts if LLM fails."""
@@ -376,9 +368,10 @@ OUTPUT FORMAT (JSON ONLY):
             return False
         return True
 
-    result = with_retry(
+    result = with_best_of_n(
         llm_call, 
         facts_validator, 
+        n=3,
         fallback=lambda: generate_fallback_facts(category)
     )
     
@@ -439,7 +432,7 @@ Format as JSON ONLY:
         output = response.json()["choices"][0]["message"]["content"]
         return robust_json_parse(output)
 
-    return with_retry(llm_call, validate_story)
+    return with_best_of_n(llm_call, validate_story, n=3)
 
 def generate_wyr(category="general"):
     """
@@ -867,7 +860,7 @@ Format as JSON ONLY:
             "tone": tone
         }
 
-    return with_retry(llm_call, validate_news, fallback=fallback)
+    return with_best_of_n(llm_call, validate_news, n=3, fallback=fallback)
 
 def generate_sound_challenge(category="animals"):
     """
@@ -919,7 +912,7 @@ Format:
             "reveal_text": "It was an Elephant! Shocking right?"
         }
 
-    return with_retry(llm_call, validate_sound_challenge, fallback=fallback)
+    return with_best_of_n(llm_call, validate_sound_challenge, n=3, fallback=fallback)
 
 
 if __name__ == "__main__":

@@ -153,22 +153,11 @@ def cover_resize(clip, target_size=(1080, 1920)):
 
 def apply_ken_burns(clip, duration):
     """
-    Applies a dynamic camera zoom (Ken Burns effect) to a clip.
-    Randomly chooses between zoom-in and zoom-out.
+    Applies a subtle, static camera zoom (Ken Burns effect) to a clip.
+    Removed per-frame lambda resize for performance.
     """
-    start_scale = random.uniform(1.0, 1.25)
-    end_scale = random.uniform(1.0, 1.25)
-    
-    # Ensure there's actually a motion
-    if abs(start_scale - end_scale) < 0.1:
-        end_scale = start_scale + 0.15 if start_scale < 1.15 else start_scale - 0.15
-
-    def resize_func(t):
-        # Linear interpolation of scale over time
-        current_scale = start_scale + (end_scale - start_scale) * (t / duration)
-        return current_scale
-
-    return clip.with_effects([vfx.Resize(resize_func)])
+    # Just a small static zoom-in (1.1x) is much faster and still looks premium
+    return clip.with_effects([vfx.Resize(1.1)])
 
 def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS"):
     """
@@ -206,8 +195,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         # Apply Ken Burns to the combined background for extra energy
         bg_clip = CompositeVideoClip(bg_segments, size=(1080, 1920)).with_duration(duration)
         bg_clip = apply_ken_burns(bg_clip, duration)
-        # 3. ATTENTION PULSE: Subtle continuous scale to keep subconscious engaged
-        bg_clip = bg_clip.with_effects([vfx.Resize(lambda t: 1 + 0.01 * np.sin(t * 2))])
+        # 3. STATIC ZOOM: One-time resize is much faster than per-frame lambda
+        bg_clip = bg_clip.with_effects([vfx.Resize(1.05)])
     
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.25).with_duration(duration)
     
@@ -248,8 +237,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         ticker_clip = ticker_clip.with_position(lambda t: (1080 - (t * 400) % (ticker_width + 1080), SAFE_BOTTOM + 150))
         persistent_clips.append(ticker_clip)
         
-        # 3. URGENCY SHAKE (Synced to intense broadcast vibe)
-        top_header = top_header.with_effects([vfx.Resize(lambda t: 1.0 + 0.02 * np.sin(t * 15))])
+        # 3. URGENCY SHAKE (Synced to intense broadcast vibe) - Positional is much faster than Resize
+        top_header = top_header.with_position(lambda t: (int(0.01 * np.sin(t * 15) * 1080), SAFE_TOP))
     elif mode == "STORY":
         header_img = create_text_image("UNBELIEVABLE BUT TRUE", font_size=110, color="orange", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
