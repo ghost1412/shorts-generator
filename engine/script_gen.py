@@ -431,8 +431,7 @@ OUTPUT FORMAT (JSON ONLY):
     result = with_best_of_n(
         llm_call, 
         facts_validator, 
-        n=3,
-        fallback=lambda: generate_fallback_facts(category)
+        n=3
     )
     
     # ASSEMBLY: 2 True + 1 Procedural False
@@ -931,7 +930,7 @@ Format as JSON ONLY:
             "tone": tone
         }
 
-    return with_best_of_n(llm_call, validate_news, n=3, fallback=fallback)
+    return with_best_of_n(llm_call, validate_news, n=3)
 
 def generate_sound_challenge(category="animals"):
     """
@@ -983,7 +982,7 @@ Format:
             "reveal_text": "It was an Elephant! Shocking right?"
         }
 
-    return with_best_of_n(llm_call, validate_sound_challenge, n=3, fallback=fallback)
+    return with_best_of_n(llm_call, validate_sound_challenge, n=3)
 
 
 if __name__ == "__main__":
