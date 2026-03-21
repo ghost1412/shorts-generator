@@ -91,6 +91,65 @@ def reject_bad_facts(facts):
             return True
     return False
 
+def reject_duplicates(facts):
+    """Rejects facts that are structurally or semantically too similar."""
+    seen = set()
+    for f in facts:
+        key = f["fact"].lower()
+        # normalize (remove numbers + punctuation)
+        key = re.sub(r'[^a-z ]', '', key)
+        # Check first 6 words for duplication (structural repetition)
+        key_start = " ".join(key.split()[:6])
+        if key_start in seen:
+            return True
+        seen.add(key_start)
+    return False
+
+def reject_same_subject(facts):
+    """Ensures each fact is about a DIFFERENT person/entity."""
+    subjects = []
+    for f in facts:
+        words = f["fact"].split()
+        if len(words) >= 2:
+            # First two words usually identify the subject
+            subjects.append(" ".join(words[:2]).lower())
+    
+    # We need 3 unique subjects for 3 facts
+    return len(set(subjects)) < 3
+
+def reject_known_false_patterns(facts):
+    """Rejects common myths or widely known false facts that LLMs often hallucinate as true."""
+    known_myths = [
+        "einstein failed math",
+        "humans use only 10",
+        "napoleon was short",
+        "vikings wore horned helmets",
+        "tesla invented wifi",
+        "goldfish have 3 second memory",
+        "great wall visible from moon"
+    ]
+    for f in facts:
+        text = f["fact"].lower()
+        for myth in known_myths:
+            if myth in text:
+                return True
+    return False
+
+def enforce_specificity(facts):
+    """Ensures all facts contain a verifiable anchor: a number or a proper noun (Name)."""
+    for f in facts:
+        text = f["fact"]
+        # must contain at least one digit or a word starting with uppercase (excluding start of sentence)
+        has_number = any(char.isdigit() for char in text)
+        words = text.split()
+        # Check for capitalized words after the first one to avoid sentence-start false positives
+        has_name = any(w[0].isupper() for w in words[1:]) if len(words) > 1 else False
+        
+        # Also check first word just in case it's a name like "Einstein" (though ambiguous)
+        if not (has_number or has_name or (words and words[0][0].isupper())):
+            return False
+    return True
+
 def validate_story(data):
     """Ensures story is verifiable and not vague."""
     story = data.get("story", "").lower()
@@ -248,13 +307,18 @@ STRICT RULES (MUST FOLLOW):
 5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 
 FACT CREATION PROCESS:
-Step 1: Generate 2 obscure TRUE facts.
+Step 1: Generate 2 obscure TRUE facts about DIFFERENT people/entities.
 Step 2: Independently verify both are 100% correct.
-Step 3: Take a REAL fact and alter ONE key detail:
+Step 3: Take a DIFFERENT REAL fact and alter ONE key detail:
         - year (1964 → 1972)
         - name
         - number
 Step 4: Ensure the altered version is FALSE but believable.
+
+CRITICAL DIVERSITY RULES:
+- Each fact MUST be about a DIFFERENT person, place, or entity.
+- Do NOT repeat the same subject in two different facts (e.g. no "Rock in UH" vs "Rock in USC").
+- Diversity is more important than difficulty!
 
 SELF-CHECK BEFORE OUTPUT:
 - Identify which fact is false
@@ -295,6 +359,14 @@ OUTPUT FORMAT (JSON ONLY):
     def facts_validator(data):
         facts = data.get("facts", [])
         if reject_bad_facts(facts):
+            return False
+        if reject_duplicates(facts):
+            return False
+        if reject_same_subject(facts):
+            return False
+        if reject_known_false_patterns(facts):
+            return False
+        if not enforce_specificity(facts):
             return False
         if not validate_semantics(facts):
             return False
@@ -847,6 +919,7 @@ Format:
 
 
 if __name__ == "__main__":
-    facts = generate_mixed_facts("science")
-    for i, f in enumerate(facts):
+    res = generate_mixed_facts("science")
+    print(f"Hook: {res['hook']}")
+    for i, f in enumerate(res["facts"]):
         print(f"{i+1}. {f['fact']} (True: {f['truth']})")
