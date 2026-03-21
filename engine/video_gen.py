@@ -145,20 +145,31 @@ def cover_resize(clip, target_size=(1080, 1920)):
     # Calculate scale factor to cover the target area
     scale = max(target_w / w, target_h / h)
     
-    # Resize and then center crop
+    # Resize and then center crop. ENFORCE EVEN DIMENSIONS!
     new_w, new_h = int(w * scale), int(h * scale)
-    # Use a small buffer if needed, but int should be fine
+    if new_w % 2 != 0: new_w += 1
+    if new_h % 2 != 0: new_h += 1
+    
     clip = clip.resized(width=new_w, height=new_h)
     
     return clip.cropped(x_center=new_w/2, y_center=new_h/2, width=target_w, height=target_h)
 
 def apply_ken_burns(clip, duration):
     """
-    Applies a subtle, static camera zoom (Ken Burns effect) to a clip.
-    Removed per-frame lambda resize for performance.
+    Applies a subtle, static camera zoom (1.05x) to a clip.
+    Strictly crops back to 1080x1920 to prevent FFMPEG memory-stride tearing.
     """
-    # Just a small static zoom-in (1.1x) is much faster and still looks premium
-    return clip.with_effects([vfx.Resize(1.1)])
+    # Just a small static zoom-in is much faster and still looks premium
+    zoomed = clip.with_effects([vfx.Resize(1.05)])
+    
+    # Force even dimensions and strictly crop back to 1080x1920 to avoid CompositeVideoClip slicing bugs
+    w, h = zoomed.size
+    # Ensure dimensions are even before cropping
+    w = int(w) + (int(w) % 2)
+    h = int(h) + (int(h) % 2)
+    zoomed = zoomed.resized(width=w, height=h)
+    
+    return zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
 
 def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS"):
     """
@@ -196,8 +207,6 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         # Apply Ken Burns to the combined background for extra energy
         bg_clip = CompositeVideoClip(bg_segments, size=(1080, 1920)).with_duration(duration)
         bg_clip = apply_ken_burns(bg_clip, duration)
-        # 3. STATIC ZOOM: One-time resize is much faster than per-frame lambda
-        bg_clip = bg_clip.with_effects([vfx.Resize(1.05)])
     
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.25).with_duration(duration)
     
