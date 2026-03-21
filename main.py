@@ -71,13 +71,14 @@ def main():
             hook = facts_res["hook"]
             facts_data = facts_res["facts"]
             
-            # Construct the script: Hook -> Challenge Intro -> Fact 1, 2, 3 -> Outro
-            full_script = f"{hook} ... One of these facts is a fake! Can you find it? ... ... "
-            full_script += f"Fact 1: {facts_data[0]['fact']} ... "
-            full_script += f"Fact 2: {facts_data[1]['fact']} ... "
-            full_script += f"Fact 3: {facts_data[2]['fact']} ... ... "
-            full_script += "CAN YOU FIND THE LIE? 👇 Comment below! ... ... "
-            full_script += "Like and Subscribe for more daily challenges! You just got smarter!"
+            # Construct the script: Hook -> Challenge Intro -> Fact 1, 2, 3 -> Loop Outro
+            # RE retention guide: Rapid-fire 15s format.
+            full_script = f"{hook} ... One of these facts is a LIE! ... "
+            full_script += f"1: {facts_data[0]['fact']} ... "
+            full_script += f"2: {facts_data[1]['fact']} ... "
+            full_script += f"3: {facts_data[2]['fact']} ... "
+            # Infinite Loop Trick: End on a cliffhanger that loops back to the start
+            full_script += "The real answer is ... ... Wait! Did you spot the fake?"
         elif mode == "STORY":
             story_data = generate_story(category)
             if not story_data: return

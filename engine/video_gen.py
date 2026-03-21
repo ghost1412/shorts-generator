@@ -195,10 +195,21 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         persistent_clips.append(top_header)
         
-        # 2. BOTTOM FOOTER: FOLLOW FOR UPDATES
-        footer_img = create_text_image("FOLLOW FOR UPDATES", font_size=60, color="white", y_pos=1700)
-        bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
-        persistent_clips.append(bottom_footer)
+        # 2. BOTTOM FOOTER: SCROLLING TICKER
+        footer_img = create_text_image(" " * 50 + "BREAKING: " + mode.replace("_", " ") + " - FOLLOW FOR MORE UPDATES! " + " " * 50, font_size=65, color="white", y_pos=1750, add_box=True)
+        ticker_clip = ImageClip(footer_img).with_start(0).with_duration(duration)
+        
+        # Animate ticker scrolling from right to left
+        # We use a custom position function for a true ticker.
+        ticker_width = ticker_clip.size[0]
+        ticker_clip = ticker_clip.with_position(lambda t: (1080 - (t * 400) % (ticker_width + 1080), 1750))
+        
+        persistent_clips.append(ticker_clip)
+        
+        # 3. GLITCH/SHAKE EFFECT FOR BREAKING NEWS
+        top_header = top_header.with_effects([
+            vfx.Resize(lambda t: 1.0 + 0.05 * np.sin(t * 20)) 
+        ])
     elif mode == "STORY":
         # STORY MODE HEADER
         header_img = create_text_image("UNBELIEVABLE BUT TRUE", font_size=110, color="orange", y_pos=70)
@@ -313,11 +324,23 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     # 1. Background - Solid Green (Greenscreen) as requested
     bg_clip = ColorClip(size=(1080, 1920), color=(0, 177, 64)).with_duration(duration)
     
-    # 2. Progress Bar
-    bar_height = 20
+    # 2. Progress Bar & Countdown Timer
+    bar_height = 25
     bg_bar = ColorClip(size=(1080, bar_height), color=(30, 30, 30)).with_duration(duration).with_position(("center", 1880))
     progress_bar = ColorClip(size=(1080, bar_height), color=(255, 230, 0)).with_duration(duration).with_position(("center", 1880))
     progress_bar = progress_bar.with_effects([vfx.Resize(lambda t: (max(1, int(1080 * t / duration)), bar_height))])
+    
+    # Visual Countdown Timer (Center of screen, shrinking circle or bar)
+    timer_w = 400
+    timer_bg = ColorClip(size=(timer_w, 40), color=(0, 0, 0, 100)).with_duration(audio_clip.duration).with_position(("center", 1600))
+    timer_fg = ColorClip(size=(timer_w, 40), color=(255, 0, 0)).with_duration(audio_clip.duration).with_position(("center", 1600))
+    timer_fg = timer_fg.with_effects([
+        vfx.Resize(lambda t: (max(1, int(timer_w * (1 - t / audio_clip.duration))), 40))
+    ])
+    
+    # "HURRY!" text at 3s mark
+    hurry_img = create_text_image("ONLY 3 SECONDS LEFT! ⏳", font_size=80, color="red", y_pos=1400, add_box=True)
+    hurry_clip = ImageClip(hurry_img).with_start(audio_clip.duration - 3).with_duration(3).with_effects([vfx.CrossFadeIn(0.2)])
     
     # 3. Persistent UI - HUMOROUS HOOKS
     header_titles = [
@@ -400,7 +423,7 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     # Final Composition - Target is added AFTER distractors to be on top
     final_video = CompositeVideoClip(
         [bg_clip] + distractor_clips + [target_sticker] + 
-        [bg_bar, progress_bar, top_header, bottom_footer, reveal_highlight, found_clip], 
+        [bg_bar, progress_bar, top_header, bottom_footer, timer_bg, timer_fg, hurry_clip, reveal_highlight, found_clip], 
         size=(1080, 1920)
     )
     
