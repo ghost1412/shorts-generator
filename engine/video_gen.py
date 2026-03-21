@@ -282,8 +282,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             c_duration = max(0.6, entry["duration"])
             c_clip = ImageClip(c_img).with_start(start).with_duration(c_duration).with_position((0, 0))
             
-            # Bounce scale effect
-            c_clip = c_clip.with_effects([vfx.Resize(bounce_scale)])
+            # Bounce effect using position instead of expensive Resize
+            def make_bounce_pos(st):
+                return lambda t: ("center", SAFE_MID + int(15 * np.sin((t - st) * 12)))
+            
+            c_clip = c_clip.with_position(make_bounce_pos(start))
             word_clips.append(c_clip)
 
         # 3. FINAL REVEAL OVERLAY

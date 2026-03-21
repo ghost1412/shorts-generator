@@ -66,79 +66,84 @@ def main():
         category = args.category if args.category and args.category in categories else random.choice(categories)
         print(f"[Log] Generating content for category: {category}...", flush=True)
         
-        if mode == "FACTS":
-            facts_res = generate_mixed_facts(category)
-            hook = facts_res["hook"]
-            facts_data = facts_res["facts"]
-            
-            # Construct the script: Hook -> Challenge Intro -> Fact 1, 2, 3 -> Loop Outro
-            full_script = f"{hook} ... One of these facts is a LIE! ... "
-            full_script += f"1: {facts_data[0]['fact']} ... "
-            full_script += f"2: {facts_data[1]['fact']} ... "
-            full_script += f"3: {facts_data[2]['fact']} ... "
-            # Improved Viral Loop: Force replay
-            full_script += "The real answer is ... wait... go back and check again."
-        elif mode == "STORY":
-            story_data = generate_story(category)
-            if not story_data: return
-            
-            # Construct script with strategic viral pauses
-            full_script = f"{story_data['title']}! ... {story_data['story']} ... Like and Subscribe for more true stories!"
-            facts_data = [] # Not used in story mode but kept for metadata function compatibility
-            print(f"[Log] Story: {story_data['story']}")
-        elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
-            # Channel Manager Intro
-            intros = [
-                "Only GIGACHADS can find this! 🗿",
-                "Bro is hiding from the IRS! 🤫",
-                "99% of you will FAIL this challenge! 🧠",
-                "POV: You are searching for your brain cells... found him yet?",
-                "If you don't find this, you owe me a sub! 🤝"
-            ]
-            full_script = f"{random.choice(intros)} ... 🔍 Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
-            facts_data = []
-            print(f"[Log] Game mode: {mode}", flush=True)
-        elif mode == "WYR":
-            wyr_data = generate_wyr(category)
-            full_script = f"Would you rather? 🔴 {wyr_data['option_a']} ... OR ... 🔵 {wyr_data['option_b']} ... ... What did you choose? Let me know in the comments!"
-            facts_data = [] # Not used
-            print(f"[Log] WYR Data: {wyr_data}")
-        elif mode == "REDDIT":
-            reddit_data = generate_reddit_story(category)
-            full_script = f"{reddit_data['title']} ... {reddit_data['story']} ... Whose side are you on? Let me know!"
-            facts_data = []
-            print(f"[Log] Reddit Data: {reddit_data}")
-        elif mode == "TRIVIA":
-            trivia_data = generate_trivia(category)
-            full_script = f"Are you a genius? Let's find out! ... {trivia_data['question']} ... A: {trivia_data['opt_a']} ... B: {trivia_data['opt_b']} ... C: {trivia_data['opt_c']} ... ... Answer is ... {trivia_data['answer']}. Did you get it right?"
-            facts_data = [] # Not used
-            print(f"[Log] TRIVIA Data: {trivia_data}")
-        elif mode == "QUOTE":
-            quote_data = generate_quote(category)
-            full_script = f"Listen closely... ... {quote_data['quote']} ... ... ... ... Do you agree?"
-            facts_data = []
-            print(f"[Log] QUOTE Data: {quote_data}")
-        elif mode == "ODD_ONE_OUT":
-            full_script = "Spot the odd one out! 🧐 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
-            facts_data = []
-            print(f"[Log] ODD_ONE_OUT Selected")
-        elif mode == "NEWS":
-            news_data = generate_funny_news(category, tone="funny")
-            news_source = news_data.get('source', 'Unknown')
-            full_script = f"{news_data['hook']} ... {news_data['story']}"
-            facts_data = []
-            print(f"[Log] NEWS (funny) Data: {news_data}")
-        elif mode == "NEWS_SERIOUS":
-            news_data = generate_funny_news(category, tone="serious")
-            news_source = news_data.get('source', 'Unknown')
-            full_script = f"{news_data['hook']} ... {news_data['story']}"
-            facts_data = []
-            print(f"[Log] NEWS_SERIOUS Data: {news_data}")
-        elif mode == "GUESS_SOUND":
-            sound_data = generate_sound_challenge(category)
-            full_script = f"{sound_data['hook']} ... ... ... ... ... {sound_data['reveal_text']}"
-            facts_data = [] # Not used
-            print(f"[Log] GUESS_SOUND Data: {sound_data}")
+        try:
+            if mode == "FACTS":
+                facts_res = generate_mixed_facts(category)
+                hook = facts_res["hook"]
+                facts_data = facts_res["facts"]
+                
+                # Construct the script: Hook -> Challenge Intro -> Fact 1, 2, 3 -> Loop Outro
+                full_script = f"{hook} ... One of these facts is a LIE! ... "
+                full_script += f"1: {facts_data[0]['fact']} ... "
+                full_script += f"2: {facts_data[1]['fact']} ... "
+                full_script += f"3: {facts_data[2]['fact']} ... "
+                # Improved Viral Loop: Force replay
+                full_script += "The real answer is ... wait... go back and check again."
+            elif mode == "STORY":
+                story_data = generate_story(category)
+                if not story_data: return
+                
+                # Construct script with strategic viral pauses
+                full_script = f"{story_data['title']}! ... {story_data['story']} ... Like and Subscribe for more true stories!"
+                facts_data = [] # Not used in story mode but kept for metadata function compatibility
+                print(f"[Log] Story: {story_data['story']}")
+            elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
+                # Channel Manager Intro
+                intros = [
+                    "Only GIGACHADS can find this! 🗿",
+                    "Bro is hiding from the IRS! 🤫",
+                    "99% of you will FAIL this challenge! 🧠",
+                    "POV: You are searching for your brain cells... found him yet?",
+                    "If you don't find this, you owe me a sub! 🤝"
+                ]
+                full_script = f"{random.choice(intros)} ... 🔍 Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
+                facts_data = []
+                print(f"[Log] Game mode: {mode}", flush=True)
+            elif mode == "WYR":
+                wyr_data = generate_wyr(category)
+                full_script = f"Would you rather? 🔴 {wyr_data['option_a']} ... OR ... 🔵 {wyr_data['option_b']} ... ... What did you choose? Let me know in the comments!"
+                facts_data = [] # Not used
+                print(f"[Log] WYR Data: {wyr_data}")
+            elif mode == "REDDIT":
+                reddit_data = generate_reddit_story(category)
+                full_script = f"{reddit_data['title']} ... {reddit_data['story']} ... Whose side are you on? Let me know!"
+                facts_data = []
+                print(f"[Log] Reddit Data: {reddit_data}")
+            elif mode == "TRIVIA":
+                trivia_data = generate_trivia(category)
+                full_script = f"Are you a genius? Let's find out! ... {trivia_data['question']} ... A: {trivia_data['opt_a']} ... B: {trivia_data['opt_b']} ... C: {trivia_data['opt_c']} ... ... Answer is ... {trivia_data['answer']}. Did you get it right?"
+                facts_data = [] # Not used
+                print(f"[Log] TRIVIA Data: {trivia_data}")
+            elif mode == "QUOTE":
+                quote_data = generate_quote(category)
+                full_script = f"Listen closely... ... {quote_data['quote']} ... ... ... ... Do you agree?"
+                facts_data = []
+                print(f"[Log] QUOTE Data: {quote_data}")
+            elif mode == "ODD_ONE_OUT":
+                full_script = "Spot the odd one out! 🧐 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
+                facts_data = []
+                print(f"[Log] ODD_ONE_OUT Selected")
+            elif mode == "NEWS":
+                news_data = generate_funny_news(category, tone="funny")
+                news_source = news_data.get('source', 'Unknown')
+                full_script = f"{news_data['hook']} ... {news_data['story']}"
+                facts_data = []
+                print(f"[Log] NEWS (funny) Data: {news_data}")
+            elif mode == "NEWS_SERIOUS":
+                news_data = generate_funny_news(category, tone="serious")
+                news_source = news_data.get('source', 'Unknown')
+                full_script = f"{news_data['hook']} ... {news_data['story']}"
+                facts_data = []
+                print(f"[Log] NEWS_SERIOUS Data: {news_data}")
+            elif mode == "GUESS_SOUND":
+                sound_data = generate_sound_challenge(category)
+                full_script = f"{sound_data['hook']} ... ... ... ... ... {sound_data['reveal_text']}"
+                facts_data = [] # Not used
+                print(f"[Log] GUESS_SOUND Data: {sound_data}")
+        except RuntimeError as e:
+            print(f"[Error] Generation failed: {e}")
+            print("[Log] Gracefully skipping this video to maintain channel diversity.")
+            return
 
     print(f"[Log] Full Script: \"{full_script}\"", flush=True)
     

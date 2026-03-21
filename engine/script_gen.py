@@ -128,7 +128,7 @@ def check_hallucinations(facts):
     # Prepare a condensed list for the checker
     test_str = "\n".join([f"- {f['fact']}" for f in facts if f['truth']])
     
-    prompt = f"""You are an elite Fact-Checker. Review these 2 'TRUE' facts. 
+    prompt = f"""You are an elite Fact-Checker. Review these 2 facts. 
 Are ANY of them actually FALSE, logically impossible, or based on common myths?
 
 FACTS TO CHECK:
@@ -140,10 +140,10 @@ CRITICAL CHECKS:
 3. No 'Einstein failed math' type myths.
 4. No 'produced in X but aired in Y' ambiguous confusing facts.
 
-If ANY fact is suspicious, incorrect, or ambiguous, answer 'FAIL'.
-If BOTH are 100% verified and logically sound, answer 'PASS'.
-
-ANSWER (PASS/FAIL ONLY):"""
+First, briefly explain your reasoning in 1-2 sentences.
+Then, on a new line, write exactly 'DECISION: PASS' if BOTH facts are verified and logically sound.
+Write exactly 'DECISION: FAIL' if ANY fact is suspicious, incorrect, or ambiguous.
+"""
 
     try:
         url = "https://router.huggingface.co/v1/chat/completions"
@@ -151,16 +151,19 @@ ANSWER (PASS/FAIL ONLY):"""
         payload = {
             "model": "meta-llama/Llama-3.1-8B-Instruct",
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 10,
+            "max_tokens": 150,
             "temperature": 0.0 # Extreme precision
         }
         response = requests.post(url, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
-        decision = response.json()["choices"][0]["message"]["content"].strip().upper()
+        output = response.json()["choices"][0]["message"]["content"].strip().upper()
         
-        print(f"[Log] AI Fact-Checker Decision: {decision}")
-        # ROBUST CHECK: Anything that isn't a clean PASS is a FAIL
-        return "PASS" not in decision
+        # Log the output safely on one line
+        log_out = output.replace('\n', ' | ')
+        print(f"[Log] AI Fact-Checker Output: {log_out}")
+        
+        # ROBUST CHECK: Look for 'DECISION: PASS'
+        return "DECISION: PASS" not in output
     except Exception as e:
         print(f"[Warning] AI Fact-Checker failed ({e}). Defaulting to safety.")
         # If checker fails, we reject just in case
