@@ -158,23 +158,32 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
             
         return output_audio, output_subs
 
-    try:
-        import nest_asyncio
-        nest_asyncio.apply()
-        
-        # Optimize event loop for repeated calls
-        if asyncio.get_event_loop().is_running():
-            return asyncio.create_task(amain())
-        else:
-            return asyncio.run(amain())
-    except Exception as e:
-        print(f"Error in generate_voice: {e}")
+    # Secure async execution for edge-tts
+    import threading
+    
+    result = {"audio": None, "subs": None, "error": None}
+    
+    def run_in_thread():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(amain())
-        except Exception as e2:
-            print(f"Critical error in generate_voice: {e2}")
-            return None, None
+            a, s = loop.run_until_complete(amain())
+            result["audio"] = a
+            result["subs"] = s
+        except Exception as e:
+            result["error"] = e
+        finally:
+            loop.close()
+            
+    t = threading.Thread(target=run_in_thread)
+    t.start()
+    t.join()
+    
+    if result["error"]:
+        print(f"Error in generate_voice: {result['error']}")
+        return None, None
+        
+    return result["audio"], result["subs"]
 
 if __name__ == "__main__":
     text = "99% fail this tech challenge! ... 1. Python was named after a snake. 2. CPU stands for core processing unit. The real answer is... Wait! Did you spot the fake?"
