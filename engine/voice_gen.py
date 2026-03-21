@@ -3,10 +3,16 @@ import os
 import asyncio
 import edge_tts
 
+import re
+
 def strip_emojis(text):
     """
-    Strips emojis from text to prevent TTS from reading them verbally.
+    Strips emojis and URLs from text to prevent TTS from reading them.
     """
+    # 1. Strip URLs first
+    text = re.sub(r'https?://\S+', '', text)
+    
+    # 2. Strip non-ASCII and emojis
     result = []
     allowed_chars = set(".,!?;:()-'\" ")
     for c in text:
@@ -23,12 +29,15 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     # Clean text for TTS
     tts_text = strip_emojis(text)
     
+    # Replace '...' with SSML breaks for dramatic effect
+    content_with_breaks = tts_text.replace("...", " <break time='500ms'/> ")
+    ssml_text = f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='{voice_name}'>{content_with_breaks}</voice></speak>"
+    
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     
     async def amain():
-        voice = voice_name
-        # Apply rate for higher energy
-        communicate = edge_tts.Communicate(tts_text, voice, rate=rate)
+        # Use SSML for better control over pauses
+        communicate = edge_tts.Communicate(ssml_text, voice_name, rate=rate)
         subtitles = []
         
         with open(output_audio, "wb") as f:

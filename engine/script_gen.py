@@ -604,8 +604,9 @@ REAL HEADLINE: "{real_headline}"
 
 RULES:
 1. DO NOT change the facts. Keep it accurate to the headline.
-2. STORY: Retell it in under 45 words. Fast-paced.
-3. Do NOT add fake details. Only elaborate on what the headline says.
+2. ANCHOR PERSONA: Start with a professional news intro (e.g., "This is your 60-second world report...") and end with a characteristic sign-off.
+3. STORY: Retell it in under 45 words. Fast-paced. Use '...' for dramatic pauses in the script.
+4. Do NOT add fake details. Only elaborate on what the headline says.
 {tone_instruction}
 
 Format as JSON ONLY:
