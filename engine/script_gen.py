@@ -108,14 +108,15 @@ def reject_duplicates(facts):
 def reject_same_subject(facts):
     """Ensures each fact is about a DIFFERENT person/entity."""
     subjects = []
+    stopwords = ["the", "a", "an", "this", "that"]
     for f in facts:
-        words = f["fact"].split()
+        words = [w.lower() for w in f["fact"].split() if w.lower() not in stopwords]
         if len(words) >= 2:
-            # First two words usually identify the subject
-            subjects.append(" ".join(words[:2]).lower())
+            # Check first 2 meaningful words
+            subjects.append(" ".join(words[:2]))
     
-    # We need 3 unique subjects for 3 facts
-    return len(set(subjects)) < 3
+    # We need as many unique subjects as there are facts
+    return len(set(subjects)) < len(facts)
 
 def check_hallucinations(facts):
     """
