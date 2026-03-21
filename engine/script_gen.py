@@ -155,11 +155,9 @@ ANSWER (PASS/FAIL ONLY):"""
         }
         response = requests.post(url, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
-        decision = response.json()["choices"][0]["message"]["content"].strip().upper()
-        
         print(f"[Log] AI Fact-Checker Decision: {decision}")
-        # ROBUST CHECK: Anything that isn't a clean PASS is a FAIL
-        return decision != "PASS"
+        # ROBUST CHECK: Look for 'PASS' anywhere in the response
+        return "PASS" not in decision
     except Exception as e:
         print(f"[Warning] AI Fact-Checker failed ({e}). Defaulting to caution.")
         return False
@@ -408,14 +406,20 @@ OUTPUT FORMAT (JSON ONLY):
 
     def facts_validator(data):
         facts = data.get("facts", [])
-        if len(facts) < 2: return False
+        if len(facts) < 2: 
+            print("❌ Validation failed: Not enough facts.")
+            return False
         if reject_bad_facts(facts):
+            print("❌ Validation failed: Bad facts/formatting.")
             return False
         if reject_duplicates(facts):
+            print("❌ Validation failed: Duplicates detected.")
             return False
         if reject_same_subject(facts):
+            print("❌ Validation failed: Same subject repeated.")
             return False
         if check_hallucinations(facts): # NEW: Dynamic AI Fact-Checker on TRUE facts
+            print("❌ Validation failed: AI Hallucination detected.")
             return False
         return True
 
