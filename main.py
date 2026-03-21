@@ -8,7 +8,7 @@ from engine.utils import decrypt_secret
 
 load_dotenv()
 
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_best_of_3
+from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video, download_image, download_sfx
 from engine.video_gen import create_shorts_video
@@ -67,7 +67,7 @@ def main():
         print(f"[Log] Generating content for category: {category}...", flush=True)
         
         if mode == "FACTS":
-            facts_res = generate_best_of_3(lambda: generate_mixed_facts(category))
+            facts_res = generate_mixed_facts(category)
             hook = facts_res["hook"]
             facts_data = facts_res["facts"]
             
@@ -79,7 +79,7 @@ def main():
             # Improved Viral Loop: Force replay
             full_script += "The real answer is ... wait... go back and check again."
         elif mode == "STORY":
-            story_data = generate_best_of_3(lambda: generate_story(category))
+            story_data = generate_story(category)
             if not story_data: return
             
             # Construct script with strategic viral pauses
@@ -123,19 +123,19 @@ def main():
             facts_data = []
             print(f"[Log] ODD_ONE_OUT Selected")
         elif mode == "NEWS":
-            news_data = generate_best_of_3(lambda: generate_funny_news(category, tone="funny"))
+            news_data = generate_funny_news(category, tone="funny")
             news_source = news_data.get('source', 'Unknown')
             full_script = f"{news_data['hook']} ... {news_data['story']}"
             facts_data = []
             print(f"[Log] NEWS (funny) Data: {news_data}")
         elif mode == "NEWS_SERIOUS":
-            news_data = generate_best_of_3(lambda: generate_funny_news(category, tone="serious"))
+            news_data = generate_funny_news(category, tone="serious")
             news_source = news_data.get('source', 'Unknown')
             full_script = f"{news_data['hook']} ... {news_data['story']}"
             facts_data = []
             print(f"[Log] NEWS_SERIOUS Data: {news_data}")
         elif mode == "GUESS_SOUND":
-            sound_data = generate_best_of_3(lambda: generate_sound_challenge(category))
+            sound_data = generate_sound_challenge(category)
             full_script = f"{sound_data['hook']} ... ... ... ... ... {sound_data['reveal_text']}"
             facts_data = [] # Not used
             print(f"[Log] GUESS_SOUND Data: {sound_data}")
