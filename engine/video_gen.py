@@ -3,7 +3,7 @@ import os
 import numpy as np
 import random
 from moviepy import VideoFileClip, AudioFileClip, ColorClip, ImageClip, CompositeVideoClip, CompositeAudioClip, vfx, afx
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # --- VIRAL SAFE ZONES (Prevents UI overlap) ---
 SAFE_TOP = 150
@@ -26,6 +26,12 @@ def bounce_scale(t):
     elif t < 0.2:
         return 1.1 - 0.5 * (t - 0.1)
     return 1.0
+
+def apply_blur(image, radius=2):
+    """Applies Gaussian Blur to a numpy image array using Pillow."""
+    pil_img = Image.fromarray(image)
+    blurred_pil = pil_img.filter(ImageFilter.GaussianBlur(radius=radius))
+    return np.array(blurred_pil)
 
 def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None, add_box=True):
     """
@@ -412,7 +418,7 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
                 .with_position(pos)\
                 .with_start(0)\
                 .with_opacity(0.92)\
-                .with_effects([vfx.GaussianBlur(0.8)]) # Harder to find
+                .image_transform(lambda img: apply_blur(img, radius=2)) # Harder to find
         else:
             obj_path = object_paths[i % num_distractors]
             obj_clip = prepare_sticker(obj_path, width=115).with_position(pos).with_start(0)
