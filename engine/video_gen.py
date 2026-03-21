@@ -6,8 +6,8 @@ from moviepy import VideoFileClip, AudioFileClip, ColorClip, ImageClip, Composit
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # --- VIRAL SAFE ZONES (Prevents UI overlap) ---
-SAFE_TOP = 150
-SAFE_MID = 800
+SAFE_TOP = 220
+SAFE_MID = 750
 SAFE_BOTTOM = 1600
 
 def add_pattern_interrupt(duration):
@@ -228,11 +228,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     if mode.startswith("NEWS"):
         # 1. TOP HEADER: BREAKING NEWS!
-        header_img = create_text_image("BREAKING NEWS!", font_size=110, color="red", y_pos=SAFE_TOP)
+        header_img = create_text_image("BREAKING NEWS!", font_size=90, color="red", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         
-        # LIVE Badge
-        live_img = create_text_image("● LIVE", font_size=60, color="red", y_pos=SAFE_TOP + 120)
+        # LIVE Badge (Safely below a potentially 2-line header)
+        live_img = create_text_image("● LIVE", font_size=50, color="red", y_pos=SAFE_TOP + 180)
         live_clip = ImageClip(live_img).with_start(0).with_duration(duration)
         persistent_clips.extend([top_header, live_clip])
         
@@ -284,16 +284,12 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             start = entry["start"]
             end = start + entry["duration"]
             
-            c_img = create_text_image(text, font_size=120, color="white", y_pos=SAFE_MID)
+            c_img = create_text_image(text, font_size=90, color="white", y_pos=SAFE_MID)
             # Minimum display duration for readability
             c_duration = max(0.6, entry["duration"])
-            c_clip = ImageClip(c_img).with_start(start).with_duration(c_duration).with_position((0, 0))
+            c_clip = ImageClip(c_img).with_start(start).with_duration(c_duration)
             
-            # Bounce effect using position instead of expensive Resize
-            def make_bounce_pos(st):
-                return lambda t: ("center", SAFE_MID + int(15 * np.sin((t - st) * 12)))
-            
-            c_clip = c_clip.with_position(make_bounce_pos(start))
+            c_clip = c_clip.with_position(make_bounce_pos(start, 0))
             word_clips.append(c_clip)
 
         # 3. FINAL REVEAL OVERLAY
@@ -669,8 +665,8 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
     
     # Options
     boxes = []
-    # Start either at 750 or below the question, whichever is lower
-    current_y = max(750, 150 + q_height + 60)
+    # Start either at SAFE_MID or below the question, whichever is lower
+    current_y = max(SAFE_MID, SAFE_TOP + q_height + 60)
     
     opt_a = f"A) {trivia_data.get('opt_a', 'Opt A').upper()}"
     opt_b = f"B) {trivia_data.get('opt_b', 'Opt B').upper()}"
