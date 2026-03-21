@@ -2,48 +2,132 @@ import json
 import os
 import asyncio
 import edge_tts
-
 import re
 
-def strip_emojis(text):
+def clean_for_tts(text):
     """
-    Strips emojis, URLs, and common web noise from text.
+    Strips emojis, URLs, and common web noise while preserving useful symbols.
     """
-    # 1. Strip URLs (more aggressive)
+    # 1. Strip URLs
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
     # 2. Strip standalone domains/versions like example.com or v1.0
     text = re.sub(r'\b\S+\.com\S*|\b\S+\.net\S*|\bv\d+\.\d+\b', '', text)
     
-    # 3. Clean up stray punctuation like empty parentheses and extra spaces
+    # 3. Clean up stray punctuation and extra spaces
     text = re.sub(r'\(\s*\)', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     
-    # 4. Strip non-ASCII and emojis
+    # 4. Strip emojis but keep useful symbols (%, $)
     result = []
-    allowed_chars = set(".,!?;:()-'\" ")
+    allowed_chars = set(".,!?;:()-'\" %$")
     for c in text:
         if ord(c) < 127:
             if c.isalnum() or c.isspace() or c in allowed_chars:
                 result.append(c)
     return "".join(result)
 
-def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+10%"):
+def add_dramatic_pauses(text):
+    """Injects SSML break tags based on punctuation and logic."""
+    # pause after numbers (facts list)
+    text = re.sub(r'(\d+[:\.])', r'\1 <break time="300ms"/>', text)
+    # pause before punchlines
+    text = re.sub(r'(The real answer is)', r'<break time="400ms"/> \1', text)
+    # pause after each fact line
+    text = re.sub(r'(\.\s)', r'\1 <break time="250ms"/> ', text)
+    # micro-pauses for rhythm
+    text = re.sub(r',', ', <break time="120ms"/>', text)
+    # ellipsis stays strongest pause
+    text = text.replace("...", " <break time='600ms'/> ")
+    return text
+
+def emphasize_keywords(text):
+    """Injects SSML emphasis for viral keywords safely using regex."""
+    keywords = ["lie", "fake", "real answer", "spot", "shocking", "secret"]
+    for k in keywords:
+        text = re.sub(
+            fr"\b({k})\b",
+            lambda m: f"<emphasis level='strong'>{m.group(1)}</emphasis>",
+            text,
+            flags=re.IGNORECASE
+        )
+    return text
+
+def split_hook(text):
+    """Robustly splits text into hook and rest, falling back to first sentence."""
+    # Try splitting by ellipsis first
+    if "..." in text:
+        parts = text.split("...", 1)
+        return parts[0], parts[1]
+
+    # fallback: first sentence as hook
+    sentences = re.split(r'[.!?]', text, maxsplit=1)
+    if len(sentences) > 1:
+        return sentences[0], sentences[1]
+
+    return text, ""
+
+def group_subtitles(subtitles):
+    """Groups word-by-word subtitles into cleaner, punctuation-aware chunks."""
+    if not subtitles: return []
+    grouped = []
+    current = []
+
+    for w in subtitles:
+        current.append(w)
+        # Group by punctuation or 4-word max limit
+        word_text = w["word"].strip()
+        if any(p in word_text for p in [".", "!", "?"]) or len(current) >= 4:
+            grouped.append({
+                "word": " ".join([x["word"] for x in current]),
+                "start": current[0]["start"],
+                "duration": sum(x["duration"] for x in current)
+            })
+            current = []
+
+    if current:
+        grouped.append({
+            "word": " ".join([x["word"] for x in current]),
+            "start": current[0]["start"],
+            "duration": sum(x["duration"] for x in current)
+        })
+
+    return grouped
+
+def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+15%", add_cta=True):
     """
-    Generates voice and precise word-level subtitles using edge-tts Python API.
-    Added 'rate' support for punchy social media flow.
+    Generates voice with cinematic pacing and optimized subtitles.
     """
-    # Clean text for TTS
-    tts_text = strip_emojis(text)
+    raw_text = clean_for_tts(text)
     
-    # Replace '...' with SSML breaks for dramatic effect
-    content_with_breaks = tts_text.replace("...", " <break time='500ms'/> ")
-    ssml_text = f"<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'><voice name='{voice_name}'>{content_with_breaks}</voice></speak>"
+    # Add final drop CTA if requested
+    if add_cta:
+        raw_text += " <break time='300ms'/> Comment your answer now."
     
+    hook, rest = split_hook(raw_text)
+    
+    # Process the 'rest' for pauses and emphasis
+    processed_rest = emphasize_keywords(add_dramatic_pauses(rest or ""))
+    
+    # Split rest for energy ramp (Slow -> Medium -> Fast)
+    rest_parts = processed_rest.split()
+    half = len(rest_parts) // 2
+    rest_1 = " ".join(rest_parts[:half])
+    rest_2 = " ".join(rest_parts[half:])
+
+    # Build a powerful SSML delivery with Energy Ramp
+    ssml_text = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
+  <voice name='{voice_name}'>
+    <prosody rate='-10%' pitch='+5%'>{hook}</prosody>
+    <break time='400ms'/>
+    <prosody rate='+5%'>{rest_1}</prosody>
+    <prosody rate='{rate}'>{rest_2}</prosody>
+  </voice>
+</speak>"""
+
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     
     async def amain():
-        # Use SSML for better control over pauses
-        communicate = edge_tts.Communicate(ssml_text, voice_name, rate=rate)
+        communicate = edge_tts.Communicate(ssml_text, voice_name)
         subtitles = []
         
         with open(output_audio, "wb") as f:
@@ -56,27 +140,20 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
                         "start": chunk["offset"] / 10_000_000,
                         "duration": max(0.05, chunk["duration"] / 10_000_000)
                     })
-                elif chunk["type"] in ["SentenceBoundary", "sentence_boundary"]:
-                    if not subtitles or subtitles[-1]["word"] != chunk["text"]:
-                        # If we aren't getting word boundaries, we can use these
-                        # We'll actually handle this post-stream if word boundaries are missing
-                        pass
 
-        # VERY ROBUST FALLBACK: If we have NO word boundaries, we must split the text manually
-        # and estimate timings based on the audio duration.
+        # Fallback for words
         if not subtitles:
-            print("[Warning] No word boundaries found. Estimating word timings from text.")
             audio_duration = 0
             try:
-                from moviepy import AudioFileClip
+                from moviepy.editor import AudioFileClip
                 ac = AudioFileClip(output_audio)
                 audio_duration = ac.duration
                 ac.close()
-            except Exception as e:
-                print(f"[Warning] MoviePy failed to get duration: {e}. Using char-count estimation.")
-                audio_duration = len(text) * 0.08 # very rough estimate
+            except Exception:
+                # Better estimation: words * average speaking time
+                audio_duration = len(raw_text.split()) * 0.35
             
-            words = text.split()
+            words = raw_text.split()
             avg_word_dur = audio_duration / max(1, len(words))
             for i, word in enumerate(words):
                 subtitles.append({
@@ -85,30 +162,32 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
                     "duration": max(0.1, avg_word_dur)
                 })
 
+        # Chunk subtitles for a premium UX
+        grouped = group_subtitles(subtitles)
         with open(output_subs, "w", encoding="utf-8") as f:
-            json.dump(subtitles, f, indent=2)
+            json.dump(grouped, f, indent=2)
             
         return output_audio, output_subs
 
     try:
-        # Modern way to run async code in sync context
-        return asyncio.run(amain())
-    except RuntimeError:
-        # Fallback if an event loop is already running (e.g., in some REPLs or frameworks)
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
         import nest_asyncio
         nest_asyncio.apply()
-        return loop.run_until_complete(amain())
+        
+        # Optimize event loop for repeated calls
+        if asyncio.get_event_loop().is_running():
+            return asyncio.create_task(amain())
+        else:
+            return asyncio.run(amain())
     except Exception as e:
         print(f"Error in generate_voice: {e}")
-        return None, None
+        try:
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(amain())
+        except Exception as e2:
+            print(f"Critical error in generate_voice: {e2}")
+            return None, None
 
 if __name__ == "__main__":
-    text = "Did you know? Octopuses have three hearts and blue blood."
+    text = "99% fail this tech challenge! ... 1. Python was named after a snake. 2. CPU stands for core processing unit. The real answer is... Wait! Did you spot the fake?"
     a, s = generate_voice(text)
     print(f"Voice: {a}, Subs: {s}")

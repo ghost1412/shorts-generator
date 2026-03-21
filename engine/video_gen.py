@@ -5,6 +5,28 @@ import random
 from moviepy import VideoFileClip, AudioFileClip, ColorClip, ImageClip, CompositeVideoClip, CompositeAudioClip, vfx, afx
 from PIL import Image, ImageDraw, ImageFont
 
+# --- VIRAL SAFE ZONES (Prevents UI overlap) ---
+SAFE_TOP = 150
+SAFE_MID = 800
+SAFE_BOTTOM = 1600
+
+def add_pattern_interrupt(duration):
+    """Adds a mid-video 'pattern interrupt' flash to regain attention."""
+    interrupt_time = duration * 0.5
+    flash = ColorClip(size=(1080, 1920), color=(255, 255, 255))\
+        .with_start(interrupt_time)\
+        .with_duration(0.1)\
+        .with_opacity(0.4)
+    return flash
+
+def bounce_scale(t):
+    """TikTok-style pop/bounce animation for captions."""
+    if t < 0.1:
+        return 0.5 + 8 * t
+    elif t < 0.2:
+        return 1.1 - 0.5 * (t - 0.1)
+    return 1.0
+
 def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None, add_box=True):
     """
     Creates a transparent PNG with text using Pillow.
@@ -170,6 +192,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         # Apply Ken Burns to the combined background for extra energy
         bg_clip = CompositeVideoClip(bg_segments, size=(1080, 1920)).with_duration(duration)
         bg_clip = apply_ken_burns(bg_clip, duration)
+        # 3. ATTENTION PULSE: Subtle continuous scale to keep subconscious engaged
+        bg_clip = bg_clip.with_effects([vfx.Resize(lambda t: 1 + 0.01 * np.sin(t * 2))])
     
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.25).with_duration(duration)
     
@@ -181,53 +205,51 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     header_clips = []
     word_clips = []
     
-    # Progress Bar (Interactive Element)
+    # Progress Bar (Urgency Curve)
     bar_height = 20
+    # Progress Bar (Urgency Curve + Color Shift)
     bg_bar = ColorClip(size=(1080, bar_height), color=(50, 50, 50)).with_duration(duration).with_position(("center", 1880))
     progress_bar = ColorClip(size=(1080, bar_height), color=(255, 255, 0)).with_duration(duration).with_position(("center", 1880))
-    progress_bar = progress_bar.with_effects([vfx.Resize(lambda t: (max(1, int(1080 * t / duration)), bar_height))])
-    
-    # viral_color = (255, 230, 0) # Bright Yellow
+    # Faster near end + Transition Yellow -> Red
+    progress_bar = progress_bar.with_effects([
+        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), bar_height)),
+        vfx.MultiplyColor(lambda t: (1, 1 - t/duration, 0))
+    ])
     
     if mode.startswith("NEWS"):
         # 1. TOP HEADER: BREAKING NEWS!
-        header_img = create_text_image("BREAKING NEWS!", font_size=110, color="red", y_pos=70)
+        header_img = create_text_image("BREAKING NEWS!", font_size=110, color="red", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
-        persistent_clips.append(top_header)
+        
+        # LIVE Badge
+        live_img = create_text_image("● LIVE", font_size=60, color="red", y_pos=SAFE_TOP + 120)
+        live_clip = ImageClip(live_img).with_start(0).with_duration(duration)
+        persistent_clips.extend([top_header, live_clip])
         
         # 2. BOTTOM FOOTER: SCROLLING TICKER
-        footer_img = create_text_image(" " * 50 + "BREAKING: " + mode.replace("_", " ") + " - FOLLOW FOR MORE UPDATES! " + " " * 50, font_size=65, color="white", y_pos=1750, add_box=True)
+        footer_img = create_text_image(" " * 50 + "BREAKING: " + mode.replace("_", " ") + " - FOLLOW FOR MORE UPDATES! " + " " * 50, font_size=65, color="white", y_pos=SAFE_BOTTOM + 150, add_box=True)
         ticker_clip = ImageClip(footer_img).with_start(0).with_duration(duration)
         
-        # Animate ticker scrolling from right to left
-        # We use a custom position function for a true ticker.
         ticker_width = ticker_clip.size[0]
-        ticker_clip = ticker_clip.with_position(lambda t: (1080 - (t * 400) % (ticker_width + 1080), 1750))
-        
+        ticker_clip = ticker_clip.with_position(lambda t: (1080 - (t * 400) % (ticker_width + 1080), SAFE_BOTTOM + 150))
         persistent_clips.append(ticker_clip)
         
-        # 3. GLITCH/SHAKE EFFECT FOR BREAKING NEWS
-        top_header = top_header.with_effects([
-            vfx.Resize(lambda t: 1.0 + 0.05 * np.sin(t * 20)) 
-        ])
+        # 3. URGENCY SHAKE (Synced to intense broadcast vibe)
+        top_header = top_header.with_effects([vfx.Resize(lambda t: 1.0 + 0.02 * np.sin(t * 15))])
     elif mode == "STORY":
-        # STORY MODE HEADER
-        header_img = create_text_image("UNBELIEVABLE BUT TRUE", font_size=110, color="orange", y_pos=70)
+        header_img = create_text_image("UNBELIEVABLE BUT TRUE", font_size=110, color="orange", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         persistent_clips.append(top_header)
     else: # FACTS mode
-        # 1. TOP HEADER: SPOT THE LIE! (Stay high)
-        header_img = create_text_image("SPOT THE LIE!", font_size=110, color="yellow", y_pos=70)
+        header_img = create_text_image("SPOT THE LIE!", font_size=110, color="yellow", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
-        persistent_clips.append(top_header)
         
-        # 2. BOTTOM FOOTER: COMMENT YOUR GUESS
-        footer_img = create_text_image("COMMENT YOUR GUESS", font_size=60, color="white", y_pos=1700)
+        footer_img = create_text_image("COMMENT YOUR GUESS", font_size=60, color="white", y_pos=SAFE_BOTTOM + 100)
         bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
-        persistent_clips.append(bottom_footer)
+        persistent_clips.extend([top_header, bottom_footer])
 
     if subtitles:
-        # 1. Fact Indicators (e.g., FACT 1/3) - Only for FACT Mode
+        # 1. Fact Indicators
         fact_header_times = []
         if mode == "FACTS":
             for j, entry in enumerate(subtitles):
@@ -242,63 +264,56 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             idx = fact_header_times.index((start, txt))
             next_header_start = fact_header_times[idx + 1][0] if idx + 1 < len(fact_header_times) else duration
             h_duration = next_header_start - start
-            # Well below the top header (SafeZone 1: 350)
-            h_img = create_text_image(txt, font_size=110, color="cyan", y_pos=350, add_box=True)
+            h_img = create_text_image(txt, font_size=110, color="cyan", y_pos=SAFE_TOP + 200, add_box=True)
             h_clip = ImageClip(h_img).with_start(start).with_duration(h_duration).with_position((0, 0))
             header_clips.append(h_clip.with_effects([vfx.CrossFadeIn(0.1)]))
 
-        # 2. SENTENCE-BASED Captions with Pop-In Effect
-        current_sentence = []
-        sentence_start = None
-        
+        # 2. Captions with Bounce Effect
         for i, entry in enumerate(subtitles):
-            word = entry["word"]
-            if sentence_start is None:
-                sentence_start = entry["start"]
+            text = entry["word"].upper()
+            start = entry["start"]
+            end = start + entry["duration"]
             
-            current_sentence.append(word.upper())
-            is_end = any(p in word for p in [".", "!", "?"])
+            c_img = create_text_image(text, font_size=120, color="white", y_pos=SAFE_MID)
+            # Minimum display duration for readability
+            c_duration = max(0.6, entry["duration"])
+            c_clip = ImageClip(c_img).with_start(start).with_duration(c_duration).with_position((0, 0))
             
-            if is_end or i == len(subtitles) - 1:
-                text = " ".join(current_sentence)
-                end = entry["start"] + entry["duration"]
-                
-                # Dynamic sizing but more constrained
-                dynamic_font_size = 110
-                if len(text) > 50: dynamic_font_size = 90
-                if len(text) > 80: dynamic_font_size = 75
-                
-                # Start from a fixed Y position well below fact indicators
-                # y_pos=650 is true middle zone to prevent overlap above/below
-                c_img = create_text_image(text, font_size=dynamic_font_size, color="white", y_pos=650)
-                c_clip = ImageClip(c_img).with_start(sentence_start).with_duration(end - sentence_start).with_position((0, 0))
-                
-                # Add AGGRESSIVE POP-IN effect (Rapid scale from 0.4 to 1.0)
-                c_clip = c_clip.with_effects([
-                    vfx.Resize(lambda t: min(1.0, 0.4 + 6.0 * t) if t < 0.1 else 1.0)
-                ])
-                
-                word_clips.append(c_clip)
-                current_sentence = []
-                sentence_start = None
+            # Bounce scale effect
+            c_clip = c_clip.with_effects([vfx.Resize(bounce_scale)])
+            word_clips.append(c_clip)
 
         # 3. FINAL REVEAL OVERLAY
+        reveal_y = SAFE_MID + 100
         if mode == "FACTS":
-            reveal_img = create_text_image("LIKE & SUB TO REVEAL! 👇", font_size=110, color="orange", y_pos=900)
+            reveal_img = create_text_image("Comment your guess... answer below 👇", font_size=110, color="orange", y_pos=reveal_y)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
         elif mode.startswith("NEWS"):
-            reveal_img = create_text_image("STAY TUNED FOR MORE! 🚨", font_size=110, color="red", y_pos=900)
+            reveal_img = create_text_image("STAY TUNED FOR MORE! 🚨", font_size=110, color="red", y_pos=reveal_y)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
         else: # STORY mode
-            # Story Mode Outro
-            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=120, color="yellow", y_pos=850)
+            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=120, color="yellow", y_pos=reveal_y)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
 
-    # Final Composition - Force (1080, 1920) size
-    final_video = CompositeVideoClip([bg_clip, dark_overlay, bg_bar, progress_bar] + persistent_clips + header_clips + word_clips, size=(1080, 1920))
+    # 3. Performance Optimization: Pre-flatten static layers
+    static_layer = CompositeVideoClip(
+        [bg_clip, dark_overlay, add_pattern_interrupt(duration), bg_bar],
+        size=(1080, 1920)
+    ).with_duration(duration)
+
+    final_video = CompositeVideoClip(
+        [static_layer, progress_bar] + 
+        persistent_clips + header_clips + word_clips, 
+        size=(1080, 1920)
+    )
+    
+    # Loopability Zoom Effect
+    final_video = final_video.with_effects([
+        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
+    ])
     
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -306,9 +321,10 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         audio_clip = CompositeAudioClip([audio_clip, music])
     
     final_video = final_video.with_audio(audio_clip)
+    final_video = final_video.with_fps(24).with_duration(duration)
     
     print(f"[Log] Exporting polished eye-candy short: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="6000k")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="6000k", threads=4)
     
     return output_path
 
@@ -379,7 +395,7 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     
     random.shuffle(positions)
     num_to_place = min(len(positions), 90)
-    target_idx = random.randint(10, num_to_place - 1)
+    target_idx = random.randint(5, int(num_to_place * 0.7))
     target_pos = positions[target_idx]
     
     def prepare_sticker(path, width=110):
@@ -391,13 +407,22 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     for i in range(num_to_place):
         pos = positions[i]
         if i == target_idx:
-            target_sticker = prepare_sticker(target_path, width=105).with_position(pos).with_start(0)
+            # CAMOUFLAGE: Slight transparency + perfectly centered + target blur
+            target_sticker = prepare_sticker(target_path, width=105)\
+                .with_position(pos)\
+                .with_start(0)\
+                .with_opacity(0.92)\
+                .with_effects([vfx.GaussianBlur(0.8)]) # Harder to find
         else:
             obj_path = object_paths[i % num_distractors]
             obj_clip = prepare_sticker(obj_path, width=115).with_position(pos).with_start(0)
+            
+            # Pattern interrupts/noise: Slight mirror and rotate
             if random.random() > 0.5: obj_clip = obj_clip.with_effects([vfx.MirrorX()])
             rotation = random.randint(-30, 30)
             if rotation != 0: obj_clip = obj_clip.with_effects([vfx.Rotate(rotation)])
+            
+            # Distractors CLEAR to mask the target
             distractor_clips.append(obj_clip)
 
     # 5. Result Pop-up & Highlight
@@ -410,8 +435,6 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
                        .with_duration(3.0)
                        .with_position((target_pos[0]-35, target_pos[1]-35))
                        .with_effects([vfx.CrossFadeIn(0.2)]))
-    # 5. Result Pop-up (at the end)
-    reveal_start = audio_clip.duration
     
     found_text_img = create_text_image("FOUND IT! 🎯", font_size=120, color="lime", stroke_color="black", y_pos=900)
     found_clip = (ImageClip(found_text_img)
@@ -433,9 +456,10 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
         audio_clip = CompositeAudioClip([audio_clip, music])
     
     final_video = final_video.with_audio(audio_clip)
+    final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting EXTREME Challenge: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="8000k")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="8000k", threads=4)
     
     return output_path
 
@@ -477,19 +501,25 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
     dark2 = ColorClip(size=(1080, 960), color=(0,0,0)).with_opacity(0.4).with_duration(duration).with_position((0, 960))
 
     # Header
-    header_img = create_text_image("WOULD YOU RATHER?", font_size=90, color="yellow", y_pos=100)
+    header_img = create_text_image("WOULD YOU RATHER?", font_size=90, color="yellow", y_pos=SAFE_TOP)
     top_header = ImageClip(header_img).with_start(0).with_duration(duration)
 
-    # Options Text
+    # Options Text with motion
     opt_a_img = create_text_image(wyr_data.get("option_a", "A").upper(), font_size=80, color="white", y_pos=450)
-    opt_a_clip = ImageClip(opt_a_img).with_start(0).with_duration(duration).with_effects([vfx.CrossFadeIn(0.5)])
+    opt_a_clip = ImageClip(opt_a_img).with_start(0).with_duration(duration).with_effects([
+        vfx.CrossFadeIn(0.5),
+        vfx.Resize(lambda t: 1 + 0.02 * np.sin(t * 3))
+    ])
     
     opt_b_img = create_text_image(wyr_data.get("option_b", "B").upper(), font_size=80, color="white", y_pos=1400)
-    opt_b_clip = ImageClip(opt_b_img).with_start(0).with_duration(duration).with_effects([vfx.CrossFadeIn(0.5)])
+    opt_b_clip = ImageClip(opt_b_img).with_start(0).with_duration(duration).with_effects([
+        vfx.CrossFadeIn(0.5),
+        vfx.Resize(lambda t: 1 + 0.02 * np.cos(t * 3))
+    ])
 
-    # "Comment your pick" CTA (shown after audio ends, where percentages used to be)
+    # "Comment your pick" CTA
     reveal_start = audio_clip.duration
-    cta_img = create_text_image("💬 COMMENT YOUR PICK!", font_size=90, color="yellow", y_pos=870, add_box=True)
+    cta_img = create_text_image("💬 COMMENT YOUR PICK!", font_size=90, color="yellow", y_pos=SAFE_MID + 100, add_box=True)
     cta_clip = ImageClip(cta_img).with_start(reveal_start).with_duration(3.0).with_effects([vfx.CrossFadeIn(0.3)])
 
     # Progress bar for the think time
@@ -506,9 +536,10 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
         audio_clip = CompositeAudioClip([audio_clip, music])
     
     final_video = final_video.with_audio(audio_clip)
+    final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting WYR short: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="8000k")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="8000k", threads=4)
     
     return output_path
 
@@ -543,54 +574,38 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.3).with_duration(duration)
 
     # 2. Reddit Header Overlay
-    reddit_tag_img = create_text_image("🟠 REDDIT STORY", font_size=65, color="white", y_pos=100, add_box=True)
+    reddit_tag_img = create_text_image("🟠 REDDIT STORY", font_size=65, color="white", y_pos=SAFE_TOP - 50, add_box=True)
     reddit_tag_clip = ImageClip(reddit_tag_img).with_start(0).with_duration(duration)
 
-    header_img = create_text_image(reddit_data.get("title", "r/TrueOffMyChest").upper(), font_size=80, color="orange", y_pos=250, add_box=True)
+    header_img = create_text_image(reddit_data.get("title", "r/TrueOffMyChest").upper(), font_size=80, color="orange", y_pos=SAFE_TOP + 100, add_box=True)
     post_header = ImageClip(header_img).with_start(0).with_duration(duration)
 
-    # 3. Dynamic Subtitles (Word-by-word or sentence)
+    # 3. Dynamic Subtitles (Word-by-word with Bounce)
     word_clips = []
     try:
         with open(subs_path, "r", encoding="utf-8") as f:
             subtitles = json.load(f)
             
-        current_sentence = []
-        sentence_start = None
-        
         for i, entry in enumerate(subtitles):
-            word = entry["word"]
-            if sentence_start is None:
-                sentence_start = entry["start"]
+            text = entry["word"].upper()
+            start = entry["start"]
+            c_img = create_text_image(text, font_size=120, color="white", y_pos=SAFE_MID)
+            c_dur = max(0.6, entry["duration"])
+            c_clip = ImageClip(c_img).with_start(start).with_duration(c_dur).with_position((0, 0))
             
-            current_sentence.append(word.upper())
-            is_end = any(p in word for p in [".", "!", "?", ","]) or len(current_sentence) > 5
-            
-            if is_end or i == len(subtitles) - 1:
-                text = " ".join(current_sentence)
-                end = entry["start"] + entry["duration"]
-                
-                # Dynamic sizing
-                dynamic_font_size = 110
-                if len(text) > 40: dynamic_font_size = 90
-                
-                # Render in center
-                c_img = create_text_image(text, font_size=dynamic_font_size, color="white", y_pos=850)
-                c_clip = ImageClip(c_img).with_start(sentence_start).with_duration(end - sentence_start).with_position((0, 0))
-                
-                # Pop-in effect
-                c_clip = c_clip.with_effects([
-                    vfx.Resize(lambda t: min(1.0, 0.8 + 2.0 * t) if t < 0.1 else 1.0)
-                ])
-                
-                word_clips.append(c_clip)
-                current_sentence = []
-                sentence_start = None
+            # Bounce scale effect
+            c_clip = c_clip.with_effects([vfx.Resize(bounce_scale)])
+            word_clips.append(c_clip)
     except Exception as e:
         print(f"[Warning] Failed to render Reddit subtitles: {e}")
 
     # Composition
-    final_video = CompositeVideoClip([bg_clip, dark_overlay, reddit_tag_clip, post_header] + word_clips, size=(1080, 1920))
+    final_video = CompositeVideoClip([bg_clip, dark_overlay, add_pattern_interrupt(duration), reddit_tag_clip, post_header] + word_clips, size=(1080, 1920))
+
+    # Loopability Zoom Effect
+    final_video = final_video.with_effects([
+        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
+    ])
 
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -598,9 +613,10 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
         audio_clip = CompositeAudioClip([audio_clip, music])
     
     final_video = final_video.with_audio(audio_clip)
+    final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting Reddit short: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="7000k")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="7000k", threads=4)
     
     return output_path
 
@@ -634,7 +650,7 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
     q_font = 85 if q_len < 40 else (75 if q_len < 80 else 65)
     
     q_text = trivia_data.get("question", "Question?").upper()
-    q_img = create_text_image(q_text, font_size=q_font, color="yellow", y_pos=150, add_box=True)
+    q_img = create_text_image(q_text, font_size=q_font, color="yellow", y_pos=SAFE_TOP, add_box=True)
     q_clip = ImageClip(q_img).with_start(0).with_duration(duration)
     
     # Calculate question height to avoid overlapping options
@@ -703,7 +719,12 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
     reveal_splash = create_text_image("CORRECT!", font_size=110, color="lime", y_pos=1650)
     splash_clip = ImageClip(reveal_splash).with_start(audio_clip.duration).with_duration(reveal_duration).with_effects([vfx.CrossFadeIn(0.2)])
     
-    final_video = CompositeVideoClip([bg_clip, dark_overlay, q_clip] + boxes + [timer_bg, timer_fg, ans_clip, splash_clip], size=(1080, 1920))
+    final_video = CompositeVideoClip([bg_clip, dark_overlay, add_pattern_interrupt(duration), q_clip] + boxes + [timer_bg, timer_fg, ans_clip, splash_clip], size=(1080, 1920))
+
+    # Loopability Zoom Effect
+    final_video = final_video.with_effects([
+        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
+    ])
 
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -713,7 +734,7 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
     final_video = final_video.with_audio(audio_clip)
     
     print(f"[Log] Exporting TRIVIA short: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="7000k")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="7000k", threads=4)
     
     return output_path
 
@@ -750,14 +771,19 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
     # instead of aggressive word-by-word popping
     
     # Quote
-    q_img = create_text_image(quote_text, font_size=75, color="white", y_pos=450)
+    q_img = create_text_image(quote_text, font_size=75, color="white", y_pos=SAFE_MID - 200)
     q_clip = ImageClip(q_img).with_start(0).with_duration(duration).with_effects([vfx.CrossFadeIn(2.0)])
     
     # Author
-    a_img = create_text_image(author_text, font_size=65, color="gray", y_pos=1400)
+    a_img = create_text_image(author_text, font_size=65, color="gray", y_pos=SAFE_BOTTOM - 100)
     a_clip = ImageClip(a_img).with_start(1.0).with_duration(duration - 1.0).with_effects([vfx.CrossFadeIn(2.0)])
     
-    final_video = CompositeVideoClip([bg_clip, dark_overlay, q_clip, a_clip], size=(1080, 1920))
+    final_video = CompositeVideoClip([bg_clip, dark_overlay, add_pattern_interrupt(duration), q_clip, a_clip], size=(1080, 1920))
+
+    # Loopability Zoom Effect
+    final_video = final_video.with_effects([
+        vfx.Resize(lambda t: 1 + 0.03 * np.sin(t / duration * np.pi))
+    ])
 
     if music_path and os.path.exists(music_path):
         bg_music_clip = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
@@ -765,9 +791,10 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
         audio_clip = CompositeAudioClip([audio_clip, bg_music_clip])
     
     final_video = final_video.with_audio(audio_clip)
+    final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting QUOTE short: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="6000k")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="6000k", threads=4)
     
     return output_path
 
@@ -869,6 +896,97 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     
     print(f"[Log] Exporting ODD_ONE_OUT short: {output_path}")
     final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="5000k")
+    
+    return output_path
+
+def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, video_paths, output_path="sound_short.mp4", music_path=None):
+    """
+    Composes a 'Guess the Sound' challenge video.
+    """
+    # 1. Load Audio
+    voice_clip = AudioFileClip(audio_path)
+    sfx_clip = AudioFileClip(sfx_path).with_volume_scaled(1.5)
+    
+    # We need to find the gap in the voice for the SFX
+    # The script is: [Hook] ... [Reveal]
+    with open(subs_path, "r", encoding="utf-8") as f:
+        subtitles = json.load(f)
+    
+    # Simple heuristic: The first chunk is the hook, the rest is the reveal
+    hook_end = subtitles[0]["start"] + subtitles[0]["duration"]
+    reveal_start = subtitles[1]["start"] if len(subtitles) > 1 else voice_clip.duration
+    
+    # The gap should be around 5s for the challenge
+    sfx_start = hook_end + 0.5
+    sfx_duration = min(5.0, sfx_clip.duration)
+    sfx_clip = sfx_clip.with_duration(sfx_duration).with_start(sfx_start)
+    
+    duration = voice_clip.duration + 2.0
+    
+    # 2. Background
+    if isinstance(video_paths, str): video_paths = [video_paths]
+    try:
+        bg_clip = VideoFileClip(video_paths[0])
+        n_loops = int(np.ceil(duration / bg_clip.duration)) if bg_clip.duration > 0 else 1
+        bg_clip = bg_clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(duration)
+        bg_clip = cover_resize(bg_clip, (1080, 1920))
+        bg_clip = bg_clip.with_effects([vfx.Resize(lambda t: 1 + 0.01 * np.sin(t * 2))])
+    except Exception as e:
+        bg_clip = ColorClip(size=(1080, 1920), color=(10, 10, 20)).with_duration(duration)
+
+    dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.4).with_duration(duration)
+    
+    # 3. UI Elements
+    header_img = create_text_image("GUESS THE SOUND! 🎧", font_size=100, color="yellow", y_pos=SAFE_TOP)
+    top_header = ImageClip(header_img).with_start(0).with_duration(duration)
+    
+    footer_img = create_text_image("COMMENT YOUR GUESS 👇", font_size=65, color="white", y_pos=SAFE_BOTTOM)
+    bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
+    
+    # 4. Timer Bar (During sfx)
+    bar_height = 25
+    timer_bg = ColorClip(size=(800, bar_height), color=(50, 50, 50)).with_start(sfx_start).with_duration(sfx_duration).with_position(("center", 1600))
+    timer_fg = ColorClip(size=(800, bar_height), color=(255, 0, 0)).with_start(sfx_start).with_duration(sfx_duration).with_position(("center", 1600))
+    timer_fg = timer_fg.with_effects([vfx.Resize(lambda t: (max(1, int(800 * (1 - t / sfx_duration))), bar_height))])
+    
+    # 5. Reveal Object
+    reveal_audio_start = reveal_start 
+    try:
+        obj_clip = ImageClip(obj_path).resized(width=600).with_start(reveal_audio_start).with_duration(duration - reveal_audio_start).with_position(("center", "center"))
+        obj_clip = obj_clip.with_effects([vfx.Resize(bounce_scale)])
+    except:
+        obj_clip = ColorClip(size=(1,1), color=(0,0,0,0)).with_duration(0.1)
+
+    # 6. Captions
+    word_clips = []
+    for entry in subtitles:
+        text = entry["word"].upper()
+        c_img = create_text_image(text, font_size=110, color="cyan", y_pos=SAFE_MID + 300)
+        c_dur = max(0.6, entry["duration"])
+        c_clip = ImageClip(c_img).with_start(entry["start"]).with_duration(c_dur).with_position((0, 0)).with_effects([vfx.Resize(bounce_scale)])
+        word_clips.append(c_clip)
+
+    # Progress Bar (Urgency)
+    bg_bar = ColorClip(size=(1080, 20), color=(40, 40, 40)).with_duration(duration).with_position(("center", 1880))
+    progress_bar = ColorClip(size=(1080, 20), color=(255, 255, 0)).with_duration(duration).with_position(("center", 1880))
+    progress_bar = progress_bar.with_effects([
+        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), 20)),
+        vfx.MultiplyColor(lambda t: (1, 1 - t/duration, 0))
+    ])
+
+    final_audio = CompositeAudioClip([voice_clip, sfx_clip])
+    if music_path and os.path.exists(music_path):
+        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)]).with_volume_scaled(0.15)
+        final_audio = CompositeAudioClip([final_audio, music])
+
+    final_video = CompositeVideoClip(
+        [bg_clip, dark_overlay, bg_bar, progress_bar, top_header, bottom_footer, timer_bg, timer_fg, obj_clip] + word_clips,
+        size=(1080, 1920)
+    )
+    
+    final_video = final_video.with_audio(final_audio).with_duration(duration).with_fps(24)
+    print(f"[Log] Exporting GUESS SOUND challenge: {output_path}")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate="7000k", threads=4)
     
     return output_path
 
