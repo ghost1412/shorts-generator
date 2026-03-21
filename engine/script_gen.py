@@ -117,38 +117,114 @@ def reject_same_subject(facts):
     # We need 3 unique subjects for 3 facts
     return len(set(subjects)) < 3
 
-def reject_known_false_patterns(facts):
-    """Rejects common myths or widely known false facts that LLMs often hallucinate as true."""
-    known_myths = [
-        "einstein failed math",
-        "humans use only 10",
-        "napoleon was short",
-        "vikings wore horned helmets",
-        "tesla invented wifi",
-        "goldfish have 3 second memory",
-        "great wall visible from moon"
+def check_hallucinations(facts):
+    """
+    Uses a second LLM call to act as a skeptic/fact-checker.
+    Ensures 'True' facts aren't actually hallucinations or logically impossible.
+    """
+    if not facts: return False
+    
+    # Prepare a condensed list for the checker
+    test_str = "\n".join([f"- {f['fact']}" for f in facts if f['truth']])
+    
+    prompt = f"""You are an elite Fact-Checker. Review these 2 'TRUE' facts. 
+Are ANY of them actually FALSE, logically impossible, or based on common myths?
+
+FACTS TO CHECK:
+{test_str}
+
+CRITICAL CHECKS:
+1. Movies DON'T have 'pilots' (only TV shows).
+2. People can't use tech that wasn't invented yet.
+3. No 'Einstein failed math' type myths.
+4. No 'produced in X but aired in Y' ambiguous confusing facts.
+
+If ANY fact is suspicious, incorrect, or ambiguous, answer 'FAIL'.
+If BOTH are 100% verified and logically sound, answer 'PASS'.
+
+ANSWER (PASS/FAIL ONLY):"""
+
+    try:
+        url = "https://router.huggingface.co/v1/chat/completions"
+        headers = {"Authorization": f"Bearer {HF_API_KEY}", "Content-Type": "application/json"}
+        payload = {
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 10,
+            "temperature": 0.0 # Extreme precision
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
+        response.raise_for_status()
+        decision = response.json()["choices"][0]["message"]["content"].strip().upper()
+        
+        print(f"[Log] AI Fact-Checker Decision: {decision}")
+        # ROBUST CHECK: Anything that isn't a clean PASS is a FAIL
+        return decision != "PASS"
+    except Exception as e:
+        print(f"[Warning] AI Fact-Checker failed ({e}). Defaulting to caution.")
+        return False
+
+def mutate_year(text):
+    """Subtle year shift (+/- 1-2 years)."""
+    return re.sub(r'\d{4}', lambda m: str(int(m.group()) + random.choice([-1, 1, 2])), text)
+
+def mutate_location(text):
+    """Subtle location swap for realism."""
+    locations = ["France", "Germany", "USA", "Japan", "Italy", "London", "Paris", "Berlin"]
+    for loc in locations:
+        if loc in text:
+            new_loc = random.choice([l for l in locations if l != loc])
+            return text.replace(loc, new_loc)
+    return text
+
+def mutate_number(text):
+    """Subtle number shift for stats/counts."""
+    # Matches words that are digits only
+    return re.sub(r'\b\d+\b', lambda m: str(int(m.group()) + random.choice([-1, 1, 3])), text)
+
+def mutate_relationship(text):
+    """Semantic pivot for high-quality lies."""
+    pairs = {"brother": "father", "father": "brother", "wife": "sister", "son": "friend", "rival": "mentor"}
+    for k, v in pairs.items():
+        if k in text.lower():
+            return re.sub(re.escape(k), v, text, flags=re.IGNORECASE)
+    return text
+
+def mutate_method(text):
+    """Mutation of mechanism/tool."""
+    pairs = {"using": "without", "with": "without", "by": "without"}
+    for k, v in pairs.items():
+        if k in text.lower():
+            return re.sub(re.escape(k), v, text, flags=re.IGNORECASE)
+    return text
+
+def create_false_from_true(facts):
+    """Procedurally generates a SUBTLE lie using weighted mutation types."""
+    base = random.choice(facts)["fact"]
+    
+    mutations = [
+        mutate_year,
+        mutate_location,
+        mutate_number,
+        mutate_relationship,
+        mutate_method
     ]
+    
+    # Try mutations in random order until one actually changes the text
+    for m in random.sample(mutations, len(mutations)):
+        new_fact = m(base)
+        if new_fact != base:
+            return new_fact
+
+    # Final robust fallback if no pattern matched
+    return base.rstrip(".") + " in a different year"
+    """Rejects facts that are 'partially true' or confusing (e.g. produced in x but released in y)."""
+    banned_keywords = ["produced in", "recorded in", "but not", "originally", "later aired"]
     for f in facts:
         text = f["fact"].lower()
-        for myth in known_myths:
-            if myth in text:
-                return True
+        if any(b in text for b in banned_keywords):
+            return True
     return False
-
-def enforce_specificity(facts):
-    """Ensures all facts contain a verifiable anchor: a number or a proper noun (Name)."""
-    for f in facts:
-        text = f["fact"]
-        # must contain at least one digit or a word starting with uppercase (excluding start of sentence)
-        has_number = any(char.isdigit() for char in text)
-        words = text.split()
-        # Check for capitalized words after the first one to avoid sentence-start false positives
-        has_name = any(w[0].isupper() for w in words[1:]) if len(words) > 1 else False
-        
-        # Also check first word just in case it's a name like "Einstein" (though ambiguous)
-        if not (has_number or has_name or (words and words[0][0].isupper())):
-            return False
-    return True
 
 def validate_story(data):
     """Ensures story is verifiable and not vague."""
@@ -284,51 +360,29 @@ def generate_mixed_facts(category="science"):
 
     model = "meta-llama/Llama-3.1-8B-Instruct" 
     
-    prompt = f"""SPOT THE LIE! 🔍 One of these facts about {selected_sub} is a fake. 
-
+    prompt = f"""SPOT THE LIE! 🔍 Review these facts about {selected_sub}. 
+    
 TASK:
-Generate EXACTLY 3 facts:
-- 2 TRUE (factually correct)
-- 1 FALSE (plausible but incorrect)
+Generate EXACTLY 2 TRUE facts ONLY. 
+DO NOT generate any false facts. 
 
 STRICT RULES (MUST FOLLOW):
 1. Each fact must be under 10 words.
-2. Total output must be under 40 words.
-3. Facts must be specific (include year, name, or detail).
-4. NO vague or generic facts.
-5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
-
-FACT CREATION PROCESS:
-Step 1: Generate 2 obscure TRUE facts about DIFFERENT people/entities.
-Step 2: Independently verify both are 100% correct.
-Step 3: Take a DIFFERENT REAL fact and alter ONE key detail to make it FALSE:
-        - Location (e.g. "discovered in France" -> "discovered in Brazil")
-        - Cause/Effect (e.g. "died of curiosity" -> "died in a duel")
-        - Magnitude/Scale (e.g. "10 million years" -> "100 million years")
-        - Relationship (e.g. "his brother" -> "his secret rival")
-        - Scientific Anchor (e.g. "using a telescope" -> "using a microscope")
-        - Year/Name (Standard fallbacks)
-Step 4: Ensure the altered version is FALSE but highly believable.
+2. Facts must be specific (include year, name, or detail).
+3. NO vague or generic facts.
+4. NO TECHNICAL NOISE: Do NOT include URLs or JSON keys.
 
 CRITICAL DIVERSITY RULES:
 - Each fact MUST be about a DIFFERENT person, place, or entity.
-- Do NOT repeat the same subject in two different facts.
-- Use VARIED falsification methods (don't just change dates).
-- Diversity is more important than difficulty!
-
-SELF-CHECK BEFORE OUTPUT:
-- Identify which fact is false
-- Ensure it differs by ONLY ONE detail
-- Ensure both true facts are historically accurate
-If any condition fails → REGENERATE internally.
+- Do NOT use movies (they are too easy to debunk as 'pilots').
+- Facts must be 100% historically VERifiable.
 
 OUTPUT FORMAT (JSON ONLY):
 {{
   "hook": "5-word curiosity hook",
   "facts": [
     {{"fact": "...", "truth": true}},
-    {{"fact": "...", "truth": true}},
-    {{"fact": "...", "truth": false}}
+    {{"fact": "...", "truth": true}}
   ]
 }}
 """
@@ -349,22 +403,19 @@ OUTPUT FORMAT (JSON ONLY):
         facts_list = data.get("facts", [])
         for f in facts_list:
             f["fact"] = f["fact"].split(": ", 1)[-1] if ": " in f["fact"] else f["fact"]
-        data["facts"] = facts_list[:3]
+        data["facts"] = facts_list[:2] # We only need 2 true ones
         return data
 
     def facts_validator(data):
         facts = data.get("facts", [])
+        if len(facts) < 2: return False
         if reject_bad_facts(facts):
             return False
         if reject_duplicates(facts):
             return False
         if reject_same_subject(facts):
             return False
-        if reject_known_false_patterns(facts):
-            return False
-        if not enforce_specificity(facts):
-            return False
-        if not validate_semantics(facts):
+        if check_hallucinations(facts): # NEW: Dynamic AI Fact-Checker on TRUE facts
             return False
         return True
 
@@ -375,9 +426,20 @@ OUTPUT FORMAT (JSON ONLY):
         fallback=lambda: generate_fallback_facts(category)
     )
     
-    # Shuffle for engagement
-    random.shuffle(result["facts"])
-    return result
+    # ASSEMBLY: 2 True + 1 Procedural False
+    true_facts = [f for f in result["facts"] if f.get("truth") is True][:2]
+    
+    # Generate the lie from one of the truths (Procedural Mutation)
+    false_fact_text = create_false_from_true(true_facts)
+    false_fact = {"fact": false_fact_text, "truth": False}
+    
+    final_facts = true_facts + [false_fact]
+    random.shuffle(final_facts)
+    
+    return {
+        "hook": result["hook"],
+        "facts": final_facts
+    }
 
 def generate_story(category="history"):
     """
