@@ -563,7 +563,7 @@ Format as JSON ONLY:
             wyr["percent_b"] = 100 - wyr.get("percent_a", 50)
         return wyr
 
-    return with_retry(llm_call, validate_wyr)
+    return with_best_of_n(llm_call, validate_wyr, n=3)
 
 def generate_reddit_story(category="general"):
     """
@@ -618,7 +618,7 @@ JSON Structure:
         output = response.json()["choices"][0]["message"]["content"]
         return robust_json_parse(output)
 
-    return with_retry(llm_call, validate_reddit)
+    return with_best_of_n(llm_call, validate_reddit, n=3)
 
 def generate_trivia(category="general knowledge"):
     """
@@ -673,7 +673,7 @@ Format as JSON ONLY:
         output = response.json()["choices"][0]["message"]["content"]
         return robust_json_parse(output)
 
-    return with_retry(llm_call, validate_trivia)
+    return with_best_of_n(llm_call, validate_trivia, n=3)
 
 def generate_quote(category="stoic"):
     """
@@ -727,7 +727,7 @@ JSON Structure:
         output = response.json()["choices"][0]["message"]["content"]
         return robust_json_parse(output)
 
-    return with_retry(llm_call, validate_quote)
+    return with_best_of_n(llm_call, validate_quote, n=3)
 def generate_funny_news(category="general", tone="funny"):
     """
     Fetches REAL news from RSS feeds, then uses LLM to rewrite in the chosen tone.
