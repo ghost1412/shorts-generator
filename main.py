@@ -8,9 +8,9 @@ from engine.utils import decrypt_secret
 
 load_dotenv()
 
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news
+from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_best_of_3
 from engine.voice_gen import generate_voice
-from engine.media_gen import download_background_video
+from engine.media_gen import download_background_video, download_image, download_sfx
 from engine.video_gen import create_shorts_video
 from engine.storage import upload_to_storage
 
@@ -23,7 +23,7 @@ VIBE_VOICE_MAP = {
 
 def main():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
@@ -56,8 +56,8 @@ def main():
             mode = args.mode
         else:
             mode = random.choices(
-                ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS"],
-                weights=[20, 0, 0, 10, 20, 5, 10, 5, 15, 15]
+                ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND"],
+                weights=[15, 0, 0, 10, 15, 5, 10, 5, 15, 15, 10]
             )[0]
         print(f"[Log] Mode selected: {mode}", flush=True)
         
@@ -67,20 +67,19 @@ def main():
         print(f"[Log] Generating content for category: {category}...", flush=True)
         
         if mode == "FACTS":
-            facts_res = generate_mixed_facts(category)
+            facts_res = generate_best_of_3(lambda: generate_mixed_facts(category))
             hook = facts_res["hook"]
             facts_data = facts_res["facts"]
             
             # Construct the script: Hook -> Challenge Intro -> Fact 1, 2, 3 -> Loop Outro
-            # RE retention guide: Rapid-fire 15s format.
             full_script = f"{hook} ... One of these facts is a LIE! ... "
             full_script += f"1: {facts_data[0]['fact']} ... "
             full_script += f"2: {facts_data[1]['fact']} ... "
             full_script += f"3: {facts_data[2]['fact']} ... "
-            # Infinite Loop Trick: End on a cliffhanger that loops back to the start
-            full_script += "The real answer is ... ... Wait! Did you spot the fake?"
+            # Improved Viral Loop: Force replay
+            full_script += "The real answer is ... wait... go back and check again."
         elif mode == "STORY":
-            story_data = generate_story(category)
+            story_data = generate_best_of_3(lambda: generate_story(category))
             if not story_data: return
             
             # Construct script with strategic viral pauses
@@ -124,17 +123,22 @@ def main():
             facts_data = []
             print(f"[Log] ODD_ONE_OUT Selected")
         elif mode == "NEWS":
-            news_data = generate_funny_news(category, tone="funny")
+            news_data = generate_best_of_3(lambda: generate_funny_news(category, tone="funny"))
             news_source = news_data.get('source', 'Unknown')
             full_script = f"{news_data['hook']} ... {news_data['story']}"
             facts_data = []
             print(f"[Log] NEWS (funny) Data: {news_data}")
         elif mode == "NEWS_SERIOUS":
-            news_data = generate_funny_news(category, tone="serious")
+            news_data = generate_best_of_3(lambda: generate_funny_news(category, tone="serious"))
             news_source = news_data.get('source', 'Unknown')
             full_script = f"{news_data['hook']} ... {news_data['story']}"
             facts_data = []
             print(f"[Log] NEWS_SERIOUS Data: {news_data}")
+        elif mode == "GUESS_SOUND":
+            sound_data = generate_best_of_3(lambda: generate_sound_challenge(category))
+            full_script = f"{sound_data['hook']} ... ... ... ... ... {sound_data['reveal_text']}"
+            facts_data = [] # Not used
+            print(f"[Log] GUESS_SOUND Data: {sound_data}")
 
     print(f"[Log] Full Script: \"{full_script}\"", flush=True)
     
@@ -152,7 +156,9 @@ def main():
     selected_voice = VIBE_VOICE_MAP.get(args.vibe, "en-US-AriaNeural")
     print(f"[Log] Selected voice for '{args.vibe}' vibe: {selected_voice}")
     
-    audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file, voice_name=selected_voice)
+    # Voice CTA only for interactive/game modes
+    add_cta = mode in ["FACTS", "WYR", "FIND_IT", "ODD_ONE_OUT", "TRIVIA", "GUESS_SOUND"]
+    audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file, voice_name=selected_voice, add_cta=add_cta)
     
     if args.video_id and args.user_id:
         report_status(args.video_id, args.user_id, "In-Progress Video", "Processing", None, mode)
@@ -227,12 +233,24 @@ def main():
             return
     elif mode in ("NEWS", "NEWS_SERIOUS"):
         # Use the search_term from the news data for relevant backgrounds
-        search_query = news_data.get('search_term', 'breaking news broadcast') if 'news_data' in dir() else 'breaking news broadcast'
+        search_query = news_data.get('search_term', 'breaking news broadcast') if 'news_data' in locals() else 'breaking news broadcast'
         bg_filename = os.path.join(session_dir, "bg_news.mp4")
         path = download_background_video(search_query, output_path=bg_filename)
         if not path:
             path = download_background_video("news studio broadcast", output_path=os.path.join(session_dir, "bg_news_fallback.mp4"))
         if path: bg_video_paths.append(path)
+    elif mode == "GUESS_SOUND":
+        bg_filename = os.path.join(session_dir, "bg_sound.mp4")
+        path = download_background_video("satisfying sand", output_path=bg_filename)
+        if path: bg_video_paths.append(path)
+        
+        # Download object image for reveal
+        obj_filename = os.path.join(session_dir, "reveal_obj.png")
+        download_image(sound_data["object"], output_path=obj_filename)
+        
+        # Download sound effect
+        sfx_filename = os.path.join(session_dir, "challenge_sfx.mp3")
+        download_sfx(sound_data["sound_query"], output_path=sfx_filename)
 
     if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
         print("[Error] Failed to download any background videos.")
@@ -311,6 +329,19 @@ def main():
             output_filename,
             music_path=bg_music
         )
+    elif mode == "GUESS_SOUND":
+        from engine.video_gen import create_sound_challenge_video
+        sfx_path = os.path.join(session_dir, "challenge_sfx.mp3")
+        obj_path = os.path.join(session_dir, "reveal_obj.png")
+        final_video = create_sound_challenge_video(
+            audio_path,
+            subs_path,
+            sfx_path,
+            obj_path,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music
+        )
     else:
         final_video = create_shorts_video(
             audio_path, 
@@ -350,6 +381,8 @@ def main():
         source_credit = news_data.get('source', '')
         if source_credit:
             metadata['description'] = metadata.get('description', '') + f"\n\n📰 Source: {source_credit}"
+    elif mode == "GUESS_SOUND":
+        metadata = generate_viral_metadata(f"Can you guess this sound? It's a {sound_data['object']}", mode="STORY", category=category)
     else:
         # For STORY or other modes
         story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"

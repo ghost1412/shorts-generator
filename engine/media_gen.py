@@ -197,6 +197,43 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
             
     return assets
 
+SFX_LIBRARY = {
+    "lion": "https://archive.org/download/SoundEffectsVolume1/01%20Lions%20Roaring.mp3",
+    "jet": "https://archive.org/download/SoundEffectsVolume1/02%20Jet%20Take-Off.mp3",
+    "police": "https://archive.org/download/SoundEffectsVolume1/10%20Police%20Siren.mp3",
+    "car crash": "https://archive.org/download/SoundeffectsInStereo/05%20Car%20Crash.mp3",
+    "thunder": "https://archive.org/download/SoundeffectsVol.1/04%20Thunder.mp3",
+    "rain": "https://archive.org/download/SoundeffectsVol.1/02%20Rain%20In%20Woods.mp3"
+}
+
+def download_sfx(query, output_path="assets/sfx.mp3"):
+    """
+    Downloads a sound effect from the curated library or a fallback.
+    """
+    query_lower = query.lower()
+    selected_url = None
+    
+    # Try to find a match in the library
+    for key in SFX_LIBRARY:
+        if key in query_lower:
+            selected_url = SFX_LIBRARY[key]
+            break
+            
+    if not selected_url:
+        print(f"[Warning] No SFX found for '{query}', using fallback (Rain)")
+        selected_url = SFX_LIBRARY["rain"]
+        
+    try:
+        print(f"[Log] Downloading SFX: {selected_url}")
+        content = requests.get(selected_url, timeout=20).content
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "wb") as f:
+            f.write(content)
+        return output_path
+    except Exception as e:
+        print(f"[Error] Failed to download SFX: {e}")
+        return None
+
 if __name__ == "__main__":
     # download_background_video("A day on Venus is longer than a year on Venus.")
     print(get_game_assets(3))

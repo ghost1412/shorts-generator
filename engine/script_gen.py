@@ -51,6 +51,168 @@ def get_sub_topic(category):
     }
     return random.choice(sub_topics.get(category, [category]))
 
+def validate_semantics(facts):
+    """
+    Ensures:
+    - Exactly 2 true, 1 false
+    - False fact differs by ONLY one detail
+    """
+    if not facts or len(facts) != 3:
+        return False
+
+    truths = [f for f in facts if f.get("truth") is True]
+    falses = [f for f in facts if f.get("truth") is False]
+
+    if len(truths) != 2 or len(falses) != 1:
+        return False
+
+    # Heuristic: false fact should be very similar to one true fact
+    false_fact = falses[0]["fact"]
+
+    similarity_hits = 0
+    for t in truths:
+        # crude similarity check
+        common_words = set(false_fact.split()) & set(t["fact"].split())
+        if len(common_words) >= 3:
+            similarity_hits += 1
+
+    return similarity_hits >= 1
+
+def reject_bad_facts(facts):
+    """Filters out vague or generic facts."""
+    if not facts: return True
+    for f in facts:
+        fact = f["fact"].lower()
+        # reject vague facts
+        if len(fact.split()) < 4:
+            return True
+        # reject generic patterns
+        if any(v in fact for v in ["some", "many", "most people"]):
+            return True
+    return False
+
+def validate_story(data):
+    """Ensures story is verifiable and not vague."""
+    story = data.get("story", "").lower()
+    if not story: return False
+    # must contain anchor (digit/year/number)
+    if not any(char.isdigit() for char in story):
+        return False
+    # must not be vague
+    vague_words = ["someone", "somewhere", "many people"]
+    if any(v in story for v in vague_words):
+        return False
+    return True
+
+def validate_wyr(data):
+    """Ensures WYR options are unique and balanced."""
+    a = data.get("option_a", "")
+    b = data.get("option_b", "")
+    if not a or not b or a == b:
+        return False
+    # must be different enough (heuristic)
+    if len(set(a.split()) & set(b.split())) > 5:
+        return False
+    return True
+
+def validate_trivia(data):
+    """Ensures trivia has unique options and correct answer mapping."""
+    opts = [data.get("opt_a"), data.get("opt_b"), data.get("opt_c")]
+    if not all(opts) or len(set(opts)) != 3:
+        return False
+    # answer must match one option exactly
+    if data.get("answer") not in opts:
+        return False
+    return True
+
+def validate_reddit(data):
+    """Ensures Reddit story has tension and a question for judgment."""
+    story = data.get("story", "").lower()
+    if not story: return False
+    if "?" not in story:
+        return False
+    if not any(x in story for x in ["am i", "was i", "should i"]):
+        return False
+    return True
+
+def validate_quote(data):
+    """Ensures quote has sufficient depth and isn't a cliché."""
+    quote = data.get("quote", "")
+    if not quote or len(quote.split()) < 8:
+        return False
+    banned = ["believe in yourself", "never give up", "follow your dreams"]
+    if any(b in quote.lower() for b in banned):
+        return False
+    return True
+
+def validate_news(data):
+    """Ensures news story isn't vague and has minimum factual substance."""
+    story = data.get("story", "").lower()
+    if not story: return False
+    # must not hallucinate vague stuff
+    vague_sources = ["some reports", "many believe", "sources say", "it is said"]
+    if any(x in story for x in vague_sources):
+        return False
+    # must have entity/substance (basic heuristic: > 8 words)
+    if len(story.split()) < 8:
+        return False
+    return True
+
+def validate_sound_challenge(data):
+    """Ensures the object and sound prompt are present."""
+    return bool(data.get("object") and data.get("sound_query"))
+
+def with_retry(func, validator, max_retries=2, fallback=None):
+    """Generic retry wrapper for LLM calls with custom validation."""
+    for attempt in range(max_retries + 1):
+        try:
+            result = func(attempt)
+            if validator(result):
+                return result
+            print(f"⚠️ Attempt {attempt+1}: Validation failed. Retrying...")
+        except Exception as e:
+            print(f"💡 Attempt {attempt+1} failed ({type(e).__name__}: {e})")
+    
+    if fallback:
+        print("🚨 All retries failed. Using fallback.")
+        return fallback()
+    raise RuntimeError("LLM generation failed validation after all retries.")
+
+def generate_best_of_3(generator):
+    """
+    Runs a generator 3 times and picks the one with the highest 'viral score'
+    (based on length and punchiness/exclamation).
+    """
+    results = []
+    for _ in range(3):
+        try:
+            results.append(generator())
+        except:
+            pass
+    
+    if not results:
+        return generator() # Final attempt if all failed
+        
+    def score(x):
+        text = str(x)
+        # Higher score for longer text (substance) + extra points for punchy punctuation
+        return len(text) + 12 * text.count("!") + 8 * text.count("?")
+    
+    best = max(results, key=score)
+    print(f"[Log] Best of 3 selected (Score: {score(best)})")
+    return best
+
+def generate_fallback_facts(category):
+    """Safely returns hardcoded obscure facts if LLM fails."""
+    return {
+        "hook": "Spot the lie instantly 🔍",
+        "facts": [
+            {"fact": "First webcam watched coffee pot", "truth": True},
+            {"fact": "IBM Simon debuted in 1992", "truth": True},
+            {"fact": "First mouse invented in 1980", "truth": False}
+        ]
+    }
+
 def generate_mixed_facts(category="science"):
     """
     Generates 2 True facts and 1 False fact using LLM with robust fallbacks.
@@ -72,88 +234,81 @@ def generate_mixed_facts(category="science"):
     model = "meta-llama/Llama-3.1-8B-Instruct" 
     
     prompt = f"""SPOT THE LIE! 🔍 One of these facts about {selected_sub} is a fake. 
-Generate three short, shocking, and OBSCURE facts. 
-Exactly two must be true, and one must be a FALSE statement that sounds true. 
-DO NOT produce three true facts. The "truth": false entry must be a demonstrably incorrect statement.
 
-RETENTION REQUIREMENTS (CRITICAL):
-1. TOTAL SCRIPT LENGTH: Must be under 40 words.
-2. INDIVIDUAL FACTS: Must be under 10 words each. Rapid-fire style.
-3. NO FILLER: Do not say 'Fact 1:' or 'Welcome back'. Start immediately with the hook.
-4. A GOOD LIE: Should be a specific incorrect detail (e.g., if true is 'released in 1991', lie could be 'released in 1985').
+TASK:
+Generate EXACTLY 3 facts:
+- 2 TRUE (factually correct)
+- 1 FALSE (plausible but incorrect)
 
-VIRAL HOOK REQUIREMENT:
-The hook must be under 6 words. Styles:
-- "99% FAIL this {category} challenge! 😱"
-- "Only GIGACHADS spot the fake! 🗿"
-- "Which {category} fact is the LIE? 🚨"
-
-CRITICAL: The story MUST be 100% FACTUALLY ACCURATE and VERIFIABLE for true facts.
+STRICT RULES (MUST FOLLOW):
+1. Each fact must be under 10 words.
+2. Total output must be under 40 words.
+3. Facts must be specific (include year, name, or detail).
+4. NO vague or generic facts.
 5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 
-Format as JSON ONLY:
+FACT CREATION PROCESS:
+Step 1: Generate 2 obscure TRUE facts.
+Step 2: Independently verify both are 100% correct.
+Step 3: Take a REAL fact and alter ONE key detail:
+        - year (1964 → 1972)
+        - name
+        - number
+Step 4: Ensure the altered version is FALSE but believable.
+
+SELF-CHECK BEFORE OUTPUT:
+- Identify which fact is false
+- Ensure it differs by ONLY ONE detail
+- Ensure both true facts are historically accurate
+If any condition fails → REGENERATE internally.
+
+OUTPUT FORMAT (JSON ONLY):
 {{
-  "hook": "Intense 5-word hook",
+  "hook": "5-word curiosity hook",
   "facts": [
-    {{"fact": "Short punchy fact", "truth": true}},
-    {{"fact": "Short punchy fact", "truth": true}},
-    {{"fact": "Believable short lie", "truth": false}}
+    {{"fact": "...", "truth": true}},
+    {{"fact": "...", "truth": true}},
+    {{"fact": "...", "truth": false}}
   ]
 }}
 """
     
-    max_retries = 2
-    for attempt in range(max_retries + 1):
+    def llm_call(attempt):
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 800,
-            "temperature": 0.1 + (attempt * 0.2)
+            "temperature": 0.2
         }
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        output = response.json()["choices"][0]["message"]["content"]
+        data = robust_json_parse(output)
         
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=20)
-            if response.status_code != 200:
-                print(f"DEBUG: API Error {response.status_code} - {response.text}")
-            
-            response.raise_for_status()
-            
-            try:
-                response_json = response.json()
-            except Exception as json_err:
-                print(f"DEBUG: Attempt {attempt+1} - Failed to parse JSON. Response text: '{response.text}'")
-                continue
+        # Clean data (prefixes)
+        facts_list = data.get("facts", [])
+        for f in facts_list:
+            f["fact"] = f["fact"].split(": ", 1)[-1] if ": " in f["fact"] else f["fact"]
+        data["facts"] = facts_list[:3]
+        return data
 
-            output = response_json["choices"][0]["message"]["content"]
-            
-            data = robust_json_parse(output)
-            hook = data.get("hook", f"Can you spot the lie about {category}?")
-            facts_list = data.get("facts", [])
-            
-            # VALIDATION: Ensure exactly 2 True and 1 False
-            trues = [f for f in facts_list if f.get("truth") is True]
-            falses = [f for f in facts_list if f.get("truth") is False]
-            
-            if len(trues) == 2 and len(falses) == 1:
-                for f in facts_list:
-                    # Clean any "Fact X: " prefixes generated by the LLM
-                    f["fact"] = f["fact"].split(": ", 1)[-1] if ": " in f["fact"] else f["fact"]
-                
-                # Return the hook and facts separately for cleaner script construction in main.py
-                return {"hook": hook, "facts": facts_list[:3]}
-            else:
-                print(f"⚠️ Attempt {attempt+1}: LLM generated wrong counts ({len(trues)}T, {len(falses)}F). Retrying...")
-                
-        except Exception as e:
-            print(f"💡 Attempt {attempt+1} failed ({type(e).__name__}: {e})")
-            if attempt == max_retries:
-                break
+    def facts_validator(data):
+        facts = data.get("facts", [])
+        if reject_bad_facts(facts):
+            return False
+        if not validate_semantics(facts):
+            return False
+        return True
 
-    print("❌ All API attempts failed or gave wrong counts. Failing to avoid low-quality upload.")
-    raise RuntimeError("LLM Fact Generation failed to produce valid 2T/1F ratio after retries.")
-
-def generate_fallback_facts(category): # [DELETE] Removing fallback function entirely
-    pass
+    result = with_retry(
+        llm_call, 
+        facts_validator, 
+        fallback=lambda: generate_fallback_facts(category)
+    )
+    
+    # Shuffle for engagement
+    random.shuffle(result["facts"])
+    return result
 
 def generate_story(category="history"):
     """
@@ -183,9 +338,11 @@ VIRAL REQUIREMENTS:
 5. End on a shocking twist or realization.
 6. Keep it under 100 words.
 
-CRITICAL: The story MUST be 100% FACTUALLY ACCURATE and VERIFIABLE. 
-6. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
-Do not hallucinate or embellish details.
+CRITICAL VALIDATION:
+- Story must be about a REAL documented event.
+- Must include at least one verifiable anchor (year, place, or specific person).
+- DO NOT fabricate unknown events or use vague terms like "someone" or "somewhere".
+- NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 
 Format as JSON ONLY:
 {{
@@ -194,31 +351,19 @@ Format as JSON ONLY:
 }}
 """
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 500,
-        "temperature": 0.8
-    }
-
-    try:
+    def llm_call(attempt):
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 500,
+            "temperature": 0.2
+        }
         response = requests.post(url, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
-        try:
-            response_json = response.json()
-        except Exception as json_err:
-            print(f"DEBUG: Story API Failed to parse JSON. Response text: '{response.text}'")
-            raise json_err
-
-        output = response_json["choices"][0]["message"]["content"]
-        
+        output = response.json()["choices"][0]["message"]["content"]
         return robust_json_parse(output)
-    except Exception as e:
-        print(f"❌ Story API failed after all attempts ({e}).")
-        raise RuntimeError(f"LLM Story Generation failed: {e}")
 
-    print(f"❌ Story API failed after all attempts.")
-    raise RuntimeError(f"LLM Story Generation failed.")
+    return with_retry(llm_call, validate_story)
 
 def generate_wyr(category="general"):
     """
@@ -247,6 +392,11 @@ REQUIREMENTS:
 4. CRITICAL: Ensure the options make sense and are well-phrased.
 5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 
+CRITICAL VALIDATION:
+- Options must be equally painful or absurd.
+- Must force hesitation (user cannot easily choose).
+- Avoid obvious better choice.
+
 Format as JSON ONLY:
 {{
   "option_a": "Option A relating to {selected_sub}",
@@ -256,33 +406,22 @@ Format as JSON ONLY:
 }}
 """
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 400,
-        "temperature": 0.85
-    }
-
-    try:
+    def llm_call(attempt):
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 400,
+            "temperature": 0.2
+        }
         response = requests.post(url, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
-        response_json = response.json()
-        output = response_json["choices"][0]["message"]["content"]
-        
+        output = response.json()["choices"][0]["message"]["content"]
         wyr = robust_json_parse(output)
-        
-        # Validation
-        if "option_a" in wyr and "option_b" in wyr and "percent_a" in wyr and "percent_b" in wyr:
-             if wyr["percent_a"] + wyr["percent_b"] != 100:
-                  # Fix it if math is wrong
-                  wyr["percent_b"] = 100 - wyr["percent_a"]
-             return wyr
-        else:
-            raise ValueError("Missing keys in JSON")
-            
-    except Exception as e:
-        print(f"❌ WYR API failed: {e}")
-        raise RuntimeError(f"LLM WYR Generation failed after all attempts: {e}")
+        if wyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
+            wyr["percent_b"] = 100 - wyr.get("percent_a", 50)
+        return wyr
+
+    return with_retry(llm_call, validate_wyr)
 
 def generate_reddit_story(category="general"):
     """
@@ -312,6 +451,12 @@ Requirements:
 5. End on a cliffhanger or a controversial note asking for judgment.
 6. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
 7. Format as JSON ONLY. Escape all double quotes inside the text.
+
+CRITICAL VALIDATION:
+- Must include a clear moral dilemma.
+- Reader should be unsure who is right.
+- Must end with a direct question for judgment (e.g., "Am I the jerk?").
+
 JSON Structure:
 {{
   "title": "A short viral title regarding {selected_sub}",
@@ -319,27 +464,19 @@ JSON Structure:
 }}
 """
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 600,
-        "temperature": 0.85
-    }
+    def llm_call(attempt):
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 600,
+            "temperature": 0.2
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=25)
+        response.raise_for_status()
+        output = response.json()["choices"][0]["message"]["content"]
+        return robust_json_parse(output)
 
-    # Try up to 2 times
-    for attempt in range(2):
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=25)
-            response.raise_for_status()
-            output = response.json()["choices"][0]["message"]["content"]
-            
-            return robust_json_parse(output)
-        except Exception as e:
-            print(f"[Warning] Reddit attempt {attempt+1} failed ({type(e).__name__}: {e})")
-            continue
-
-    print(f"❌ REDDIT API failed after retries.")
-    raise RuntimeError("LLM REDDIT Generation failed to produce valid JSON after retries.")
+    return with_retry(llm_call, validate_reddit)
 
 def generate_trivia(category="general knowledge"):
     """
@@ -364,9 +501,13 @@ def generate_trivia(category="general knowledge"):
 REQUIREMENTS:
 1. Provide one challenging, OBSCURE question. Avoid common trivia.
 2. Provide exactly three short options (A, B, and C).
-3. State the correct option letter (A, B, or C).
+3. State the correct option letter (must match exactly one option text).
 4. CRITICAL: The question and answer MUST be 100% FACTUALLY ACCURATE and VERIFIABLE.
 5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
+
+CRITICAL VALIDATION:
+- All options must be unique and plausible.
+- Answer MUST match one of the options exactly.
 
 Format as JSON ONLY:
 {{
@@ -378,23 +519,19 @@ Format as JSON ONLY:
 }}
 """
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 400,
-        "temperature": 0.7
-    }
-
-    try:
+    def llm_call(attempt):
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 400,
+            "temperature": 0.2
+        }
         response = requests.post(url, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
-        response_json = response.json()
-        output = response_json["choices"][0]["message"]["content"]
-        
+        output = response.json()["choices"][0]["message"]["content"]
         return robust_json_parse(output)
-    except Exception as e:
-        print(f"❌ TRIVIA API failed: {e}")
-        raise RuntimeError(f"LLM TRIVIA Generation failed after all attempts: {e}")
+
+    return with_retry(llm_call, validate_trivia)
 
 def generate_quote(category="stoic"):
     """
@@ -422,6 +559,12 @@ Requirements:
 3. Provide the author's name (can be a real historical figure or "Unknown").
 4. Make it incredibly cinematic and thought-provoking.
 5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
+
+CRITICAL VALIDATION:
+- Quote must be at least 10 words long for depth.
+- AVOID cliches (e.g., "believe in yourself", "never give up").
+- Must be cinematic and soul-stirring.
+
 6. Format as JSON ONLY. Escape all double quotes inside the text.
 JSON Structure:
 {{
@@ -430,27 +573,19 @@ JSON Structure:
 }}
 """
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 400,
-        "temperature": 0.8
-    }
+    def llm_call(attempt):
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 400,
+            "temperature": 0.2
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        output = response.json()["choices"][0]["message"]["content"]
+        return robust_json_parse(output)
 
-    for attempt in range(2):
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=20)
-            response.raise_for_status()
-            output = response.json()["choices"][0]["message"]["content"]
-            
-            return robust_json_parse(output)
-        except Exception as e:
-            print(f"[Warning] Quote attempt {attempt+1} failed: {e}")
-            continue
-
-    print(f"❌ QUOTE API failed after retries.")
-    raise RuntimeError("LLM QUOTE Generation failed to produce valid JSON after retries.")
-
+    return with_retry(llm_call, validate_quote)
 def generate_funny_news(category="general", tone="funny"):
     """
     Fetches REAL news from RSS feeds, then uses LLM to rewrite in the chosen tone.
@@ -617,6 +752,7 @@ RULES:
 3. STORY: Retell it in under 45 words. Fast-paced. Use '...' for dramatic pauses in the script.
 4. Do NOT add fake details. Only elaborate on what the headline says.
 5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys in the story.
+6. DO NOT exaggerate beyond headline facts. No fake details or assumptions.
 {tone_instruction}
 
 Format as JSON ONLY:
@@ -628,38 +764,86 @@ Format as JSON ONLY:
 }}
 """
 
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 400,
-        "temperature": 0.9 if tone == "funny" else 0.7
-    }
+    def llm_call(attempt):
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 400,
+            "temperature": 0.3 if tone == "funny" else 0.2
+        }
+        response = requests.post(url, headers=api_headers, json=payload, timeout=20)
+        response.raise_for_status()
+        output = response.json()["choices"][0]["message"]["content"]
+        data = robust_json_parse(output)
+        data["source"] = real_source
+        data["original_headline"] = real_headline
+        data["tone"] = tone
+        return data
 
-    for attempt in range(3):
-        try:
-            response = requests.post(url, headers=api_headers, json=payload, timeout=20)
-            response.raise_for_status()
-            output = response.json()["choices"][0]["message"]["content"]
-            data = robust_json_parse(output)
-            if data.get("story") and data.get("hook"):
-                data["source"] = real_source
-                data["original_headline"] = real_headline
-                data["tone"] = tone
-                return data
-        except Exception as e:
-            print(f"[Warning] News rewrite attempt {attempt+1} failed: {e}")
-            continue
+    def fallback():
+        return {
+            "title": f"🚨 {real_headline}",
+            "hook": real_headline[:50],
+            "story": f"{real_headline}. {'Bro, this actually happened!' if tone == 'funny' else 'More on this developing story.'}",
+            "source": real_source,
+            "original_headline": real_headline,
+            "search_term": "breaking news",
+            "tone": tone
+        }
 
-    # If LLM fails, return the raw headline as-is
-    return {
-        "title": f"🚨 {real_headline}",
-        "hook": real_headline[:50],
-        "story": f"{real_headline}. {'Bro, this actually happened!' if tone == 'funny' else 'More on this developing story.'}",
-        "source": real_source,
-        "original_headline": real_headline,
-        "search_term": "breaking news",
-        "tone": tone
+    return with_retry(llm_call, validate_news, fallback=fallback)
+
+def generate_sound_challenge(category="animals"):
+    """
+    Generates a 'Guess the Sound' challenge script.
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
     }
+    
+    prompt = f"""Generate a 'Guess the Sound' viral challenge for category: {category}.
+
+TASK:
+1. Pick a specific object/animal with a distinct sound.
+2. Create a 5-word curiosity hook.
+3. Provide a 'sound_query' for searching a free sound effect (e.g., 'lion roar', 'old car engine').
+
+RULES:
+- Script should be: [HOOK] ... [5 SECONDS SILENCE FOR SOUND] ... [REVEAL]
+- Total script under 20 words.
+- JSON ONLY.
+
+Format:
+{{
+  "hook": "Can you guess this sound?",
+  "object": "Lion",
+  "sound_query": "lion roar",
+  "reveal_text": "It was a Lion! Did you get it?"
+}}
+"""
+
+    def llm_call(attempt):
+        payload = {
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 200
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        return robust_json_parse(response.json()["choices"][0]["message"]["content"])
+
+    def fallback():
+        return {
+            "hook": "Can you guess this sound?",
+            "object": "Elephant",
+            "sound_query": "elephant trumpeting",
+            "reveal_text": "It was an Elephant! Shocking right?"
+        }
+
+    return with_retry(llm_call, validate_sound_challenge, fallback=fallback)
 
 
 if __name__ == "__main__":
