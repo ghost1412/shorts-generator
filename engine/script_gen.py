@@ -309,15 +309,19 @@ STRICT RULES (MUST FOLLOW):
 FACT CREATION PROCESS:
 Step 1: Generate 2 obscure TRUE facts about DIFFERENT people/entities.
 Step 2: Independently verify both are 100% correct.
-Step 3: Take a DIFFERENT REAL fact and alter ONE key detail:
-        - year (1964 → 1972)
-        - name
-        - number
-Step 4: Ensure the altered version is FALSE but believable.
+Step 3: Take a DIFFERENT REAL fact and alter ONE key detail to make it FALSE:
+        - Location (e.g. "discovered in France" -> "discovered in Brazil")
+        - Cause/Effect (e.g. "died of curiosity" -> "died in a duel")
+        - Magnitude/Scale (e.g. "10 million years" -> "100 million years")
+        - Relationship (e.g. "his brother" -> "his secret rival")
+        - Scientific Anchor (e.g. "using a telescope" -> "using a microscope")
+        - Year/Name (Standard fallbacks)
+Step 4: Ensure the altered version is FALSE but highly believable.
 
 CRITICAL DIVERSITY RULES:
 - Each fact MUST be about a DIFFERENT person, place, or entity.
-- Do NOT repeat the same subject in two different facts (e.g. no "Rock in UH" vs "Rock in USC").
+- Do NOT repeat the same subject in two different facts.
+- Use VARIED falsification methods (don't just change dates).
 - Diversity is more important than difficulty!
 
 SELF-CHECK BEFORE OUTPUT:
