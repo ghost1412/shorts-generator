@@ -101,33 +101,21 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     
     # Add final drop CTA if requested
     if add_cta:
-        raw_text += " <break time='300ms'/> Comment your answer now."
+        raw_text += "... Comment your answer now."
     
     hook, rest = split_hook(raw_text)
     
-    # Process the 'rest' for pauses and emphasis
-    processed_rest = emphasize_keywords(add_dramatic_pauses(rest or ""))
+    # Process the 'rest' for pauses. We rely purely on punctuation for pacing
+    # since edge-tts treats custom <speak> wrapper as literal text.
+    processed_rest = rest or ""
     
-    # Split rest for energy ramp (Slow -> Medium -> Fast)
-    rest_parts = processed_rest.split()
-    half = len(rest_parts) // 2
-    rest_1 = " ".join(rest_parts[:half])
-    rest_2 = " ".join(rest_parts[half:])
-
-    # Build a powerful SSML delivery with Energy Ramp
-    ssml_text = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
-  <voice name='{voice_name}'>
-    <prosody rate='-10%' pitch='+5%'>{hook}</prosody>
-    <break time='400ms'/>
-    <prosody rate='+5%'>{rest_1}</prosody>
-    <prosody rate='{rate}'>{rest_2}</prosody>
-  </voice>
-</speak>"""
+    # Simple plain-text delivery string (letting edge-tts build its own SSML internally)
+    final_text = f"{hook}... {processed_rest}"
 
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     
     async def amain():
-        communicate = edge_tts.Communicate(ssml_text, voice_name)
+        communicate = edge_tts.Communicate(final_text, voice_name, rate=rate)
         subtitles = []
         
         with open(output_audio, "wb") as f:
@@ -142,6 +130,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
                     })
 
         # Fallback for words
+
         if not subtitles:
             audio_duration = 0
             try:

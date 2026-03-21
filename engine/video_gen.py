@@ -39,7 +39,8 @@ def color_shift_green_kill(get_frame, t, duration):
     factor_g = max(0, 1 - (t / duration))
     new_frame = frame.copy()
     new_frame[:, :, 1] = (new_frame[:, :, 1] * factor_g).astype("uint8")
-    return new_frame
+    # Strictly ensure memory contiguity to prevent MoviePy/FFMPEG diagonal render corruption
+    return np.ascontiguousarray(new_frame)
 
 def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None, add_box=True):
     """
@@ -212,11 +213,9 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     bar_height = 20
     # Progress Bar (Urgency Curve + Color Shift)
     bg_bar = ColorClip(size=(1080, bar_height), color=(50, 50, 50)).with_duration(duration).with_position(("center", 1880))
-    progress_bar = ColorClip(size=(1080, bar_height), color=(255, 255, 0)).with_duration(duration).with_position(("center", 1880))
-    # Faster near end + Transition Yellow -> Red
-    progress_bar = progress_bar.with_effects([
-        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), bar_height))
-    ])
+    progress_bar = ColorClip(size=(1080, bar_height), color=(255, 255, 0)).with_duration(duration)
+    # 0-cost sliding animation for progress instead of expensive, glich-prone vfx.Resize
+    progress_bar = progress_bar.with_position(lambda t: (int(-1080 + 1080 * (t / duration) ** 0.7), 1880))
     progress_bar = progress_bar.transform(lambda gf, t: color_shift_green_kill(gf, t, duration))
     
     if mode.startswith("NEWS"):
