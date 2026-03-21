@@ -33,6 +33,14 @@ def apply_blur(image, radius=2):
     blurred_pil = pil_img.filter(ImageFilter.GaussianBlur(radius=radius))
     return np.array(blurred_pil)
 
+def color_shift_green_kill(get_frame, t, duration):
+    """Gradually kills the green channel to transition Yellow (255,255,0) -> Red (255,0,0)."""
+    frame = get_frame(t)
+    factor_g = max(0, 1 - (t / duration))
+    new_frame = frame.copy()
+    new_frame[:, :, 1] = (new_frame[:, :, 1] * factor_g).astype("uint8")
+    return new_frame
+
 def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None, add_box=True):
     """
     Creates a transparent PNG with text using Pillow.
@@ -218,9 +226,9 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     progress_bar = ColorClip(size=(1080, bar_height), color=(255, 255, 0)).with_duration(duration).with_position(("center", 1880))
     # Faster near end + Transition Yellow -> Red
     progress_bar = progress_bar.with_effects([
-        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), bar_height)),
-        vfx.MultiplyColor(lambda t: (1, 1 - t/duration, 0))
+        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), bar_height))
     ])
+    progress_bar = progress_bar.transform(lambda gf, t: color_shift_green_kill(gf, t, duration))
     
     if mode.startswith("NEWS"):
         # 1. TOP HEADER: BREAKING NEWS!
@@ -976,9 +984,9 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
     bg_bar = ColorClip(size=(1080, 20), color=(40, 40, 40)).with_duration(duration).with_position(("center", 1880))
     progress_bar = ColorClip(size=(1080, 20), color=(255, 255, 0)).with_duration(duration).with_position(("center", 1880))
     progress_bar = progress_bar.with_effects([
-        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), 20)),
-        vfx.MultiplyColor(lambda t: (1, 1 - t/duration, 0))
+        vfx.Resize(lambda t: (max(1, int(1080 * (t / duration) ** 0.7)), 20))
     ])
+    progress_bar = progress_bar.transform(lambda gf, t: color_shift_green_kill(gf, t, duration))
 
     final_audio = CompositeAudioClip([voice_clip, sfx_clip])
     if music_path and os.path.exists(music_path):
