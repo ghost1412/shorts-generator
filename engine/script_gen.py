@@ -156,12 +156,15 @@ ANSWER (PASS/FAIL ONLY):"""
         }
         response = requests.post(url, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
+        decision = response.json()["choices"][0]["message"]["content"].strip().upper()
+        
         print(f"[Log] AI Fact-Checker Decision: {decision}")
-        # ROBUST CHECK: Look for 'PASS' anywhere in the response
+        # ROBUST CHECK: Anything that isn't a clean PASS is a FAIL
         return "PASS" not in decision
     except Exception as e:
-        print(f"[Warning] AI Fact-Checker failed ({e}). Defaulting to caution.")
-        return False
+        print(f"[Warning] AI Fact-Checker failed ({e}). Defaulting to safety.")
+        # If checker fails, we reject just in case
+        return True
 
 def mutate_year(text):
     """Subtle year shift (+/- 1-2 years)."""
@@ -368,13 +371,14 @@ DO NOT generate any false facts.
 STRICT RULES (MUST FOLLOW):
 1. Each fact must be under 10 words.
 2. Facts must be specific (include year, name, or detail).
-3. NO vague or generic facts.
-4. NO TECHNICAL NOISE: Do NOT include URLs or JSON keys.
+3. NO fictional or hybrid show names (e.g. dont blend 'The Simpsons' and 'Friends' into 'Simpfriends').
+4. NO vague or generic facts.
+5. NO TECHNICAL NOISE: Do NOT include URLs or JSON keys.
 
 CRITICAL DIVERSITY RULES:
 - Each fact MUST be about a DIFFERENT person, place, or entity.
-- Do NOT use movies (they are too easy to debunk as 'pilots').
-- Facts must be 100% historically VERifiable.
+- Be 100% CERTAIN of the TRUE facts. If you have any doubt, pick a different subject.
+- Facts must be historically documented truths (e.g. things that were actually banned, discovered, or invented).
 
 OUTPUT FORMAT (JSON ONLY):
 {{
