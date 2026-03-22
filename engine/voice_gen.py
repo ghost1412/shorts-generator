@@ -3,6 +3,7 @@ import os
 import asyncio
 import edge_tts
 import re
+from xml.sax.saxutils import escape as xml_escape
 
 def clean_for_tts(text):
     """
@@ -27,44 +28,30 @@ def clean_for_tts(text):
     return "".join(result)
 
 def add_dramatic_pauses(text):
-    """Injects SSML break tags based on punctuation and logic."""
-    # pause after numbers (facts list)
-    text = re.sub(r'(\d+[:\.])', r'\1 <break time="300ms"/>', text)
-    # pause before punchlines
-    text = re.sub(r'(The real answer is)', r'<break time="400ms"/> \1', text)
-    # pause after each fact line
-    text = re.sub(r'(\.\s)', r'\1 <break time="250ms"/> ', text)
-    # micro-pauses for rhythm
-    text = re.sub(r',', ', <break time="120ms"/>', text)
-    # ellipsis stays strongest pause
-    text = text.replace("...", " <break time='600ms'/> ")
-    return text
-
-def emphasize_keywords(text):
-    """Injects SSML emphasis for viral keywords safely using regex."""
-    keywords = ["lie", "fake", "real answer", "spot", "shocking", "secret"]
-    for k in keywords:
-        text = re.sub(
-            fr"\b({k})\b",
-            lambda m: f"<emphasis level='strong'>{m.group(1)}</emphasis>",
-            text,
-            flags=re.IGNORECASE
-        )
+    """Injects punctuation-based breaks that edge-tts naturally interprets."""
+    # Strong pause after each point/digit
+    text = re.sub(r'(\d+[:\.])\s*', r'\1 ... ', text)
+    # Long pause before reveal
+    text = re.sub(r'(The real answer is)', r'... \1', text)
+    # Natural breathing pauses at sentence ends
+    text = re.sub(r'(\.\s+)', r'... ', text)
+    # Comma for micro-pauses
+    text = re.sub(r',', ', ', text)
     return text
 
 def split_hook(text):
     """Robustly splits text into hook and rest, falling back to first sentence."""
-    # Try splitting by ellipsis first
+    # Try splitting by first explicit ellipsis
     if "..." in text:
         parts = text.split("...", 1)
-        return parts[0], parts[1]
+        return parts[0].strip(), parts[1].strip()
 
     # fallback: first sentence as hook
     sentences = re.split(r'[.!?]', text, maxsplit=1)
     if len(sentences) > 1:
-        return sentences[0], sentences[1]
+        return sentences[0].strip(), sentences[1].strip()
 
-    return text, ""
+    return text.strip(), ""
 
 def group_subtitles(subtitles):
     """Groups word-by-word subtitles into cleaner, punctuation-aware chunks."""
@@ -96,29 +83,18 @@ def group_subtitles(subtitles):
 def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+15%", add_cta=True):
     """
     Generates voice with cinematic pacing and optimized subtitles.
+    Relying on punctuation for stability instead of risky SSML.
     """
     raw_text = clean_for_tts(text)
     
-    # Add final drop CTA if requested
-    if add_cta:
-        raw_text += "... Comment your answer now."
-    
-    # 🟢 UPGRADE: Dramatic Pacing & SSML Implementation
+    # 🟢 UPGRADE: Punctuation-based Pacing (Safe for all edge-tts versions)
     hook, rest = split_hook(raw_text)
-    
-    # Inject dramatic breaks into the story/facts
     processed_rest = add_dramatic_pauses(rest or "")
-    processed_rest = emphasize_keywords(processed_rest)
     
-    # Wrap in SSML for professional delivery
-    # Note: edge-tts REQUIRES valid <speak> format for breaks to work
-    final_text = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
-        <voice name='{voice_name}'>
-            {hook}
-            <break time='500ms'/>
-            {processed_rest}
-        </voice>
-    </speak>"""
+    # Simple plain-text delivery with strategic pauses
+    final_text = f"{hook} ... {processed_rest}"
+    if add_cta:
+        final_text += " ... Comment your answer now."
 
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     
