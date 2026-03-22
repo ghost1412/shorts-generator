@@ -3,6 +3,7 @@ import requests
 import random
 import re
 from dotenv import load_dotenv
+from engine.comfy_bridge import generate_cinematic_backgrounds
 
 load_dotenv()
 
@@ -93,6 +94,17 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
             
     except Exception as e:
         print(f"Error downloading video: {e}")
+
+def generate_ai_background(prompt, output_path="assets/bg.png"):
+    """
+    Generates a premium AI background using the ComfyUI bridge.
+    """
+    results = generate_cinematic_backgrounds(prompt)
+    if results:
+        import shutil
+        shutil.copy(results[0], output_path)
+        return output_path
+    return None
         
 def download_image(query, output_path="assets/obj.png"):
     """
