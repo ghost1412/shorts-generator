@@ -111,29 +111,42 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio"):
     try:
         response = requests.post(f"{COMFY_URL}/prompt", json={"prompt": workflow}, timeout=10)
         if response.status_code != 200:
+            print(f"[ComfyBridge] Error: Server returned status {response.status_code}: {response.text}")
             return None
         
         prompt_id = response.json().get("prompt_id")
+        print(f"[ComfyBridge] Audio job submitted (ID: {prompt_id}). Polling for result...")
         
         # Polling for audio result
-        for _ in range(120): # Audio takes longer (2 mins timeout)
+        for i in range(120): # Audio takes longer (approx 2 mins timeout)
+            time.sleep(2)
             history_res = requests.get(f"{COMFY_URL}/history/{prompt_id}")
             if history_res.status_code == 200:
                 history = history_res.json()
                 if prompt_id in history:
                     # Job complete!
-                    audio_data = history[prompt_id]['outputs']['13']['audio'][0]
-                    filename = audio_data['filename']
-                    
-                    # Download the result
-                    audio_res = requests.get(f"{COMFY_URL}/view?filename={filename}&type=output")
-                    out_path = os.path.join(output_dir, f"ai_audio_{int(time.time())}.mp3")
-                    with open(out_path, "wb") as f:
-                        f.write(audio_res.content)
-                    return out_path
-            time.sleep(2)
+                    job_info = history[prompt_id]
+                    if 'outputs' in job_info and '13' in job_info['outputs']:
+                        audio_data = job_info['outputs']['13']['audio'][0]
+                        filename = audio_data['filename']
+                        
+                        # Download the result
+                        audio_res = requests.get(f"{COMFY_URL}/view?filename={filename}&type=output")
+                        out_path = os.path.join(output_dir, f"ai_audio_{int(time.time())}.mp3")
+                        with open(out_path, "wb") as f:
+                            f.write(audio_res.content)
+                        print(f"[ComfyBridge] Successfully generated AI Audio: {out_path}")
+                        return out_path
+                    else:
+                        print(f"[ComfyBridge] Audio job finished but '13' output was missing. History: {job_info}")
+                        return None
+            
+            if i % 10 == 0 and i > 0:
+                print(f"[ComfyBridge] Still waiting for audio... ({i*2}s elapsed)")
+            
+        print(f"[ComfyBridge] Audio generation timed out after 240 seconds.")
             
     except Exception as e:
-        print(f"[ComfyBridge] Audio generation failed: {e}")
+        print(f"[ComfyBridge] Audio generation exception: {e}")
     
     return None

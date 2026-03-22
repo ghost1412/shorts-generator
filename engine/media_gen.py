@@ -215,7 +215,8 @@ SFX_LIBRARY = {
     "police": "https://archive.org/download/SoundEffectsVolume1/10%20Police%20Siren.mp3",
     "car crash": "https://archive.org/download/SoundeffectsInStereo/05%20Car%20Crash.mp3",
     "thunder": "https://archive.org/download/SoundeffectsVol.1/04%20Thunder.mp3",
-    "rain": "https://archive.org/download/SoundeffectsVol.1/02%20Rain%20In%20Woods.mp3"
+    "rain": "https://archive.org/download/SoundeffectsVol.1/02%20Rain%20In%20Woods.mp3",
+    "whoosh": "https://archive.org/download/SoundeffectsVol.1/03%20Wind.mp3"
 }
 
 def download_sfx(query, output_path="assets/sfx.mp3"):
