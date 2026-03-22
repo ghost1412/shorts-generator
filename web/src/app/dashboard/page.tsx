@@ -144,6 +144,7 @@ export default function Dashboard() {
     }
     setIsTriggering(true);
     try {
+      console.log(`[Dashboard] Triggering generation. Mode: ${mode}, Category: ${category}, useComfy: ${useComfy}, useAiAudio: ${useAiAudio}, Plan: ${userConfig?.plan}`);
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
