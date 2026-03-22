@@ -36,7 +36,11 @@ def apply_audio_ducking(audio_clip, music_path, duration, duck_vol=0.12, boom_vo
             return duck_vol
         return boom_vol
         
-    music = music.with_effects([afx.MultiplyVolume(music_volume)])
+    # Apply dynamic volume via custom frame function (MoviePy 2.x compatible)
+    def duck_effect(get_frame, t):
+        return music_volume(t) * get_frame(t)
+    
+    music = music.with_updated_frame_function(lambda t: duck_effect(music.get_frame, t))
     return CompositeAudioClip([audio_clip, music])
 
 def apply_handheld_jitter(clip, intensity=1.5):
