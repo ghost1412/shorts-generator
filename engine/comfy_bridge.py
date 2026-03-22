@@ -3,16 +3,32 @@ import json
 import os
 import time
 import random
+from dotenv import load_dotenv
 
-COMFY_URL = os.getenv("COMFY_URL", "http://127.0.0.1:8000")
+load_dotenv()
+COMFY_URL = os.getenv("COMFY_URL", "http://127.0.0.1:8001")
 
 def is_comfy_available():
     """Returns True if the local ComfyUI server is reachable."""
     try:
-        response = requests.get(f"{COMFY_URL}/system_stats", timeout=2)
-        return response.status_code == 200
+        # Just check if the server is alive by calling /
+        response = requests.get(COMFY_URL, timeout=2)
+        return True # Any response means the server is reachable
     except:
         return False
+
+def get_comfy_error(job_info):
+    """Extracts a human-readable error from ComfyUI history/status."""
+    status = job_info.get("status", {})
+    messages = status.get("messages", [])
+    for msg in messages:
+        if isinstance(msg, list) and len(msg) > 1 and msg[0] == "execution_error":
+            err_details = msg[1]
+            node_id = err_details.get("node_id")
+            node_type = err_details.get("node_type")
+            exception = err_details.get("exception_message", "Unknown error")
+            return f"Node {node_id} ({node_type}) failed: {exception}"
+    return "Unknown execution error (check ComfyUI console)"
 
 def generate_cinematic_backgrounds(prompt, count=5, output_dir="assets/comfy_out"):
     """
@@ -75,7 +91,8 @@ def generate_cinematic_backgrounds(prompt, count=5, output_dir="assets/comfy_out
                             f.write(img_res.content)
                         return [out_path] 
                     else:
-                        print(f"[ComfyBridge] Image job finished but '9' output was missing. History: {job_info}")
+                        error_msg = get_comfy_error(job_info)
+                        print(f"[ComfyBridge] Image job failed: {error_msg}")
                         return []
             time.sleep(1)
             
@@ -111,7 +128,7 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio"):
                 "seconds_total": duration
             }
         },
-        "11": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "audio_ace_step_1_t2a_song.safetensors"}},
+        "11": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "ace_step_v1_3.5b.safetensors"}},
         "12": {"class_type": "CLIPTextEncode", "inputs": {"text": f"High quality, studio recorded, cinematic, {prompt}", "clip": ["11", 1]}},
         "13": {"class_type": "SaveAudio", "inputs": {"filename_prefix": "comfy_audio", "audio": ["10", 0]}}
     }
@@ -146,7 +163,8 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio"):
                         print(f"[ComfyBridge] Successfully generated AI Audio: {out_path}")
                         return out_path
                     else:
-                        print(f"[ComfyBridge] Audio job finished but '13' output was missing. History: {job_info}")
+                        error_msg = get_comfy_error(job_info)
+                        print(f"[ComfyBridge] Audio job failed: {error_msg}")
                         return None
             
             if i % 10 == 0 and i > 0:
@@ -158,3 +176,19 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio"):
         print(f"[ComfyBridge] Audio generation exception: {e}")
     
     return None
+
+def get_available_checkpoints():
+    """Tries to list available checkpoints from ComfyUI CheckpointLoaderSimple node info."""
+    try:
+        response = requests.get(f"{COMFY_URL}/object_info/CheckpointLoaderSimple")
+        if response.status_code == 200:
+            info = response.json()
+            # The structure for inputs usually lists valid options in a list
+            ckpts = info.get("CheckpointLoaderSimple", {}).get("input", {}).get("required", {}).get("ckpt_name", [])
+            # It's usually a list where the first element is the list of choices
+            if ckpts and isinstance(ckpts[0], list):
+                return ckpts[0]
+            return ckpts
+    except:
+        pass
+    return []
