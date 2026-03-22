@@ -67,7 +67,11 @@ export default function Dashboard() {
           .order('created_at', { ascending: false });
         if (logs) setVideoLogs(logs);
 
-        const { data: config } = await supabase.from('user_configs').select('*').single();
+        const { data: config } = await supabase
+          .from('user_configs')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
         if (config) {
           setUserConfig(config);
           const plan = config.plan?.toLowerCase() || 'free';
@@ -94,7 +98,11 @@ export default function Dashboard() {
       if (data) setVideoLogs(data);
 
       // Also refresh user_configs to get updated generations_used
-      const { data: config } = await supabase.from('user_configs').select('*').single();
+      const { data: config } = await supabase
+        .from('user_configs')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
       if (config) setUserConfig(config);
     }
 
