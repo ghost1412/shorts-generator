@@ -222,6 +222,7 @@ def create_false_from_true(base_text):
 
     # Final robust fallback if no pattern matched
     return base.rstrip(".") + " in a different year"
+def reject_vague_facts(facts):
     """Rejects facts that are 'partially true' or confusing (e.g. produced in x but released in y)."""
     banned_keywords = ["produced in", "recorded in", "but not", "originally", "later aired"]
     for f in facts:
