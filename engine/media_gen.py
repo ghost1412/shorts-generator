@@ -210,20 +210,57 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
     return assets
 
 SFX_LIBRARY = {
-    "lion": "https://archive.org/download/SoundEffectsVolume1/01%20Lions%20Roaring.mp3",
-    "jet": "https://archive.org/download/SoundEffectsVolume1/02%20Jet%20Take-Off.mp3",
-    "police": "https://archive.org/download/SoundEffectsVolume1/10%20Police%20Siren.mp3",
-    "car crash": "https://archive.org/download/SoundeffectsInStereo/05%20Car%20Crash.mp3",
-    "thunder": "https://archive.org/download/SoundeffectsVol.1/04%20Thunder.mp3",
-    "rain": "https://archive.org/download/SoundeffectsVol.1/02%20Rain%20In%20Woods.mp3",
-    "whoosh": "https://archive.org/download/SoundeffectsVol.1/03%20Wind.mp3"
+    "lion": "https://upload.wikimedia.org/wikipedia/commons/4/47/Lion_roar.ogg",
+    "jet": "https://upload.wikimedia.org/wikipedia/commons/e/e0/F-14_Tomcat_Takeoff.ogg",
+    "police": "https://upload.wikimedia.org/wikipedia/commons/4/48/Police_siren.ogg",
+    "car crash": "https://upload.wikimedia.org/wikipedia/commons/0/07/Car_crash_sound_effect.ogg",
+    "thunder": "https://upload.wikimedia.org/wikipedia/commons/1/13/Thunder_sound_effect.ogg",
+    "rain": "https://upload.wikimedia.org/wikipedia/commons/9/91/Rain_in_woods.ogg",
+    "whoosh": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Whoosh.ogg"
 }
+
+import numpy as np
+from moviepy.audio.AudioClip import AudioClip
+
+def generate_local_sfx(kind, output_path):
+    """Synthesizes basic Foley sound effects mathematically (100% reliable, 0 server downtime)."""
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    if kind == "whoosh":
+        def make_whoosh(t):
+            t = np.atleast_1d(t)
+            noise = np.random.normal(0, 0.5, len(t))
+            # Sharp bell curve envelope
+            envelope = np.exp(-((t - 0.5) ** 2) / 0.02)
+            frame = noise * envelope
+            return np.vstack([frame, frame]).T
+        clip = AudioClip(make_whoosh, duration=1.0)
+        clip.write_audiofile(output_path, fps=44100, bitrate="192k", logger=None)
+        return output_path
+    elif kind == "rain" or kind == "static":
+        def make_rain(t):
+            t = np.atleast_1d(t)
+            # Low volume white noise acts as a great base for rain/static ambiance
+            noise = np.random.normal(0, 0.1, len(t))
+            return np.vstack([noise, noise]).T
+        clip = AudioClip(make_rain, duration=5.0)
+        clip.write_audiofile(output_path, fps=44100, bitrate="192k", logger=None)
+        return output_path
+    return None
 
 def download_sfx(query, output_path="assets/sfx.mp3"):
     """
     Downloads a sound effect from the curated library or a fallback.
     """
     query_lower = query.lower()
+    
+    # 🌟 OFFLINE SYNTHESIS: 100% reliable Foley generation
+    if "whoosh" in query_lower or "wind" in query_lower:
+        print(f"[Log] Synthesizing '{query_lower}' SFX locally (0 network dependency)...")
+        return generate_local_sfx("whoosh", output_path)
+    elif "rain" in query_lower or "water" in query_lower or "static" in query_lower:
+        print(f"[Log] Synthesizing '{query_lower}' SFX locally...")
+        return generate_local_sfx("rain", output_path)
+        
     selected_url = None
     
     # Try to find a match in the library
@@ -233,8 +270,8 @@ def download_sfx(query, output_path="assets/sfx.mp3"):
             break
             
     if not selected_url:
-        print(f"[Warning] No SFX found for '{query}', using fallback (Rain)")
-        selected_url = SFX_LIBRARY["rain"]
+        print(f"[Warning] No SFX found for '{query}', using synthesized fallback (Rain)")
+        return generate_local_sfx("rain", output_path)
         
     try:
         print(f"[Log] Downloading SFX: {selected_url}")
@@ -244,7 +281,7 @@ def download_sfx(query, output_path="assets/sfx.mp3"):
         # Basic validation: ensure it's not an HTML error page or empty
         if 'text/html' in r.headers.get('Content-Type', ''):
             print(f"[Error] SFX URL returned HTML instead of audio: {selected_url}")
-            return None
+            return generate_local_sfx("rain", output_path)
             
         content = r.content
         if len(content) < 1000: # Less than 1KB is likely not a valid MP3
