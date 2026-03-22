@@ -77,14 +77,15 @@ def main():
                 full_script += f"1: {facts_data[0]['fact']} ... "
                 full_script += f"2: {facts_data[1]['fact']} ... "
                 full_script += f"3: {facts_data[2]['fact']} ... "
-                # Improved Viral Loop: Force replay
-                full_script += "The real answer is ... wait... go back and check again."
+                # 🟢 UPGRADE: Seamless Viral Loop
+                full_script += f"The real answer is ... wait... {data.get('loop_lead', 'Go back and check again.')}"
             elif mode == "STORY":
                 story_data = generate_story(category)
                 if not story_data: return
                 
                 # Construct script with strategic viral pauses
-                full_script = f"{story_data['title']}! ... {story_data['story']} ... Like and Subscribe for more true stories!"
+                # 🟢 UPGRADE: Removed "Bot-like" title and added Seamless Loop
+                full_script = f"{story_data['story']} ... {story_data.get('loop_lead', 'Hit the plus if you want more.')}"
                 facts_data = [] # Not used in story mode but kept for metadata function compatibility
                 print(f"[Log] Story: {story_data['story']}")
             elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety

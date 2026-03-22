@@ -103,14 +103,22 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     if add_cta:
         raw_text += "... Comment your answer now."
     
+    # 🟢 UPGRADE: Dramatic Pacing & SSML Implementation
     hook, rest = split_hook(raw_text)
     
-    # Process the 'rest' for pauses. We rely purely on punctuation for pacing
-    # since edge-tts treats custom <speak> wrapper as literal text.
-    processed_rest = rest or ""
+    # Inject dramatic breaks into the story/facts
+    processed_rest = add_dramatic_pauses(rest or "")
+    processed_rest = emphasize_keywords(processed_rest)
     
-    # Simple plain-text delivery string (letting edge-tts build its own SSML internally)
-    final_text = f"{hook}... {processed_rest}"
+    # Wrap in SSML for professional delivery
+    # Note: edge-tts REQUIRES valid <speak> format for breaks to work
+    final_text = f"""<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
+        <voice name='{voice_name}'>
+            {hook}
+            <break time='500ms'/>
+            {processed_rest}
+        </voice>
+    </speak>"""
 
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     

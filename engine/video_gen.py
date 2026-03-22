@@ -19,6 +19,36 @@ def add_pattern_interrupt(duration):
         .with_opacity(0.4)
     return flash
 
+def apply_audio_ducking(audio_clip, music_path, duration, duck_vol=0.12, boom_vol=0.28):
+    """
+    Applies professional audio ducking to background music.
+    Music is quieter during voiceover and 'booms' during reveals/CTAs.
+    """
+    if not music_path or not os.path.exists(music_path):
+        return audio_clip
+        
+    music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
+    
+    # Dynamic Volume Envelope
+    voice_duration = audio_clip.duration
+    def music_volume(t):
+        if t < voice_duration:
+            return duck_vol
+        return boom_vol
+        
+    music = music.with_effects([afx.Volumex(music_volume)])
+    return CompositeAudioClip([audio_clip, music])
+
+def apply_handheld_jitter(clip, intensity=1.5):
+    """
+    Adds a subtle 'handheld camera' jitter to the clip for an organic feel.
+    """
+    def jitter_pos(t):
+        x = int(intensity * np.sin(t * 7) * np.cos(t * 3))
+        y = int(intensity * np.cos(t * 8))
+        return (x, y)
+    return clip.with_position(jitter_pos)
+
 def make_bounce_pos(st, y_base=0):
     return lambda t: ("center", y_base + int(15 * np.sin((t - st) * 12)))
 
@@ -37,11 +67,10 @@ def color_shift_green_kill(get_frame, t, duration):
     # Strictly ensure memory contiguity to prevent MoviePy/FFMPEG diagonal render corruption
     return np.ascontiguousarray(new_frame)
 
-def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None, add_box=True):
+def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stroke_color="black", stroke_width=6, y_pos=None, add_box=True, shadow_offset=(5, 5), shadow_color=(0, 0, 0, 150)):
     """
     Creates a transparent PNG with text using Pillow.
-    Optimized for readability with viral shorts-style background boxes.
-    Strips emojis to avoid "tofu" boxes on systems without full emoji font support.
+    Optimized for readability with viral shorts-style background boxes or drop shadows.
     """
     # 1. Clean emojis from visual text
     result = []
@@ -56,13 +85,15 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    # Robust font loading
+    # Premium Font Loading (Prioritizing high-impact viral fonts)
     try:
         font_paths = [
-            "C:/Windows/Fonts/ariblk.ttf", # Arial Black
-            "C:/Windows/Fonts/impact.ttf", # Impact
-            "C:/Windows/Fonts/arialbd.ttf", # Arial Bold
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "assets/fonts/impact.ttf",     # Bundled (Recommended for 1M subs)
+            "assets/fonts/ariblk.ttf",     # Bundled
+            "C:/Windows/Fonts/impact.ttf", # Windows Classic
+            "C:/Windows/Fonts/ariblk.ttf", # Windows Arial Black
+            "/usr/share/fonts/truetype/msttcorefonts/Impact.ttf", # Linux (ubuntu-latest)
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", # Linux Fallback
             "C:/Windows/Fonts/arial.ttf"
         ]
         font_path = None
@@ -74,7 +105,8 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
         if font_path:
             font = ImageFont.truetype(font_path, font_size)
         else:
-            font = ImageFont.load_default()
+            # Fallback to default if no premium fonts found
+            font = ImageFont.load_default(size=font_size)
     except Exception as e:
         print(f"[Warning] Font loading error: {e}")
         font = ImageFont.load_default()
@@ -99,8 +131,6 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
     if current_line:
         lines.append(" ".join(current_line))
 
-    # Significant spacing to prevent any overlap
-    # Tight spacing for shorts style
     line_spacing = 30
     line_infos = []
     total_h = 0
@@ -119,12 +149,18 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
 
     for line, w, h in line_infos:
         x = (size[0] - w) / 2
+        
+        # 🟢 UPGRADE: Stylish Semi-Transparent Background Box
         if add_box:
-            px, py = 40, 15
-            draw.rectangle([x - px, start_y - py, x + w + px, start_y + h + py], fill=(0, 0, 0, 185))
+            px, py = 45, 12
+            draw.rounded_rectangle([x - px, start_y - py, x + w + px, start_y + h + py + 10], radius=15, fill=(0, 0, 0, 195))
+        
+        # 🟢 UPGRADE: Drop Shadow for "Punchy" Depth
+        if not add_box:
+            draw.text((x + shadow_offset[0], start_y + shadow_offset[1]), line, font=font, fill=shadow_color, anchor="lt")
 
-        # Draw text using anchor="lt" for deterministic positioning
-        draw.text((x, start_y), line, font=font, fill=color, anchor="lt")
+        # Main text
+        draw.text((x, start_y), line, font=font, fill=color, anchor="lt", stroke_width=stroke_width, stroke_fill=stroke_color)
         start_y += h + line_spacing
 
     return np.array(img)
@@ -278,34 +314,52 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             h_clip = ImageClip(h_img).with_start(start).with_duration(h_duration).with_position((0, 0))
             header_clips.append(h_clip.with_effects([vfx.CrossFadeIn(0.1)]))
 
-        # 2. Captions with Bounce Effect
+        # 2. Captions with Premium "Pop" Animation
         for i, entry in enumerate(subtitles):
             text = entry["word"].upper()
             start = entry["start"]
-            end = start + entry["duration"]
             
-            c_img = create_text_image(text, font_size=90, color="white", y_pos=SAFE_MID)
+            # 🟢 UPGRADE: High-impact Viral Colors (Alternating Yellow/Lime for variety)
+            vibrant_color = "yellow" if i % 2 == 0 else "#00FF00" # Lime
+            
+            # Use No Box + Drop Shadow for more "modern" look if it's single words
+            # If the text is long (> 3 words), use a box for readability
+            is_long = len(text.split()) > 3
+            
+            c_img = create_text_image(text, font_size=120, color=vibrant_color, y_pos=SAFE_MID, add_box=is_long, stroke_width=8)
+            
             # Minimum display duration for readability
-            c_duration = max(0.6, entry["duration"])
+            c_duration = max(0.5, entry["duration"])
             c_clip = ImageClip(c_img).with_start(start).with_duration(c_duration)
             
-            c_clip = c_clip.with_position(make_bounce_pos(start, 0))
+            # 🟢 UPGRADE: "Hormozi" Pop Effect (Scale from 0.8 to 1.1 then settle)
+            def pop_effect(t):
+                # t is relative to start of clip
+                if t < 0.1:
+                    return 0.8 + (0.3 * (t / 0.1)) # Fast zoom in
+                elif t < 0.2:
+                    return 1.1 - (0.1 * ((t - 0.1) / 0.1)) # Settle
+                return 1.0
+            
+            c_clip = c_clip.with_effects([vfx.Resize(pop_effect)])
+            c_clip = c_clip.with_position(("center", "center")) # Let Resize handle centering
             word_clips.append(c_clip)
 
-        # 3. FINAL REVEAL OVERLAY
+        # 3. FINAL REVEAL OVERLAY (🟢 UPGRADE: "Flash Reveal" for Retention)
         reveal_y = SAFE_MID + 100
+        reveal_duration = 0.5 # Super short window to force re-watch
         if mode == "FACTS":
-            reveal_img = create_text_image("Comment your guess... answer below 👇", font_size=110, color="orange", y_pos=reveal_y)
-            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
-            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
+            reveal_img = create_text_image("ANSWER IN COMMENTS 👇", font_size=110, color="orange", y_pos=reveal_y)
+            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(reveal_duration).with_position((0, 0))
+            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.1)]))
         elif mode.startswith("NEWS"):
-            reveal_img = create_text_image("STAY TUNED FOR MORE! 🚨", font_size=110, color="red", y_pos=reveal_y)
-            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
-            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
+            reveal_img = create_text_image("STAY TUNED! 🚨", font_size=110, color="red", y_pos=reveal_y)
+            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(reveal_duration).with_position((0, 0))
+            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.1)]))
         else: # STORY mode
-            reveal_img = create_text_image("LIKE & SUBSCRIBE! 🔔", font_size=120, color="yellow", y_pos=reveal_y)
-            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(2.5).with_position((0, 0))
-            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.5)]))
+            reveal_img = create_text_image("DID YOU SPOT IT? 🔔", font_size=120, color="yellow", y_pos=reveal_y)
+            reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(reveal_duration).with_position((0, 0))
+            word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.1)]))
 
     # 3. Performance Optimization: Pre-flatten static layers
     static_layer = CompositeVideoClip(
@@ -317,15 +371,15 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         [static_layer, progress_bar] + 
         persistent_clips + header_clips + word_clips, 
         size=(1080, 1920)
-    )
+    ).with_effects([vfx.CrossFadeIn(0.1)])
+    
+    # 🟢 UPGRADE: Final "Handheld" Jitter for organic feel
+    final_video = apply_handheld_jitter(final_video, intensity=1.2)
     
     # Removed Loopability Zoom Effect: Dynamically resizing the final composite alters frame resolutions 
     # mid-stream, breaking FFMPEG's fixed-pipe stride and causing severe diagonal tearing.
     
-    if music_path and os.path.exists(music_path):
-        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-        music = music.with_volume_scaled(0.18)
-        audio_clip = CompositeAudioClip([audio_clip, music])
+    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
     
     final_video = final_video.with_audio(audio_clip)
     final_video = final_video.with_fps(24).with_duration(duration)
@@ -458,10 +512,7 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
         size=(1080, 1920)
     )
     
-    if music_path and os.path.exists(music_path):
-        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-        music = music.with_volume_scaled(0.18)
-        audio_clip = CompositeAudioClip([audio_clip, music])
+    audio_clip = apply_audio_ducking(audio_clip, music_path, duration, boom_vol=0.35)
     
     final_video = final_video.with_audio(audio_clip)
     final_video = final_video.with_duration(duration)
@@ -538,10 +589,7 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
 
     final_video = CompositeVideoClip([clip1, clip2, dark1, dark2, divider, bg_bar, progress_bar, top_header, opt_a_clip, opt_b_clip, cta_clip], size=(1080, 1920))
 
-    if music_path and os.path.exists(music_path):
-        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-        music = music.with_volume_scaled(0.18)
-        audio_clip = CompositeAudioClip([audio_clip, music])
+    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
     
     final_video = final_video.with_audio(audio_clip)
     final_video = final_video.with_duration(duration)
@@ -612,10 +660,7 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
 
     # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
-    if music_path and os.path.exists(music_path):
-        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-        music = music.with_volume_scaled(0.15)
-        audio_clip = CompositeAudioClip([audio_clip, music])
+    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
     
     final_video = final_video.with_audio(audio_clip)
     final_video = final_video.with_duration(duration)
@@ -726,10 +771,7 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
 
     # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
-    if music_path and os.path.exists(music_path):
-        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-        music = music.with_volume_scaled(0.15)
-        audio_clip = CompositeAudioClip([audio_clip, music])
+    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
     
     final_video = final_video.with_audio(audio_clip)
     
@@ -782,11 +824,7 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
 
     # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
-    if music_path and os.path.exists(music_path):
-        bg_music_clip = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-        bg_music_clip = bg_music_clip.with_volume_scaled(0.2)
-        audio_clip = CompositeAudioClip([audio_clip, bg_music_clip])
-    
+    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
     final_video = final_video.with_audio(audio_clip)
     final_video = final_video.with_duration(duration)
     
@@ -880,13 +918,7 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     # Ensure audio lasts for the entire duration by combining voice with (optional) music or silence
     audio_clips = [audio_clip.with_start(0)]
     
-    if music_path and os.path.exists(music_path):
-        bg_music_clip = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-        bg_music_clip = bg_music_clip.with_volume_scaled(0.15)
-        audio_clips.append(bg_music_clip)
-    
-    # Using CompositeAudioClip automatically handles different durations correctly
-    final_audio = CompositeAudioClip(audio_clips).with_duration(duration)
+    final_audio = apply_audio_ducking(audio_clip, music_path, duration)
     final_video = final_video.with_audio(final_audio)
     
     print(f"[Log] Exporting ODD_ONE_OUT short: {output_path}")
@@ -969,9 +1001,7 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
     progress_bar = progress_bar.transform(lambda gf, t: color_shift_green_kill(gf, t, duration))
 
     final_audio = CompositeAudioClip([voice_clip, sfx_clip])
-    if music_path and os.path.exists(music_path):
-        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)]).with_volume_scaled(0.15)
-        final_audio = CompositeAudioClip([final_audio, music])
+    final_audio = apply_audio_ducking(final_audio, music_path, duration)
 
     final_video = CompositeVideoClip(
         [bg_clip, dark_overlay, bg_bar, progress_bar, top_header, bottom_footer, timer_bg, timer_fg, obj_clip] + word_clips,

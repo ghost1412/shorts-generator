@@ -183,9 +183,8 @@ def mutate_location(text):
     return text
 
 def mutate_number(text):
-    """Subtle number shift for stats/counts."""
-    # Matches words that are digits only
-    return re.sub(r'\b\d+\b', lambda m: str(int(m.group()) + random.choice([-1, 1, 3])), text)
+    """Subtle number shift for stats/counts (ensuring positive values)."""
+    return re.sub(r'\b\d+\b', lambda m: str(max(1, int(m.group()) + random.choice([-1, 1, 3]))), text)
 
 def mutate_relationship(text):
     """Semantic pivot for high-quality lies."""
@@ -371,25 +370,29 @@ TASK:
 Generate EXACTLY 2 TRUE facts ONLY. 
 DO NOT generate any false facts. 
 
+VIRAL RETENTION RULES:
+1. Use a MASSIVE curiosity hook. Avoid clichés.
+2. The Hook MUST be an incomplete thought that the facts satisfy.
+3. The script MUST end with a "Loop Lead" that connects back to the hook perfectly.
+
 STRICT RULES (MUST FOLLOW):
 1. Each fact must be under 10 words.
 2. Facts must be specific (include year, name, or detail).
-3. NO fictional or hybrid show names (e.g. dont blend 'The Simpsons' and 'Friends' into 'Simpfriends').
-4. NO vague or generic facts.
-5. NO TECHNICAL NOISE: Do NOT include URLs or JSON keys.
+3. NO fictional or hybrid show names.
+4. NO technical-sounding jargon or web URLs.
 
 CRITICAL DIVERSITY RULES:
 - Each fact MUST be about a DIFFERENT person, place, or entity.
-- Be 100% CERTAIN of the TRUE facts. If you have any doubt, pick a different subject.
-- Facts must be historically documented truths (e.g. things that were actually banned, discovered, or invented).
+- Be 100% CERTAIN of the TRUE facts. 
 
 OUTPUT FORMAT (JSON ONLY):
 {{
-  "hook": "5-word curiosity hook",
+  "hook": "Aggressive curiosity-gap hook",
   "facts": [
     {{"fact": "...", "truth": true}},
     {{"fact": "...", "truth": true}}
-  ]
+  ],
+  "loop_lead": "Short bridge that leads back to the hook"
 }}
 """
     
@@ -472,24 +475,23 @@ def generate_story(category="history"):
     print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
     
     prompt = f"""Generate a short, shocking, and 100% TRUE story about {selected_sub}. 
-VIRAL REQUIREMENTS:
-1. START WITH A MASSIVE CURIOSITY GAP (e.g., "The government doesn't want you to know about this {selected_sub} incident...").
-2. USE AGGRESSIVE HOOKS: "99% have no idea this happened," "This will keep you up at night," etc.
-3. Focus on an OBSCURE and RARE event. Avoid common stories or well-known events.
-4. Tell the story in a fast-paced, engaging way.
-5. End on a shocking twist or realization.
-6. Keep it under 100 words.
+VIRAL RETENTION RULES:
+1. START WITH A SHOCKING STATEMENT (e.g., "This man shouldn't be alive...").
+2. USE AGGRESSIVE HOOKS: "99% have no idea," "The government hid this," etc.
+3. FOCUS on the "Forbidden" or "Obscure" detail.
+4. The END of the story must bridge perfectly back to the first word of the hook (Seamless Loop).
 
-CRITICAL VALIDATION:
-- Story must be about a REAL documented event.
-- Must include at least one verifiable anchor (year, place, or specific person).
-- DO NOT fabricate unknown events or use vague terms like "someone" or "somewhere".
-- NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
+STORY RULES:
+1. Fast-paced, intense delivery.
+2. Must include ONE verifiable anchor (year/person/place).
+3. Under 90 words.
+4. NO TECHNICAL NOISE or "v1.0" or JSON keys.
 
 Format as JSON ONLY:
 {{
-  "title": "A short viral title with emojis",
-  "story": "The full story text starting with the intense hook..."
+  "title": "Viral Clickbait Title",
+  "story": "Intense story text...",
+  "loop_lead": "Optional bridge text for the loop"
 }}
 """
 
