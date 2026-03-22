@@ -36,7 +36,7 @@ def apply_audio_ducking(audio_clip, music_path, duration, duck_vol=0.12, boom_vo
             return duck_vol
         return boom_vol
         
-    music = music.with_effects([afx.Volumex(music_volume)])
+    music = music.with_effects([afx.MultiplyVolume(music_volume)])
     return CompositeAudioClip([audio_clip, music])
 
 def apply_handheld_jitter(clip, intensity=1.5):
