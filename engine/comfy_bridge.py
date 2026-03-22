@@ -4,7 +4,7 @@ import os
 import time
 import random
 
-COMFY_URL = "http://127.0.0.1:8188"
+COMFY_URL = "http://127.0.0.1:8000"
 
 def is_comfy_available():
     """Returns True if the local ComfyUI server is reachable."""
