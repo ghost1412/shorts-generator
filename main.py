@@ -78,7 +78,7 @@ def main():
                 full_script += f"2: {facts_data[1]['fact']} ... "
                 full_script += f"3: {facts_data[2]['fact']} ... "
                 # 🟢 UPGRADE: Seamless Viral Loop
-                full_script += f"The real answer is ... wait... {data.get('loop_lead', 'Go back and check again.')}"
+                full_script += f"The real answer is ... wait... {facts_res.get('loop_lead', 'Go back and check again.')}"
             elif mode == "STORY":
                 story_data = generate_story(category)
                 if not story_data: return
