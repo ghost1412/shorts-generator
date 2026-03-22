@@ -10,8 +10,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { mode, category, customScript, vibe } = await request.json();
-    const renderTarget = process.env.RENDER_TARGET || 'github'; 
+    const {
+      mode,
+      category,
+      customScript,
+      vibe,
+      useComfy,
+      useAiAudio
+    } = await request.json();
+    const renderTarget = process.env.RENDER_TARGET || 'github';
     const videoId = crypto.randomUUID();
 
     // 0. Security & Plan Limit Check (Backend enforcement)
@@ -25,6 +32,14 @@ export async function POST(request: Request) {
     const generationsUsed = userConfig?.generations_used || 0;
     const maxVideos = userConfig?.max_videos || 3;
     const plan = userConfig?.plan || 'free';
+
+    // 🟢 PRO RESTRICTION: Only 'pro' or 'enterprise' can use Advanced AI Backgrounds or Audio
+    if ((useComfy || useAiAudio) && userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise') {
+      return NextResponse.json(
+        { error: 'Pro plan required for Advanced AI Models' },
+        { status: 403 }
+      );
+    }
 
     if (plan === 'free' && generationsUsed >= maxVideos) {
       return NextResponse.json({ 
@@ -111,7 +126,9 @@ export async function POST(request: Request) {
             custom_script: customScript,
             vibe,
             video_id: videoId,
-            user_id: user.id
+            user_id: user.id,
+            use_comfy: useComfy ? 'true' : 'false',
+            use_ai_audio: useAiAudio ? 'true' : 'false'
           },
         }),
       }

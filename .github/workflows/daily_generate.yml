@@ -29,6 +29,14 @@ on:
         description: 'Unique Video/Job ID'
         required: false
         default: ''
+      use_comfy:
+        description: 'Use ComfyUI for backgrounds'
+        required: false
+        default: 'false'
+      use_ai_audio:
+        description: 'Use ComfyUI for AI Music & SFX'
+        required: false
+        default: 'false'
 
 jobs:
   generate-and-post:
@@ -105,14 +113,9 @@ jobs:
         USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
-        $params = @()
-        if ('${{ github.event.inputs.mode }}' -and '${{ github.event.inputs.mode }}' -ne 'AUTO') { $params += "--mode"; $params += "${{ github.event.inputs.mode }}" } else { $params += "--mode"; $params += "AUTO" }
-        if ('${{ github.event.inputs.category }}' -and '${{ github.event.inputs.category }}' -ne 'random') { $params += "--category"; $params += "${{ github.event.inputs.category }}" }
-        if ('${{ github.event.inputs.vibe }}') { $params += "--vibe"; $params += "${{ github.event.inputs.vibe }}" }
-        if ('${{ github.event.inputs.user_id }}') { $params += "--user_id"; $params += "${{ github.event.inputs.user_id }}" }
-        if ('${{ github.event.inputs.video_id }}') { $params += "--video_id"; $params += "${{ github.event.inputs.video_id }}" }
-        
-        python main.py @params
+          $use_comfy = if ("${{ github.event.inputs.use_comfy }}" -eq "true") { "--use_comfy" } else { "" }
+          $use_ai_audio = if ("${{ github.event.inputs.use_ai_audio }}" -eq "true") { "--use_ai_audio" } else { "" }
+          python main.py --mode "${{ github.event.inputs.mode || 'FACTS' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" $use_comfy $use_ai_audio
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'

@@ -29,6 +29,8 @@ import { logout } from '../login/actions';
 export default function Dashboard() {
   const [isTriggering, setIsTriggering] = useState(false);
   const [customScript, setCustomScript] = useState('');
+  const [useComfy, setUseComfy] = useState(false);
+  const [useAiAudio, setUseAiAudio] = useState(false);
   const [vibe, setVibe] = useState('suspense');
   const [videoLogs, setVideoLogs] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
@@ -128,7 +130,7 @@ export default function Dashboard() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, category, customScript: script || customScript, vibe }),
+        body: JSON.stringify({ mode, category, customScript: script || customScript, vibe, useComfy, useAiAudio }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -491,6 +493,82 @@ export default function Dashboard() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Advanced AI Toggle */}
+              <div className="pt-6 border-t border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-purple-500/10 rounded-lg">
+                      <Sparkles size={18} className="text-purple-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-white">Premium AI Backgrounds</p>
+                        {userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise' && (
+                          <span className="px-1.5 py-0.5 bg-purple-500 text-white text-[8px] font-black rounded uppercase tracking-tighter shadow-lg shadow-purple-500/40">PRO</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-500">Power by Local ComfyUI (Lightning XL)</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      if (userConfig?.plan === 'pro' || userConfig?.plan === 'enterprise') {
+                        setUseComfy(!useComfy);
+                      } else {
+                        alert("🚀 This is a PRO feature! Upgrade your plan to unlock cinematic AI backgrounds power by your local GPU.");
+                      }
+                    }}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${useComfy ? 'bg-purple-500' : 'bg-zinc-700'} ${userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise' ? 'opacity-50' : ''}`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${useComfy ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {useComfy && (
+                  <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl animate-in zoom-in-95 duration-200">
+                    <p className="text-[10px] text-purple-300 leading-relaxed italic">
+                      ✨ PRO MODE: Bypassing stock footage. AI will generate unique cinematic backgrounds for every scene using DreamShaperXL-Lightning.
+                    </p>
+                  </div>
+                )}
+
+                {/* AI Music & SFX Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-pink-500/10 rounded-lg">
+                      <TrendingUp size={18} className="text-pink-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-white">Unique AI Music & SFX</p>
+                        {userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise' && (
+                          <span className="px-1.5 py-0.5 bg-pink-500 text-white text-[8px] font-black rounded uppercase tracking-tighter shadow-lg shadow-pink-500/40">PRO</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-500">Local Stable Audio + Sync-Foley</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      if (userConfig?.plan === 'pro' || userConfig?.plan === 'enterprise') {
+                        setUseAiAudio(!useAiAudio);
+                      } else {
+                        alert("🎹 This is a PRO feature! Upgrade to generate unique soundtracks and synchronized SFX locally.");
+                      }
+                    }}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${useAiAudio ? 'bg-pink-500' : 'bg-zinc-700'} ${userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise' ? 'opacity-50' : ''}`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${useAiAudio ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+                {useAiAudio && (
+                  <div className="p-3 bg-pink-500/10 border border-pink-500/20 rounded-xl animate-in zoom-in-95 duration-200">
+                    <p className="text-[10px] text-pink-300 leading-relaxed italic">
+                      🎵 SONIC BRANDING: Generating unique 30s background tracks and subtitle 'whoosh' sounds for maximum impact.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Extreme Game Mode */}

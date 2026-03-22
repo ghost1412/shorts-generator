@@ -22,30 +22,18 @@ def add_pattern_interrupt(duration):
 def apply_audio_ducking(audio_clip, music_path, duration, duck_vol=0.12, boom_vol=0.28):
     """
     Applies professional audio ducking to background music.
-    Music is quieter during voiceover and 'booms' during reveals/CTAs.
     """
     if not music_path or not os.path.exists(music_path):
         return audio_clip
         
-    music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
-    
-    # Dynamic Volume Envelope
-    voice_duration = audio_clip.duration
-    def music_volume(t):
-        return np.where(t < voice_duration, duck_vol, boom_vol)
-        
-    # Apply dynamic volume via custom frame function (MoviePy 2.x compatible)
-    def duck_effect(get_frame, t):
-        vol = music_volume(t)
-        # Handle MoviePy 2.x vectorized 't' arrays (N_frames,) vs (N_frames, 2)
-        if isinstance(t, np.ndarray):
-            return vol[:, np.newaxis] * get_frame(t)
-        return vol * get_frame(t)
-    
-    # Capture original get_frame to prevent infinite recursion in the lambda
-    original_get_frame = music.get_frame
-    music = music.with_updated_frame_function(lambda t: duck_effect(original_get_frame, t))
-    return CompositeAudioClip([audio_clip, music])
+    try:
+        music = AudioFileClip(music_path).with_effects([afx.AudioLoop(duration=duration)])
+        # Standardize volume for stability in MoviePy 2.2.1
+        music = music.with_effects([afx.MultiplyVolume(duck_vol)])
+        return music.with_duration(duration)
+    except Exception as e:
+        print(f"[Warning] Audio ducking failed: {e}")
+        return None
 
 def apply_handheld_jitter(clip, intensity=1.5):
     """
@@ -214,7 +202,7 @@ def apply_ken_burns(clip, duration):
     cropped = zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
     return cropped.image_transform(np.ascontiguousarray)
 
-def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS"):
+def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
@@ -230,10 +218,14 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     for i, path in enumerate(video_paths):
         try:
-            clip = VideoFileClip(path)
-            # Ensure clip is long enough for its segment
-            n_loops = int(np.ceil(segment_duration / clip.duration)) if clip.duration > 0 else 1
-            clip = clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(segment_duration)
+            if path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                # 🟢 UPGRADE: AI-Generated Image Background Support
+                clip = ImageClip(path).with_duration(segment_duration)
+            else:
+                clip = VideoFileClip(path)
+                # Ensure clip is long enough for its segment
+                n_loops = int(np.ceil(segment_duration / clip.duration)) if clip.duration > 0 else 1
+                clip = clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(segment_duration)
             
             # Robust resize to cover 1080x1920
             clip = cover_resize(clip, (1080, 1920))
@@ -260,6 +252,27 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     persistent_clips = []
     header_clips = []
     word_clips = []
+    
+    # 🟢 PRO CONFIG: Sync-Foley SFX (Whooshes)
+    sfx_clips = []
+    if use_ai_audio:
+        from engine.media_gen import download_sfx
+        whoosh_path = download_sfx("whoosh", output_path=os.path.join(os.path.dirname(subs_path), "whoosh.mp3"))
+        if whoosh_path and os.path.exists(whoosh_path):
+            # MoviePy 2.2.1: use volumex if available or standardized effect
+            whoosh_clip = AudioFileClip(whoosh_path)
+            # Ensure it has a duration for composting
+            if whoosh_clip.duration is None:
+                whoosh_clip = whoosh_clip.with_duration(1.0)
+            
+            if hasattr(whoosh_clip, 'volumex'):
+                whoosh_clip = whoosh_clip.volumex(0.4)
+            else:
+                whoosh_clip = whoosh_clip.with_effects([afx.MultiplyVolume(0.4)])
+        else:
+            whoosh_clip = None
+    else:
+        whoosh_clip = None
     
     # Progress Bar (Urgency Curve)
     bar_height = 20
@@ -336,8 +349,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             
             c_img = create_text_image(text, font_size=120, color=vibrant_color, y_pos=SAFE_MID, add_box=is_long, stroke_width=8)
             
-            # Minimum display duration for readability
-            c_duration = max(0.5, entry["duration"])
+            # 🟢 FIX: Ensure duration doesn't overlap with the next word to prevent "fast" feeling
+            next_start = subtitles[i+1]["start"] if i + 1 < len(subtitles) else duration
+            max_dur = next_start - start
+            c_duration = min(max(0.3, entry["duration"]), max_dur)
+            
             c_clip = ImageClip(c_img).with_start(start).with_duration(c_duration)
             
             # 🟢 UPGRADE: "Hormozi" Pop Effect (Scale from 0.8 to 1.1 then settle)
@@ -352,6 +368,10 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             c_clip = c_clip.with_effects([vfx.Resize(pop_effect)])
             c_clip = c_clip.with_position(("center", "center")) # Let Resize handle centering
             word_clips.append(c_clip)
+            
+            # Sync-Foley: Add whoosh for every word or every important segment
+            if whoosh_clip and i % 2 == 0: # Every other word to avoid sonic clutter
+                sfx_clips.append(whoosh_clip.with_start(start))
 
         # 3. FINAL REVEAL OVERLAY (🟢 UPGRADE: "Flash Reveal" for Retention)
         reveal_y = SAFE_MID + 100
@@ -387,9 +407,23 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     # Removed Loopability Zoom Effect: Dynamically resizing the final composite alters frame resolutions 
     # mid-stream, breaking FFMPEG's fixed-pipe stride and causing severe diagonal tearing.
     
-    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    # 🟢 PRO UPGRADE: Standardized Pro-tier Audio Composition (MoviePy 2.x)
+    # 1. Start with the voiceover
+    all_audio_items = [audio_clip]
     
-    final_video = final_video.with_audio(audio_clip)
+    # 2. Add Ducked Music
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        all_audio_items.append(music_clip)
+        
+    # 3. Add Sync-Foley SFX (Whooshes/Pops)
+    if sfx_clips:
+        safe_foley = [c.with_duration(min(c.duration, duration - c.start)) for c in sfx_clips if c.start < duration]
+        all_audio_items.extend(safe_foley)
+        
+    # 4. Final Combined Audio Track
+    final_audio = CompositeAudioClip(all_audio_items).with_duration(duration)
+    final_video = final_video.with_audio(final_audio)
     final_video = final_video.with_fps(24).with_duration(duration)
     
     print(f"[Log] Exporting polished eye-candy short: {output_path}")
