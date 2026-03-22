@@ -32,15 +32,19 @@ def apply_audio_ducking(audio_clip, music_path, duration, duck_vol=0.12, boom_vo
     # Dynamic Volume Envelope
     voice_duration = audio_clip.duration
     def music_volume(t):
-        if t < voice_duration:
-            return duck_vol
-        return boom_vol
+        return np.where(t < voice_duration, duck_vol, boom_vol)
         
     # Apply dynamic volume via custom frame function (MoviePy 2.x compatible)
     def duck_effect(get_frame, t):
-        return music_volume(t) * get_frame(t)
+        vol = music_volume(t)
+        # Handle MoviePy 2.x vectorized 't' arrays (N_frames,) vs (N_frames, 2)
+        if isinstance(t, np.ndarray):
+            return vol[:, np.newaxis] * get_frame(t)
+        return vol * get_frame(t)
     
-    music = music.with_updated_frame_function(lambda t: duck_effect(music.get_frame, t))
+    # Capture original get_frame to prevent infinite recursion in the lambda
+    original_get_frame = music.get_frame
+    music = music.with_updated_frame_function(lambda t: duck_effect(original_get_frame, t))
     return CompositeAudioClip([audio_clip, music])
 
 def apply_handheld_jitter(clip, intensity=1.5):
