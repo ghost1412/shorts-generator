@@ -4,7 +4,7 @@ import os
 import time
 import random
 
-COMFY_URL = "http://127.0.0.1:8000"
+COMFY_URL = os.getenv("COMFY_URL", "http://127.0.0.1:8188")
 
 def is_comfy_available():
     """Returns True if the local ComfyUI server is reachable."""
@@ -50,33 +50,41 @@ def generate_cinematic_backgrounds(prompt, count=5, output_dir="assets/comfy_out
     try:
         response = requests.post(f"{COMFY_URL}/prompt", json={"prompt": workflow}, timeout=10)
         if response.status_code != 200:
-            print(f"[ComfyBridge] Error: API returned {response.status_code}")
+            print(f"[ComfyBridge] Error: Server returned status {response.status_code}: {response.text}")
             return []
         
         prompt_id = response.json().get("prompt_id")
-        print(f"[ComfyBridge] Queued job: {prompt_id}")
+        print(f"[ComfyBridge] Queued image job: {prompt_id}")
         
         # Simple polling for results
-        for _ in range(60): # 60 second timeout
+        for i in range(60): # 60 second timeout
             history_res = requests.get(f"{COMFY_URL}/history/{prompt_id}")
             if history_res.status_code == 200:
                 history = history_res.json()
                 if prompt_id in history:
                     # Job complete!
-                    img_data = history[prompt_id]['outputs']['9']['images'][0]
-                    filename = img_data['filename']
-                    
-                    # Download the result
-                    img_res = requests.get(f"{COMFY_URL}/view?filename={filename}&type=output")
-                    out_path = os.path.join(output_dir, f"ai_bg_{int(time.time())}.png")
-                    with open(out_path, "wb") as f:
-                        f.write(img_res.content)
-                    
-                    return [out_path] # For now, return one high-quality background
+                    job_info = history[prompt_id]
+                    if 'outputs' in job_info and '9' in job_info['outputs']:
+                        img_data = job_info['outputs']['9']['images'][0]
+                        filename = img_data['filename']
+                        
+                        # Download the result
+                        img_res = requests.get(f"{COMFY_URL}/view?filename={filename}&type=output")
+                        out_path = os.path.join(output_dir, f"ai_bg_{int(time.time())}.png")
+                        with open(out_path, "wb") as f:
+                            f.write(img_res.content)
+                        return [out_path] 
+                    else:
+                        print(f"[ComfyBridge] Image job finished but '9' output was missing. History: {job_info}")
+                        return []
             time.sleep(1)
             
+        print(f"[ComfyBridge] Image generation timed out after 60 seconds.")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"[ComfyBridge] Connection failed: {e}. Ensure ComfyUI is running on {COMFY_URL}")
     except Exception as e:
-        print(f"[ComfyBridge] Connection failed: {e}. Ensure ComfyUI is running on :8000")
+        print(f"[ComfyBridge] Exception during image generation: {e}")
     
     return []
 
