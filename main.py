@@ -1,8 +1,16 @@
 import os
 import sys
+import io
 import random
 import argparse
 from dotenv import load_dotenv
+
+# 🟢 Force UTF-8 for all standard streams (fixes CP1252/Emoji crashes on Windows)
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from supabase import create_client, Client
 from engine.utils import decrypt_secret
 
