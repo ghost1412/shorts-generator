@@ -70,8 +70,9 @@ export default function Dashboard() {
         const { data: config } = await supabase.from('user_configs').select('*').single();
         if (config) {
           setUserConfig(config);
+          const plan = config.plan?.toLowerCase() || 'free';
           // 🟢 PRO UPGRADE: Auto-enable advanced models for Pro+ users
-          if (config.plan === 'pro' || config.plan === 'enterprise') {
+          if (plan === 'pro' || plan === 'enterprise') {
             setUseComfy(true);
             setUseAiAudio(true);
           }
@@ -125,10 +126,11 @@ export default function Dashboard() {
   }, [user, supabase, videoLogs.length, videoLogs.some(log => log.status === 'Processing'), Object.keys(thumbnailUrls).length]);
 
   async function triggerGeneration(mode = 'AUTO', category = 'random', script = '') {
+    const plan = userConfig?.plan?.toLowerCase() || 'free';
     const generationsUsed = userConfig?.generations_used || 0;
     const maxVideos = userConfig?.max_videos || 3;
 
-    if (userConfig?.plan === 'free' && generationsUsed >= maxVideos) {
+    if (plan === 'free' && generationsUsed >= maxVideos) {
       alert(`❌ Usage limit reached! You have used all ${maxVideos} generations in your free plan. Upgrade to Pro for unlimited!`);
       return;
     }
@@ -521,13 +523,14 @@ export default function Dashboard() {
                   </div>
                   <button 
                     onClick={() => {
-                      if (userConfig?.plan === 'pro' || userConfig?.plan === 'enterprise') {
+                      const currentPlan = userConfig?.plan?.toLowerCase() || 'free';
+                      if (currentPlan === 'pro' || currentPlan === 'enterprise') {
                         setUseComfy(!useComfy);
                       } else {
                         alert("🚀 This is a PRO feature! Upgrade your plan to unlock cinematic AI backgrounds power by your local GPU.");
                       }
                     }}
-                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${useComfy ? 'bg-purple-500' : 'bg-zinc-700'} ${userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise' ? 'opacity-50' : ''}`}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${useComfy ? 'bg-purple-500' : 'bg-zinc-700'} ${userConfig?.plan?.toLowerCase() !== 'pro' && userConfig?.plan?.toLowerCase() !== 'enterprise' ? 'opacity-50' : ''}`}
                   >
                     <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${useComfy ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
@@ -558,13 +561,14 @@ export default function Dashboard() {
                   </div>
                   <button 
                     onClick={() => {
-                      if (userConfig?.plan === 'pro' || userConfig?.plan === 'enterprise') {
+                      const currentPlan = userConfig?.plan?.toLowerCase() || 'free';
+                      if (currentPlan === 'pro' || currentPlan === 'enterprise') {
                         setUseAiAudio(!useAiAudio);
                       } else {
                         alert("🎹 This is a PRO feature! Upgrade to generate unique soundtracks and synchronized SFX locally.");
                       }
                     }}
-                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${useAiAudio ? 'bg-pink-500' : 'bg-zinc-700'} ${userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise' ? 'opacity-50' : ''}`}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${useAiAudio ? 'bg-pink-500' : 'bg-zinc-700'} ${userConfig?.plan?.toLowerCase() !== 'pro' && userConfig?.plan?.toLowerCase() !== 'enterprise' ? 'opacity-50' : ''}`}
                   >
                     <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${useAiAudio ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
