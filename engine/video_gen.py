@@ -206,7 +206,12 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
-    audio_clip = AudioFileClip(audio_path)
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load main audio: {e}")
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+
     # Extension for "Suspense Reveal" - Tighten to 1.5s for retention
     duration = audio_clip.duration + 1.5 
     
@@ -259,16 +264,20 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         from engine.media_gen import download_sfx
         whoosh_path = download_sfx("whoosh", output_path=os.path.join(os.path.dirname(subs_path), "whoosh.mp3"))
         if whoosh_path and os.path.exists(whoosh_path):
-            # MoviePy 2.2.1: use volumex if available or standardized effect
-            whoosh_clip = AudioFileClip(whoosh_path)
-            # Ensure it has a duration for composting
-            if whoosh_clip.duration is None:
-                whoosh_clip = whoosh_clip.with_duration(1.0)
-            
-            if hasattr(whoosh_clip, 'volumex'):
-                whoosh_clip = whoosh_clip.volumex(0.4)
-            else:
-                whoosh_clip = whoosh_clip.with_effects([afx.MultiplyVolume(0.4)])
+            try:
+                # MoviePy 2.2.1: use volumex if available or standardized effect
+                whoosh_clip = AudioFileClip(whoosh_path)
+                # Ensure it has a duration for composting
+                if whoosh_clip.duration is None:
+                    whoosh_clip = whoosh_clip.with_duration(1.0)
+                
+                if hasattr(whoosh_clip, 'volumex'):
+                    whoosh_clip = whoosh_clip.volumex(0.4)
+                else:
+                    whoosh_clip = whoosh_clip.with_effects([afx.MultiplyVolume(0.4)])
+            except Exception as e:
+                print(f"[Warning] Failed to load whoosh SFX: {e}")
+                whoosh_clip = None
         else:
             whoosh_clip = None
     else:
@@ -436,7 +445,13 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     Composes an EXTREMELY CHALLENGING "Find the Target" game video.
     Uses circular masking and a solid background (greenscreen).
     """
-    audio_clip = AudioFileClip(audio_path)
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load voiceover audio: {e}")
+        # Fatal error for the video if main audio is missing, but let's handle it gracefully
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+        
     # Give it a 3-second reveal window at the end
     duration = audio_clip.duration + 3.0
     
@@ -568,7 +583,12 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
     """
     Composes a split-screen Would You Rather video.
     """
-    audio_clip = AudioFileClip(audio_path)
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load main audio: {e}")
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+
     duration = audio_clip.duration + 3.0 # Extra time for reveal
     
     # 1. Backgrounds (Split screen)
@@ -645,7 +665,11 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
     """
     Composes a Reddit Story video with a static title overlay and dynamic subtitles.
     """
-    audio_clip = AudioFileClip(audio_path)
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load main audio: {e}")
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
     duration = audio_clip.duration + 1.0 # Buffer
 
     # 1. Background (Satisfying video)
@@ -716,7 +740,11 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
     """
     Composes a Trivia Quiz video with timer and answer reveal.
     """
-    audio_clip = AudioFileClip(audio_path)
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load main audio: {e}")
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
     reveal_duration = 3.0
     duration = audio_clip.duration + reveal_duration
     
@@ -880,7 +908,13 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     Composes an Odd One Out puzzle video.
     Builds a 5x6 grid of the base image, but modifies one (the odd one) to be slightly rotated/flipped.
     """
-    audio_clip = AudioFileClip(audio_path)
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load main audio: {e}")
+        # Fatal error for the video if main audio is missing
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+        
     timer_duration = 5.0
     duration = audio_clip.duration + timer_duration + 2.0
     
@@ -973,8 +1007,12 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
     Composes a 'Guess the Sound' challenge video.
     """
     # 1. Load Audio
-    voice_clip = AudioFileClip(audio_path)
-    sfx_clip = AudioFileClip(sfx_path).with_volume_scaled(1.5)
+    try:
+        voice_clip = AudioFileClip(audio_path)
+        sfx_clip = AudioFileClip(sfx_path).with_volume_scaled(1.5)
+    except Exception as e:
+        print(f"[Error] Failed to load challenge audio: {e}")
+        raise RuntimeError(f"Challenge audio files are unreadable: {e}")
     
     # We need to find the gap in the voice for the SFX
     # The script is: [Hook] ... [Reveal]

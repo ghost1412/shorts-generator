@@ -237,7 +237,19 @@ def download_sfx(query, output_path="assets/sfx.mp3"):
         
     try:
         print(f"[Log] Downloading SFX: {selected_url}")
-        content = requests.get(selected_url, timeout=20).content
+        r = requests.get(selected_url, timeout=20, stream=True)
+        r.raise_for_status()
+        
+        # Basic validation: ensure it's not an HTML error page or empty
+        if 'text/html' in r.headers.get('Content-Type', ''):
+            print(f"[Error] SFX URL returned HTML instead of audio: {selected_url}")
+            return None
+            
+        content = r.content
+        if len(content) < 1000: # Less than 1KB is likely not a valid MP3
+            print(f"[Error] SFX download is too small to be valid ({len(content)} bytes)")
+            return None
+
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "wb") as f:
             f.write(content)
