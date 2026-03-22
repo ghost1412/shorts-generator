@@ -76,7 +76,7 @@ def generate_cinematic_backgrounds(prompt, count=5, output_dir="assets/comfy_out
             time.sleep(1)
             
     except Exception as e:
-        print(f"[ComfyBridge] Connection failed: {e}. Ensure ComfyUI is running on :8188")
+        print(f"[ComfyBridge] Connection failed: {e}. Ensure ComfyUI is running on :8000")
     
     return []
 

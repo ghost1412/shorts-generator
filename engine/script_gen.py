@@ -128,7 +128,7 @@ def check_hallucinations(facts):
     # Prepare a condensed list for the checker
     test_str = "\n".join([f"- {f['fact']}" for f in facts if f['truth']])
     
-    prompt = f"""You are an elite Fact-Checker. Review these 2 facts. 
+    prompt = f"""You are an elite Fact-Checker. Review these {len(facts)} facts. 
 Are ANY of them actually FALSE, logically impossible, or based on common myths?
 
 FACTS TO CHECK:
@@ -141,7 +141,7 @@ CRITICAL CHECKS:
 4. No 'produced in X but aired in Y' ambiguous confusing facts.
 
 First, briefly explain your reasoning in 1-2 sentences.
-Then, on a new line, write exactly 'DECISION: PASS' if BOTH facts are verified and logically sound.
+Then, on a new line, write exactly 'DECISION: PASS' if ALL facts in the list are verified and logically sound.
 Write exactly 'DECISION: FAIL' if ANY fact is suspicious, incorrect, or ambiguous.
 """
 
@@ -202,9 +202,9 @@ def mutate_method(text):
             return re.sub(re.escape(k), v, text, flags=re.IGNORECASE)
     return text
 
-def create_false_from_true(facts):
+def create_false_from_true(base_text):
     """Procedurally generates a SUBTLE lie using weighted mutation types."""
-    base = random.choice(facts)["fact"]
+    base = base_text
     
     mutations = [
         mutate_year,
@@ -367,7 +367,7 @@ def generate_mixed_facts(category="science"):
     prompt = f"""SPOT THE LIE! 🔍 Review these facts about {selected_sub}. 
     
 TASK:
-Generate EXACTLY 2 TRUE facts ONLY. 
+Generate EXACTLY 3 TRUE facts ONLY. 
 DO NOT generate any false facts. 
 
 VIRAL RETENTION RULES:
@@ -389,6 +389,7 @@ OUTPUT FORMAT (JSON ONLY):
 {{
   "hook": "Aggressive curiosity-gap hook",
   "facts": [
+    {{"fact": "...", "truth": true}},
     {{"fact": "...", "truth": true}},
     {{"fact": "...", "truth": true}}
   ],
@@ -412,12 +413,12 @@ OUTPUT FORMAT (JSON ONLY):
         facts_list = data.get("facts", [])
         for f in facts_list:
             f["fact"] = f["fact"].split(": ", 1)[-1] if ": " in f["fact"] else f["fact"]
-        data["facts"] = facts_list[:2] # We only need 2 true ones
+        data["facts"] = facts_list[:3] # We only need 3 true ones
         return data
 
     def facts_validator(data):
         facts = data.get("facts", [])
-        if len(facts) < 2: 
+        if len(facts) < 3: 
             print("❌ Validation failed: Not enough facts.")
             return False
         if reject_bad_facts(facts):
@@ -437,21 +438,30 @@ OUTPUT FORMAT (JSON ONLY):
     result = with_best_of_n(
         llm_call, 
         facts_validator, 
-        n=3
+        n=3,
+        fallback=lambda: generate_fallback_facts(category)
     )
     
-    # ASSEMBLY: 2 True + 1 Procedural False
-    true_facts = [f for f in result["facts"] if f.get("truth") is True][:2]
+    # ASSEMBLY: 3 Unique True Subjects -> 2 True + 1 Procedural False
+    true_facts = [f for f in result["facts"] if f.get("truth") is True]
     
-    # Generate the lie from one of the truths (Procedural Mutation)
-    false_fact_text = create_false_from_true(true_facts)
+    # Ensure we actually got 3 true facts, if not, fallback
+    if len(true_facts) < 3:
+        true_facts = generate_fallback_facts(category)["facts"]
+        
+    kept_true = true_facts[:2]
+    fact_to_mutate = true_facts[2]["fact"]
+    
+    # Generate the lie from the 3rd true fact (Procedural Mutation)
+    false_fact_text = create_false_from_true(fact_to_mutate)
     false_fact = {"fact": false_fact_text, "truth": False}
     
-    final_facts = true_facts + [false_fact]
+    final_facts = kept_true + [false_fact]
     random.shuffle(final_facts)
     
     return {
         "hook": result["hook"],
+        "loop_lead": result.get("loop_lead", ""),
         "facts": final_facts
     }
 
