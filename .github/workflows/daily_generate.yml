@@ -54,12 +54,15 @@ jobs:
           ${{ runner.os }}-shorts-${{ hashFiles('**/requirements.txt') }}-
           ${{ runner.os }}-shorts-
 
-    - name: Install FFmpeg (Linux)
+    - name: Install FFmpeg & Fonts (Linux)
       if: runner.os == 'Linux'
       shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install -y ffmpeg
+        # Install MS Core Fonts (Impact, Arial, etc.) non-interactively
+        echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+        sudo apt-get install -y ttf-mscorefonts-installer
 
     - name: Verify FFmpeg (Windows)
       if: runner.os == 'Windows'
