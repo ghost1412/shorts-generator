@@ -68,7 +68,14 @@ export default function Dashboard() {
         if (logs) setVideoLogs(logs);
 
         const { data: config } = await supabase.from('user_configs').select('*').single();
-        if (config) setUserConfig(config);
+        if (config) {
+          setUserConfig(config);
+          // 🟢 PRO UPGRADE: Auto-enable advanced models for Pro+ users
+          if (config.plan === 'pro' || config.plan === 'enterprise') {
+            setUseComfy(true);
+            setUseAiAudio(true);
+          }
+        }
       }
     }
     init();
