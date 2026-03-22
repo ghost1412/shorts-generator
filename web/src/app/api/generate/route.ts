@@ -10,14 +10,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const {
+    const body = await request.json();
+    let {
       mode,
       category,
       customScript,
       vibe,
       useComfy,
       useAiAudio
-    } = await request.json();
+    } = body;
+
+    // Defensive check: support snake_case from older/misc clients
+    if (useComfy === undefined) useComfy = body.use_comfy;
+    if (useAiAudio === undefined) useAiAudio = body.use_ai_audio;
+    if (customScript === undefined) customScript = body.custom_script;
     const renderTarget = process.env.RENDER_TARGET || 'github';
     const videoId = crypto.randomUUID();
 
@@ -33,12 +39,22 @@ export async function POST(request: Request) {
     const maxVideos = userConfig?.max_videos || 3;
     const plan = userConfig?.plan || 'free';
 
-    // 🟢 PRO RESTRICTION: Only 'pro' or 'enterprise' can use Advanced AI Backgrounds or Audio
-    if ((useComfy || useAiAudio) && userConfig?.plan !== 'pro' && userConfig?.plan !== 'enterprise') {
+    // 🟢 PRO RESTRICTION: Only 'pro' or 'enterprise' can use Advanced AI Models or Audio
+    const isPro = userConfig?.plan?.toLowerCase() === 'pro' || userConfig?.plan?.toLowerCase() === 'enterprise';
+    
+    if ((useComfy || useAiAudio) && !isPro) {
       return NextResponse.json(
         { error: 'Pro plan required for Advanced AI Models' },
         { status: 403 }
       );
+    }
+
+    // 🟢 PRO RESILIENCE: If user IS Pro, but flags came in as false/missing, we AUTO-ENABLE them.
+    // This fixes state-sync issues where the frontend might lag behind the DB status.
+    if (isPro) {
+      if (useComfy === undefined || useComfy === false || useComfy === "false") useComfy = true;
+      if (useAiAudio === undefined || useAiAudio === false || useAiAudio === "false") useAiAudio = true;
+      console.log(`[API] Pro user detected (${user.id}). Auto-enabling AI flags: Comfy=${useComfy}, Audio=${useAiAudio}`);
     }
 
     if (plan === 'free' && generationsUsed >= maxVideos) {
