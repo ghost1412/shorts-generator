@@ -8,33 +8,274 @@ import re
 load_dotenv()
 
 HF_API_KEY = os.getenv("HF_API_KEY")
+LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/api/chat") # Default Ollama
 
-def robust_json_parse(output):
-    """
-    Tries to extract and fix a JSON block from LLM output.
-    Handles unescaped newlines, control characters, and common LLM quirks.
-    """
-    # Remove control characters that break JSON (except for newline/tab/carriage-return)
-    clean_output = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', output)
-    
-    # Try to find the inner JSON block (starts with { or [ and ends with } or ])
-    match = re.search(r'([\[\{].*[\]\}])', clean_output, re.DOTALL)
-    if not match:
-        raise ValueError("No JSON-like structure found in response.")
-        
-    json_str = match.group(1).strip()
-    
-    # Common fixes for LLM-generated JSON
-    # 1. Unescaped newlines inside strings
+def get_llm_response(
+    prompt,
+    system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
+    max_tokens=2048,
+    temperature=0.3,
+    model="meta-llama/Llama-3.1-8B-Instruct"
+):
+    import requests
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    # 1. Try Local LLM (Ollama)
+    if LOCAL_LLM_URL:
+        try:
+            print(f"[Log] Attempting local LLM at {LOCAL_LLM_URL}...")
+
+            payload = {
+                "model": "llama3:8b-instruct-q4_K_M",  # 🔥 better model
+                "messages": messages,
+                "stream": True,
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": min(max_tokens, 32768), # Allow longer responses for complex extractions
+                    "num_ctx": 32768  # 🔥 Massive context for 100k+ char transcripts
+                }
+            }
+
+            response = requests.post(
+                LOCAL_LLM_URL,
+                json=payload,
+                timeout=300  # 🔥 increased for long videos
+            )
+            response.raise_for_status()
+
+            try:
+                data = response.json()
+                content = data.get("message", {}).get("content", "")
+                if not content:
+                    raise json.JSONDecodeError("Empty content in main object", "", 0)
+            except json.JSONDecodeError as e:
+                # 🟢 PHASE 13: Robust NDJSON/Extra Data Stitching
+                lines = response.text.strip().split('\n')
+                all_content = []
+                for line in lines:
+                    try:
+                        temp = json.loads(line)
+                        c = temp.get("message", {}).get("content", "")
+                        if c: all_content.append(c)
+                    except:
+                        continue
+                if all_content:
+                    content = "".join(all_content)
+                    data = {"message": {"content": content}}
+                else:
+                    raise e
+
+            content = data["message"]["content"]  # ✅ guaranteed non-empty
+            print("[Log] Local LLM success!")
+            return content
+
+        except requests.exceptions.Timeout:
+            print("[Warn] Local LLM timeout, retrying with extra time...")
+            try:
+                response = requests.post(
+                    LOCAL_LLM_URL,
+                    json=payload,
+                    timeout=300 # 5 minutes for massive transcripts
+                )
+                response.raise_for_status()
+                
+                try:
+                    data = response.json()
+                    content = data.get("message", {}).get("content", "")
+                    if not content:
+                        raise json.JSONDecodeError("Empty content in main object (retry)", "", 0)
+                except json.JSONDecodeError as e:
+                    # 🟢 PHASE 13: Robust NDJSON/Extra Data Stitching (Retry)
+                    lines = response.text.strip().split('\n')
+                    all_content = []
+                    for line in lines:
+                        try:
+                            temp = json.loads(line)
+                            c = temp.get("message", {}).get("content", "")
+                            if c: all_content.append(c)
+                        except:
+                            continue
+                    if all_content:
+                        content = "".join(all_content)
+                        data = {"message": {"content": content}}
+                    else:
+                        raise e
+                        
+                return data["message"]["content"]
+            except Exception as e:
+                print(f"[Info] Retry failed: {e}")
+
+        except Exception as e:
+            print(f"[Info] Local LLM failed: {e}")
+            # Ensure we don't leave connection hanging
+            if 'response' in locals() and hasattr(response, 'close'):
+                response.close()
+
+    # 2. HuggingFace fallback
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature
+    }
+
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
+
+def _clean_json_string(s):
+    """Internal helper to clean comments and trailing commas."""
+    import re
+    # 1. Remove control characters
+    s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', s)
+    # 2. Fix unescaped newlines inside strings
     def fix_newlines(m):
         return m.group(0).replace('\n', '\\n')
-    json_str = re.sub(r'"[^"]*?"', fix_newlines, json_str, flags=re.DOTALL)
-    
-    # 2. Fix trailing commas (e.g. [1, 2, ])
-    json_str = re.sub(r',\s*([\]\}])', r'\1', json_str)
-    
-    return json.loads(json_str)
+    s = re.sub(r'"[^"]*?"', fix_newlines, s, flags=re.DOTALL)
+    # 3. Strip comments
+    s = re.sub(r'//.*?\n', '', s)
+    s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
+    # 4. Fix trailing commas (e.g. [1, 2, ])
+    s = re.sub(r',\s*([\]\}])', r'\1', s)
+    return s.strip()
 
+def robust_json_parse(output):
+    """Tries multiple strategies to extract JSON from LLM output, including regex fallback."""
+    import re, json
+    if not output: return None
+        
+    # 🟢 PHASE 20: REGEX FALLBACK (for conversational LLMs)
+    # Extracts patterns like (0.00s - 15.4s) or "start": 10.5, "end": 20.1
+    def try_regex_recovery(text):
+        print("[Log] JSON parse failed, attempting Regex recovery from conversational text...")
+        # Patterns: (10.5s - 20.1s), 10.5-20.1, [10.5, 20.1], 01:23 - 01:45
+        patterns = [
+            r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
+            r"(\d{1,2}:\d{2}:?\d{0,2})\s*[\-\–\—to,]+\s*(\d{1,2}:\d{2}:?\d{0,2})", # 01:23 - 01:45
+            r"start[\"':\s]+(\d+\.?\d*)[\s,]*end[\"':\s]+(\d+\.?\d*)", # "start": 10.5
+        ]
+        
+        def time_to_sec(ts):
+            if ":" not in ts: return float(ts)
+            parts = ts.split(":")
+            if len(parts) == 3: return int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
+            return int(parts[0])*60 + float(parts[1])
+
+        items = []
+        for p in patterns:
+            matches = re.findall(p, text, re.IGNORECASE)
+            for m in matches:
+                try:
+                    s_val = time_to_sec(m[0])
+                    e_val = time_to_sec(m[1])
+                    if e_val > s_val:
+                        if not any(i['start'] == s_val and i['end'] == e_val for i in items):
+                            items.append({"start": s_val, "end": e_val, "reason": "Recovered Segment", "viral_score": 80})
+                except: continue
+            if items: break
+        return items if items else None
+
+    start_idx = -1
+    for i, char in enumerate(output):
+        if char in ('{', '['):
+            start_idx = i
+            break
+            
+    if start_idx == -1:
+        # 🟢 Fallback to Regex if NO JSON structure at all
+        recovered = try_regex_recovery(output)
+        if recovered: return recovered
+        print(f"[Error] No JSON start found in output: {output[:300]}...")
+        return None
+        
+    # Manual scan to find the first complete balanced structure
+    stack = []
+    in_string = False
+    escaped = False
+    balanced_str = ""
+    
+    for i in range(start_idx, len(output)):
+        char = output[i]
+        if char == '"' and not escaped: in_string = not in_string
+        if in_string:
+            if char == '\\': escaped = not escaped
+            else: escaped = False
+        else:
+            if char == '{': stack.append('}')
+            elif char == '[': stack.append(']')
+            elif char in ('}', ']'):
+                if stack and stack[-1] == char:
+                    stack.pop()
+                    if not stack: 
+                        balanced_str = output[start_idx:i+1]
+                        break
+    
+    json_str = _clean_json_string(balanced_str or output[start_idx:])
+    
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as initial_err:
+        # 1. Handle "Extra data" (take the first object only)
+        if "Extra data" in str(initial_err):
+            try:
+                surgical_str = _clean_json_string(json_str[:initial_err.pos])
+                return json.loads(surgical_str)
+            except:
+                pass 
+                
+        print(f"[Log] Initial JSON parse failed ({initial_err}), attempting auto-repair...")
+        
+        # 2. Stack-based repair for truncated structures
+        stack = []
+        in_string = False
+        escaped = False
+        for char in json_str:
+            if char == '"' and not escaped: in_string = not in_string
+            if in_string:
+                if char == '\\': escaped = not escaped
+                else: escaped = False
+                continue
+            if char == '{': stack.append('}')
+            elif char == '[': stack.append(']')
+            elif char in ('}', ']'):
+                if stack and stack[-1] == char: stack.pop()
+        
+        if stack:
+            repaired_str = json_str.strip()
+            
+            # Use rfind to see if we ended in the middle of an object
+            last_valid_end = max(repaired_str.rfind('}'), repaired_str.rfind(']'))
+            if last_valid_end != -1 and last_valid_end < len(repaired_str) - 2:
+                junk = repaired_str[last_valid_end+1:].strip()
+                if junk and (junk.startswith(',') or junk.startswith('{')):
+                    print(f"[Log] Discarding partial trailing junk: {junk[:20]}...")
+                    repaired_str = repaired_str[:last_valid_end+1]
+                    # Recursive call on cleaned string
+                    return robust_json_parse(repaired_str)
+
+            repaired_str = _clean_json_string(repaired_str + "".join(reversed(stack)))
+            
+            try:
+                return json.loads(repaired_str)
+            except Exception as repair_err:
+                print(f"[Error] Auto-repair failed at {getattr(repair_err, 'pos', '?')}: {repair_err}")
+                print(f"[Log] Repaired snippet (hex): {' '.join([f'{ord(c):02x}' for c in repaired_str[:20]])}")
+                print(f"[Log] Repaired snippet (text): {repaired_str[:50]}...")
+                raise initial_err
+        else:
+            print(f"[Log] Original failing snippet (hex): {' '.join([f'{ord(c):02x}' for c in json_str[:20]])}")
+            print(f"[Error] No stack mismatch found, cannot repair: {initial_err}")
+            raise initial_err
 
 def get_sub_topic(category):
     """
@@ -146,17 +387,8 @@ Write exactly 'DECISION: FAIL' if ANY fact is suspicious, incorrect, or ambiguou
 """
 
     try:
-        url = "https://router.huggingface.co/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {HF_API_KEY}", "Content-Type": "application/json"}
-        payload = {
-            "model": "meta-llama/Llama-3.1-8B-Instruct",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 150,
-            "temperature": 0.0 # Extreme precision
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=15)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"].strip().upper()
+        response_text = get_llm_response(prompt, temperature=0.0, max_tokens=150)
+        output = response_text.strip().upper()
         
         # Log the output safely on one line
         log_out = output.replace('\n', ' | ')
@@ -345,6 +577,58 @@ def generate_fallback_facts(category):
         ]
     }
 
+def generate_long_form_facts(category="science", count=12):
+    """
+    Generates a large set of true facts for long-form landscape videos.
+    Returns a dict: {"title": str, "facts": list}
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] [Long-Form] Selected sub-topic: {selected_sub}")
+
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    prompt = f"""Generate a high-impact, epic list of {count} fascinating facts about {selected_sub}.
+    
+    TONE: Epic, high-stakes, world-shaking.
+    
+    RULES:
+    1. Each fact must be extremely punchy (under 12 words).
+    2. Include specific dates, names, or massive numbers.
+    3. Ensure 100% accuracy.
+    4. Provide a viral 'Epic Title' for the video.
+
+    OUTPUT FORMAT (JSON ONLY):
+    {{
+      "title": "Epic catchy title",
+      "facts": [
+        {{"fact": "...", "truth": true}},
+        ... ({count} total)
+      ]
+    }}
+    """
+    
+    try:
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=1200)
+        data = robust_json_parse(response_text)
+        
+        # Basic validation: ensure we have at least 8 facts
+        if len(data.get("facts", [])) < 8:
+            raise ValueError("Insufficient facts generated.")
+            
+        print(f"[Log] Successfully generated {len(data['facts'])} long-form facts.")
+        return data
+    except Exception as e:
+        print(f"[Error] Long-form fact generation failed: {e}")
+        # Fallback to a few facts
+        return {
+            "title": f"The Secrets of {selected_sub.capitalize()}",
+            "facts": [{"fact": "The universe is expanding faster than light.", "truth": True}] * count
+        }
+
 def generate_mixed_facts(category="science"):
     """
     Generates 2 True facts and 1 False fact using LLM with robust fallbacks.
@@ -399,16 +683,8 @@ OUTPUT FORMAT (JSON ONLY):
 """
     
     def llm_call(attempt):
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 800,
-            "temperature": 0.2
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        data = robust_json_parse(output)
+        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=800)
+        data = robust_json_parse(response_text)
         
         # Clean data (prefixes)
         facts_list = data.get("facts", [])
@@ -562,16 +838,8 @@ Format as JSON ONLY:
 """
 
     def llm_call(attempt):
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 400,
-            "temperature": 0.2
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        wyr = robust_json_parse(output)
+        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
+        wyr = robust_json_parse(response_text)
         if wyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
             wyr["percent_b"] = 100 - wyr.get("percent_a", 50)
         return wyr
@@ -620,16 +888,8 @@ JSON Structure:
 """
 
     def llm_call(attempt):
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 600,
-            "temperature": 0.2
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=25)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        return robust_json_parse(output)
+        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=600)
+        return robust_json_parse(response_text)
 
     return with_best_of_n(llm_call, validate_reddit, n=3)
 
@@ -675,16 +935,8 @@ Format as JSON ONLY:
 """
 
     def llm_call(attempt):
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 400,
-            "temperature": 0.2
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        return robust_json_parse(output)
+        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
+        return robust_json_parse(response_text)
 
     return with_best_of_n(llm_call, validate_trivia, n=3)
 
@@ -729,16 +981,8 @@ JSON Structure:
 """
 
     def llm_call(attempt):
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 400,
-            "temperature": 0.2
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        return robust_json_parse(output)
+        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
+        return robust_json_parse(response_text)
 
     return with_best_of_n(llm_call, validate_quote, n=3)
 def generate_funny_news(category="general", tone="funny"):
@@ -920,16 +1164,8 @@ Format as JSON ONLY:
 """
 
     def llm_call(attempt):
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 400,
-            "temperature": 0.3 if tone == "funny" else 0.2
-        }
-        response = requests.post(url, headers=api_headers, json=payload, timeout=20)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        data = robust_json_parse(output)
+        response_text = get_llm_response(prompt, temperature=0.3 if tone == "funny" else 0.2, max_tokens=400)
+        data = robust_json_parse(response_text)
         data["source"] = real_source
         data["original_headline"] = real_headline
         data["tone"] = tone
@@ -947,6 +1183,46 @@ Format as JSON ONLY:
         }
 
     return with_best_of_n(llm_call, validate_news, n=3)
+
+def generate_movie_recap(title):
+    """
+    Generates a dramatic, high-tension cinematic recap/summary.
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    prompt = f"""Generate a high-tension, cinematic STORY RECAP for: "{title}".
+    
+    STRUCTURE:
+    1. THE HOOK: Start with a question or shocking outcome (e.g., "The plan was perfect, until the vault opened...").
+    2. THE CLIMAX: Focus on the emotional peak and plot twists.
+    3. THE TWIST: Mention a detail that 99% of people missed.
+    4. THE LOOP: End with a lead that connects back to the very first word of the hook.
+
+    RULES:
+    - Tone: Dramatic, intense, sophisticated.
+    - Duration: Target ~300-500 words for long-form.
+    - Include specific character names and plot beats.
+    - NO spoilers in the hook, but reveal them in the climax.
+    
+    Format as JSON ONLY:
+    {{
+      "title": "Recap Title",
+      "story": "The full dramatic recap text...",
+      "search_term": "Optimized Pexels search query for the movie aesthetic",
+      "loop_lead": "Bridge back to hook"
+    }}
+    """
+    
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, max_tokens=1500)
+        return robust_json_parse(response_text)
+
+    # We reuse validate_story but with higher tolerance for length
+    return with_best_of_n(llm_call, lambda d: len(d.get("story", "").split()) > 20, n=3)
 
 def generate_sound_challenge(category="animals"):
     """
@@ -980,25 +1256,49 @@ Format:
 """
 
     def llm_call(attempt):
-        payload = {
-            "model": "meta-llama/Llama-3.1-8B-Instruct",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
-            "max_tokens": 200
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        return robust_json_parse(response.json()["choices"][0]["message"]["content"])
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=200)
+        return robust_json_parse(response_text)
 
-    def fallback():
-        return {
-            "hook": "Can you guess this sound?",
-            "object": "Elephant",
-            "sound_query": "elephant trumpeting",
-            "reveal_text": "It was an Elephant! Shocking right?"
-        }
+def generate_trend_script(topic):
+    """Generates a viral news script for a specific trending topic."""
+    system_prompt = "You are a viral news anchor specializing in high-energy, breaking news reports. ALWAYS respond with RAW JSON."
+    prompt = f"""Write a viral 55-second short-form video script about the trending topic: '{topic}'.
+    
+    STRUCTURE:
+    - 0-8s: THE HOOK (Shocking).
+    - 8-45s: THE STORY (Drama/Impact).
+    - 45-55s: THE LOOP (Seamless connection).
+    
+    Respond in JSON only:
+    {{
+      "title": "VIRAL NEWS: {topic}",
+      "script": "The full narration text here..."
+    }}
+    """
+    try:
+        res = get_llm_response(prompt, system_prompt)
+        # Use local function instead of re-importing
+        data = robust_json_parse(res)
+        if data and isinstance(data, dict) and "script" in data:
+            return data
+        return None
+    except Exception as e:
+        print(f"[Error] Failed to generate trend script: {e}")
+        return None
 
-    return with_best_of_n(llm_call, validate_sound_challenge, n=3)
+def generate_breath_challenge():
+    """Generates a script for a viral breathing/hold-your-breath challenge."""
+    challenges = [
+        {"name": "DEEP SEA DIVE", "dur": 45, "level": "EXTREME"},
+        {"name": "MOUNTAIN OXYGEN", "dur": 30, "level": "HARD"},
+        {"name": "ZEN MASTER", "dur": 60, "level": "LEGENDARY"}
+    }
+    c = random.choice(challenges)
+    return {
+        "title": f"BREATHING CHALLENGE: {c['name']} 🫁",
+        "script": f"Are you ready for the {c['level']} Breathing Challenge? Take a deep breath in 3... 2... 1... HOLD IT! ... ... [Pause for {c['dur']} seconds] ... ... DON'T GIVE UP! You're almost there! ... And... EXHALE! Did you make it? Like and subscribe if you survived!",
+        "duration": c['dur']
+    }
 
 
 if __name__ == "__main__":

@@ -118,8 +118,8 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
         if not subtitles:
             audio_duration = 0
             try:
-                from moviepy.editor import AudioFileClip
-                ac = AudioFileClip(output_audio)
+                import moviepy.audio.io.AudioFileClip
+                ac = moviepy.audio.io.AudioFileClip.AudioFileClip(output_audio)
                 audio_duration = ac.duration
                 ac.close()
             except Exception:

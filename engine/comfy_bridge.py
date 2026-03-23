@@ -30,10 +30,10 @@ def get_comfy_error(job_info):
             return f"Node {node_id} ({node_type}) failed: {exception}"
     return "Unknown execution error (check ComfyUI console)"
 
-def generate_cinematic_backgrounds(prompt, count=5, output_dir="assets/comfy_out"):
+def generate_cinematic_backgrounds(prompt, count=5, output_dir="assets/comfy_out", width=1024, height=1024):
     """
     Triggers local ComfyUI to generate high-end cinematic backgrounds.
-    Uses SDXL-Lightning for 1M-sub quality in under 5 seconds.
+    Uses SDXL-Lightning for quality assets in under 5 seconds.
     """
     print(f"[ComfyBridge] Generating {count} AI backgrounds for: {prompt}")
     os.makedirs(output_dir, exist_ok=True)
@@ -56,8 +56,8 @@ def generate_cinematic_backgrounds(prompt, count=5, output_dir="assets/comfy_out
             }
         },
         "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "DreamShaperXL_Lightning-SFW.safetensors"}},
-        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 1024, "height": 1024, "batch_size": 1}},
-        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": f"Cinematic, high-impact, 8k, viral thumbnail style, {prompt}", "clip": ["4", 1]}},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": f"Cinematic, high-impact, 8k, viral thumbnail style, studio lighting, {prompt}", "clip": ["4", 1]}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "low quality, text, watermark, blurry, distorted", "clip": ["4", 1]}},
         "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
         "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "comfy_short", "images": ["8", 0]}}

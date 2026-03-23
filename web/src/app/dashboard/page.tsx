@@ -51,6 +51,8 @@ export default function Dashboard() {
     { id: 'ODD_ONE_OUT', label: 'Spot the Odd', icon: <Users size={16} />, color: 'text-indigo-400' },
     { id: 'NEWS', label: '😂 Funny News', icon: <TrendingUp size={16} />, color: 'text-green-400' },
     { id: 'NEWS_SERIOUS', label: '📰 Serious News', icon: <TrendingUp size={16} />, color: 'text-blue-400' },
+    { id: 'TREND', label: '📈 Viral Trends', icon: <TrendingUp size={16} />, color: 'text-yellow-300' },
+    { id: 'CHALLENGE', label: '🫁 Breathing Game', icon: <Sparkles size={16} />, color: 'text-rose-400' },
   ];
   const supabase = createClient();
 
@@ -388,6 +390,8 @@ export default function Dashboard() {
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                           vid.mode === 'STORY' ? 'bg-orange-500/20 text-orange-400' : 
                           vid.mode === 'FIND_IT' ? 'bg-red-500/20 text-red-400' :
+                          vid.mode === 'TREND' ? 'bg-yellow-500/20 text-yellow-500' :
+                          vid.mode === 'CHALLENGE' ? 'bg-rose-500/20 text-rose-400' :
                           'bg-cyan-500/20 text-cyan-400'
                         }`}>
                           {vid.mode}
@@ -593,18 +597,32 @@ export default function Dashboard() {
 
               {/* Extreme Game Mode */}
               <div className="pt-6 border-t border-white/5 space-y-4">
-                <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Mode: FIND IT (Interactive)</p>
-                <button 
-                  onClick={() => triggerGeneration('FIND_IT', 'random')}
-                  disabled={isTriggering}
-                  className="w-full py-3 bg-gradient-to-r from-orange-500/10 to-red-500/10 hover:from-orange-500/20 hover:to-red-500/20 border border-orange-500/30 rounded-xl flex items-center justify-center gap-3 transition-all group"
-                >
-                  <PlayCircle className="text-orange-400 group-hover:scale-110 transition-transform" />
-                  <div className="text-left">
-                    <p className="text-xs font-bold text-orange-400">GENERATE CHALLENGE</p>
-                    <p className="text-[10px] text-zinc-500">Extreme "Find the Target" Game</p>
-                  </div>
-                </button>
+                <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Interactive Challenges</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <button 
+                    onClick={() => triggerGeneration('FIND_IT', 'random')}
+                    disabled={isTriggering}
+                    className="w-full py-3 bg-gradient-to-r from-orange-500/10 to-red-500/10 hover:from-orange-500/20 hover:to-red-500/20 border border-orange-500/30 rounded-xl flex items-center justify-center gap-3 transition-all group"
+                  >
+                    <PlayCircle className="text-orange-400 group-hover:scale-110 transition-transform" />
+                    <div className="text-left">
+                      <p className="text-xs font-bold text-orange-400 uppercase">Find the Target</p>
+                      <p className="text-[10px] text-zinc-500 italic">Extreme Search Game</p>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => triggerGeneration('CHALLENGE', 'random')}
+                    disabled={isTriggering}
+                    className="w-full py-3 bg-gradient-to-r from-rose-500/10 to-pink-500/10 hover:from-rose-500/20 hover:to-pink-500/20 border border-rose-500/30 rounded-xl flex items-center justify-center gap-3 transition-all group"
+                  >
+                    <Sparkles className="text-rose-400 group-hover:scale-110 transition-transform" />
+                    <div className="text-left">
+                      <p className="text-xs font-bold text-rose-400 uppercase">Breathing Challenge</p>
+                      <p className="text-[10px] text-zinc-500 italic">High-Retention Lung Game</p>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               {/* Manual Script Input */}
