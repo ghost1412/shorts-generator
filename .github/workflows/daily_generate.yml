@@ -145,6 +145,7 @@ jobs:
         ARG_SCRIPT="${{ github.event.inputs.custom_script && format('--script \"{0}\"', github.event.inputs.custom_script) || '' }}"
         ARG_COMFY="${{ github.event.inputs.use_comfy == 'true' && '--use_comfy' || '' }}"
         ARG_AUDIO="${{ github.event.inputs.use_ai_audio == 'true' && '--use_ai_audio' || '' }}"
+        ARG_BITRATE="${{ github.event.inputs.bitrate && format('--bitrate {0}', github.event.inputs.bitrate) || '--bitrate 12000k' }}"
         ARG_PRESET="${{ github.event.inputs.preset && format('--preset {0}', github.event.inputs.preset) || '--preset medium' }}"
         
         python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO $ARG_BITRATE $ARG_PRESET
