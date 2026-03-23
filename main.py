@@ -8,6 +8,9 @@ if os.name == 'nt':
 
 print("--- Initializing Shorts-Generator CLI ---") # Instant feedback
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # Moved heavy imports inside main() for instant startup:
 # from supabase import ...
 # from engine.utils import ...
@@ -59,16 +62,9 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
         print(f"[Error] Failed to update Supabase directly: {e}")
 
 def main():
-    from dotenv import load_dotenv
-    load_dotenv()
-    
     import argparse
     import time
-    import random
-    import json
-    
     from engine.video_gen import extract_segments # Lightweight wrapper
-    from engine.voice_gen import generate_voice   # Fast edge-tts
     
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, or ODD_ONE_OUT shorts.")
     parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "TREND", "CHALLENGE", "AUTO"], help="Force a specific mode.")
@@ -168,7 +164,8 @@ def main():
         return
 
     print("--- Starting Shorts Generator ---", flush=True)
-    # from engine.script_gen import ... (Moved into the mode logic)
+    from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_movie_recap
+    from engine.voice_gen import generate_voice
     
     youtube_video_id = None
     facts_data = []
@@ -201,13 +198,11 @@ def main():
         
         try:
             if mode == "FACTS":
-                from engine.script_gen import generate_mixed_facts
                 facts_res = generate_mixed_facts(category)
                 hook = facts_res["hook"]
                 facts_data = facts_res["facts"]
                 full_script = f"{hook} ... One of these facts is a LIE! ... 1: {facts_data[0]['fact']} ... 2: {facts_data[1]['fact']} ... 3: {facts_data[2]['fact']} ... {facts_res.get('loop_lead', 'Go back and check again.')}"
             elif mode == "STORY":
-                from engine.script_gen import generate_story
                 story_data = generate_story(category)
                 if not story_data: return
                 full_script = f"{story_data['story']} ... {story_data.get('loop_lead', 'Hit the plus if you want more.')}"
@@ -218,22 +213,18 @@ def main():
                 full_script = f"{random.choice(intros)} ... 🔍 Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
                 facts_data = []
             elif mode == "WYR":
-                from engine.script_gen import generate_wyr
                 wyr_data = generate_wyr(category)
                 full_script = f"Would you rather? 🔴 {wyr_data['option_a']} ... OR ... 🔵 {wyr_data['option_b']} ... ... What did you choose? Let me know!"
                 facts_data = []
             elif mode == "REDDIT":
-                from engine.script_gen import generate_reddit_story
                 reddit_data = generate_reddit_story(category)
                 full_script = f"{reddit_data['title']} ... {reddit_data['story']} ... Whose side are you on? Let me know!"
                 facts_data = []
             elif mode == "TRIVIA":
-                from engine.script_gen import generate_trivia
                 trivia_data = generate_trivia(category)
                 full_script = f"Are you a genius? Let's find out! ... {trivia_data['question']} ... A: {trivia_data['opt_a']} ... B: {trivia_data['opt_b']} ... C: {trivia_data['opt_c']} ... Answer is ... {trivia_data['answer']}. Did you get it right?"
                 facts_data = []
             elif mode == "QUOTE":
-                from engine.script_gen import generate_quote
                 quote_data = generate_quote(category)
                 full_script = f"Listen closely... ... {quote_data['quote']} ... ... ... ... Do you agree?"
                 facts_data = []
@@ -241,22 +232,18 @@ def main():
                 full_script = "Spot the odd one out! 🧐 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
                 facts_data = []
             elif mode == "NEWS":
-                from engine.script_gen import generate_funny_news
                 news_data = generate_funny_news(category, tone="funny")
                 full_script = f"{news_data['hook']} ... {news_data['story']}"
                 facts_data = []
             elif mode == "NEWS_SERIOUS":
-                from engine.script_gen import generate_funny_news
                 news_data = generate_funny_news(category, tone="serious")
                 full_script = f"{news_data['hook']} ... {news_data['story']}"
                 facts_data = []
             elif mode == "GUESS_SOUND":
-                from engine.script_gen import generate_sound_challenge
                 sound_data = generate_sound_challenge(category)
                 full_script = f"{sound_data['hook']} ... ... ... ... ... {sound_data['reveal_text']}"
                 facts_data = []
             elif mode == "MOVIE_RECAP":
-                from engine.script_gen import generate_movie_recap
                 recap_data = generate_movie_recap(args.recap_title)
                 full_script = recap_data["script"]
                 facts_data = []
@@ -268,8 +255,8 @@ def main():
                 trend = get_random_trend()
                 if not trend:
                     print("[Error] No trends found. Falling back to FACTS.")
-                    # mode = "FACTS"
-                    return # Skip recursion for safety
+                    mode = "FACTS"
+                    return main() # Restart with FACTS
                 
                 print(f"[Log] Generating script for trend: {trend['title']} ({trend['traffic']} searches)")
                 trend_data = generate_trend_script(trend["title"])
@@ -377,7 +364,6 @@ def main():
     # 5. Social Media Automation
     # 5. Viral Metadata Generation (Required for both Upload and Local Report)
     print("[Log] Generating viral metadata...")
-    from engine.social_gen import generate_viral_metadata
         
     if mode == "FACTS":
         metadata = generate_viral_metadata(facts_data, category=category)
@@ -423,8 +409,6 @@ def main():
     
     if not actually_skip_upload:
         print("[Log] Checking for user-specific upload credentials...")
-        from engine.social_gen import YouTubeUploader, InstagramUploader, decrypt_secret
-        from supabase import create_client
         
         youtube_creds = None
         if args.user_id:
@@ -432,7 +416,7 @@ def main():
             supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") # Use Service Role for backend
             
             if supabase_url and supabase_key:
-                supabase = create_client(supabase_url, supabase_key)
+                supabase: Client = create_client(supabase_url, supabase_key)
                 user_res = supabase.from_("user_configs").select("*").eq("user_id", args.user_id).execute()
                 
                 if user_res.data:

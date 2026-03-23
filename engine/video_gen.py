@@ -1,30 +1,29 @@
 import json
 import os
+import numpy as np
+import random
 import subprocess
 import time
 import importlib
 import imageio_ffmpeg
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-# Lazy Import Wrapper
-_MOVIEPY = {}
-def get_moviepy(class_name):
-    if class_name not in _MOVIEPY:
-        mapping = {
-            "VideoFileClip": "moviepy.video.io.VideoFileClip",
-            "AudioFileClip": "moviepy.audio.io.AudioFileClip",
-            "ColorClip": "moviepy.video.VideoClip",
-            "ImageClip": "moviepy.video.VideoClip",
-            "CompositeVideoClip": "moviepy.video.compositing.CompositeVideoClip",
-            "concatenate_videoclips": "moviepy.video.compositing.CompositeVideoClip",
-            "CompositeAudioClip": "moviepy.audio.AudioClip"
-        }
-        mod_path = mapping.get(class_name)
-        if mod_path:
-            mod = importlib.import_module(mod_path)
-            _MOVIEPY[class_name] = getattr(mod, class_name)
-    return _MOVIEPY.get(class_name)
+# moviepy 2.2.1 Bulletproof Imports via importlib
+def safe_import(module_name, class_name):
+    try:
+        mod = importlib.import_module(module_name)
+        return getattr(mod, class_name)
+    except Exception as e:
+        print(f"[Critical] Failed to import {class_name} from {module_name}: {e}")
+        return None
 
-# --- DYNAMIC SAFE ZONES (Prevents UI overlap) ---
+VideoFileClip = safe_import("moviepy.video.io.VideoFileClip", "VideoFileClip")
+AudioFileClip = safe_import("moviepy.audio.io.AudioFileClip", "AudioFileClip")
+ColorClip = safe_import("moviepy.video.VideoClip", "ColorClip")
+ImageClip = safe_import("moviepy.video.VideoClip", "ImageClip")
+CompositeVideoClip = safe_import("moviepy.video.compositing.CompositeVideoClip", "CompositeVideoClip")
+concatenate_videoclips = safe_import("moviepy.video.compositing.CompositeVideoClip", "concatenate_videoclips")
+CompositeAudioClip = safe_import("moviepy.audio.AudioClip", "CompositeAudioClip")
 
 # --- DYNAMIC SAFE ZONES (Prevents UI overlap) ---
 def get_safe_zones(size=(1080, 1920)):
@@ -36,8 +35,6 @@ def apply_audio_ducking(audio_clip, music_path, duration, duck_vol=0.12):
     if not music_path or not os.path.exists(music_path):
         return audio_clip
     try:
-        AudioFileClip = get_moviepy("AudioFileClip")
-        CompositeAudioClip = get_moviepy("CompositeAudioClip")
         music = AudioFileClip(music_path).with_duration(duration)
         return CompositeAudioClip([audio_clip, music]).with_duration(duration)
     except Exception as e:
@@ -47,7 +44,6 @@ def apply_audio_ducking(audio_clip, music_path, duration, duck_vol=0.12):
 def apply_handheld_jitter(clip, intensity=1.5):
     """Handheld jitter using position transform."""
     def jitter_pos(t):
-        import numpy as np
         x = int(intensity * np.sin(t * 7) * np.cos(t * 3))
         y = int(intensity * np.cos(t * 8))
         return (x, y)
@@ -55,7 +51,6 @@ def apply_handheld_jitter(clip, intensity=1.5):
 
 def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     """Adds a dynamic filling progress bar at the bottom of the clip."""
-    ColorClip = get_moviepy("ColorClip")
     # Background bar (dark)
     bg_bar = ColorClip(size=(int(clip.w * 0.8), height), color=(50, 50, 50)).with_duration(duration).with_position(("center", clip.h - 250)).with_opacity(0.6)
     
@@ -67,8 +62,6 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     return [bg_bar, fill_bar]
 
 def create_text_image(text, size=(1080, 1920), font_size=50, color="white", y_pos=None):
-    from PIL import Image, ImageDraw, ImageFont
-    import numpy as np
     img = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     try:
@@ -100,15 +93,11 @@ def apply_influencer_subtitles(clip, transcript_data, start_offset, end_offset, 
     for j, word in enumerate(relevant_words):
         color = viral_colors[j % len(viral_colors)] if j % 4 == 0 else "white"
         img = create_text_image(word["word"].upper(), size=size, font_size=115, color=color, y_pos=y_pos)
-        ImageClip = get_moviepy("ImageClip")
         c = ImageClip(img).with_start(word["start"]).with_duration(max(0.1, word["duration"])).with_position("center")
         word_clips.append(c)
     return word_clips
 
 def create_shorts_video(audio_path, subs_path, video_paths, output_path, music_path=None, mode="FACTS", bitrate="25M", preset="medium"):
-    AudioFileClip = get_moviepy("AudioFileClip")
-    VideoFileClip = get_moviepy("VideoFileClip")
-    CompositeVideoClip = get_moviepy("CompositeVideoClip")
     audio = AudioFileClip(audio_path); duration = audio.duration
     bg = VideoFileClip(video_paths[0]).with_duration(duration)
     final = CompositeVideoClip([bg]).with_audio(audio)
