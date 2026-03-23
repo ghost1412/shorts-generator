@@ -1259,6 +1259,8 @@ Format:
         response_text = get_llm_response(prompt, temperature=0.7, max_tokens=200)
         return robust_json_parse(response_text)
 
+    return with_best_of_n(llm_call, validate_sound_challenge, n=3)
+
 def generate_trend_script(topic):
     """Generates a viral news script for a specific trending topic."""
     system_prompt = "You are a viral news anchor specializing in high-energy, breaking news reports. ALWAYS respond with RAW JSON."
@@ -1292,7 +1294,7 @@ def generate_breath_challenge():
         {"name": "DEEP SEA DIVE", "dur": 45, "level": "EXTREME"},
         {"name": "MOUNTAIN OXYGEN", "dur": 30, "level": "HARD"},
         {"name": "ZEN MASTER", "dur": 60, "level": "LEGENDARY"}
-    }
+    ]
     c = random.choice(challenges)
     return {
         "title": f"BREATHING CHALLENGE: {c['name']} 🫁",
