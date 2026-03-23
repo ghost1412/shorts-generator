@@ -1,11 +1,8 @@
 import os
-import requests
 import json
 import random
-from dotenv import load_dotenv
-
 import re
-load_dotenv()
+# from dotenv import load_dotenv (Now handled by main.py or locally)
 
 HF_API_KEY = os.getenv("HF_API_KEY")
 LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/api/chat") # Default Ollama
@@ -1292,7 +1289,7 @@ def generate_breath_challenge():
         {"name": "DEEP SEA DIVE", "dur": 45, "level": "EXTREME"},
         {"name": "MOUNTAIN OXYGEN", "dur": 30, "level": "HARD"},
         {"name": "ZEN MASTER", "dur": 60, "level": "LEGENDARY"}
-    }
+    ]
     c = random.choice(challenges)
     return {
         "title": f"BREATHING CHALLENGE: {c['name']} 🫁",
