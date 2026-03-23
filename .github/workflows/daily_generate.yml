@@ -37,6 +37,14 @@ on:
         description: 'Use ComfyUI for AI Music & SFX'
         required: false
         default: 'false'
+      bitrate:
+        description: 'Video Bitrate (e.g. 5000k, 12000k)'
+        required: false
+        default: '12000k'
+      preset:
+        description: 'FFmpeg Preset'
+        required: false
+        default: 'medium'
 
 jobs:
   generate-and-post:
@@ -116,7 +124,7 @@ jobs:
           $use_comfy = if ("${{ github.event.inputs.use_comfy }}" -eq "true") { "--use_comfy" } else { "" }
           $use_ai_audio = if ("${{ github.event.inputs.use_ai_audio }}" -eq "true") { "--use_ai_audio" } else { "" }
           $script = if ("${{ github.event.inputs.custom_script }}" -ne "") { "--script `"${{ github.event.inputs.custom_script }}`"" } else { "" }
-          python main.py --mode "${{ github.event.inputs.mode || 'FACTS' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" $use_comfy $use_ai_audio $script
+          python main.py --mode "${{ github.event.inputs.mode || 'FACTS' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $script
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
@@ -137,5 +145,7 @@ jobs:
         ARG_SCRIPT="${{ github.event.inputs.custom_script && format('--script \"{0}\"', github.event.inputs.custom_script) || '' }}"
         ARG_COMFY="${{ github.event.inputs.use_comfy == 'true' && '--use_comfy' || '' }}"
         ARG_AUDIO="${{ github.event.inputs.use_ai_audio == 'true' && '--use_ai_audio' || '' }}"
+        ARG_BITRATE="${{ github.event.inputs.bitrate && format('--bitrate {0}', github.event.inputs.bitrate) || '--bitrate 12000k' }}"
+        ARG_PRESET="${{ github.event.inputs.preset && format('--preset {0}', github.event.inputs.preset) || '--preset medium' }}"
         
-        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO
+        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO $ARG_BITRATE $ARG_PRESET

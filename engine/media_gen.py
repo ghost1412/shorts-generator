@@ -30,7 +30,7 @@ def extract_keywords(text):
     keywords = [w for w in words if w not in stopwords and len(w) > 3]
     return keywords[:3] # Return top 3 keywords
 
-def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4"):
+def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4", orientation="portrait"):
     """
     downloads a background video based on keywords from the fact.
     Higher priority given to high-retention gameplay/satisfying clips to boost AVD.
@@ -53,7 +53,7 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
         shutil.copy(cached_path, output_path)
         return output_path
 
-    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
+    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation={orientation}"
 
     headers = {"Authorization": PEXELS_API_KEY}
     
@@ -95,11 +95,11 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
     except Exception as e:
         print(f"Error downloading video: {e}")
 
-def generate_ai_background(prompt, output_path="assets/bg.png"):
+def generate_ai_background(prompt, output_path="assets/bg.png", width=1024, height=1024):
     """
     Generates a premium AI background using the ComfyUI bridge.
     """
-    results = generate_cinematic_backgrounds(prompt)
+    results = generate_cinematic_backgrounds(prompt, width=width, height=height)
     if results:
         import shutil
         shutil.copy(results[0], output_path)
@@ -219,8 +219,9 @@ SFX_LIBRARY = {
     "whoosh": "https://upload.wikimedia.org/wikipedia/commons/1/1b/Whoosh.ogg"
 }
 
-import numpy as np
-from moviepy.audio.AudioClip import AudioClip
+# moviepy 2.2.1 surgical import
+import moviepy.audio.AudioClip
+AudioClip = moviepy.audio.AudioClip.AudioClip
 
 def generate_local_sfx(kind, output_path):
     """Synthesizes basic Foley sound effects mathematically (100% reliable, 0 server downtime)."""
