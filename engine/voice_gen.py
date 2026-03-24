@@ -112,14 +112,34 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
                         "start": chunk["offset"] / 10_000_000,
                         "duration": max(0.05, chunk["duration"] / 10_000_000)
                     })
+                elif chunk["type"] == "SentenceBoundary":
+                    # 🟢 UPGRADE: Handle SentenceBoundary as a high-quality fallback for words
+                    text = chunk["text"]
+                    words = text.split()
+                    if not words: continue
+                    
+                    sent_start = chunk["offset"] / 10_000_000
+                    sent_dur = chunk["duration"] / 10_000_000
+                    avg_word_dur = sent_dur / len(words)
+                    
+                    for i, word in enumerate(words):
+                        subtitles.append({
+                            "word": word,
+                            "start": sent_start + (i * avg_word_dur),
+                            "duration": max(0.1, avg_word_dur)
+                        })
 
-        # Fallback for words
-
+        # Final Fallback for words if everything else fails
         if not subtitles:
             audio_duration = 0
             try:
-                import moviepy.audio.io.AudioFileClip
-                ac = moviepy.audio.io.AudioFileClip.AudioFileClip(output_audio)
+                # Robust import for both MoviePy 1.x and 2.x
+                try:
+                    from moviepy.audio.io.AudioFileClip import AudioFileClip
+                except ImportError:
+                    from moviepy.editor import AudioFileClip
+                
+                ac = AudioFileClip(output_audio)
                 audio_duration = ac.duration
                 ac.close()
             except Exception:

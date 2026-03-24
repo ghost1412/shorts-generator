@@ -1,147 +1,148 @@
-import os
 import requests
 import json
+import re
 import random
+import os
 from dotenv import load_dotenv
 
-import re
 load_dotenv()
 
 HF_API_KEY = os.getenv("HF_API_KEY")
-LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/api/chat") # Default Ollama
 
-def get_llm_response(
-    prompt,
-    system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
-    max_tokens=2048,
-    temperature=0.3,
-    model="meta-llama/Llama-3.1-8B-Instruct"
-):
-    import requests
-
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
-
-    # 1. Try Local LLM (Ollama)
-    if LOCAL_LLM_URL:
-        try:
-            print(f"[Log] Attempting local LLM at {LOCAL_LLM_URL}...")
-
-            payload = {
-                "model": "llama3:8b-instruct-q4_K_M",  # 🔥 better model
-                "messages": messages,
-                "stream": True,
-                "options": {
-                    "temperature": temperature,
-                    "num_predict": min(max_tokens, 32768), # Allow longer responses for complex extractions
-                    "num_ctx": 32768  # 🔥 Massive context for 100k+ char transcripts
-                }
-            }
-
-            response = requests.post(
-                LOCAL_LLM_URL,
-                json=payload,
-                timeout=300  # 🔥 increased for long videos
-            )
-            response.raise_for_status()
-
-            try:
-                data = response.json()
-                content = data.get("message", {}).get("content", "")
-                if not content:
-                    raise json.JSONDecodeError("Empty content in main object", "", 0)
-            except json.JSONDecodeError as e:
-                # 🟢 PHASE 13: Robust NDJSON/Extra Data Stitching
-                lines = response.text.strip().split('\n')
-                all_content = []
-                for line in lines:
-                    try:
-                        temp = json.loads(line)
-                        c = temp.get("message", {}).get("content", "")
-                        if c: all_content.append(c)
-                    except:
-                        continue
-                if all_content:
-                    content = "".join(all_content)
-                    data = {"message": {"content": content}}
-                else:
-                    raise e
-
-            content = data["message"]["content"]  # ✅ guaranteed non-empty
-            print("[Log] Local LLM success!")
-            return content
-
-        except requests.exceptions.Timeout:
-            print("[Warn] Local LLM timeout, retrying with extra time...")
-            try:
-                response = requests.post(
-                    LOCAL_LLM_URL,
-                    json=payload,
-                    timeout=300 # 5 minutes for massive transcripts
-                )
-                response.raise_for_status()
-                
-                try:
-                    data = response.json()
-                    content = data.get("message", {}).get("content", "")
-                    if not content:
-                        raise json.JSONDecodeError("Empty content in main object (retry)", "", 0)
-                except json.JSONDecodeError as e:
-                    # 🟢 PHASE 13: Robust NDJSON/Extra Data Stitching (Retry)
-                    lines = response.text.strip().split('\n')
-                    all_content = []
-                    for line in lines:
-                        try:
-                            temp = json.loads(line)
-                            c = temp.get("message", {}).get("content", "")
-                            if c: all_content.append(c)
-                        except:
-                            continue
-                    if all_content:
-                        content = "".join(all_content)
-                        data = {"message": {"content": content}}
-                    else:
-                        raise e
-                        
-                return data["message"]["content"]
-            except Exception as e:
-                print(f"[Info] Retry failed: {e}")
-
-        except Exception as e:
-            print(f"[Info] Local LLM failed: {e}")
-            # Ensure we don't leave connection hanging
-            if 'response' in locals() and hasattr(response, 'close'):
-                response.close()
-
-    # 2. HuggingFace fallback
+def get_llm_response(prompt, system_prompt="You are a creative viral video script writer. Respond in JSON ONLY.", temperature=0.7, max_tokens=500):
+    """
+    Helper to call HuggingFace router with retries and fallback.
+    """
     url = "https://router.huggingface.co/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {HF_API_KEY}",
         "Content-Type": "application/json"
     }
 
+    if not HF_API_KEY:
+        print("DEBUG: HF_API_KEY is missing!")
+        raise RuntimeError("HF_API_KEY is missing. Check your .env file.")
+
     payload = {
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature
+        "model": "meta-llama/Llama-3.1-8B-Instruct",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=45)
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        print(f"[Error] LLM call failed: {e}")
+        # Try a simpler model or raise
+        raise e
+
+def with_best_of_n(func, validator, n=3):
+    """Retries a generation function up to n times until the validator passes."""
+    last_err = None
+    for i in range(n):
+        try:
+            res = func(i)
+            if validator(res):
+                return res
+            print(f"[Log] Validation failed for attempt {i+1}, retrying...")
+        except Exception as e:
+            print(f"[Log] Attempt {i+1} raised error: {e}")
+            last_err = e
+    
+    if last_err: raise last_err
+    raise RuntimeError("Failed to generate valid output after n attempts")
+
+# --- Specific Validators ---
+
+def validate_mixed_facts(data):
+    return isinstance(data, dict) and "hook" in data and len(data.get("facts", [])) >= 2
+
+def validate_wyr(data):
+    return isinstance(data, dict) and "option_a" in data and "option_b" in data
+
+def validate_reddit(data):
+    return isinstance(data, dict) and "title" in data and len(data.get("story", "").split()) > 20
+
+def validate_trivia(data):
+    return isinstance(data, dict) and "question" in data and "answer" in data
+
+def validate_quote(data):
+    return isinstance(data, dict) and "quote" in data and len(data.get("quote", "").split()) >= 5
+
+def validate_news(data):
+    return isinstance(data, dict) and "story" in data and len(data.get("story", "").split()) > 10
+
+def validate_sound_challenge(data):
+    return isinstance(data, dict) and "hook" in data and "sound_query" in data
+
+# --- Generation Functions ---
+
+def generate_mixed_facts(category="science"):
+    """
+    Generates a curiosity-driven 'True or False' fact list.
+    Returns: {"hook": str, "facts": [{"fact": str, "truth": bool}]}
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    if not HF_API_KEY:
+        print("DEBUG: HF_API_KEY is missing!")
+        raise RuntimeError("HF_API_KEY is missing. Cannot generate facts.")
+
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] FACTS: Selected sub-topic: {selected_sub}")
+    
+    prompt = f"""Generate 2-3 SHOCKING and BIZARRE facts about {selected_sub}.
+    One of them MUST be a plausible-sounding LIE (False), the others must be TRUE.
+    
+    RULES:
+    1. Focus on OBSCURE, weird, or mind-blowing topics.
+    2. The LIE must be hard to distinguish from the truth (don't make it obvious like 'cats are aliens').
+    3. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
+    4. Format as JSON ONLY:
+    
+    {{
+      "hook": "Wait, did you know that {selected_sub}...",
+      "facts": [
+        {{"fact": "shocking fact text", "truth": true}},
+        {{"fact": "plausible lie text", "truth": false}}
+      ]
+    }}
+    """
+
+    def llm_call(attempt):
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.8,
+            "max_tokens": 512
+        }
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        res.raise_for_status()
+        content = res.json()["choices"][0]["message"]["content"]
+        return robust_json_parse(content)
+
+    return with_best_of_n(llm_call, validate_mixed_facts, n=3)
 
 def _clean_json_string(s):
-    """Internal helper to clean comments and trailing commas."""
+    """Internal helper to clean comments, control chars, and trailing commas."""
     import re
     # 1. Remove control characters
     s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', s)
-    # 2. Fix unescaped newlines inside strings
-    def fix_newlines(m):
-        return m.group(0).replace('\n', '\\n')
-    s = re.sub(r'"[^"]*?"', fix_newlines, s, flags=re.DOTALL)
+    # 2. Fix unescaped newlines/tabs inside strings (heuristic)
+    def fix_whitespace(m):
+        return m.group(0).replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+    s = re.sub(r'"[^"]*?"', fix_whitespace, s, flags=re.DOTALL)
     # 3. Strip comments
     s = re.sub(r'//.*?\n', '', s)
     s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
@@ -150,132 +151,94 @@ def _clean_json_string(s):
     return s.strip()
 
 def robust_json_parse(output):
-    """Tries multiple strategies to extract JSON from LLM output, including regex fallback."""
+    """Extreme multi-strategy JSON extraction for unreliable LLM outputs."""
     import re, json
     if not output: return None
-        
-    # 🟢 PHASE 20: REGEX FALLBACK (for conversational LLMs)
-    # Extracts patterns like (0.00s - 15.4s) or "start": 10.5, "end": 20.1
-    def try_regex_recovery(text):
-        print("[Log] JSON parse failed, attempting Regex recovery from conversational text...")
-        # Patterns: (10.5s - 20.1s), 10.5-20.1, [10.5, 20.1], 01:23 - 01:45
-        patterns = [
-            r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
-            r"(\d{1,2}:\d{2}:?\d{0,2})\s*[\-\–\—to,]+\s*(\d{1,2}:\d{2}:?\d{0,2})", # 01:23 - 01:45
-            r"start[\"':\s]+(\d+\.?\d*)[\s,]*end[\"':\s]+(\d+\.?\d*)", # "start": 10.5
-        ]
-        
-        def time_to_sec(ts):
-            if ":" not in ts: return float(ts)
-            parts = ts.split(":")
-            if len(parts) == 3: return int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
-            return int(parts[0])*60 + float(parts[1])
-
-        items = []
-        for p in patterns:
-            matches = re.findall(p, text, re.IGNORECASE)
-            for m in matches:
-                try:
-                    s_val = time_to_sec(m[0])
-                    e_val = time_to_sec(m[1])
-                    if e_val > s_val:
-                        if not any(i['start'] == s_val and i['end'] == e_val for i in items):
-                            items.append({"start": s_val, "end": e_val, "reason": "Recovered Segment", "viral_score": 80})
-                except: continue
-            if items: break
-        return items if items else None
-
-    start_idx = -1
-    for i, char in enumerate(output):
-        if char in ('{', '['):
-            start_idx = i
-            break
-            
-    if start_idx == -1:
-        # 🟢 Fallback to Regex if NO JSON structure at all
-        recovered = try_regex_recovery(output)
-        if recovered: return recovered
-        print(f"[Error] No JSON start found in output: {output[:300]}...")
-        return None
-        
-    # Manual scan to find the first complete balanced structure
-    stack = []
-    in_string = False
-    escaped = False
-    balanced_str = ""
     
-    for i in range(start_idx, len(output)):
-        char = output[i]
-        if char == '"' and not escaped: in_string = not in_string
-        if in_string:
-            if char == '\\': escaped = not escaped
-            else: escaped = False
-        else:
-            if char == '{': stack.append('}')
-            elif char == '[': stack.append(']')
-            elif char in ('}', ']'):
-                if stack and stack[-1] == char:
-                    stack.pop()
-                    if not stack: 
-                        balanced_str = output[start_idx:i+1]
-                        break
-    
-    json_str = _clean_json_string(balanced_str or output[start_idx:])
-    
-    try:
-        return json.loads(json_str)
-    except json.JSONDecodeError as initial_err:
-        # 1. Handle "Extra data" (take the first object only)
-        if "Extra data" in str(initial_err):
-            try:
-                surgical_str = _clean_json_string(json_str[:initial_err.pos])
-                return json.loads(surgical_str)
-            except:
-                pass 
-                
-        print(f"[Log] Initial JSON parse failed ({initial_err}), attempting auto-repair...")
+    def get_balanced(text):
+        start_idx = -1
+        for i, char in enumerate(text):
+            if char in ('{', '['):
+                start_idx = i
+                break
+        if start_idx == -1: return None
         
-        # 2. Stack-based repair for truncated structures
         stack = []
         in_string = False
         escaped = False
-        for char in json_str:
+        for i in range(start_idx, len(text)):
+            char = text[i]
             if char == '"' and not escaped: in_string = not in_string
             if in_string:
                 if char == '\\': escaped = not escaped
                 else: escaped = False
-                continue
-            if char == '{': stack.append('}')
-            elif char == '[': stack.append(']')
-            elif char in ('}', ']'):
-                if stack and stack[-1] == char: stack.pop()
-        
-        if stack:
-            repaired_str = json_str.strip()
-            
-            # Use rfind to see if we ended in the middle of an object
-            last_valid_end = max(repaired_str.rfind('}'), repaired_str.rfind(']'))
-            if last_valid_end != -1 and last_valid_end < len(repaired_str) - 2:
-                junk = repaired_str[last_valid_end+1:].strip()
-                if junk and (junk.startswith(',') or junk.startswith('{')):
-                    print(f"[Log] Discarding partial trailing junk: {junk[:20]}...")
-                    repaired_str = repaired_str[:last_valid_end+1]
-                    # Recursive call on cleaned string
-                    return robust_json_parse(repaired_str)
+            else:
+                if char == '{': stack.append('}')
+                elif char == '[': stack.append(']')
+                elif char in ('}', ']'):
+                    if stack and stack[-1] == char:
+                        stack.pop()
+                        if not stack: return text[start_idx:i+1]
+        return None
 
-            repaired_str = _clean_json_string(repaired_str + "".join(reversed(stack)))
+    # strategy 1: Direct Balanced Clean & Parse
+    json_candidate = get_balanced(output)
+    if json_candidate:
+        try:
+            return json.loads(_clean_json_string(json_candidate))
+        except:
+            pass
             
+    # strategy 2: Greedy Recovery (for Fragmented or Large Lists)
+    collected_objects = []
+    # Find every starting '{' and try to extract a balanced object
+    for i in range(len(output)):
+        if output[i] == '{':
+            candidate = get_balanced(output[i:])
+            if candidate:
+                try:
+                    obj = json.loads(_clean_json_string(candidate))
+                    if obj not in collected_objects:
+                        collected_objects.append(obj)
+                except:
+                    continue
+    
+    if collected_objects:
+        print(f"[Log] Recovered {len(collected_objects)} valid objects via greedy extraction.")
+        return collected_objects
+
+    # strategy 3: Regex Timestamp/Segment Recovery (Last Resort)
+    print("[Log] JSON parsing failed all strategies, attempting Regex segment recovery...")
+    patterns = [
+        r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
+        r"(\d{1,2}:\d{2}:?\d{0,2})\s*[\-\–\—to,]+\s*(\d{1,2}:\d{2}:?\d{0,2})", # 01:23 - 01:45
+        r"start[\"':\s]+(\d+\.?\d*m?s?)[\s,]*end[\"':\s]+(\d+\.?\d*m?s?)", # "start": 10.5s
+    ]
+    
+    def time_to_sec(ts):
+        ts = str(ts).lower().replace("s", "").replace("m", "").strip()
+        if ":" not in ts: return float(ts)
+        parts = ts.split(":")
+        if len(parts) == 3: return int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
+        return int(parts[0])*60 + float(parts[1])
+
+    segments = []
+    for p in patterns:
+        matches = re.findall(p, output, re.IGNORECASE)
+        for m in matches:
             try:
-                return json.loads(repaired_str)
-            except Exception as repair_err:
-                print(f"[Error] Auto-repair failed at {getattr(repair_err, 'pos', '?')}: {repair_err}")
-                print(f"[Log] Repaired snippet (hex): {' '.join([f'{ord(c):02x}' for c in repaired_str[:20]])}")
-                print(f"[Log] Repaired snippet (text): {repaired_str[:50]}...")
-                raise initial_err
-        else:
-            print(f"[Log] Original failing snippet (hex): {' '.join([f'{ord(c):02x}' for c in json_str[:20]])}")
-            print(f"[Error] No stack mismatch found, cannot repair: {initial_err}")
-            raise initial_err
+                s_val = time_to_sec(m[0])
+                e_val = time_to_sec(m[1])
+                if e_val > s_val:
+                    if not any(s['start'] == s_val and s['end'] == e_val for s in segments):
+                        segments.append({"start": s_val, "end": e_val, "viral_score": 75, "reason": "Regex Recovered"})
+            except: continue
+        if segments: break
+    
+    if segments: return segments
+    
+    print(f"[Error] Failed to extract any usable data from LLM output: {output[:200]}...")
+    return None
 
 def get_sub_topic(category):
     """
@@ -288,513 +251,20 @@ def get_sub_topic(category):
         "history": ["bizarre royal laws", "untold warfare", "lost civilizations", "the middle ages", "secret societies", "forgotten plagues", "ancient technology"],
         "anime_lore": ["hidden easter eggs", "banned episodes", "mangaka secrets", "budget cuts", "pilot episodes differences", "lost media anime", "censorship history"],
         "intimacy_facts": ["historical dating rituals", "psychology of attraction", "weird laws about love", "evolutionary biology", "hormonal secrets", "body language myths"],
-        "cooking_hacks": ["molecular gastronomy", "forgotten ancient recipes", "food chemistry", "industrial food secrets", "chef shortcuts", "dangerous ingredients in history"]
+        "facts": ["the ocean floor", "human brain glitches", "unexpected history", "science of sleep", "unsolved mysteries", "nature's survivalists"],
+        "wyr": ["awkward social dilemmas", "impossible survival choices", "weird superpower trade-offs", "historical alternate realities", "bizarre sensory swaps"],
+        "trivia": ["unbelievable geography", "forgotten inventions", "extreme nature", "pop culture butterfly effects", "obscure mythology"],
+        "quotes": ["stoic wisdom for chaos", "cinematic metaphors", "minimalist life philosophy", "forgotten ancient scrolls", "poetic nihilism"],
+        "sound_challenge": ["rare animals", "vintage machinery", "unknown instruments", "nature's whispers", "mechanical failures"]
     }
-    return random.choice(sub_topics.get(category, [category]))
-
-def validate_semantics(facts):
-    """
-    Ensures:
-    - Exactly 2 true, 1 false
-    - False fact differs by ONLY one detail
-    """
-    if not facts or len(facts) != 3:
-        return False
-
-    truths = [f for f in facts if f.get("truth") is True]
-    falses = [f for f in facts if f.get("truth") is False]
-
-    if len(truths) != 2 or len(falses) != 1:
-        return False
-
-    # Heuristic: false fact should be very similar to one true fact
-    false_fact = falses[0]["fact"]
-
-    similarity_hits = 0
-    for t in truths:
-        # crude similarity check
-        common_words = set(false_fact.split()) & set(t["fact"].split())
-        if len(common_words) >= 3:
-            similarity_hits += 1
-
-    return similarity_hits >= 1
-
-def reject_bad_facts(facts):
-    """Filters out vague or generic facts."""
-    if not facts: return True
-    for f in facts:
-        fact = f["fact"].lower()
-        # reject vague facts
-        if len(fact.split()) < 4:
-            return True
-        # reject generic patterns
-        if any(v in fact for v in ["some", "many", "most people"]):
-            return True
-    return False
-
-def reject_duplicates(facts):
-    """Rejects facts that are structurally or semantically too similar."""
-    seen = set()
-    for f in facts:
-        key = f["fact"].lower()
-        # normalize (remove numbers + punctuation)
-        key = re.sub(r'[^a-z ]', '', key)
-        # Check first 6 words for duplication (structural repetition)
-        key_start = " ".join(key.split()[:6])
-        if key_start in seen:
-            return True
-        seen.add(key_start)
-    return False
-
-def reject_same_subject(facts):
-    """Ensures each fact is about a DIFFERENT person/entity."""
-    subjects = []
-    stopwords = ["the", "a", "an", "this", "that"]
-    for f in facts:
-        words = [w.lower() for w in f["fact"].split() if w.lower() not in stopwords]
-        if len(words) >= 2:
-            # Check first 2 meaningful words
-            subjects.append(" ".join(words[:2]))
     
-    # We need as many unique subjects as there are facts
-    return len(set(subjects)) < len(facts)
-
-def check_hallucinations(facts):
-    """
-    Uses a second LLM call to act as a skeptic/fact-checker.
-    Ensures 'True' facts aren't actually hallucinations or logically impossible.
-    """
-    if not facts: return False
+    # Try direct mapping first
+    if category.lower() in sub_topics:
+        return random.choice(sub_topics[category.lower()])
     
-    # Prepare a condensed list for the checker
-    test_str = "\n".join([f"- {f['fact']}" for f in facts if f['truth']])
-    
-    prompt = f"""You are an elite Fact-Checker. Review these {len(facts)} facts. 
-Are ANY of them actually FALSE, logically impossible, or based on common myths?
-
-FACTS TO CHECK:
-{test_str}
-
-CRITICAL CHECKS:
-1. Movies DON'T have 'pilots' (only TV shows).
-2. People can't use tech that wasn't invented yet.
-3. No 'Einstein failed math' type myths.
-4. No 'produced in X but aired in Y' ambiguous confusing facts.
-
-First, briefly explain your reasoning in 1-2 sentences.
-Then, on a new line, write exactly 'DECISION: PASS' if ALL facts in the list are verified and logically sound.
-Write exactly 'DECISION: FAIL' if ANY fact is suspicious, incorrect, or ambiguous.
-"""
-
-    try:
-        response_text = get_llm_response(prompt, temperature=0.0, max_tokens=150)
-        output = response_text.strip().upper()
-        
-        # Log the output safely on one line
-        log_out = output.replace('\n', ' | ')
-        print(f"[Log] AI Fact-Checker Output: {log_out}")
-        
-        # ROBUST CHECK: Look for 'DECISION: PASS'
-        return "DECISION: PASS" not in output
-    except Exception as e:
-        print(f"[Warning] AI Fact-Checker failed ({e}). Defaulting to safety.")
-        # If checker fails, we reject just in case
-        return True
-
-def mutate_year(text):
-    """Subtle year shift (+/- 1-2 years)."""
-    return re.sub(r'\d{4}', lambda m: str(int(m.group()) + random.choice([-1, 1, 2])), text)
-
-def mutate_location(text):
-    """Subtle location swap for realism."""
-    locations = ["France", "Germany", "USA", "Japan", "Italy", "London", "Paris", "Berlin"]
-    for loc in locations:
-        if loc in text:
-            new_loc = random.choice([l for l in locations if l != loc])
-            return text.replace(loc, new_loc)
-    return text
-
-def mutate_number(text):
-    """Subtle number shift for stats/counts (ensuring positive values)."""
-    return re.sub(r'\b\d+\b', lambda m: str(max(1, int(m.group()) + random.choice([-1, 1, 3]))), text)
-
-def mutate_relationship(text):
-    """Semantic pivot for high-quality lies."""
-    pairs = {"brother": "father", "father": "brother", "wife": "sister", "son": "friend", "rival": "mentor"}
-    for k, v in pairs.items():
-        if k in text.lower():
-            return re.sub(re.escape(k), v, text, flags=re.IGNORECASE)
-    return text
-
-def mutate_method(text):
-    """Mutation of mechanism/tool."""
-    pairs = {"using": "without", "with": "without", "by": "without"}
-    for k, v in pairs.items():
-        if k in text.lower():
-            return re.sub(re.escape(k), v, text, flags=re.IGNORECASE)
-    return text
-
-def create_false_from_true(base_text):
-    """Procedurally generates a SUBTLE lie using weighted mutation types."""
-    base = base_text
-    
-    mutations = [
-        mutate_year,
-        mutate_location,
-        mutate_number,
-        mutate_relationship,
-        mutate_method
-    ]
-    
-    # Try mutations in random order until one actually changes the text
-    for m in random.sample(mutations, len(mutations)):
-        new_fact = m(base)
-        if new_fact != base:
-            return new_fact
-
-    # Final robust fallback if no pattern matched
-    return base.rstrip(".") + " in a different year"
-def reject_vague_facts(facts):
-    """Rejects facts that are 'partially true' or confusing (e.g. produced in x but released in y)."""
-    banned_keywords = ["produced in", "recorded in", "but not", "originally", "later aired"]
-    for f in facts:
-        text = f["fact"].lower()
-        if any(b in text for b in banned_keywords):
-            return True
-    return False
-
-def validate_story(data):
-    """Ensures story is verifiable and not vague."""
-    story = data.get("story", "").lower()
-    if not story: return False
-    # must contain anchor (digit/year/number)
-    if not any(char.isdigit() for char in story):
-        return False
-    # must not be vague
-    vague_words = ["someone", "somewhere", "many people"]
-    if any(v in story for v in vague_words):
-        return False
-    return True
-
-def validate_wyr(data):
-    """Ensures WYR options are unique and balanced."""
-    a = data.get("option_a", "")
-    b = data.get("option_b", "")
-    if not a or not b or a == b:
-        return False
-    # must be different enough (heuristic)
-    if len(set(a.split()) & set(b.split())) > 5:
-        return False
-    return True
-
-def validate_trivia(data):
-    """Ensures trivia has unique options and correct answer mapping."""
-    opts = [data.get("opt_a"), data.get("opt_b"), data.get("opt_c")]
-    if not all(opts) or len(set(opts)) != 3:
-        return False
-    # answer must match one option exactly
-    if data.get("answer") not in opts:
-        return False
-    return True
-
-def validate_reddit(data):
-    """Ensures Reddit story has tension and a question for judgment."""
-    story = data.get("story", "").lower()
-    if not story: return False
-    if "?" not in story:
-        return False
-    if not any(x in story for x in ["am i", "was i", "should i"]):
-        return False
-    return True
-
-def validate_quote(data):
-    """Ensures quote has sufficient depth and isn't a cliché."""
-    quote = data.get("quote", "")
-    if not quote or len(quote.split()) < 8:
-        return False
-    banned = ["believe in yourself", "never give up", "follow your dreams"]
-    if any(b in quote.lower() for b in banned):
-        return False
-    return True
-
-def validate_news(data):
-    """Ensures news story isn't vague and has minimum factual substance."""
-    story = data.get("story", "").lower()
-    if not story: return False
-    # must not hallucinate vague stuff
-    vague_sources = ["some reports", "many believe", "sources say", "it is said"]
-    if any(x in story for x in vague_sources):
-        return False
-    # must have entity/substance (basic heuristic: > 8 words)
-    if len(story.split()) < 8:
-        return False
-    return True
-
-def validate_sound_challenge(data):
-    """Ensures the object and sound prompt are present."""
-    return bool(data.get("object") and data.get("sound_query"))
-
-def with_best_of_n(func, validator, n=3, fallback=None):
-    """
-    Runs an LLM generator n times, filters for valid results,
-    and returns the one with the highest 'viral score'.
-    Fulfills both Quality (Best of N) and Validity (Retry) needs in one pass.
-    """
-    results = []
-    for i in range(n):
-        try:
-            res = func(i)
-            if validator(res):
-                results.append(res)
-        except Exception as e:
-            print(f"⚠️ Attempt {i+1} failed ({type(e).__name__}): {e}")
-            
-    if not results:
-        if fallback:
-            print("🚨 All attempts failed or invalid. Using fallback.")
-            return fallback()
-        raise RuntimeError("LLM generation failed validation after all attempts.")
-        
-    def score(x):
-        text = str(x)
-        # Higher score for longer text (substance) + extra points for punchy punctuation
-        return len(text) + 12 * text.count("!") + 8 * text.count("?")
-    
-    best = max(results, key=score)
-    print(f"[Log] Best of {len(results)} valid results selected (Score: {score(best)})")
-    return best
-
-# Removed redundant generate_best_of_3 function as it's now integrated into with_best_of_n
-
-def generate_fallback_facts(category):
-    """Safely returns hardcoded obscure facts if LLM fails."""
-    return {
-        "hook": "Spot the lie instantly 🔍",
-        "facts": [
-            {"fact": "First webcam watched coffee pot", "truth": True},
-            {"fact": "IBM Simon debuted in 1992", "truth": True},
-            {"fact": "First mouse invented in 1980", "truth": False}
-        ]
-    }
-
-def generate_long_form_facts(category="science", count=12):
-    """
-    Generates a large set of true facts for long-form landscape videos.
-    Returns a dict: {"title": str, "facts": list}
-    """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    selected_sub = get_sub_topic(category)
-    print(f"[Log] [Long-Form] Selected sub-topic: {selected_sub}")
-
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    prompt = f"""Generate a high-impact, epic list of {count} fascinating facts about {selected_sub}.
-    
-    TONE: Epic, high-stakes, world-shaking.
-    
-    RULES:
-    1. Each fact must be extremely punchy (under 12 words).
-    2. Include specific dates, names, or massive numbers.
-    3. Ensure 100% accuracy.
-    4. Provide a viral 'Epic Title' for the video.
-
-    OUTPUT FORMAT (JSON ONLY):
-    {{
-      "title": "Epic catchy title",
-      "facts": [
-        {{"fact": "...", "truth": true}},
-        ... ({count} total)
-      ]
-    }}
-    """
-    
-    try:
-        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=1200)
-        data = robust_json_parse(response_text)
-        
-        # Basic validation: ensure we have at least 8 facts
-        if len(data.get("facts", [])) < 8:
-            raise ValueError("Insufficient facts generated.")
-            
-        print(f"[Log] Successfully generated {len(data['facts'])} long-form facts.")
-        return data
-    except Exception as e:
-        print(f"[Error] Long-form fact generation failed: {e}")
-        # Fallback to a few facts
-        return {
-            "title": f"The Secrets of {selected_sub.capitalize()}",
-            "facts": [{"fact": "The universe is expanding faster than light.", "truth": True}] * count
-        }
-
-def generate_mixed_facts(category="science"):
-    """
-    Generates 2 True facts and 1 False fact using LLM with robust fallbacks.
-    Returns a dict: {"hook": str, "facts": list}
-    """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    selected_sub = get_sub_topic(category)
-    print(f"[Log] Selected sub-topic for variety: {selected_sub}")
-
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    if not HF_API_KEY:
-        print("DEBUG: HF_API_KEY is missing!")
-        raise RuntimeError("HF_API_KEY is missing. Cannot generate facts.")
-
-    model = "meta-llama/Llama-3.1-8B-Instruct" 
-    
-    prompt = f"""SPOT THE LIE! 🔍 Review these facts about {selected_sub}. 
-    
-TASK:
-Generate EXACTLY 3 TRUE facts ONLY. 
-DO NOT generate any false facts. 
-
-VIRAL RETENTION RULES:
-1. Use a MASSIVE curiosity hook. Avoid clichés.
-2. The Hook MUST be an incomplete thought that the facts satisfy.
-3. The script MUST end with a "Loop Lead" that connects back to the hook perfectly.
-
-STRICT RULES (MUST FOLLOW):
-1. Each fact must be under 10 words.
-2. Facts must be specific (include year, name, or detail).
-3. NO fictional or hybrid show names.
-4. NO technical-sounding jargon or web URLs.
-
-CRITICAL DIVERSITY RULES:
-- Each fact MUST be about a DIFFERENT person, place, or entity.
-- Be 100% CERTAIN of the TRUE facts. 
-
-OUTPUT FORMAT (JSON ONLY):
-{{
-  "hook": "Aggressive curiosity-gap hook",
-  "facts": [
-    {{"fact": "...", "truth": true}},
-    {{"fact": "...", "truth": true}},
-    {{"fact": "...", "truth": true}}
-  ],
-  "loop_lead": "Short bridge that leads back to the hook"
-}}
-"""
-    
-    def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=800)
-        data = robust_json_parse(response_text)
-        
-        # Clean data (prefixes)
-        facts_list = data.get("facts", [])
-        for f in facts_list:
-            f["fact"] = f["fact"].split(": ", 1)[-1] if ": " in f["fact"] else f["fact"]
-        data["facts"] = facts_list[:3] # We only need 3 true ones
-        return data
-
-    def facts_validator(data):
-        facts = data.get("facts", [])
-        if len(facts) < 3: 
-            print("❌ Validation failed: Not enough facts.")
-            return False
-        if reject_bad_facts(facts):
-            print("❌ Validation failed: Bad facts/formatting.")
-            return False
-        if reject_duplicates(facts):
-            print("❌ Validation failed: Duplicates detected.")
-            return False
-        if reject_same_subject(facts):
-            print("❌ Validation failed: Same subject repeated.")
-            return False
-        if check_hallucinations(facts): # NEW: Dynamic AI Fact-Checker on TRUE facts
-            print("❌ Validation failed: AI Hallucination detected.")
-            return False
-        return True
-
-    result = with_best_of_n(
-        llm_call, 
-        facts_validator, 
-        n=3,
-        fallback=lambda: generate_fallback_facts(category)
-    )
-    
-    # ASSEMBLY: 3 Unique True Subjects -> 2 True + 1 Procedural False
-    true_facts = [f for f in result["facts"] if f.get("truth") is True]
-    
-    # Ensure we actually got 3 true facts, if not, fallback
-    if len(true_facts) < 3:
-        true_facts = generate_fallback_facts(category)["facts"]
-        
-    kept_true = true_facts[:2]
-    fact_to_mutate = true_facts[2]["fact"]
-    
-    # Generate the lie from the 3rd true fact (Procedural Mutation)
-    false_fact_text = create_false_from_true(fact_to_mutate)
-    false_fact = {"fact": false_fact_text, "truth": False}
-    
-    final_facts = kept_true + [false_fact]
-    random.shuffle(final_facts)
-    
-    return {
-        "hook": result["hook"],
-        "loop_lead": result.get("loop_lead", ""),
-        "facts": final_facts
-    }
-
-def generate_story(category="history"):
-    """
-    Generates a single, shocking true story about the category.
-    Returns: {"story": str, "title": str}
-    """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    if not HF_API_KEY:
-        print("DEBUG: HF_API_KEY is missing for story!")
-        raise RuntimeError("HF_API_KEY is missing. Cannot generate story.")
-
-    model = "meta-llama/Llama-3.1-8B-Instruct"
-    selected_sub = get_sub_topic(category)
-    print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
-    
-    prompt = f"""Generate a short, shocking, and 100% TRUE story about {selected_sub}. 
-VIRAL RETENTION RULES:
-1. START WITH A SHOCKING STATEMENT (e.g., "This man shouldn't be alive...").
-2. USE AGGRESSIVE HOOKS: "99% have no idea," "The government hid this," etc.
-3. FOCUS on the "Forbidden" or "Obscure" detail.
-4. The END of the story must bridge perfectly back to the first word of the hook (Seamless Loop).
-
-STORY RULES:
-1. Fast-paced, intense delivery.
-2. Must include ONE verifiable anchor (year/person/place).
-3. Under 90 words.
-4. NO TECHNICAL NOISE or "v1.0" or JSON keys.
-
-Format as JSON ONLY:
-{{
-  "title": "Viral Clickbait Title",
-  "story": "Intense story text...",
-  "loop_lead": "Optional bridge text for the loop"
-}}
-"""
-
-    def llm_call(attempt):
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 500,
-            "temperature": 0.2
-        }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        output = response.json()["choices"][0]["message"]["content"]
-        return robust_json_parse(output)
-
-    return with_best_of_n(llm_call, validate_story, n=3)
+    # Fallback to random if not found
+    all_subs = [item for sublist in sub_topics.values() for item in sublist]
+    return random.choice(all_subs)
 
 def generate_wyr(category="general"):
     """
@@ -840,7 +310,7 @@ Format as JSON ONLY:
     def llm_call(attempt):
         response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
         wyr = robust_json_parse(response_text)
-        if wyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
+        if vyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
             wyr["percent_b"] = 100 - wyr.get("percent_a", 50)
         return wyr
 
@@ -985,6 +455,7 @@ JSON Structure:
         return robust_json_parse(response_text)
 
     return with_best_of_n(llm_call, validate_quote, n=3)
+
 def generate_funny_news(category="general", tone="funny"):
     """
     Fetches REAL news from RSS feeds, then uses LLM to rewrite in the chosen tone.
@@ -1142,7 +613,7 @@ HOOK: Rewrite headline as a shocking 6-word hook."""
 HOOK: Rewrite headline as an urgent 6-word hook."""
     
     prompt = f"""Rewrite this REAL news headline as a YouTube Shorts script:
-
+    
 REAL HEADLINE: "{real_headline}"
 
 RULES:
