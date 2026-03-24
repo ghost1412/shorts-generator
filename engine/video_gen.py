@@ -296,11 +296,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     if mode.startswith("NEWS"):
         # 1. TOP HEADER: BREAKING NEWS!
-        header_img = create_text_image("BREAKING NEWS!", font_size=90, color="red", y_pos=SAFE_TOP)
+        header_img = create_text_image("BREAKING NEWS!", font_size=110, color="red", y_pos=SAFE_TOP + 50, add_box=True)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         
         # LIVE Badge (Safely below a potentially 2-line header)
-        live_img = create_text_image("● LIVE", font_size=50, color="red", y_pos=SAFE_TOP + 180)
+        live_img = create_text_image("● LIVE", font_size=50, color="red", y_pos=SAFE_TOP + 230)
         live_clip = ImageClip(live_img).with_start(0).with_duration(duration)
         persistent_clips.extend([top_header, live_clip])
         
@@ -367,43 +367,57 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
 
             avatar_clip = img_clip.with_mask(img_clip.transform(make_transparent_mask, apply_to="mask"))
             
-            # 2. Apply professional "News Bubble" crop (Circular)
-            w, h = avatar_clip.size # Now guaranteed to be square
-            center = (w // 2, h // 2)
-            radius = w // 2 - 10
+            # 2. Professional "TV Inset" Layout (Rectangle instead of Circular)
+            # Center-crop the avatar to a clean 16:9 rectangle for the TV screen
+            w, h = avatar_clip.size
+            target_aspect = 16/9
+            if w/h > target_aspect:
+                # Too wide: crop sides
+                new_w = h * target_aspect
+                x_start = (w - new_w) // 2
+                avatar_clip = avatar_clip.cropped(x1=x_start, y1=0, x2=x_start + new_w, y2=h)
+            else:
+                # Too tall: crop top/bottom
+                new_h = w / target_aspect
+                y_start = (h - new_h) // 2
+                avatar_clip = avatar_clip.cropped(x1=0, y1=y_start, x2=w, y2=y_start + new_h)
             
-            def circular_mask(t):
-                mask = np.zeros((h, w), dtype=float)
-                y, x = np.ogrid[:h, :w]
-                dist_from_center = np.sqrt((x - center[0])**2 + (y - center[1])**2)
-                mask[dist_from_center <= radius] = 1.0
-                return mask
-            
-            # Combine chromakey mask with circular crop
-            final_mask_clip = avatar_clip.mask.transform(lambda get_frame, t: get_frame(t) * circular_mask(t))
-            avatar_clip = avatar_clip.with_mask(final_mask_clip)
+            # 3. Add TV Frame Boundary with Transparency Fix
+            tv_path = "assets/branding/tv_frame.png"
+            if os.path.exists(tv_path):
+                # 3. Add TV Frame Boundary with User-Provided Asset (Bezel Masking)
+                tv_img = ImageClip(tv_path).with_start(0).with_duration(duration)
+                
+                def isolate_bezel(get_frame, t):
+                    frame = get_frame(t)
+                    # The user's monitor is black. Isolate anything dark (bezel/stand)
+                    # We use a slightly higher threshold (100) to catch shadows
+                    is_dark = (frame[:, :, 0] < 100) & (frame[:, :, 1] < 100) & (frame[:, :, 2] < 100)
+                    mask = np.zeros(frame.shape[:2], dtype=float)
+                    mask[is_dark] = 1.0
+                    return mask
 
-            # 3. Add high-impact "Talking" animation (Bobbing + Pulsing)
-            def avatar_anim(t):
-                y_bob = int(10 * np.sin(t * 12))
-                scale = 1.0 + 0.03 * np.sin(t * 16)
-                return (scale, y_bob)
+                tv_frame = tv_img.with_mask(tv_img.transform(isolate_bezel, apply_to="mask")).resized(width=720)
+                # TV Position: centered at bottom
+                tv_pos = (180, 1200) # (1080-720)//2 = 180
+                tv_frame = tv_frame.with_position(tv_pos)
                 
-            # Position: Anchored at bottom-center (350, SAFE_MID + 550)
-            avatar_clip = avatar_clip.resized(width=380) # Perfectly sized news bubble
-            
-            def final_pos(t):
-                scale, y_bob = avatar_anim(t)
-                # Centered: (1080 - 380) // 2 = 350
-                # Lower: SAFE_MID (750) + 550 = 1300
-                return (350, 1300 + y_bob)
+                # 4. Final Avatar Sizing & Positioning (BEHIND the bezel)
+                # Size it to fit perfectly inside the 720px frame bezels
+                avatar_clip = avatar_clip.resized(width=600) 
                 
-            avatar_clip = avatar_clip.with_effects([
-                vfx.Resize(lambda t: avatar_anim(t)[0])
-            ]).with_position(final_pos)
-            
-            persistent_clips.append(avatar_clip)
-            print(f"[Log] Animated Pro-News Bubble applied (Custom Mask active): {avatar_path}")
+                def avatar_pos(t):
+                    y_bob = int(4 * np.sin(t * 8))
+                    # Perfectly aligned inside the monitor (Centered 240)
+                    # Vertical: 1200 (TV Top) + 40 (Bezel offset) = 1240
+                    return (240, 1240 + y_bob)
+                    
+                avatar_clip = avatar_clip.with_position(avatar_pos)
+                
+                # Layering: Avatar FIRST, then TV Frame on top
+                persistent_clips.append(avatar_clip)
+                persistent_clips.append(tv_frame) 
+                print(f"[Log] Fine-tuned TV Inset applied: {avatar_path}")
         except Exception as e:
             print(f"[Warning] Failed to animate avatar {avatar_path}: {e}")
 
