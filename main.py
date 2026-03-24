@@ -4,6 +4,7 @@ import io
 import random
 import argparse
 import json
+import subprocess
 from dotenv import load_dotenv
 
 # 🟢 Force UTF-8 for all standard streams (fixes CP1252/Emoji crashes on Windows)
@@ -395,32 +396,70 @@ if not audio_path or not subs_path:
 print("[Log] Searching for relevant background videos...")
 bg_video_paths = []
 
-def get_bg_path(query, out_path):
+# 🧪 A/B EXPERIMENT: 60% chance to use local high-retention collection
+LOCAL_BG_DIR = "assets/backgrounds/local"
+is_local_experiment = random.random() < 0.8 if os.path.exists(LOCAL_BG_DIR) else False
+local_bg_pool = []
+if is_local_experiment:
+    local_bg_pool = [os.path.join(LOCAL_BG_DIR, f) for f in os.listdir(LOCAL_BG_DIR) if f.endswith(".mp4")]
+    if local_bg_pool:
+        print(f"[Log] 🧪 SEARCH_EXPERIMENT: Local Collection Selected (60% Bucket)")
+    else:
+        print(f"[Log] [Warning] Local experiment selected but pool is empty, falling back to Pexels.")
+        is_local_experiment = False
+
+def get_video_duration(path):
+    """Gets duration of a video using ffprobe."""
+    try:
+        cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", path]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return float(result.stdout.strip())
+    except Exception as e:
+        print(f"[Warning] Failed to get duration for {path}: {e}")
+        return 10.0 # Fallback
+
+def get_bg_path(query, out_path, target_duration=15.0):
+    if is_local_experiment and local_bg_pool:
+        # Pick one or more random videos from the local pool until target_duration is covered
+        selected_paths = []
+        current_len = 0
+        while current_len < target_duration and local_bg_pool:
+            choice = random.choice(local_bg_pool)
+            d = get_video_duration(choice)
+            selected_paths.append(os.path.abspath(choice))
+            current_len += d
+            if len(local_bg_pool) > 1: local_bg_pool.remove(choice)
+            if not local_bg_pool: break # Pool exhausted
+        return selected_paths
+
     if args.use_comfy:
         from engine.media_gen import generate_ai_background
         path = generate_ai_background(query, output_path=out_path.replace(".mp4", ".png"))
-        if path: return path
+        if path: return [path]
         print("[Warning] ComfyUI failed, falling back to Pexels...")
     from engine.media_gen import download_background_video
-    return download_background_video(query, output_path=out_path)
+    path = download_background_video(query, output_path=out_path)
+    return [path] if path else []
+
+# Calculate segments for staggered backgrounds
+audio_duration = get_video_duration(audio_path)
+total_bg_duration = audio_duration + 1.5
 
 if mode == "FACTS":
-    # Download 3 different clips for facts
+    # 3 facts, 3 segments
+    seg_len = total_bg_duration / 3
     for i, fact in enumerate(facts_data):
         bg_filename = os.path.join(session_dir, f"bg_fact_{i+1}.mp4")
-        path = get_bg_path(fact['fact'], bg_filename)
-        if not path:
-            path = get_bg_path("nature", os.path.join(session_dir, f"bg_fallback_{i}.mp4"))
-        if path: bg_video_paths.append(path)
+        paths = get_bg_path(fact['fact'], bg_filename, target_duration=seg_len)
+        bg_video_paths.extend(paths)
 elif mode == "STORY":
-    # For Stories, download 2 high-quality clips based on the title/category
+    # 2 segments
+    seg_len = total_bg_duration / 2
     search_query = f"{category} {story_data['title']}"
     for i in range(2):
         bg_filename = os.path.join(session_dir, f"bg_story_{i}.mp4")
-        path = get_bg_path(search_query, bg_filename)
-        if not path:
-            path = get_bg_path("cinematic", os.path.join(session_dir, f"bg_fallback_story_{i}.mp4"))
-        if path: bg_video_paths.append(path)
+        paths = get_bg_path(search_query, bg_filename, target_duration=seg_len)
+        bg_video_paths.extend(paths)
 elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
     from engine.media_gen import get_game_assets
     # Pass a custom directory or unique prefix if possible (get_game_assets needs update)
@@ -432,32 +471,27 @@ elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
         print(f"[Error] Failed to download {target_name} image.", flush=True)
         sys.exit(0)
 elif mode == "WYR":
-    # Two backgrounds for split screen
+    # 2 backgrounds for split screen
+    seg_len = total_bg_duration / 2
     search_query = f"{category} satisfying"
     for i in range(2):
         bg_filename = os.path.join(session_dir, f"bg_wyr_{i}.mp4")
-        path = get_bg_path(search_query if i == 0 else "minecraft parkour", bg_filename)
-        if not path:
-            path = get_bg_path("nature", os.path.join(session_dir, f"bg_fallback_wyr_{i}.mp4"))
-        if path: bg_video_paths.append(path)
+        paths = get_bg_path(search_query if i == 0 else "minecraft parkour", bg_filename, target_duration=seg_len)
+        bg_video_paths.extend(paths)
 elif mode == "REDDIT":
-    # One high-retention satisfying video
     bg_filename = os.path.join(session_dir, "bg_reddit.mp4")
-    path = get_bg_path("satisfying sand", bg_filename)
-    if path: bg_video_paths.append(path)
+    paths = get_bg_path("satisfying sand", bg_filename, target_duration=total_bg_duration)
+    bg_video_paths.extend(paths)
 elif mode == "TRIVIA":
-    # Engaging background like Minecraft parkour
     bg_filename = os.path.join(session_dir, "bg_trivia.mp4")
-    path = get_bg_path("minecraft parkour", bg_filename)
-    if path: bg_video_paths.append(path)
+    paths = get_bg_path("minecraft parkour", bg_filename, target_duration=total_bg_duration)
+    bg_video_paths.extend(paths)
 elif mode == "QUOTE":
-    # Moody dark aesthetic
     bg_filename = os.path.join(session_dir, "bg_quote.mp4")
-    path = get_bg_path("dark cinematic moody slow motion", bg_filename)
-    if path: bg_video_paths.append(path)
+    paths = get_bg_path("dark cinematic moody slow motion", bg_filename, target_duration=total_bg_duration)
+    bg_video_paths.extend(paths)
 elif mode == "ODD_ONE_OUT":
     from engine.media_gen import get_game_assets
-    # We reuse the logic that grabs a single target image for the Odd One Out grid
     game_assets = get_game_assets(1, output_dir=session_dir)
     target_path = game_assets["target_path"]
     target_name = game_assets["target_name"]
@@ -465,17 +499,16 @@ elif mode == "ODD_ONE_OUT":
         print(f"[Error] Failed to download {target_name} image for ODD_ONE_OUT.", flush=True)
         sys.exit(0)
 elif mode in ("NEWS", "NEWS_SERIOUS"):
-    # Use the search_term from the news data for relevant backgrounds
     search_query = news_data.get('search_term', 'breaking news broadcast') if 'news_data' in locals() else 'breaking news broadcast'
     bg_filename = os.path.join(session_dir, "bg_news.mp4")
-    path = get_bg_path(search_query, bg_filename)
-    if not path:
-        path = get_bg_path("news studio broadcast", os.path.join(session_dir, "bg_news_fallback.mp4"))
-    if path: bg_video_paths.append(path)
+    paths = get_bg_path(search_query, bg_filename, target_duration=total_bg_duration)
+    if not paths:
+        paths = get_bg_path("news studio broadcast", os.path.join(session_dir, "bg_news_fallback.mp4"), target_duration=total_bg_duration)
+    bg_video_paths.extend(paths)
 elif mode == "GUESS_SOUND":
     bg_filename = os.path.join(session_dir, "bg_sound.mp4")
-    path = get_bg_path("satisfying sand", bg_filename)
-    if path: bg_video_paths.append(path)
+    paths = get_bg_path("satisfying sand", bg_filename, target_duration=total_bg_duration)
+    bg_video_paths.extend(paths)
     
     # Download object image for reveal
     obj_filename = os.path.join(session_dir, "reveal_obj.png")

@@ -221,32 +221,41 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     if isinstance(video_paths, str): video_paths = [video_paths]
     
     bg_segments = []
-    segment_duration = duration / len(video_paths)
+    current_time = 0
+    # If we have many clips (likely from local concat experiment), use natural durations
+    # Otherwise, split equally for standard staggered layouts (FACTS, STORY)
+    use_natural_stitch = len(video_paths) > 5 or mode in ["REDDIT", "TRIVIA", "QUOTE", "NEWS", "GUESS_SOUND"]
     
     for i, path in enumerate(video_paths):
         try:
             if path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
                 # 🟢 UPGRADE: AI-Generated Image Background Support
-                clip = ImageClip(path).with_duration(segment_duration)
+                clip = ImageClip(path).with_duration(duration) # Images fill the whole or remaining duration
             else:
                 clip = VideoFileClip(path)
-                # Ensure clip is long enough for its segment
-                n_loops = int(np.ceil(segment_duration / clip.duration)) if clip.duration > 0 else 1
-                clip = clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(segment_duration)
+                
+                if use_natural_stitch:
+                    # Sequential stitching until duration is reached
+                    if current_time >= duration: break
+                    this_dur = min(clip.duration, duration - current_time)
+                    clip = clip.with_duration(this_dur).with_start(current_time)
+                    current_time += this_dur
+                else:
+                    # Standard equal-segment layering (FACTS/STORY/WYR)
+                    seg_dur = duration / len(video_paths)
+                    n_loops = int(np.ceil(seg_dur / clip.duration)) if clip.duration > 0 else 1
+                    clip = clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(seg_dur).with_start(i * seg_dur)
             
             # Robust resize to cover 1080x1920
             clip = cover_resize(clip, (1080, 1920))
-            
-            clip = clip.with_start(i * segment_duration)
             bg_segments.append(clip)
         except Exception as e:
             print(f"[Warning] Error processing background {path}: {e}")
     
-    # Force size=(1080, 1920) on all composites to avoid aspect ratio drifting
+    # Final composite background
     if not bg_segments:
         bg_clip = ColorClip(size=(1080, 1920), color=(20, 20, 30)).with_duration(duration)
     else:
-        # Apply Ken Burns to the combined background for extra energy
         bg_clip = CompositeVideoClip(bg_segments, size=(1080, 1920)).with_duration(duration)
         bg_clip = apply_ken_burns(bg_clip, duration)
     
@@ -322,7 +331,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         header_img = create_text_image("SPOT THE LIE!", font_size=110, color="yellow", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         
-        footer_text = " " * 50 + "FACTS - FIND THE LIE! - " + category.upper() + " - " + " " * 50
+        footer_text = " " * 50 + "FACTS - FIND THE LIE! - " + " - " + " " * 50
         footer_img = create_text_image(footer_text, font_size=65, color="white", y_pos=SAFE_BOTTOM + 150, add_box=True)
         bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
         persistent_clips.extend([top_header, bottom_footer])
@@ -518,6 +527,19 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     # 🟢 PRO UPGRADE: Standardized Pro-tier Audio Composition (MoviePy 2.x)
     # 1. Start with the voiceover
     all_audio_items = [audio_clip]
+    
+    # 🟢 UPGRADE: Incorporate Ambient Background Sound (Ducked)
+    # This adds 'texture' (ASMR, game sounds) from the video clips for high retention
+    if bg_clip.audio:
+        try:
+            # MoviePy 2.2.1: Use volumex or afx.MultiplyVolume
+            if hasattr(bg_clip.audio, 'volumex'):
+                ambience = bg_clip.audio.volumex(0.12) # Subtle 12% volume
+            else:
+                ambience = bg_clip.audio.with_effects([afx.MultiplyVolume(0.12)])
+            all_audio_items.append(ambience)
+        except Exception as e:
+            print(f"[Warning] Failed to process ambient background audio: {e}")
     
     # 2. Add Ducked Music
     music_clip = apply_audio_ducking(audio_clip, music_path, duration)

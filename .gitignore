@@ -10,6 +10,7 @@ assets/bg_*.mp4
 assets/voice.mp3
 assets/subs.json
 *.png
+*.mp4
 *.mp4.txt
 *.json
 *.mp3
