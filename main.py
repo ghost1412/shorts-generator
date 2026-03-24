@@ -221,7 +221,7 @@ else:
         elif mode == "MOVIE_RECAP":
             from engine.script_gen import generate_movie_recap
             recap_data = generate_movie_recap(args.recap_title)
-            full_script = recap_data["script"]
+            full_script = recap_data.get("story") or recap_data.get("script", "")
             facts_data = []
             story_data = {"title": args.recap_title, "story": full_script}
         elif mode == "STORY":
@@ -296,7 +296,7 @@ else:
             from engine.script_gen import generate_trend_script
             trend_data = generate_trend_script(category)
             if not trend_data: sys.exit(0)
-            full_script = trend_data["script"]
+            full_script = trend_data.get("script") or trend_data.get("story", "")
             facts_data = []
             print(f"[Log] TREND Data: {trend_data}")
     except RuntimeError as e:

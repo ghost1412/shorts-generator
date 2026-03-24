@@ -9,6 +9,10 @@ def clean_for_tts(text):
     """
     Strips emojis, URLs, and common web noise while preserving useful symbols.
     """
+    if not isinstance(text, str):
+        print(f"[Warning] clean_for_tts received non-string ({type(text)}). Converting...")
+        text = str(text)
+        
     # 1. Strip URLs
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
     # 2. Strip standalone domains/versions like example.com or v1.0
