@@ -322,6 +322,8 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         header_img = create_text_image("SPOT THE LIE!", font_size=110, color="yellow", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         
+        footer_text = " " * 50 + "FACTS - FIND THE LIE! - " + category.upper() + " - " + " " * 50
+        footer_img = create_text_image(footer_text, font_size=65, color="white", y_pos=SAFE_BOTTOM + 150, add_box=True)
         bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
         persistent_clips.extend([top_header, bottom_footer])
 
