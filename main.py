@@ -223,7 +223,7 @@ else:
     else:
         mode = random.choices(
             ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND"],
-            weights=[15, 0, 0, 15, 15, 5, 10, 5, 20, 15, 0]
+            weights=[20, 0, 0, 20, 15, 5, 0, 5, 20, 15, 0]
         )[0]
     if args.recap_title: mode = "MOVIE_RECAP"
     
