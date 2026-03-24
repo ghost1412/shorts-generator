@@ -572,10 +572,11 @@ JSON Structure:
 
     return with_best_of_n(llm_call, validate_quote, n=3)
 
-def generate_funny_news(category="general", tone="funny"):
+def generate_funny_news(category="general", tone="funny", persona=None):
     """
-    Fetches REAL news from RSS feeds, then uses LLM to rewrite in the chosen tone.
+    Fetches REAL news from RSS feeds, then uses LLM to rewrite in the chosen tone or persona.
     tone: "funny" = bizarre/sarcastic, "serious" = dramatic/informative
+    persona: "rabbit", "robot", "squirrel", "superhero" etc.
     Returns: {"title": str, "hook": str, "story": str, "source": str, "search_term": str, "tone": str}
     """
     import xml.etree.ElementTree as ET
@@ -607,24 +608,43 @@ def generate_funny_news(category="general", tone="funny"):
     }
 
     # 1. Base Google News RSS (Highly specific search)
-    google_search_suffix = "weird bizarre funny" if tone == "funny" else "latest breaking"
+    google_search_suffix = "weird bizarre funny" if tone == "funny" or persona else "latest breaking"
     rss_feeds = [
         f"https://news.google.com/rss/search?q={query}+{google_search_suffix}&hl=en&gl=US&ceid=US:en"
     ]
     
     # 2. Category-specific subreddits
-    subs = category_subreddits.get(category, ["nottheonion" if tone == "funny" else "worldnews"])
+    subs = category_subreddits.get(category, ["nottheonion" if tone == "funny" or persona else "worldnews"])
     for sub in subs:
         rss_feeds.append(f"https://www.reddit.com/r/{sub}/.rss?limit=30")
     
     # 3. Dedicated niche feeds (Serious only)
-    if tone == "serious":
+    if tone == "serious" and not persona:
         if category in ("world", "general"):
             rss_feeds.append("https://feeds.bbci.co.uk/news/world/rss.xml")
         elif category == "tech":
             rss_feeds.append("https://feeds.feedburner.com/TechCrunch/")
         elif category == "sports":
             rss_feeds.append("https://www.espn.com/espn/rss/news")
+    
+    # 🟢 UPGRADE: Persona-Driven Funny News
+    persona_prompt = ""
+    if persona:
+        p = persona.lower()
+        if p == "rabbit":
+            persona_prompt = "ACT AS A HYPERACTIVE RABBIT: Use words like 'Boing!', 'Crunchy!', 'Hop to it!', and be EXTREMELY energetic and fast-paced."
+        elif p == "robot":
+            persona_prompt = "ACT AS A SARCASTIC ROBOT: Use technical jargon, beep-boop sounds, and be cold, calculated, and slightly condescending."
+        elif p == "squirrel":
+            persona_prompt = "ACT AS A PANICKED SQUIRREL: Mention nuts, be very distracted, use short sentences, and act like everything is a crisis."
+        elif p == "superhero":
+            persona_prompt = "ACT AS A BOOMING SUPERHERO: Be heroic, mention justice, use epic metaphors, and act like you're saving the world with this news."
+        elif p == "old_man":
+            persona_prompt = "ACT AS A GRUMPY OLD MAN: Complain about 'kids these days', mention 'the good old days', and be skeptical of everything."
+        elif p == "mafia_cat":
+            persona_prompt = "ACT AS A MAFIA CAT BOSS: Speak with a raspy voice, use 'family' metaphors, mention 'making an offer', and be cool, intimidating, and mysterious."
+        else:
+            persona_prompt = f"ACT AS A {persona.upper()}: Use appropriate slang, interjections, and personality traits."
     
     headlines = []
     now = datetime.now(timezone.utc)
@@ -696,7 +716,7 @@ def generate_funny_news(category="general", tone="funny"):
             continue
     
     if not headlines:
-        print(f"[Warning] No fresh headlines for {category} ({tone}). Using fallback.")
+        print(f"[Warning] No fresh headlines for {category}. Using fallback.")
         headlines = [{
             "headline": f"Breaking development in {category} today" if tone == "serious" else f"Unbelievable {category} story catches everyone off guard",
             "source": "Global News Network",
@@ -707,9 +727,9 @@ def generate_funny_news(category="general", tone="funny"):
     chosen = random.choice(headlines)
     real_headline = chosen["headline"]
     real_source = chosen["source"]
-    print(f"[Log] NEWS ({tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
+    print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     
-    # --- STEP 2: Use LLM to rewrite based on tone ---
+    # --- STEP 2: Use LLM to rewrite based on tone/persona ---
     url = "https://router.huggingface.co/v1/chat/completions"
     api_headers = {
         "Authorization": f"Bearer {HF_API_KEY}",
@@ -721,12 +741,16 @@ def generate_funny_news(category="general", tone="funny"):
     
     model = "meta-llama/Llama-3.1-8B-Instruct"
     
-    if tone == "funny":
-        tone_instruction = """TONE: Sarcastic, funny, disbelief-filled. End with a punchline or "Bro, this actually happened."
-HOOK: Rewrite headline as a shocking 6-word hook."""
+    if persona:
+        tone_instruction = f"""PERSONA: You are a {persona}. 
+        Use characteristic slang, sounds, and interjections (e.g., if Rabbit, use "Boing! What's up docs?"; if Robot, use "Beep Boop - Processing...").
+        Be EXTREMELY expressive and funny."""
+    elif tone == "funny":
+        tone_instruction = """TONE: Sarcastic, funny, disbelief-filled. End with a punchline or "Bro, this actually happened." 
+        HOOK: Rewrite headline as a shocking 6-word hook."""
     else:
         tone_instruction = """TONE: Dramatic, clear, informative. Like a professional anchor delivering breaking news.
-HOOK: Rewrite headline as an urgent 6-word hook."""
+        HOOK: Rewrite headline as an urgent 6-word hook."""
     
     prompt = f"""Rewrite this REAL news headline as a YouTube Shorts script:
     
@@ -734,11 +758,10 @@ REAL HEADLINE: "{real_headline}"
 
 RULES:
 1. DO NOT change the facts. Keep it accurate to the headline.
-2. ANCHOR PERSONA: Start with a professional news intro (e.g., "This is your 60-second world report...") and end with a characteristic sign-off.
-3. STORY: Retell it in under 45 words. Fast-paced. Use '...' for dramatic pauses in the script.
-4. Do NOT add fake details. Only elaborate on what the headline says.
-5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys in the story.
-6. DO NOT exaggerate beyond headline facts. No fake details or assumptions.
+2. ANCHOR PERSONA: Start with a professional news intro AND your character intro if applicable. 
+3. STORY: Retell it in under 45 words. Fast-paced. Use '...' for dramatic pauses.
+4. If persona is set, integrate it into EVERY line. 
+5. NO TECHNICAL NOISE: Do NOT include URLs or version numbers in the story.
 {tone_instruction}
 
 Format as JSON ONLY:

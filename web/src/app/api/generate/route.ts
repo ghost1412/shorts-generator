@@ -17,13 +17,21 @@ export async function POST(request: Request) {
       customScript,
       vibe,
       useComfy,
-      useAiAudio
+      useAiAudio,
+      cartoon,
+      persona
     } = body;
 
     // Defensive check: support snake_case from older/misc clients
     if (useComfy === undefined) useComfy = body.use_comfy;
     if (useAiAudio === undefined) useAiAudio = body.use_ai_audio;
     if (customScript === undefined) customScript = body.custom_script;
+
+    // 🟢 CARTOON LOGIC: Auto-enable for NEWS modes
+    if (mode?.includes('NEWS')) {
+      if (cartoon === undefined) cartoon = true;
+      if (!persona) persona = 'mafia_cat';
+    }
     const renderTarget = process.env.RENDER_TARGET || 'github';
     const videoId = crypto.randomUUID();
 
@@ -144,7 +152,9 @@ export async function POST(request: Request) {
             video_id: videoId,
             user_id: user.id,
             use_comfy: useComfy ? 'true' : 'false',
-            use_ai_audio: useAiAudio ? 'true' : 'false'
+            use_ai_audio: useAiAudio ? 'true' : 'false',
+            cartoon: cartoon ? 'true' : 'false',
+            persona: persona || ''
           },
         }),
       }

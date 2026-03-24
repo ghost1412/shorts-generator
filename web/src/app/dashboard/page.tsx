@@ -39,6 +39,8 @@ export default function Dashboard() {
   const [selectedCategory, setSelectedCategory] = useState('random');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
+  const [cartoon, setCartoon] = useState(true);
+  const [persona, setPersona] = useState('mafia_cat');
 
   const modes = [
     { id: 'AUTO', label: 'Magic Auto', icon: <Sparkles size={16} />, color: 'text-purple-400' },
@@ -150,7 +152,7 @@ export default function Dashboard() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, category, customScript: script || customScript, vibe, useComfy, useAiAudio }),
+        body: JSON.stringify({ mode, category, customScript: script || customScript, vibe, useComfy, useAiAudio, cartoon, persona }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -591,6 +593,53 @@ export default function Dashboard() {
                     <p className="text-[10px] text-pink-300 leading-relaxed italic">
                       🎵 SONIC BRANDING: Generating unique 30s background tracks and subtitle 'whoosh' sounds for maximum impact.
                     </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Cartoon Mode & Persona Selection */}
+              <div className="pt-6 border-t border-white/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-emerald-500/10 rounded-lg">
+                      <Users size={18} className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-white">Cartoon News Anchor</p>
+                      <p className="text-[10px] text-zinc-500">Enable character-driven delivery</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setCartoon(!cartoon)}
+                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${cartoon ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${cartoon ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {cartoon && (
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">Select Persona</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { id: 'mafia_cat', label: 'Mafia Cat 🕶️' },
+                        { id: 'rabbit', label: 'Funny Rabbit 🐰' },
+                        { id: 'robot', label: 'Alpha Bot 🤖' },
+                        { id: 'superhero', label: 'Hero 🦸' }
+                      ].map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => setPersona(p.id)}
+                          className={`px-3 py-2 text-[10px] font-bold rounded-lg border transition-all ${
+                            persona === p.id 
+                              ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' 
+                              : 'bg-white/5 border-white/10 text-zinc-500 hover:border-white/20'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
