@@ -3,6 +3,7 @@ import sys
 import io
 import random
 import argparse
+import json
 from dotenv import load_dotenv
 
 # ≡ƒƒó Force UTF-8 for all standard streams (fixes CP1252/Emoji crashes on Windows)

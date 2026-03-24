@@ -3,7 +3,6 @@ import os
 import numpy as np
 import random
 import subprocess
-import time
 import imageio_ffmpeg
 from moviepy import VideoFileClip, AudioFileClip, ColorClip, ImageClip, CompositeVideoClip, CompositeAudioClip, vfx, afx
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -149,12 +148,12 @@ def create_text_image(text, size=(1080, 1920), font_size=50, color="white", stro
     for line, w, h in line_infos:
         x = (size[0] - w) / 2
         
-        # ≡ƒƒó UPGRADE: Stylish Semi-Transparent Background Box
+        # 🟢 UPGRADE: Stylish Semi-Transparent Background Box
         if add_box:
             px, py = 45, 12
             draw.rounded_rectangle([x - px, start_y - py, x + w + px, start_y + h + py + 10], radius=15, fill=(0, 0, 0, 195))
         
-        # ≡ƒƒó UPGRADE: Drop Shadow for "Punchy" Depth
+        # 🟢 UPGRADE: Drop Shadow for "Punchy" Depth
         if not add_box:
             draw.text((x + shadow_offset[0], start_y + shadow_offset[1]), line, font=font, fill=shadow_color, anchor="lt")
 
@@ -227,7 +226,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     for i, path in enumerate(video_paths):
         try:
             if path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                # ≡ƒƒó UPGRADE: AI-Generated Image Background Support
+                # 🟢 UPGRADE: AI-Generated Image Background Support
                 clip = ImageClip(path).with_duration(segment_duration)
             else:
                 clip = VideoFileClip(path)
@@ -261,7 +260,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     header_clips = []
     word_clips = []
     
-    # ≡ƒƒó PRO CONFIG: Sync-Foley SFX (Whooshes)
+    # 🟢 PRO CONFIG: Sync-Foley SFX (Whooshes)
     sfx_clips = []
     if use_ai_audio:
         from engine.media_gen import download_sfx
@@ -301,7 +300,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         
         # LIVE Badge (Safely below a potentially 2-line header)
-        live_img = create_text_image("ΓùÅ LIVE", font_size=50, color="red", y_pos=SAFE_TOP + 180)
+        live_img = create_text_image("● LIVE", font_size=50, color="red", y_pos=SAFE_TOP + 180)
         live_clip = ImageClip(live_img).with_start(0).with_duration(duration)
         persistent_clips.extend([top_header, live_clip])
         
@@ -352,7 +351,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             text = entry["word"].upper()
             start = entry["start"]
             
-            # ≡ƒƒó UPGRADE: High-impact Viral Colors (Alternating Yellow/Lime for variety)
+            # 🟢 UPGRADE: High-impact Viral Colors (Alternating Yellow/Lime for variety)
             vibrant_color = "yellow" if i % 2 == 0 else "#00FF00" # Lime
             
             # Use No Box + Drop Shadow for more "modern" look if it's single words
@@ -361,14 +360,14 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             
             c_img = create_text_image(text, font_size=120, color=vibrant_color, y_pos=SAFE_MID, add_box=is_long, stroke_width=8)
             
-            # ≡ƒƒó FIX: Ensure duration doesn't overlap with the next word to prevent "fast" feeling
+            # 🟢 FIX: Ensure duration doesn't overlap with the next word to prevent "fast" feeling
             next_start = subtitles[i+1]["start"] if i + 1 < len(subtitles) else duration
             max_dur = next_start - start
             c_duration = min(max(0.3, entry["duration"]), max_dur)
             
             c_clip = ImageClip(c_img).with_start(start).with_duration(c_duration)
             
-            # ≡ƒƒó UPGRADE: "Hormozi" Pop Effect (Scale from 0.8 to 1.1 then settle)
+            # 🟢 UPGRADE: "Hormozi" Pop Effect (Scale from 0.8 to 1.1 then settle)
             def pop_effect(t):
                 # t is relative to start of clip
                 if t < 0.1:
@@ -385,19 +384,19 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
             if whoosh_clip and i % 2 == 0: # Every other word to avoid sonic clutter
                 sfx_clips.append(whoosh_clip.with_start(start))
 
-        # 3. FINAL REVEAL OVERLAY (≡ƒƒó UPGRADE: "Flash Reveal" for Retention)
+        # 3. FINAL REVEAL OVERLAY (🟢 UPGRADE: "Flash Reveal" for Retention)
         reveal_y = SAFE_MID + 100
         reveal_duration = 0.5 # Super short window to force re-watch
         if mode == "FACTS":
-            reveal_img = create_text_image("ANSWER IN COMMENTS ≡ƒæç", font_size=110, color="orange", y_pos=reveal_y)
+            reveal_img = create_text_image("ANSWER IN COMMENTS 👇", font_size=110, color="orange", y_pos=reveal_y)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(reveal_duration).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.1)]))
         elif mode.startswith("NEWS"):
-            reveal_img = create_text_image("STAY TUNED! ≡ƒÜ¿", font_size=110, color="red", y_pos=reveal_y)
+            reveal_img = create_text_image("STAY TUNED! 🚨", font_size=110, color="red", y_pos=reveal_y)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(reveal_duration).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.1)]))
         else: # STORY mode
-            reveal_img = create_text_image("DID YOU SPOT IT? ≡ƒöö", font_size=120, color="yellow", y_pos=reveal_y)
+            reveal_img = create_text_image("DID YOU SPOT IT? 🔔", font_size=120, color="yellow", y_pos=reveal_y)
             reveal_clip = ImageClip(reveal_img).with_start(audio_clip.duration).with_duration(reveal_duration).with_position((0, 0))
             word_clips.append(reveal_clip.with_effects([vfx.CrossFadeIn(0.1)]))
 
@@ -413,13 +412,13 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         size=(1080, 1920)
     ).with_effects([vfx.CrossFadeIn(0.1)])
     
-    # ≡ƒƒó UPGRADE: Final "Handheld" Jitter for organic feel
+    # 🟢 UPGRADE: Final "Handheld" Jitter for organic feel
     final_video = apply_handheld_jitter(final_video, intensity=1.2)
     
     # Removed Loopability Zoom Effect: Dynamically resizing the final composite alters frame resolutions 
     # mid-stream, breaking FFMPEG's fixed-pipe stride and causing severe diagonal tearing.
     
-    # ≡ƒƒó PRO UPGRADE: Standardized Pro-tier Audio Composition (MoviePy 2.x)
+    # 🟢 PRO UPGRADE: Standardized Pro-tier Audio Composition (MoviePy 2.x)
     # 1. Start with the voiceover
     all_audio_items = [audio_clip]
     
@@ -477,25 +476,25 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     timer_fg = timer_fg.with_position(lambda t: (int((1080 - timer_w)/2 - timer_w * (t / audio_clip.duration)), 1600))
     
     # "HURRY!" text at 3s mark
-    hurry_img = create_text_image("ONLY 3 SECONDS LEFT! ΓÅ│", font_size=80, color="red", y_pos=1400, add_box=True)
+    hurry_img = create_text_image("ONLY 3 SECONDS LEFT! ⏳", font_size=80, color="red", y_pos=1400, add_box=True)
     hurry_clip = ImageClip(hurry_img).with_start(audio_clip.duration - 3).with_duration(3).with_effects([vfx.CrossFadeIn(0.2)])
     
     # 3. Persistent UI - HUMOROUS HOOKS
     header_titles = [
         f"SPOT THE {target_name.upper()}!",
         f"WHERE IS {target_name.upper()}??",
-        f"FIND {target_name.upper()} = GIGACHAD ≡ƒù┐",
-        f"BRO HIDING FROM THE IRS ≡ƒñ½",
+        f"FIND {target_name.upper()} = GIGACHAD 🗿",
+        f"BRO HIDING FROM THE IRS 🤫",
         f"99% FAIL TO FIND {target_name.upper()}"
     ]
     header_img = create_text_image(random.choice(header_titles), font_size=95, color="white", stroke_color="#1a1a1a", y_pos=150)
     top_header = ImageClip(header_img).with_start(0).with_duration(duration)
     
     footer_texts = [
-        "ONLY 1% CAN FIND IT! ≡ƒò╡∩╕ÅΓÇìΓÖé∩╕Å",
-        "STOP THE VIDEO WHEN FOUND! ≡ƒ¢æ",
-        "FAILED? YOU OWE ME A SUB! ≡ƒñ¥",
-        "I BET YOU CAN'T SPOT HIM ≡ƒÆÇ"
+        "ONLY 1% CAN FIND IT! 🕵️‍♂️",
+        "STOP THE VIDEO WHEN FOUND! 🛑",
+        "FAILED? YOU OWE ME A SUB! 🤝",
+        "I BET YOU CAN'T SPOT HIM 💀"
     ]
     footer_img = create_text_image(random.choice(footer_texts), font_size=70, color="yellow", stroke_color="#1a1a1a", y_pos=1700)
     bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
@@ -551,14 +550,14 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     reveal_start = audio_clip.duration
     
     # Simple Reveal Highlight (Red box/ring)
-    reveal_ring_img = create_text_image("Γùï", font_size=180, color="red", y_pos=50)
+    reveal_ring_img = create_text_image("○", font_size=180, color="red", y_pos=50)
     reveal_highlight = (ImageClip(reveal_ring_img)
                        .with_start(reveal_start)
                        .with_duration(3.0)
                        .with_position((target_pos[0]-35, target_pos[1]-35))
                        .with_effects([vfx.CrossFadeIn(0.2)]))
     
-    found_text_img = create_text_image("FOUND IT! ≡ƒÄ»", font_size=120, color="lime", stroke_color="black", y_pos=900)
+    found_text_img = create_text_image("FOUND IT! 🎯", font_size=120, color="lime", stroke_color="black", y_pos=900)
     found_clip = (ImageClip(found_text_img)
                   .with_start(reveal_start)
                   .with_duration(3.0)
@@ -572,9 +571,13 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
         size=(1080, 1920)
     )
     
-    audio_clip = apply_audio_ducking(audio_clip, music_path, duration, boom_vol=0.35)
-    
-    final_video = final_video.with_audio(audio_clip)
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration, boom_vol=0.35)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+        final_video = final_video.with_audio(final_audio)
+    else:
+        final_video = final_video.with_audio(audio_clip)
+
     final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting EXTREME Challenge: {output_path}")
@@ -643,7 +646,7 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
 
     # "Comment your pick" CTA
     reveal_start = audio_clip.duration
-    cta_img = create_text_image("≡ƒÆ¼ COMMENT YOUR PICK!", font_size=90, color="yellow", y_pos=SAFE_MID + 100, add_box=True)
+    cta_img = create_text_image("💬 COMMENT YOUR PICK!", font_size=90, color="yellow", y_pos=SAFE_MID + 100, add_box=True)
     cta_clip = ImageClip(cta_img).with_start(reveal_start).with_duration(3.0).with_effects([vfx.CrossFadeIn(0.3)])
 
     # Progress bar for the think time
@@ -654,9 +657,13 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
 
     final_video = CompositeVideoClip([clip1, clip2, dark1, dark2, divider, bg_bar, progress_bar, top_header, opt_a_clip, opt_b_clip, cta_clip], size=(1080, 1920))
 
-    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
-    
-    final_video = final_video.with_audio(audio_clip)
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+        final_video = final_video.with_audio(final_audio)
+    else:
+        final_video = final_video.with_audio(audio_clip)
+
     final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting WYR short: {output_path}")
@@ -699,7 +706,7 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.3).with_duration(duration)
 
     # 2. Reddit Header Overlay
-    reddit_tag_img = create_text_image("≡ƒƒá REDDIT STORY", font_size=65, color="white", y_pos=SAFE_TOP - 50, add_box=True)
+    reddit_tag_img = create_text_image("🟠 REDDIT STORY", font_size=65, color="white", y_pos=SAFE_TOP - 50, add_box=True)
     reddit_tag_clip = ImageClip(reddit_tag_img).with_start(0).with_duration(duration)
 
     header_img = create_text_image(reddit_data.get("title", "r/TrueOffMyChest").upper(), font_size=80, color="orange", y_pos=SAFE_TOP + 100, add_box=True)
@@ -729,9 +736,13 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
 
     # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
-    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
-    
-    final_video = final_video.with_audio(audio_clip)
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+        final_video = final_video.with_audio(final_audio)
+    else:
+        final_video = final_video.with_audio(audio_clip)
+
     final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting Reddit short: {output_path}")
@@ -844,16 +855,19 @@ def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivi
 
     # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
-    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
-    
-    final_video = final_video.with_audio(audio_clip)
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+        final_video = final_video.with_audio(final_audio)
+    else:
+        final_video = final_video.with_audio(audio_clip)
     
     print(f"[Log] Exporting TRIVIA short: {output_path}")
     final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
     
     return output_path
 
-def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_short.mp4", music_path=None, bitrate="8000k", preset="medium"):
+def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_short.mp4", music_path=None, bitrate="800k", preset="medium"):
     """
     Composes a moody Quote video with elegant fading text.
     """
@@ -897,8 +911,13 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
 
     # Loopability Zoom Effect completely removed to prevent dynamic frame resolution mismatch in FFMPEG.
 
-    audio_clip = apply_audio_ducking(audio_clip, music_path, duration)
-    final_video = final_video.with_audio(audio_clip)
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+        final_video = final_video.with_audio(final_audio)
+    else:
+        final_video = final_video.with_audio(audio_clip)
+
     final_video = final_video.with_duration(duration)
     
     print(f"[Log] Exporting QUOTE short: {output_path}")
@@ -997,8 +1016,12 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     # Ensure audio lasts for the entire duration by combining voice with (optional) music or silence
     audio_clips = [audio_clip.with_start(0)]
     
-    final_audio = apply_audio_ducking(audio_clip, music_path, duration)
-    final_video = final_video.with_audio(final_audio)
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+        final_video = final_video.with_audio(final_audio)
+    else:
+        final_video = final_video.with_audio(audio_clip)
     
     print(f"[Log] Exporting ODD_ONE_OUT short: {output_path}")
     final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset)
@@ -1047,10 +1070,10 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
     dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.4).with_duration(duration)
     
     # 3. UI Elements
-    header_img = create_text_image("GUESS THE SOUND! ≡ƒÄº", font_size=100, color="yellow", y_pos=SAFE_TOP)
+    header_img = create_text_image("GUESS THE SOUND! 🎧", font_size=100, color="yellow", y_pos=SAFE_TOP)
     top_header = ImageClip(header_img).with_start(0).with_duration(duration)
     
-    footer_img = create_text_image("COMMENT YOUR GUESS ≡ƒæç", font_size=65, color="white", y_pos=SAFE_BOTTOM)
+    footer_img = create_text_image("COMMENT YOUR GUESS 👇", font_size=65, color="white", y_pos=SAFE_BOTTOM)
     bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
     
     # 4. Timer Bar (During sfx)
@@ -1083,8 +1106,13 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
     progress_bar = progress_bar.with_position(lambda t: (int(-1080 + 1080 * (t / duration) ** 0.7), 1880))
     progress_bar = progress_bar.transform(lambda gf, t: color_shift_green_kill(gf, t, duration))
 
-    final_audio = CompositeAudioClip([voice_clip, sfx_clip])
-    final_audio = apply_audio_ducking(final_audio, music_path, duration)
+    combined_voice = CompositeAudioClip([voice_clip, sfx_clip])
+    music_clip = apply_audio_ducking(combined_voice, music_path, duration)
+    
+    if music_clip:
+        final_audio = CompositeAudioClip([combined_voice, music_clip]).with_duration(duration)
+    else:
+        final_audio = combined_voice.with_duration(duration)
 
     final_video = CompositeVideoClip(
         [bg_clip, dark_overlay, bg_bar, progress_bar, top_header, bottom_footer, timer_bg, timer_fg, obj_clip] + word_clips,
