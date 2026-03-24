@@ -45,7 +45,7 @@ def merge_segments(segments, min_gap=6.0, max_dur=95.0):
         if gap < min_gap and combined_dur <= max_dur:
             curr['end'] = max(curr['end'], next_seg['end'])
             if len(curr.get('reason', '')) < 150:
-                curr['reason'] = f"{curr['reason']} & {next_seg.get('reason', 'Clip')}"
+                curr['reason'] = f"{curr.get('reason', 'Segment')} & {next_seg.get('reason', 'Clip')}"
         else:
             merged.append(curr)
             curr = next_seg.copy()

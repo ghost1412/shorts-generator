@@ -72,26 +72,17 @@ Format as JSON ONLY:
             return s_clean[start:end]
         return s_clean
 
+    from engine.script_gen import get_llm_response, robust_json_parse
+
     for attempt in range(3):
         try:
             temp = 0.7 + (attempt * 0.1)
-            payload = {
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 1000,
-                "temperature": temp
-            }
-            
-            response = requests.post(url, headers=headers, json=payload, timeout=20)
-            response.raise_for_status()
-            output = response.json()["choices"][0]["message"]["content"]
-            
-            clean_output = clean_json_string(output)
-            metadata = json.loads(clean_output)
+            output = get_llm_response(prompt, temperature=temp, max_tokens=1000)
+            metadata = robust_json_parse(output)
             
             # Validation
-            if not metadata.get("title"):
-                raise ValueError("Empty title in LLM response")
+            if not metadata or not isinstance(metadata, dict) or not metadata.get("title"):
+                raise ValueError("Empty or invalid title in LLM response")
                 
             # YouTube title limit is 100
             metadata["title"] = metadata["title"][:95]
