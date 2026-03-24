@@ -628,7 +628,8 @@ else:
         use_ai_audio=args.use_ai_audio,
         bitrate=target_bitrate,
         preset=target_preset,
-        avatar_path=avatar_path
+        avatar_path=avatar_path,
+        category=category
     )
 
 print(f"[Log] SUCCESS! Interactive video created: {final_video}")

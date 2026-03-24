@@ -204,7 +204,7 @@ def apply_ken_burns(clip, duration):
     cropped = zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
     return cropped.image_transform(np.ascontiguousarray)
 
-def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium", avatar_path=None):
+def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium", avatar_path=None, category="general"):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
