@@ -623,6 +623,7 @@ export default function Dashboard() {
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         { id: 'mafia_cat', label: 'Mafia Cat 🕶️' },
+                        { id: 'orange_cat', label: 'Orange Cat 🐱' },
                         { id: 'rabbit', label: 'Funny Rabbit 🐰' },
                         { id: 'robot', label: 'Alpha Bot 🤖' },
                         { id: 'superhero', label: 'Hero 🦸' }

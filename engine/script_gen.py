@@ -792,7 +792,11 @@ Format as JSON ONLY:
             "tone": tone
         }
 
-    return with_best_of_n(llm_call, validate_news, n=3)
+    try:
+        return with_best_of_n(llm_call, validate_news, n=3)
+    except Exception as e:
+        print(f"[Warning] News LLM failed ({e}). Using emergency fallback.")
+        return fallback()
 
 def generate_movie_recap(title):
     """

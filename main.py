@@ -37,6 +37,7 @@ CARTOON_VOICE_MAP = {
     "superhero": "en-US-ChristopherNeural", # Deep/Heroic
     "old_man": "en-US-RogerNeural",   # Grumpy/Old
     "mafia_cat": "en-US-RogerNeural", # Deep/Raspy/Boss-like
+    "orange_cat": "en-US-AvaNeural",  # Girly/Energetic
     "default": "en-US-GuyNeural"      # High Energy
 }
 
@@ -47,6 +48,7 @@ CARTOON_AUDIO_CONFIG = {
     "superhero": {"pitch": "-5Hz", "rate": "+15%"},
     "old_man": {"pitch": "-20Hz", "rate": "-5%"},
     "mafia_cat": {"pitch": "-10Hz", "rate": "-5%"},
+    "orange_cat": {"pitch": "+15Hz", "rate": "+10%"},
     "default": {"pitch": "+0Hz", "rate": "+15%"}
 }
 
@@ -222,8 +224,18 @@ else:
             ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND"],
             weights=[15, 0, 0, 15, 15, 5, 10, 5, 20, 15, 0]
         )[0]
-    print(f"[Log] Mode selected: {mode}", flush=True)
     if args.recap_title: mode = "MOVIE_RECAP"
+    
+    # 🟢 AUTO-CARTOON: Enforce character personas for all News modes
+    if mode in ("NEWS", "NEWS_SERIOUS"):
+        if not args.cartoon:
+            print(f"[Log] {mode} detected. Auto-enabling Cartoon Mode...")
+            args.cartoon = True
+        
+        # 🟢 MULTI-CAT RANDOMIZATION: Pick between cats if no persona is set
+        if not args.persona:
+            args.persona = random.choice(["mafia_cat", "orange_cat"])
+            print(f"[Log] Randomly selected persona: {args.persona}")
     
     # 2. Choose Category
     categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports"]
