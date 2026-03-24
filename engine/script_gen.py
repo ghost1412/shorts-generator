@@ -61,7 +61,10 @@ def with_best_of_n(func, validator, n=3):
 # --- Specific Validators ---
 
 def validate_mixed_facts(data):
-    return isinstance(data, dict) and "hook" in data and len(data.get("facts", [])) >= 2
+    return isinstance(data, dict) and ("hook" in data or "facts" in data)
+
+def validate_story(data):
+    return isinstance(data, dict) and "title" in data and len(data.get("story", "").split()) > 20
 
 def validate_wyr(data):
     return isinstance(data, dict) and "option_a" in data and "option_b" in data
@@ -133,6 +136,21 @@ def generate_mixed_facts(category="science"):
         return robust_json_parse(content)
 
     return with_best_of_n(llm_call, validate_mixed_facts, n=3)
+
+def generate_story(category="general"):
+    """
+    Generates a dramatic or emotional viral story.
+    Returns: {"title": str, "story": str}
+    """
+    selected_sub = get_sub_topic(category)
+    print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
+    prompt = f"Write a SHOCKING, high-drama 1st-person story about {selected_sub}. Focus on a bizarre personal experience. Keep it under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...'}}"
+    
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=600)
+        return robust_json_parse(response_text)
+    
+    return with_best_of_n(llm_call, validate_story, n=3)
 
 def _clean_json_string(s):
     """Internal helper to clean comments, control chars, and trailing commas."""
@@ -212,7 +230,7 @@ def robust_json_parse(output):
     patterns = [
         r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
         r"(\d{1,2}:\d{2}:?\d{0,2})\s*[\-\–\—to,]+\s*(\d{1,2}:\d{2}:?\d{0,2})", # 01:23 - 01:45
-        r"start[\"':\s]+(\d+\.?\d*m?s?)[\s,]*end[\"':\s]+(\d+\.?\d*m?s?)", # "start": 10.5s
+        r"\"?start\"?[\"':\s]+[\"']?(\d+\.?\d*m?s?)[\"']?[\s,]*\"?end\"?[\"':\s]+[\"']?(\d+\.?\d*m?s?)[\"']?", # Quote-resilient
     ]
     
     def time_to_sec(ts):
