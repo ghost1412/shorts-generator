@@ -131,10 +131,12 @@ jobs:
       run: |
           $use_comfy = if ("${{ github.event.inputs.use_comfy }}" -eq "true") { "--use_comfy" } else { "" }
           $use_ai_audio = if ("${{ github.event.inputs.use_ai_audio }}" -eq "true") { "--use_ai_audio" } else { "" }
-          $cartoon = if ("${{ github.event.inputs.cartoon }}" -eq "true" -or ("${{ github.event.inputs.mode }}" -like "*NEWS*")) { "--cartoon" } else { "" }
-          $persona = if ("${{ github.event.inputs.persona }}" -ne "") { "--persona ${{ github.event.inputs.persona }}" } else { "" }
-          $script = if ("${{ github.event.inputs.custom_script }}" -ne "") { "--script `"${{ github.event.inputs.custom_script }}`"" } else { "" }
-          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $cartoon $persona $script
+          $c_flag = if ("${{ github.event.inputs.cartoon }}" -eq "true" -or ("${{ github.event.inputs.mode }}" -like "*NEWS*")) { "--cartoon" } else { "" }
+          $p_flag = if ("${{ github.event.inputs.persona }}" -ne "") { "--persona" } else { "" }
+          $p_val = if ("${{ github.event.inputs.persona }}" -ne "") { "${{ github.event.inputs.persona }}" } else { "" }
+          $s_flag = if ("${{ github.event.inputs.custom_script }}" -ne "") { "--script" } else { "" }
+          $s_val = if ("${{ github.event.inputs.custom_script }}" -ne "") { "${{ github.event.inputs.custom_script }}" } else { "" }
+          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
