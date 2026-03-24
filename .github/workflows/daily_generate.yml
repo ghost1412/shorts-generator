@@ -53,8 +53,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-       ref: 361c303eff46512ad38e25066d7af05aeed90d3c
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
