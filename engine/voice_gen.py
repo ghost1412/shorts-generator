@@ -84,7 +84,7 @@ def group_subtitles(subtitles):
 
     return grouped
 
-def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+15%", add_cta=True):
+def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+15%", pitch="+0Hz", add_cta=True):
     """
     Generates voice with cinematic pacing and optimized subtitles.
     Relying on punctuation for stability instead of risky SSML.
@@ -103,7 +103,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     os.makedirs(os.path.dirname(output_audio), exist_ok=True)
     
     async def amain():
-        communicate = edge_tts.Communicate(final_text, voice_name, rate=rate)
+        communicate = edge_tts.Communicate(final_text, voice_name, rate=rate, pitch=pitch)
         subtitles = []
         
         with open(output_audio, "wb") as f:

@@ -204,7 +204,7 @@ def apply_ken_burns(clip, duration):
     cropped = zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
     return cropped.image_transform(np.ascontiguousarray)
 
-def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium"):
+def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium", avatar_path=None):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
     """
@@ -322,9 +322,90 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
         header_img = create_text_image("SPOT THE LIE!", font_size=110, color="yellow", y_pos=SAFE_TOP)
         top_header = ImageClip(header_img).with_start(0).with_duration(duration)
         
-        footer_img = create_text_image("COMMENT YOUR GUESS", font_size=60, color="white", y_pos=SAFE_BOTTOM + 100)
         bottom_footer = ImageClip(footer_img).with_start(0).with_duration(duration)
         persistent_clips.extend([top_header, bottom_footer])
+
+    # 🟢 UPGRADE: Cartoon Avatar Overlay (With Chromakey & Animation)
+    if avatar_path and os.path.exists(avatar_path):
+        try:
+            # 1. Load the avatar (Check if Video or Image)
+            ext = os.path.splitext(avatar_path)[1].lower()
+            if ext in [".mp4", ".mov", ".webm"]:
+                # Video Avatar: Load, mute, and loop
+                img_clip = VideoFileClip(avatar_path).without_audio().with_start(0)
+                
+                # 🟢 PRO CROP: Center-crop horizontal video to square for vertical news bubble
+                w, h = img_clip.size
+                if w > h:
+                    # Horizontal video: crop the sides
+                    x_start = (w - h) // 2
+                    img_clip = img_clip.cropped(x1=x_start, y1=0, x2=x_start + h, y2=h)
+                elif h > w:
+                    # Vertical video: crop top/bottom
+                    y_start = (h - w) // 2
+                    img_clip = img_clip.cropped(x1=0, y1=y_start, x2=w, y2=y_start + w)
+                
+                # Loop to cover full duration
+                img_clip = img_clip.with_effects([vfx.Loop(n=None, duration=duration)])
+            else:
+                # Image Avatar: Load as static image
+                img_clip = ImageClip(avatar_path).with_start(0).with_duration(duration)
+                # Ensure square for news bubble
+                w, h = img_clip.size
+                if w != h:
+                    side = min(w, h)
+                    img_clip = img_clip.cropped(x1=(w-side)//2, y1=(h-side)//2, width=side, height=side)
+            
+            # Manual Green Screen Removal for max compatibility
+            def make_transparent_mask(get_frame, t):
+                frame = get_frame(t) # (H, W, 3)
+                # Detect standard lime green (G > 180, R/B < 160)
+                is_green = (frame[:, :, 1] > 180) & (frame[:, :, 0] < 160) & (frame[:, :, 2] < 160)
+                mask = np.ones(frame.shape[:2], dtype=float)
+                mask[is_green] = 0.0
+                return mask
+
+            avatar_clip = img_clip.with_mask(img_clip.transform(make_transparent_mask, apply_to="mask"))
+            
+            # 2. Apply professional "News Bubble" crop (Circular)
+            w, h = avatar_clip.size # Now guaranteed to be square
+            center = (w // 2, h // 2)
+            radius = w // 2 - 10
+            
+            def circular_mask(t):
+                mask = np.zeros((h, w), dtype=float)
+                y, x = np.ogrid[:h, :w]
+                dist_from_center = np.sqrt((x - center[0])**2 + (y - center[1])**2)
+                mask[dist_from_center <= radius] = 1.0
+                return mask
+            
+            # Combine chromakey mask with circular crop
+            final_mask_clip = avatar_clip.mask.transform(lambda get_frame, t: get_frame(t) * circular_mask(t))
+            avatar_clip = avatar_clip.with_mask(final_mask_clip)
+
+            # 3. Add high-impact "Talking" animation (Bobbing + Pulsing)
+            def avatar_anim(t):
+                y_bob = int(10 * np.sin(t * 12))
+                scale = 1.0 + 0.03 * np.sin(t * 16)
+                return (scale, y_bob)
+                
+            # Position: Anchored at bottom-center (350, SAFE_MID + 550)
+            avatar_clip = avatar_clip.resized(width=380) # Perfectly sized news bubble
+            
+            def final_pos(t):
+                scale, y_bob = avatar_anim(t)
+                # Centered: (1080 - 380) // 2 = 350
+                # Lower: SAFE_MID (750) + 550 = 1300
+                return (350, 1300 + y_bob)
+                
+            avatar_clip = avatar_clip.with_effects([
+                vfx.Resize(lambda t: avatar_anim(t)[0])
+            ]).with_position(final_pos)
+            
+            persistent_clips.append(avatar_clip)
+            print(f"[Log] Animated Pro-News Bubble applied (Custom Mask active): {avatar_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to animate avatar {avatar_path}: {e}")
 
     if subtitles:
         # 1. Fact Indicators

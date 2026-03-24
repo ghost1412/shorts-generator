@@ -45,6 +45,14 @@ on:
         description: 'FFmpeg Preset'
         required: false
         default: 'medium'
+      cartoon:
+        description: 'Enable Cartoon Mode'
+        required: false
+        default: 'false'
+      persona:
+        description: 'Cartoon Persona (mafia_cat, rabbit, robot, squirrel)'
+        required: false
+        default: 'mafia_cat'
 
 jobs:
   generate-and-post:
@@ -123,8 +131,10 @@ jobs:
       run: |
           $use_comfy = if ("${{ github.event.inputs.use_comfy }}" -eq "true") { "--use_comfy" } else { "" }
           $use_ai_audio = if ("${{ github.event.inputs.use_ai_audio }}" -eq "true") { "--use_ai_audio" } else { "" }
+          $cartoon = if ("${{ github.event.inputs.cartoon }}" -eq "true" -o ("${{ github.event.inputs.mode }}" -like "*NEWS*")) { "--cartoon" } else { "" }
+          $persona = if ("${{ github.event.inputs.persona }}" -ne "") { "--persona ${{ github.event.inputs.persona }}" } else { "" }
           $script = if ("${{ github.event.inputs.custom_script }}" -ne "") { "--script `"${{ github.event.inputs.custom_script }}`"" } else { "" }
-          python main.py --mode "${{ github.event.inputs.mode || 'FACTS' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $script
+          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $cartoon $persona $script
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
@@ -145,7 +155,10 @@ jobs:
         ARG_SCRIPT="${{ github.event.inputs.custom_script && format('--script \"{0}\"', github.event.inputs.custom_script) || '' }}"
         ARG_COMFY="${{ github.event.inputs.use_comfy == 'true' && '--use_comfy' || '' }}"
         ARG_AUDIO="${{ github.event.inputs.use_ai_audio == 'true' && '--use_ai_audio' || '' }}"
+        # Auto-enable cartoon for NEWS or NEWS_SERIOUS
+        ARG_CARTOON="${{ (github.event.inputs.cartoon == 'true' || contains(github.event.inputs.mode, 'NEWS')) && '--cartoon' || '' }}"
+        ARG_PERSONA="${{ github.event.inputs.persona && format('--persona {0}', github.event.inputs.persona) || '' }}"
         ARG_BITRATE="${{ github.event.inputs.bitrate && format('--bitrate {0}', github.event.inputs.bitrate) || '--bitrate 12000k' }}"
         ARG_PRESET="${{ github.event.inputs.preset && format('--preset {0}', github.event.inputs.preset) || '--preset medium' }}"
         
-        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO $ARG_BITRATE $ARG_PRESET
+        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET

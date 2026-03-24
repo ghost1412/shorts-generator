@@ -6,7 +6,7 @@ import argparse
 import json
 from dotenv import load_dotenv
 
-# ≡ƒƒó Force UTF-8 for all standard streams (fixes CP1252/Emoji crashes on Windows)
+# 🟢 Force UTF-8 for all standard streams (fixes CP1252/Emoji crashes on Windows)
 if sys.stdout.encoding != 'utf-8':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 if sys.stderr.encoding != 'utf-8':
@@ -28,6 +28,26 @@ VIBE_VOICE_MAP = {
     "spooky": "en-US-AndrewNeural",       # Atmospheric
     "cinematic": "en-GB-SoniaNeural",      # Sophisticated narrator
     "upbeat": "en-US-AvaNeural"             # Energetic, modern
+}
+
+CARTOON_VOICE_MAP = {
+    "rabbit": "en-US-AnaNeural",      # Squeaky/Child
+    "robot": "en-US-SteffanNeural",   # Robotic/Formal
+    "squirrel": "en-US-AnaNeural",    # Squeaky
+    "superhero": "en-US-ChristopherNeural", # Deep/Heroic
+    "old_man": "en-US-RogerNeural",   # Grumpy/Old
+    "mafia_cat": "en-US-RogerNeural", # Deep/Raspy/Boss-like
+    "default": "en-US-GuyNeural"      # High Energy
+}
+
+CARTOON_AUDIO_CONFIG = {
+    "rabbit": {"pitch": "+25Hz", "rate": "+25%"},
+    "squirrel": {"pitch": "+35Hz", "rate": "+30%"},
+    "robot": {"pitch": "-15Hz", "rate": "+10%"},
+    "superhero": {"pitch": "-5Hz", "rate": "+15%"},
+    "old_man": {"pitch": "-20Hz", "rate": "-5%"},
+    "mafia_cat": {"pitch": "-10Hz", "rate": "-5%"},
+    "default": {"pitch": "+0Hz", "rate": "+15%"}
 }
 
 def report_status(video_id, user_id, title="Shorts Video", status="Processing", download_url=None, mode="AUTO", youtube_video_id=None, storage_path=None, thumbnail_path=None):
@@ -90,6 +110,11 @@ def parse_args():
     parser.add_argument("--bitrate", type=str, help="Manual bitrate override (e.g. 12000k)")
     parser.add_argument("--preset", type=str, help="Manual preset override (e.g. medium)")
     parser.add_argument("--quality", type=str, default="medium", choices=["low", "medium", "high", "ultra"], help="Output quality preset")
+    
+    # Cartoon/Persona Flags
+    parser.add_argument("--cartoon", action="store_true", help="Enable cartoon-style news persona.")
+    parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
+    
     args = parser.parse_args()
     return args
 
@@ -102,11 +127,11 @@ preset_map = {"low": "ultrafast", "medium": "medium", "high": "slow", "ultra": "
 target_bitrate = args.bitrate if args.bitrate else bitrate_map.get(args.quality or "medium")
 target_preset = args.preset if args.preset else preset_map.get(args.quality or "medium")
 
-# ≡ƒƒó PRO CONFIG: ComfyUI Availability Health Check
+# 🟢 PRO CONFIG: ComfyUI Availability Health Check
 if args.use_comfy or args.use_ai_audio:
     from engine.comfy_bridge import is_comfy_available
     if not is_comfy_available():
-        print("\n[Warning] ΓÜá∩╕Å PRO FEATURE ALERT: Local ComfyUI is NOT reachable on port 8188.")
+        print("\n[Warning] ⚠️ PRO FEATURE ALERT: Local ComfyUI is NOT reachable on port 8188.")
         print("[Warning] Falling back to standard generation flow for this run.\n")
         args.use_comfy = False
         args.use_ai_audio = False
@@ -117,7 +142,7 @@ if sys.platform == "win32":
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# ≡ƒƒó PHASE 13: AI Extraction (High-Speed FFmpeg path)
+# 🟢 PHASE 13: AI Extraction (High-Speed FFmpeg path)
 if getattr(args, "source_video", None):
     import time
     from engine.video_gen import extract_segments
@@ -195,7 +220,7 @@ else:
     else:
         mode = random.choices(
             ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND"],
-            weights=[15, 0, 0, 10, 15, 5, 10, 5, 15, 15, 10]
+            weights=[15, 0, 0, 15, 15, 5, 10, 5, 20, 15, 0]
         )[0]
     print(f"[Log] Mode selected: {mode}", flush=True)
     if args.recap_title: mode = "MOVIE_RECAP"
@@ -216,7 +241,7 @@ else:
             full_script += f"1: {facts_data[0]['fact']} ... "
             full_script += f"2: {facts_data[1]['fact']} ... "
             full_script += f"3: {facts_data[2]['fact']} ... "
-            # ≡ƒƒó UPGRADE: Seamless Viral Loop
+            # 🟢 UPGRADE: Seamless Viral Loop
             full_script += f"The real answer is ... wait... {facts_res.get('loop_lead', 'Go back and check again.')}"
         elif mode == "MOVIE_RECAP":
             from engine.script_gen import generate_movie_recap
@@ -229,25 +254,25 @@ else:
             if not story_data: sys.exit(0)
             
             # Construct script with strategic viral pauses
-            # ≡ƒƒó UPGRADE: Removed "Bot-like" title and added Seamless Loop
+            # 🟢 UPGRADE: Removed "Bot-like" title and added Seamless Loop
             full_script = f"{story_data['story']} ... {story_data.get('loop_lead', 'Hit the plus if you want more.')}"
             facts_data = [] # Not used in story mode but kept for metadata function compatibility
             print(f"[Log] Story: {story_data['story']}")
         elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
             # Channel Manager Intro
             intros = [
-                "Only GIGACHADS can find this! ≡ƒù┐",
-                "Bro is hiding from the IRS! ≡ƒñ½",
-                "99% of you will FAIL this challenge! ≡ƒºá",
+                "Only GIGACHADS can find this! 🗿",
+                "Bro is hiding from the IRS! 🤫",
+                "99% of you will FAIL this challenge! 🧠",
                 "POV: You are searching for your brain cells... found him yet?",
-                "If you don't find this, you owe me a sub! ≡ƒñ¥"
+                "If you don't find this, you owe me a sub! 🤝"
             ]
-            full_script = f"{random.choice(intros)} ... ≡ƒöì Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
+            full_script = f"{random.choice(intros)} ... 🔍 Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
             facts_data = []
             print(f"[Log] Game mode: {mode}", flush=True)
         elif mode == "WYR":
             wyr_data = generate_wyr(category)
-            full_script = f"Would you rather? ≡ƒö┤ {wyr_data['option_a']} ... OR ... ≡ƒö╡ {wyr_data['option_b']} ... ... What did you choose? Let me know in the comments!"
+            full_script = f"Would you rather? 🔴 {wyr_data['option_a']} ... OR ... 🔵 {wyr_data['option_b']} ... ... What did you choose? Let me know in the comments!"
             facts_data = [] # Not used
             print(f"[Log] WYR Data: {wyr_data}")
         elif mode == "REDDIT":
@@ -266,17 +291,19 @@ else:
             facts_data = []
             print(f"[Log] QUOTE Data: {quote_data}")
         elif mode == "ODD_ONE_OUT":
-            full_script = "Spot the odd one out! ≡ƒºÉ 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
+            full_script = "Spot the odd one out! 🧐 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
             facts_data = []
             print(f"[Log] ODD_ONE_OUT Selected")
         elif mode == "NEWS":
-            news_data = generate_funny_news(category, tone="funny")
+            selected_persona = args.persona if args.persona else ("rabbit" if args.cartoon else None)
+            news_data = generate_funny_news(category, tone="funny", persona=selected_persona)
             news_source = news_data.get('source', 'Unknown')
             full_script = f"{news_data['hook']} ... {news_data['story']}"
             facts_data = []
             print(f"[Log] NEWS (funny) Data: {news_data}")
         elif mode == "NEWS_SERIOUS":
-            news_data = generate_funny_news(category, tone="serious")
+            selected_persona = args.persona if args.persona else ("rabbit" if args.cartoon else None)
+            news_data = generate_funny_news(category, tone="serious", persona=selected_persona)
             news_source = news_data.get('source', 'Unknown')
             full_script = f"{news_data['hook']} ... {news_data['story']}"
             facts_data = []
@@ -318,11 +345,32 @@ subs_file = os.path.join(session_dir, "subs.json")
 
 # Map vibe to an emotional voice
 selected_voice = VIBE_VOICE_MAP.get(args.vibe, "en-US-AriaNeural")
-print(f"[Log] Selected voice for '{args.vibe}' vibe: {selected_voice}")
+selected_pitch = "+0Hz"
+selected_rate = "+15%"
+
+# Overwrite voice if Cartoon persona is active
+selected_persona = args.persona if args.persona else ("mafia_cat" if args.cartoon else None)
+if selected_persona and mode in ["NEWS", "NEWS_SERIOUS"]:
+    p_key = selected_persona.lower()
+    selected_voice = CARTOON_VOICE_MAP.get(p_key, CARTOON_VOICE_MAP["default"])
+    audio_cfg = CARTOON_AUDIO_CONFIG.get(p_key, CARTOON_AUDIO_CONFIG["default"])
+    selected_pitch = audio_cfg["pitch"]
+    selected_rate = audio_cfg["rate"]
+    print(f"[Log] Cartoon Persona '{selected_persona}' Active: Voice={selected_voice}, Pitch={selected_pitch}, Rate={selected_rate}")
+else:
+    print(f"[Log] Selected voice for '{args.vibe}' vibe: {selected_voice}")
 
 # Voice CTA only for interactive/game modes
 add_cta = mode in ["FACTS", "WYR", "FIND_IT", "ODD_ONE_OUT", "TRIVIA", "GUESS_SOUND"]
-audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file, voice_name=selected_voice, add_cta=add_cta)
+audio_path, subs_path = generate_voice(
+    full_script, 
+    output_audio=voice_file, 
+    output_subs=subs_file, 
+    voice_name=selected_voice, 
+    rate=selected_rate, 
+    pitch=selected_pitch, 
+    add_cta=add_cta
+)
 
 if args.video_id and args.user_id:
     report_status(args.video_id, args.user_id, "In-Progress Video", "Processing", None, mode)
@@ -450,7 +498,7 @@ vibe_music_map = {
 music_file = vibe_music_map.get(args.vibe, "music/bg_music.mp3")
 bg_music = music_file if os.path.exists(music_file) else "music/bg_music.mp3"
 
-# ≡ƒƒó PRO CONFIG: Unique AI Music generation
+# 🟢 PRO CONFIG: Unique AI Music generation
 if args.use_ai_audio:
     from engine.comfy_bridge import generate_ai_audio
     print(f"[Log] Generating UNIQUE AI soundtrack for vibe: {args.vibe}")
@@ -547,6 +595,17 @@ elif mode == "GUESS_SOUND":
         preset=target_preset
     )
 else:
+    # Check for avatar if persona is active
+    avatar_path = None
+    # 🟢 UPGRADE: Mafia Cat is now the default persona for Cartoon News
+    selected_persona = args.persona if args.persona else ("mafia_cat" if args.cartoon else None)
+    if selected_persona:
+        for ext in [".mp4", ".mov", ".png"]:
+            p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
+            if os.path.exists(p_path):
+                avatar_path = p_path
+                break
+
     final_video = create_shorts_video(
         audio_path, 
         subs_path, 
@@ -556,7 +615,8 @@ else:
         mode=mode,
         use_ai_audio=args.use_ai_audio,
         bitrate=target_bitrate,
-        preset=target_preset
+        preset=target_preset,
+        avatar_path=avatar_path
     )
 
 print(f"[Log] SUCCESS! Interactive video created: {final_video}")
@@ -587,7 +647,7 @@ elif mode in ("NEWS", "NEWS_SERIOUS"):
     # Append source credit to description
     source_credit = news_data.get('source', '')
     if source_credit:
-        metadata['description'] = metadata.get('description', '') + f"\n\n≡ƒô░ Source: {source_credit}"
+        metadata['description'] = metadata.get('description', '') + f"\n\n📰 Source: {source_credit}"
 elif mode == "GUESS_SOUND":
     metadata = generate_viral_metadata(f"Can you guess this sound? It's a {sound_data['object']}", mode="STORY", category=category)
 else:
@@ -597,7 +657,7 @@ else:
 
 # Ensure title is never empty or too long
 if not metadata.get("title"):
-    metadata["title"] = f"Shocking {category} reveal! ≡ƒÿ▒"
+    metadata["title"] = f"Shocking {category} reveal! 😱"
 metadata["title"] = (metadata["title"] or "Viral Short")[:95]
 
 print(f"[Log] Viral Title: {metadata['title']}")
@@ -663,7 +723,7 @@ if not actually_skip_upload:
                 metadata['tags']
             )
         else:
-            print("≡ƒÆí YouTube Auth failed or skipped.")
+            print("🚀 YouTube Auth failed or skipped.")
 
         print("[Log] Instagram uploader ready.")
         ig_uploader = InstagramUploader()
