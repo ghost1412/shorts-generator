@@ -12,7 +12,7 @@ LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL") # Default Ollama #, "http://localhost
 def get_llm_response(
     prompt,
     system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
-    max_tokens=2048,
+    max_tokens=16384, # 🔥 increased for massive 2+ hour transcripts
     temperature=0.3,
     model="meta-llama/Llama-3.1-8B-Instruct"
 ):
@@ -279,6 +279,15 @@ def robust_json_parse(output):
                     if stack and stack[-1] == char:
                         stack.pop()
                         if not stack: return text[start_idx:i+1]
+        
+        # 🟢 TRUNCATION RECOVERY: If we reach end of text but stack is not empty, append missing closers
+        if stack:
+            recovered = text[start_idx:]
+            # Close any open string
+            if in_string: recovered += '"'
+            # Close all balanced objects/arrays
+            recovered += "".join(reversed(stack))
+            return recovered
         return None
 
     # strategy 1: Direct Balanced Clean & Parse

@@ -107,6 +107,7 @@ def parse_args():
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
+    parser.add_argument("--use_audio_detect", action="store_true", help="Use advanced audio feature extraction for highlight detection.")
     
     parser.add_argument("--use_comfy", action="store_true", help="Use local ComfyUI for premium AI backgrounds.")
     parser.add_argument("--use_ai_audio", action="store_true", help="Use local ComfyUI for premium AI music & SFX.")
@@ -160,7 +161,8 @@ if getattr(args, "source_video", None):
     print("[Log] Running Transcript-based Highlight Analysis...")
     highlights, transcript_path = process_source_video(
         args.source_video, session_dir, mode=args.extract_mode, 
-        clip_count=args.clip_count, target_duration=args.target_duration
+        clip_count=args.clip_count, target_duration=args.target_duration,
+        use_audio_detect=args.use_audio_detect
     )
     
     if not highlights:

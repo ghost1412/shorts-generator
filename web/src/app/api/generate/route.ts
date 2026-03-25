@@ -19,7 +19,8 @@ export async function POST(request: Request) {
       useComfy,
       useAiAudio,
       cartoon,
-      persona
+      persona,
+      sourceVideoUrl
     } = body;
 
     // Defensive check: support snake_case from older/misc clients
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
 
     // 2. Plan Limits (Usage-based check)
     const generationsUsed = userConfig?.generations_used || 0;
-    const maxVideos = userConfig?.max_videos || 3;
+    const maxVideos = userConfig?.max_videos || 1;
     const plan = userConfig?.plan || 'free';
 
     // 🟢 PRO RESTRICTION: Only 'pro' or 'enterprise' can use Advanced AI Models or Audio
@@ -154,7 +155,8 @@ export async function POST(request: Request) {
             use_comfy: useComfy ? 'true' : 'false',
             use_ai_audio: useAiAudio ? 'true' : 'false',
             cartoon: cartoon ? 'true' : 'false',
-            persona: persona || ''
+            persona: persona || '',
+            source_video: sourceVideoUrl || ''
           },
         }),
       }
