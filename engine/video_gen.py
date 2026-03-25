@@ -530,16 +530,21 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     # 🟢 UPGRADE: Incorporate Ambient Background Sound (Ducked)
     # This adds 'texture' (ASMR, game sounds) from the video clips for high retention
-    # FIX: Explicitly collect background audio segments and clip them to avoid IndexError
+    # FIX: Only include ambient audio for extraction modes (TRANSFORM/long/shorts from source)
+    # Generated modes (STORY, FACTS, etc.) use stock clips which often have broken audio tracks.
     bg_audios = []
-    for seg in bg_segments:
-        if hasattr(seg, 'audio') and seg.audio is not None:
-            try:
-                # Ensure the audio is clipped to the segment's own duration limits
-                seg_audio = seg.audio.with_duration(seg.duration).with_start(seg.start)
-                bg_audios.append(seg_audio)
-            except Exception as ae:
-                print(f"[Warning] Failed to extract audio from background segment: {ae}")
+    extraction_modes = ["TRANSFORM", "long", "shorts"] # Modes that use real source video
+    
+    if any(m in mode for m in extraction_modes):
+        for seg in bg_segments:
+            if hasattr(seg, 'audio') and seg.audio is not None:
+                try:
+                    # Extreme Safety: subclip to ensure we never exceed physical file duration
+                    audio_dur = min(seg.audio.duration, seg.duration)
+                    seg_audio = seg.audio.subclip(0, audio_dur).with_start(seg.start)
+                    bg_audios.append(seg_audio)
+                except Exception as ae:
+                    print(f"[Warning] Failed to extract audio from background segment: {ae}")
 
     if bg_audios:
         try:
@@ -570,11 +575,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     final_video = final_video.with_fps(24).with_duration(duration)
     
     print(f"[Log] Exporting polished eye-candy short: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=8)
     
     return output_path
 
-def create_game_video(audio_path, subs_path, target_path, object_paths, output_path="game_short.mp4", target_name="Cat", music_path=None, bitrate="8000k", preset="medium"):
+def create_game_video(audio_path, subs_path, target_path, object_paths, output_path="game_short.mp4", target_name="Cat", music_path=None, bitrate="8000k", preset="medium", use_hq=False):
     """
     Composes an EXTREMELY CHALLENGING "Find the Target" game video.
     Uses circular masking and a solid background (greenscreen).
@@ -717,7 +722,7 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     
     return output_path
 
-def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.mp4", music_path=None, bitrate="8000k", preset="medium"):
+def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.mp4", music_path=None, bitrate="8000k", preset="medium", use_hq=False):
     """
     Composes a split-screen Would You Rather video.
     """
@@ -882,7 +887,7 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
     
     return output_path
 
-def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivia_short.mp4", music_path=None, bitrate="8000k", preset="medium"):
+def create_trivia_video(audio_path, trivia_data, video_paths, output_path="trivia_short.mp4", music_path=None, bitrate="8000k", preset="medium", use_hq=False):
     """
     Composes a Trivia Quiz video with timer and answer reveal.
     """
@@ -1156,7 +1161,21 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
         final_video = final_video.with_audio(audio_clip)
     
     print(f"[Log] Exporting ODD_ONE_OUT short: {output_path}")
-    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset)
+    # 🟢 PHASE 16: HQ Parameter Integration
+    ffmpeg_params = ["-vcodec", "libx264", "-crf", "18", "-preset", preset]
+    if use_hq:
+        # Note: hqdn3d and sharpening can be slow but look great
+        ffmpeg_params.extend(["-vf", get_hq_vf()])
+
+    final_video.write_videofile(
+        output_path, 
+        fps=30, 
+        codec="libx264", 
+        audio_codec="aac",
+        threads=8,
+        ffmpeg_params=ffmpeg_params,
+        logger=None
+    )
     
     return output_path
 
@@ -1263,6 +1282,14 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
 
 POOL_SIZE = 8
 
+def get_hq_vf():
+    """Returns an FFmpeg filter chain for 'Premium' enhancement."""
+    # 1. hqdn3d: High Quality Denoise (Spatial 3.0, Temporal 2.0)
+    # 2. cas: Contrast Adaptive Sharpen (0.5 strength)
+    # 3. unsharp: Standard luma sharpening
+    # 4. eq: Subtle contrast/vibrance boost (contrast 1.03, saturation 1.05)
+    return "hqdn3d=1.5:1.5:6:6,cas=0.5,unsharp=5:5:0.5:5:5:0.0,eq=contrast=1.03:saturation=1.05"
+
 def _check_nvenc():
     """Checks if NVIDIA hardware acceleration is available."""
     try:
@@ -1304,7 +1331,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -1349,8 +1376,13 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             crop_filter = "crop=ih*9/16:ih:(iw-ow)/2:0"
             vf_filter = f"{crop_filter},scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
-            # 🟢 UPGRADE: Removed 'tonemap=mobius:desat=2' which was washing out colors
-            vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2{text_filter},format=yuv420p"
+            vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
+            
+        if use_hq:
+            # 🟢 NEW: Apply Premium filters before scaling
+            vf_filter = f"{get_hq_vf()},{vf_filter}"
+            
+        vf_filter += text_filter
         
         # Hardware acceleration Selection
         use_gpu = _has_nvenc and codec == 'libx264'
@@ -1419,6 +1451,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 
             final = CompositeVideoClip([sub] + overlays)
             out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
+            # Note: HQ filters were already applied during extraction for performance
             final.write_videofile(out, fps=24, bitrate=bitrate, preset=preset, threads=8)
             extracted_files.append(out)
             sub.close()

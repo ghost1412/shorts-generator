@@ -50,6 +50,9 @@ def compute_audio_score(chunk, sr, prev_energy=None):
         silence_ratio = 1 - (active_len / len(chunk))
     except:
         silence_ratio = 0.5 # Default if split fails
+        valid_silence = False
+    else:
+        valid_silence = True
         
     # 4. Energy Delta (Sudden shifts)
     raw_energy = energy
@@ -63,7 +66,7 @@ def compute_audio_score(chunk, sr, prev_energy=None):
     # Combined Audio Score (Weighted)
     # Rewards energy spikes, pitch variation, and contrast; penalizes silence.
     score = (energy * 2.0) + (delta * 3.0) + (pitch_var * 1.0) - (silence_ratio * 2.0)
-    return max(0, score), raw_energy, silence_ratio
+    return max(0, score), raw_energy, silence_ratio, valid_silence
 
 def score_segment(text, mode="shorts", start=None, end=None):
     """
@@ -94,10 +97,27 @@ def score_segment(text, mode="shorts", start=None, end=None):
             score -= 10  # Too long for a single short candidate
     else:
         # Narrative signals (Density & flow)
-        score += text.count(".") * 5
+        score += text.count(".") * 6
         score += text.count(",") * 2
         
-        # 🟢 EXPERT REFINEMENT: Conflict & Tension Signals
+        # 🟢 EXPERT REFINEMENT: Narrative Arc & Story Beats
+        narrative_keywords = [
+            "finally", "however", "consequently", "resolved", "conclusion", 
+            "ending", "solved", "discovered", "because", "revealed",
+            "kratos", "athena", "zeus", "pandora", "god", "revenge", "hope" # Content specific but effective
+        ]
+        for k in narrative_keywords:
+            if k in text_lower: score += 15
+
+        # Dialogue density (Short sentences often imply back-and-forth narrative)
+        if word_count > 10:
+            avg_word_len = sum(len(w) for w in text.split()) / word_count
+            if 4 < avg_word_len < 7: # Standard conversational English
+                score += 8
+
+        # Length normalization for narrative flow
+        if 20 < duration < 60:
+            score += 10
         conflict_words = ["but", "however", "problem", "issue", "failed", "wrong", "mistake", "challenge", "unbelievable"]
         for k in conflict_words:
             if k in text_lower: score += 10
@@ -268,9 +288,10 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             s_idx = int(seg['start'] * sr)
             e_idx = int(seg['end'] * sr)
             chunk = audio_full[s_idx:e_idx]
-            a_score, energy, s_ratio = compute_audio_score(chunk, sr, prev_energy=prev_energy)
+            a_score, energy, s_ratio, v_silence = compute_audio_score(chunk, sr, prev_energy=prev_energy)
             seg['audio_score'] = round(a_score, 3)
             seg['silence_ratio'] = s_ratio
+            seg['valid_silence'] = v_silence
             prev_energy = energy
             
         # Change in intensity (Delta) captures "moments" better than static high volume
@@ -294,33 +315,40 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         else:
             seg['silence_delta'] = 0
 
-    # 🟢 EXPERT REFINEMENT: Signal Normalization
-    max_orig_score = max(s['score'] for s in compressed_segments) if compressed_segments else 1
-    max_audio_score = max(s['audio_score'] for s in compressed_segments) if compressed_segments else 1
-    max_delta = max(s['delta'] for s in compressed_segments) if compressed_segments else 1
-    max_audio_delta = max(s.get('audio_delta', 0) for s in compressed_segments) if compressed_segments else 1
-    max_silence_delta = max(s.get('silence_delta', 0) for s in compressed_segments) if compressed_segments else 1
-    
-    if max_orig_score == 0: max_orig_score = 1
-    if max_audio_score == 0: max_audio_score = 1
-    if max_delta == 0: max_delta = 1
-    if max_audio_delta == 0: max_audio_delta = 1
+    # 🟢 EXPERT REFINEMENT: Robust Signal Normalization (v2)
+    def get_robust_max(values):
+        if not values: return 1
+        p95 = np.percentile(values, 95)
+        p50 = np.percentile(values, 50)
+        # Prevents flat distributions or few spikes from breaking normalization
+        return max(0.1, p95, p50 * 2)
+
+    max_orig_score = get_robust_max([s['score'] for s in compressed_segments])
+    max_audio_score = get_robust_max([s['audio_score'] for s in compressed_segments])
+    max_delta = get_robust_max([s['delta'] for s in compressed_segments])
+    max_audio_delta = get_robust_max([s.get('audio_delta', 0) for s in compressed_segments])
+    max_silence_delta = get_robust_max([s.get('silence_delta', 0) for s in compressed_segments])
     
     for seg in compressed_segments:
-        seg['norm_score'] = round(seg['score'] / max_orig_score, 2)
-        seg['norm_audio'] = round(seg['audio_score'] / max_audio_score, 2)
-        seg['norm_delta'] = round(seg['delta'] / max_delta, 2)
-        seg['norm_audio_delta'] = round(seg.get('audio_delta', 0) / max_audio_delta, 2)
-        seg['norm_silence_delta'] = round(seg.get('silence_delta', 0) / max_silence_delta, 2) if max_silence_delta > 0 else 0
+        seg['norm_score'] = round(min(1.0, seg['score'] / max_orig_score), 2)
+        seg['norm_audio'] = round(min(1.0, seg['audio_score'] / max_audio_score), 2)
+        seg['norm_delta'] = round(min(1.0, seg['delta'] / max_delta), 2)
+        seg['norm_audio_delta'] = round(min(1.0, seg.get('audio_delta', 0) / max_audio_delta), 2)
         
-        # Combined Final Ranking Score for Pruning
-        # Rebalanced: 40% Text, 30% Audio, 15% Text Delta, 15% Audio Delta + 10% Silence Delta
+        # 🟢 Refined Silence Logic: Only count if detected correctly
+        if seg.get('valid_silence', True):
+            seg['norm_silence_delta'] = round(min(1.0, seg.get('silence_delta', 0) / max_silence_delta), 2) if max_silence_delta > 0 else 0
+        else:
+            seg['norm_silence_delta'] = 0
+
+        # Combined Final Ranking Score for Pruning (Rebalanced v2)
+        # 45% Text Score, 30% Audio Score, 10% Text Delta, 10% Audio Delta, 5% Silence Delta
         seg['pruning_score'] = (
-            seg['norm_score'] * 0.4 + 
-            seg['norm_audio'] * 0.3 + 
-            seg['norm_delta'] * 0.15 + 
-            seg['norm_audio_delta'] * 0.15 +
-            seg['norm_silence_delta'] * 0.1
+            seg['norm_score'] * 0.45 + 
+            seg['norm_audio'] * 0.30 + 
+            seg['norm_delta'] * 0.10 + 
+            seg['norm_audio_delta'] * 0.10 +
+            seg['norm_silence_delta'] * 0.05
         )
             
     # 🟢 PHASE 15: Peak Sharpening (Local Maxima Boost)
@@ -331,16 +359,42 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         if curr_p > prev_p and curr_p > nxt_p:
             compressed_segments[i]['pruning_score'] *= 1.2
             
-    # 🟢 EXPERT REFINEMENT: Dynamic Context Pruning
+    # 🟢 EXPERT REFINEMENT: Decile-Based Distributed Pruning
     context_window = 2 if mode == "shorts" else 4
-    limit = 25 if mode == "shorts" else 150 # Increased for better long-form coverage
+    limit = 25 if mode == "shorts" else 250 # Increased significantly for massive duration targets
+    
     if len(compressed_segments) > limit:
-        # Long mode needs narrative flow, so we include buildup/aftermath
-        top_indices = sorted(range(len(compressed_segments)), key=lambda i: compressed_segments[i]['pruning_score'], reverse=True)[:limit//2]
+        if mode == "long":
+            # 🟢 NEW: Ensure representation across the entire timeline
+            # Instead of top 75 absolute peaks, take top N from every 10% of video
+            seeds_per_decile = max(4, (limit // 2) // 10)
+            chunk_size = len(compressed_segments) // 10
+            distributed_indices = []
+            
+            for d in range(10):
+                start_bin = d * chunk_size
+                end_bin = (d + 1) * chunk_size if d < 9 else len(compressed_segments)
+                if start_bin >= end_bin: continue
+                
+                # 🟢 FILTER: Avoid oversampling low-signal "garbage" bins
+                # Only take candidates that cross a minimum quality threshold
+                bin_candidates = [
+                    i for i in range(start_bin, end_bin)
+                    if compressed_segments[i]['pruning_score'] > 0.3
+                ]
+                
+                # Best peaks in this 10% of the video
+                bin_indices = sorted(bin_candidates if bin_candidates else range(start_bin, end_bin), 
+                                     key=lambda i: compressed_segments[i]['pruning_score'], reverse=True)
+                distributed_indices.extend(bin_indices[:seeds_per_decile])
+            
+            top_indices = sorted(list(set(distributed_indices)))
+        else:
+            top_indices = sorted(range(len(compressed_segments)), key=lambda i: compressed_segments[i]['pruning_score'], reverse=True)[:limit//2]
         
         selected_indices = set()
         for i in top_indices:
-            # Include dynamic context window based on mode
+            # Include context window 
             for offset in range(-context_window, context_window + 1):
                 idx = i + offset
                 if 0 <= idx < len(compressed_segments):
@@ -355,10 +409,9 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
     
     full_text_with_ts = ""
     for segment in compressed_segments:
-        # Pass signal context directly to LLM for better ranking
-        sigs = f"t_signal={segment['norm_score']} d_signal={segment['delta']}"
-        if use_audio_detect:
-            sigs += f" a_signal={segment['norm_audio']}"
+        # 🟢 UPGRADE: Enriched signal richness for LLM 
+        # t=text, d=text_delta, a=audio, ad=audio_delta, sd=silence_delta
+        sigs = f"t={segment['norm_score']} d={segment['norm_delta']} a={segment['norm_audio']} ad={segment['norm_audio_delta']} sd={segment['norm_silence_delta']}"
         full_text_with_ts += f"[{segment['start']:.2f}s - {segment['end']:.2f}s | {sigs}]: {segment['text']}\n"
     
     if mode == "shorts":
@@ -396,10 +449,17 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         
         segment_target = max(5, min(segment_target, 250))
         prompt = f"""Objective: Generate a cohesive narrative summary reel.
-        Identify UP TO {segment_target} key segments. Only include segments that are meaningful story beats.
+        Aim to identify approximately {segment_target} key segments to reach the target duration of {target_duration}s.
+        Ensure you cover the story comprehensively. Do not be overly selective; include all meaningful story beats and reactions.
+        MANDATORY: You must continue generating the list until you reach the target count or duration. DO NOT STOP EARLY.
         MANDATORY: include 'start' and 'end' timestamps.
         
-        STRICT RULES:
+        SIGNAL GUIDE:
+        - t: Narrative density / flow
+        - d: Signal change (important beat)
+        - a: Audio intensity
+        - ad: Sudden audio spike (VERY important for reactions)
+        - sd: Silence to sound transition (highly viral hook potential)
         1. Wrap JSON in START_JSON and END_JSON.
         2. Provide 'viral_score' (0-100) and 'hook_text' for each.
         3. RAW JSON ONLY. NO EXTRA TEXT.
@@ -411,7 +471,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
 
     try:
         print(f"[Log] Sending {len(compressed_segments)} high-signal candidates to LLM for viral analysis...")
-        response_text = get_llm_response(prompt, system_prompt, 4096)
+        response_text = get_llm_response(prompt, system_prompt, max_tokens=16384)
         print(f"[Log] LLM analysis received ({len(response_text)} chars).")
         res_data = robust_json_parse(response_text)
         
@@ -432,7 +492,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
 
         # 🟢 QUALITY FILTER, MERGING & SORTING
         valid_highlights = []
-        min_floor = 8.0 if mode == "shorts" else 25.0 
+        min_floor = 8.0 if mode == "shorts" else 15.0 # Lowered for narrative flexibility
         
         if isinstance(highlights, list) and highlights:
             for h in highlights:
@@ -441,18 +501,27 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                     if isinstance(v_score, str): v_score = int(''.join(filter(str.isdigit, v_score)) or 0)
                     h['viral_score'] = v_score
                     
-                    # 🟢 EXPERT REFINEMENT: Hybrid Signal Ranking
-                    # Instead of strict containment, include anything that overlaps the highlight window
-                    contribution = [s['norm_score'] for s in compressed_segments if not (s['end'] < h['start'] or s['start'] > h['end'])]
-                    heuristic_component = (sum(contribution) / len(contribution)) if contribution else 0
+                    # 🟢 EXPERT REFINEMENT: Hybrid Signal Ranking (v3)
+                    # Align with pruning logic signals for consistency
+                    relevant_segs = [s for s in compressed_segments if not (s['end'] < h['start'] or s['start'] > h['end'])]
+                    if relevant_segs:
+                        avg_norm_score = sum(s['norm_score'] for s in relevant_segs) / len(relevant_segs)
+                        avg_norm_audio = sum(s['norm_audio'] for s in relevant_segs) / len(relevant_segs)
+                        avg_norm_delta = sum(s['norm_delta'] for s in relevant_segs) / len(relevant_segs)
+                        avg_norm_ad    = sum(s['norm_audio_delta'] for s in relevant_segs) / len(relevant_segs)
+                        avg_norm_sd    = sum(s['norm_silence_delta'] for s in relevant_segs) / len(relevant_segs)
+                        
+                        combined_signal = (
+                            avg_norm_score * 0.40 + 
+                            avg_norm_audio * 0.30 + 
+                            avg_norm_delta * 0.10 + 
+                            avg_norm_ad    * 0.10 + 
+                            avg_norm_sd    * 0.10
+                        )
+                        h['final_score'] = (v_score * 0.7) + (combined_signal * 100 * 0.3)
+                    else:
+                        h['final_score'] = v_score
                     
-                    if use_audio_detect:
-                        a_contribution = [s.get('norm_audio', 0) for s in compressed_segments if not (s['end'] < h['start'] or s['start'] > h['end'])]
-                        a_heuristic = (sum(a_contribution) / len(a_contribution)) if a_contribution else 0
-                        heuristic_component = (heuristic_component * 0.6) + (a_heuristic * 0.4)
-                    
-                    # Hybrid score: 70% LLM viral confidence + 30% heuristic signal (text + audio)
-                    h['final_score'] = (v_score * 0.7) + (heuristic_component * 100 * 0.3)
                     valid_highlights.append(h)
                 elif isinstance(h, (list, tuple)) and len(h) >= 2:
                     valid_highlights.append({"start": float(h[0]), "end": float(h[1]), "viral_score": 50, "final_score": 50, "reason": "Recovered"})
