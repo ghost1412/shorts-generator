@@ -423,11 +423,29 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= min_floor]
         
         if not valid_highlights:
-            print("[Warning] No high-impact highlights found. Using quality fallback.")
-            # Dynamic fallback: pick a later peak if possible
-            fallback_start = min(45.0, total_duration * 0.2)
+            print("[Warning] LLM analysis failed. Using Heuristic Signal Fallback (Top Peaks)...")
+            # 🟢 DYNAMIC RECOVERY: Use top heuristic signal peaks (Text + Audio)
+            fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0), reverse=True)
+            
+            for f in fallback_candidates[:clip_count]:
+                valid_highlights.append({
+                    "start": f['start'],
+                    "end": f['end'],
+                    "viral_score": int(f['norm_score'] * 100),
+                    "final_score": int(f['norm_score'] * 100),
+                    "reason": "High-Signal Moment (Heuristic Fallback)"
+                })
+            
+            # Sort chronologically for playback reliability
+            valid_highlights.sort(key=lambda x: x['start'])
+
+        if not valid_highlights:
+            # 🟢 ABSOLUTE FAILSAFE: Simple duration-based slice
+            fallback_start = min(45.0, total_duration * 0.1)
             fallback_duration = 35.0 if mode == "shorts" else (target_duration or 180.0)
-            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 85, "reason": "High-Impact Peak Moment (Fallback)"}]
+            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 85, "reason": "Draft Extraction (Failsafe)"}]
+        
+        return valid_highlights
             
         print(f"[Log] Curation complete: Selected {len(valid_highlights)} high-viral segments.")
         return valid_highlights
