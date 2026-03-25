@@ -107,7 +107,8 @@ def parse_args():
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
-    parser.add_argument("--use_audio_detect", action="store_true", help="Use advanced audio feature extraction for highlight detection.")
+    parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
+    parser.add_argument("--hq", action="store_true", help="Enable High-Quality (Premium) enhancements (sharpening, denoising).")
     
     parser.add_argument("--use_comfy", action="store_true", help="Use local ComfyUI for premium AI backgrounds.")
     parser.add_argument("--use_ai_audio", action="store_true", help="Use local ComfyUI for premium AI music & SFX.")
@@ -173,7 +174,7 @@ if getattr(args, "source_video", None):
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, session_dir, 
         mode=args.extract_mode, bitrate=target_bitrate, preset=target_preset, codec="libx264",
-        is_challenge=(args.mode == "CHALLENGE")
+        is_challenge=(args.mode == "CHALLENGE"), use_hq=args.hq
     )
     
     # Generate viral metadata for Highlights
