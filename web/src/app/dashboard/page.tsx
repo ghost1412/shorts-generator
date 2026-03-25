@@ -338,8 +338,8 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Extraction Hero - High Fidelity */}
-          <section className="lg:col-span-2">
-            <div className="glass-card p-6 md:p-8 relative overflow-hidden bg-gradient-to-br from-[#9d4edd]/10 to-[#00e5ff]/10 border-[#00e5ff]/30 shadow-[0_0_50px_rgba(157,78,221,0.1)]">
+          <section className="lg:col-span-2 relative group-hover:cursor-not-allowed">
+            <div className="glass-card p-6 md:p-8 relative overflow-hidden bg-gradient-to-br from-[#9d4edd]/10 to-[#00e5ff]/10 border-[#00e5ff]/30 shadow-[0_0_50px_rgba(157,78,221,0.1)] opacity-50 grayscale pointer-events-none">
               <div className="absolute top-0 right-0 p-4">
                 <div className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff]/40 rounded text-[8px] font-black text-[#00e5ff] uppercase tracking-widest">
                   Premium AI Extraction
@@ -352,10 +352,13 @@ export default function Dashboard() {
                     <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10">
                       <Zap className="w-5 h-5 text-[#00e5ff]" />
                     </div>
-                    <h3 className="text-2xl font-black italic uppercase tracking-tighter">Transform Content</h3>
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-2xl font-black italic uppercase tracking-tighter">Transform Content</h3>
+                      <span className="px-2 py-0.5 bg-[#00e5ff] text-black text-[10px] font-black rounded uppercase tracking-tighter animate-pulse shadow-[0_0_15px_rgba(0,229,255,0.4)]">BETA</span>
+                    </div>
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Upload long-form podcasts or streams. Our AI identifies high-impact moments using audio signals and visual cues.
+                    Upload long-form podcasts or streams. Our AI identifies high-impact moments using audio signals and visual cues. <span className="text-[#00e5ff] font-bold">(Coming Soon)</span>
                   </p>
                   
                   <div className="flex gap-2">
@@ -369,7 +372,7 @@ export default function Dashboard() {
                       onClick={() => setExtractionFormat('highlights')}
                       className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${extractionFormat === 'highlights' ? 'bg-[#9d4edd] text-white shadow-lg shadow-[#9d4edd]/20' : 'bg-white/5 border border-white/10 text-zinc-500'}`}
                     >
-                      Highlight Reel
+                      Highlight Video
                     </button>
                   </div>
 
@@ -473,7 +476,7 @@ export default function Dashboard() {
                             <div className="absolute z-20 animate-split-hl">
                               <div className="w-36 h-20 bg-[#00e5ff]/5 rounded-xl border border-[#00e5ff]/30 flex flex-col items-center justify-center gap-2 shadow-[0_0_30px_rgba(0,229,255,0.1)]">
                                 <Video className="w-5 h-5 text-[#00e5ff]" />
-                                <span className="text-[7px] font-black text-white uppercase tracking-[0.2em]">Narrative Reel</span>
+                                <span className="text-[7px] font-black text-white uppercase tracking-[0.2em]">Narrative Video</span>
                               </div>
                             </div>
                           </>
