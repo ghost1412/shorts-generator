@@ -337,6 +337,155 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Extraction Hero - High Fidelity */}
+          <section className="lg:col-span-2">
+            <div className="glass-card p-6 md:p-8 relative overflow-hidden bg-gradient-to-br from-[#9d4edd]/10 to-[#00e5ff]/10 border-[#00e5ff]/30 shadow-[0_0_50px_rgba(157,78,221,0.1)]">
+              <div className="absolute top-0 right-0 p-4">
+                <div className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff]/40 rounded text-[8px] font-black text-[#00e5ff] uppercase tracking-widest">
+                  Premium AI Extraction
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-8 items-center">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center border border-white/10">
+                      <Zap className="w-5 h-5 text-[#00e5ff]" />
+                    </div>
+                    <h3 className="text-2xl font-black italic uppercase tracking-tighter">Transform Content</h3>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Upload long-form podcasts or streams. Our AI identifies high-impact moments using audio signals and visual cues.
+                  </p>
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setExtractionFormat('shorts')}
+                      className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${extractionFormat === 'shorts' ? 'bg-[#00e5ff] text-black shadow-lg shadow-[#00e5ff]/20' : 'bg-white/5 border border-white/10 text-zinc-500'}`}
+                    >
+                      Viral Shorts
+                    </button>
+                    <button 
+                      onClick={() => setExtractionFormat('highlights')}
+                      className={`flex-1 px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${extractionFormat === 'highlights' ? 'bg-[#9d4edd] text-white shadow-lg shadow-[#9d4edd]/20' : 'bg-white/5 border border-white/10 text-zinc-500'}`}
+                    >
+                      Highlight Reel
+                    </button>
+                  </div>
+
+                  {!isExtracting ? (
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/10 rounded-2xl cursor-pointer hover:border-[#00e5ff]/30 hover:bg-[#00e5ff]/5 transition-all group">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        <PlusCircle className="w-8 h-8 text-zinc-500 group-hover:text-[#00e5ff] mb-2 transition-colors" />
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-white">Drop Source Video</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="video/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setIsExtracting(true);
+                          setUploadProgress(0);
+                          // Mock upload simulation with VFX trigger
+                          const interval = setInterval(() => {
+                            setUploadProgress(prev => {
+                              if (prev >= 100) {
+                                clearInterval(interval);
+                                return 100;
+                              }
+                              return prev + 2;
+                            });
+                          }, 50);
+                        }}
+                      />
+                    </label>
+                  ) : (
+                    <div className="h-32 flex flex-col justify-center gap-4">
+                      <div className="flex justify-between items-end">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#00e5ff]">
+                          {uploadProgress < 100 ? 'Analyzing Signals...' : 'AI Extraction Complete'}
+                        </span>
+                        <span className="text-xs font-bold">{uploadProgress}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-[#9d4edd] to-[#00e5ff] transition-all duration-300" 
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                      <button 
+                        onClick={() => setIsExtracting(false)}
+                        className="text-[8px] font-bold text-zinc-600 uppercase hover:text-white transition-colors self-center"
+                      >
+                        Reset Pipeline
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* VFX Animation Area */}
+                <div className="relative h-[280px] bg-black/40 rounded-3xl border border-white/5 overflow-hidden flex items-center justify-center">
+                   {!isExtracting ? (
+                     <div className="text-center space-y-2 opacity-30">
+                       <Video className="w-12 h-12 mx-auto mb-4" />
+                       <p className="text-[8px] font-black uppercase tracking-[0.3em]">AI Awaiting Input</p>
+                     </div>
+                   ) : (
+                     <div className="relative w-full h-full flex items-center justify-center">
+                        {uploadProgress < 100 ? (
+                          <div className="relative z-20">
+                            <div className="w-40 h-24 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-2xl border border-white/20 flex items-center justify-center backdrop-blur-md">
+                              <Video className="w-10 h-10 text-[#00e5ff] animate-pulse" />
+                              <div className="animate-scan" />
+                            </div>
+                            <div className="absolute inset-0 border-2 border-[#00e5ff]/20 rounded-2xl animate-pulse-ring" />
+                          </div>
+                        ) : (
+                          <>
+                            {/* Splitting Effects */}
+                            <div className="absolute z-30 animate-split-1">
+                              <div className="w-14 h-24 bg-white/10 rounded-xl border border-white/20 flex flex-col items-center justify-center gap-2 backdrop-blur-xl hover:scale-110 transition-transform cursor-pointer">
+                                <Sparkles className="w-4 h-4 text-purple-400" />
+                                <span className="text-[6px] font-black text-white uppercase tracking-tighter">Shot 1</span>
+                              </div>
+                            </div>
+                            <div className="absolute z-30 animate-split-2">
+                              <div className="w-14 h-24 bg-white/10 rounded-xl border border-white/20 flex flex-col items-center justify-center gap-2 backdrop-blur-xl hover:scale-110 transition-transform cursor-pointer">
+                                <Zap className="w-4 h-4 text-amber-400" />
+                                <span className="text-[6px] font-black text-white uppercase tracking-tighter">Shot 2</span>
+                              </div>
+                            </div>
+                            <div className="absolute z-30 animate-split-3">
+                              <div className="w-14 h-24 bg-white/10 rounded-xl border border-white/20 flex flex-col items-center justify-center gap-2 backdrop-blur-xl hover:scale-110 transition-transform cursor-pointer">
+                                <Eye className="w-4 h-4 text-cyan-400" />
+                                <span className="text-[6px] font-black text-white uppercase tracking-tighter">Shot 3</span>
+                              </div>
+                            </div>
+                            <div className="absolute z-30 animate-split-4">
+                              <div className="w-14 h-24 bg-white/10 rounded-xl border border-white/20 flex flex-col items-center justify-center gap-2 backdrop-blur-xl hover:scale-110 transition-transform cursor-pointer">
+                                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                                <span className="text-[6px] font-black text-white uppercase tracking-tighter">Shot 4</span>
+                              </div>
+                            </div>
+                            
+                            <div className="absolute z-20 animate-split-hl">
+                              <div className="w-36 h-20 bg-[#00e5ff]/5 rounded-xl border border-[#00e5ff]/30 flex flex-col items-center justify-center gap-2 shadow-[0_0_30px_rgba(0,229,255,0.1)]">
+                                <Video className="w-5 h-5 text-[#00e5ff]" />
+                                <span className="text-[7px] font-black text-white uppercase tracking-[0.2em]">Narrative Reel</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                     </div>
+                   )}
+                   <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay pointer-events-none" />
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Active Campaigns */}
           <section className="lg:col-span-2 space-y-6">
             <div className="flex justify-between items-center">
