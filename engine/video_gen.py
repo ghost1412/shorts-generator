@@ -530,13 +530,26 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     # 🟢 UPGRADE: Incorporate Ambient Background Sound (Ducked)
     # This adds 'texture' (ASMR, game sounds) from the video clips for high retention
-    if bg_clip.audio:
+    # FIX: Explicitly collect background audio segments and clip them to avoid IndexError
+    bg_audios = []
+    for seg in bg_segments:
+        if hasattr(seg, 'audio') and seg.audio is not None:
+            try:
+                # Ensure the audio is clipped to the segment's own duration limits
+                seg_audio = seg.audio.with_duration(seg.duration).with_start(seg.start)
+                bg_audios.append(seg_audio)
+            except Exception as ae:
+                print(f"[Warning] Failed to extract audio from background segment: {ae}")
+
+    if bg_audios:
         try:
+            # Create a dedicated composite for background ambience
+            ambience_composite = CompositeAudioClip(bg_audios).with_duration(duration)
             # MoviePy 2.2.1: Use volumex or afx.MultiplyVolume
-            if hasattr(bg_clip.audio, 'volumex'):
-                ambience = bg_clip.audio.volumex(0.12) # Subtle 12% volume
+            if hasattr(ambience_composite, 'volumex'):
+                ambience = ambience_composite.volumex(0.12) # Subtle 12% volume
             else:
-                ambience = bg_clip.audio.with_effects([afx.MultiplyVolume(0.12)])
+                ambience = ambience_composite.with_effects([afx.MultiplyVolume(0.12)])
             all_audio_items.append(ambience)
         except Exception as e:
             print(f"[Warning] Failed to process ambient background audio: {e}")

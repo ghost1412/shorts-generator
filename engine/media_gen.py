@@ -2,6 +2,7 @@ import os
 import requests
 import random
 import re
+import numpy as np
 from dotenv import load_dotenv
 from engine.comfy_bridge import generate_cinematic_backgrounds
 
