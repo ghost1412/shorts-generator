@@ -1317,6 +1317,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     processes = []
     
     for i, hi in enumerate(highlights):
+        print(f"[Log] Queueing extraction for clip {i+1}/{len(highlights)}: {hi['start']:.2f}s - {hi['end']:.2f}s")
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
         duration = hi['end'] - hi['start']
         
@@ -1333,19 +1334,24 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
         if mode == "shorts":
             crop_filter = "crop=ih*9/16:ih:(iw-ow)/2:0"
-            vf_filter = f"tonemap=mobius:desat=2,{crop_filter},scale={w}:{h}:flags={scaling_alg},format=yuv420p"
+            vf_filter = f"{crop_filter},scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
-            vf_filter = f"tonemap=mobius:desat=2,scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2{text_filter},format=yuv420p"
+            # 🟢 UPGRADE: Removed 'tonemap=mobius:desat=2' which was washing out colors
+            vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2{text_filter},format=yuv420p"
         
         # Hardware acceleration Selection
         use_gpu = _has_nvenc and codec == 'libx264'
         target_codec = 'h264_nvenc' if use_gpu else codec
-        target_preset = 'p1' if use_gpu else 'ultrafast'
+        # 🟢 UPGRADE: Intermediate quality should be higher than 'ultrafast' to prevent generation loss
+        target_preset = 'p6' if use_gpu else 'veryfast'
+        # 🟢 UPGRADE: Ensure intermediate segments have high bitrate (25M+) to survive re-encoding
+        intermediate_bitrate = "25M"
         
         cmd = [
             ffmpeg_exe, '-y', '-ss', str(hi['start']), '-i', source_path,
             '-t', str(duration), '-vf', vf_filter,
             '-c:v', target_codec, '-preset', target_preset,
+            '-b:v', intermediate_bitrate,
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '192k',
             target

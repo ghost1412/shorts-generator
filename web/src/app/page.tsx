@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { Sparkles, Youtube, Zap, Shield, ArrowRight, Play, CheckCircle2 } from 'lucide-react'
+import { Sparkles, Youtube, Zap, Shield, ArrowRight, Play, CheckCircle2, Eye, Video } from 'lucide-react'
 
 export default function LandingPage() {
   return (
@@ -31,7 +31,7 @@ export default function LandingPage() {
           <div className="max-w-6xl mx-auto text-center space-y-8 relative z-10">
             <div className="inline-flex items-center space-x-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-medium text-[#00e5ff] mb-4">
               <Zap className="w-3 h-3" />
-              <span>Version 2.0 is now live</span>
+              <span>Version 3.0: Hybrid Audio-Visual AI is here</span>
             </div>
             
             <h1 className="text-4xl md:text-8xl font-black tracking-tight leading-[1.2] md:leading-[1.1]">
@@ -53,12 +53,52 @@ export default function LandingPage() {
                 Watch Demo
               </button>
             </div>
+          </div>
+        </section>
 
-            <div className="pt-12 flex flex-wrap items-center justify-center gap-6 md:gap-8 opacity-40 grayscale hover:grayscale-0 transition-all">
-              <span className="text-[10px] md:text-sm font-bold tracking-widest uppercase w-full md:w-auto">Trusted by</span>
-              <Youtube className="w-6 h-6 md:w-8 md:h-8" />
-              <div className="font-bold text-lg md:text-xl italic uppercase">IG Reels</div>
-              <div className="font-bold text-lg md:text-xl uppercase tracking-tighter">TikTok</div>
+        {/* 🚀 NEW: Product Playground Showcase */}
+        <section className="py-24 px-6 relative overflow-hidden">
+          <div className="max-w-6xl mx-auto text-center space-y-16">
+            <div className="space-y-4">
+              <h2 className="text-3xl md:text-5xl font-black tracking-tighter">THE POWER BEHIND THE MAGIC</h2>
+              <p className="text-zinc-500 max-w-xl mx-auto">Click any engine to see how it dominates the algorithm.</p>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {[
+                { id: 'AUTO', label: 'Magic Auto', icon: <Sparkles size={24} />, color: 'text-purple-400', desc: 'AI analyzes trends and picks the best niche for you.' },
+                { id: 'FACTS', label: 'Facts', icon: <Eye size={24} />, color: 'text-cyan-400', desc: 'Mind-blowing educational content that drives saves.' },
+                { id: 'STORY', label: 'Story', icon: <Video size={24} />, color: 'text-orange-400', desc: 'Narrative-driven shorts with high retention loops.' },
+                { id: 'WYR', label: 'Would You Rather', icon: <Zap size={24} />, color: 'text-emerald-400', desc: 'Interactive psychological games for engagement.' },
+                { id: 'REDDIT', label: 'Reddit', icon: <ArrowRight size={24} />, color: 'text-red-400', desc: 'Auto-narrated viral stories from top subreddits.' },
+                { id: 'EXTRACT', label: 'AI Extraction', icon: <Play size={24} />, color: 'text-pink-400', desc: 'Turn long streams into massive batches of viral shorts.' },
+              ].map(m => (
+                <div key={m.id} className="glass-card p-6 flex flex-col items-center gap-4 hover:border-white/20 hover:scale-105 transition-all group cursor-pointer">
+                  <div className={`p-4 bg-white/5 rounded-2xl ${m.color} group-hover:scale-110 transition-transform`}>
+                    {m.icon}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white">{m.label}</p>
+                    <p className="text-[8px] text-zinc-500 mt-2 leading-relaxed">{m.desc}</p>
+                  </div>
+                  <Link href="/signup" className="mt-2 text-[8px] font-bold text-[#00e5ff] hover:underline uppercase tracking-tighter">Try this Mode →</Link>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-12">
+              <div className="glass-card p-12 relative overflow-hidden bg-gradient-to-br from-[#9d4edd]/5 to-[#00e5ff]/5 border-[#00e5ff]/20">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00e5ff] to-transparent animate-pulse" />
+                <div className="space-y-6 relative z-10">
+                  <h3 className="text-2xl font-black italic uppercase tracking-tighter">Long-form to Shorts: Now in Closed Beta</h3>
+                  <p className="text-zinc-400 max-w-2xl mx-auto text-sm">
+                    Our new Audio-Visual Hybrid engine scans your 4-hour live streams in minutes, identifying every viral moment using pitch, energy, and speech-rate analysis.
+                  </p>
+                  <Link href="/signup" className="inline-flex px-8 py-3 bg-white text-black font-black rounded-xl hover:bg-zinc-200 transition-all uppercase text-xs tracking-widest">
+                    Apply for Beta Access
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </section>

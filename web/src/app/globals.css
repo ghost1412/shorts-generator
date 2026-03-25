@@ -31,4 +31,22 @@ body {
   .btn-primary {
     @apply px-6 py-3 bg-gradient-to-r from-[#9d4edd] to-[#7b2cbf] hover:from-[#7b2cbf] hover:to-[#5a189a] text-white font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-purple-500/20 active:scale-95;
   }
+
+  @keyframes scan {
+    0% { top: 0; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  .animate-scan {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right, transparent, #00e5ff, transparent);
+    box-shadow: 0 0 15px #00e5ff;
+    animation: scan 4s linear infinite;
+    z-index: 10;
+  }
 }

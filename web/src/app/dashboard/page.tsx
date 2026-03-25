@@ -41,20 +41,26 @@ export default function Dashboard() {
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [cartoon, setCartoon] = useState(true);
   const [persona, setPersona] = useState('mafia_cat');
+  
+  // 🟢 NEW STATE: Extraction Flow
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [sourceVideoUrl, setSourceVideoUrl] = useState('');
+  const [extractionFormat, setExtractionFormat] = useState<'shorts' | 'highlights'>('shorts');
 
   const modes = [
-    { id: 'AUTO', label: 'Magic Auto', icon: <Sparkles size={16} />, color: 'text-purple-400' },
-    { id: 'FACTS', label: 'Facts Mode', icon: <Eye size={16} />, color: 'text-cyan-400' },
-    { id: 'STORY', label: 'Story Mode', icon: <Video size={16} />, color: 'text-orange-400' },
-    { id: 'WYR', label: 'Would You Rather', icon: <Zap size={16} />, color: 'text-emerald-400' },
-    { id: 'REDDIT', label: 'Reddit Stories', icon: <ArrowRight size={16} />, color: 'text-red-400' },
-    { id: 'TRIVIA', label: 'Genius Trivia', icon: <PlusCircle size={16} />, color: 'text-yellow-400' },
-    { id: 'QUOTE', label: 'Daily Quotes', icon: <Clock size={16} />, color: 'text-pink-400' },
-    { id: 'ODD_ONE_OUT', label: 'Spot the Odd', icon: <Users size={16} />, color: 'text-indigo-400' },
-    { id: 'NEWS', label: '😂 Funny News', icon: <TrendingUp size={16} />, color: 'text-green-400' },
-    { id: 'NEWS_SERIOUS', label: '📰 Serious News', icon: <TrendingUp size={16} />, color: 'text-blue-400' },
-    { id: 'TREND', label: '📈 Viral Trends', icon: <TrendingUp size={16} />, color: 'text-yellow-300' },
-    { id: 'CHALLENGE', label: '🫁 Breathing Game', icon: <Sparkles size={16} />, color: 'text-rose-400' },
+    { id: 'AUTO', label: 'Magic Auto ✨', icon: <Sparkles size={16} />, color: 'text-purple-400', category: 'Templates' },
+    { id: 'FACTS', label: 'Facts Mode', icon: <Eye size={16} />, color: 'text-cyan-400', category: 'Templates' },
+    { id: 'STORY', label: 'Story Mode', icon: <Video size={16} />, color: 'text-orange-400', category: 'Templates' },
+    { id: 'WYR', label: 'Would You Rather', icon: <Zap size={16} />, color: 'text-emerald-400', category: 'Games' },
+    { id: 'REDDIT', label: 'Reddit Stories', icon: <ArrowRight size={16} />, color: 'text-red-400', category: 'Templates' },
+    { id: 'TRIVIA', label: 'Genius Trivia', icon: <PlusCircle size={16} />, color: 'text-yellow-400', category: 'Games' },
+    { id: 'QUOTE', label: 'Daily Quotes', icon: <Clock size={16} />, color: 'text-pink-400', category: 'Templates' },
+    { id: 'ODD_ONE_OUT', label: 'Spot the Odd', icon: <Users size={16} />, color: 'text-indigo-400', category: 'Games' },
+    { id: 'NEWS', label: '😂 Funny News', icon: <TrendingUp size={16} />, color: 'text-green-400', category: 'News' },
+    { id: 'NEWS_SERIOUS', label: '📰 Serious News', icon: <TrendingUp size={16} />, color: 'text-blue-400', category: 'News' },
+    { id: 'TREND', label: '📈 Viral Trends', icon: <TrendingUp size={16} />, color: 'text-yellow-300', category: 'Templates' },
+    { id: 'CHALLENGE', label: '🫁 Breathing Game', icon: <Sparkles size={16} />, color: 'text-rose-400', category: 'Games' },
   ];
   const supabase = createClient();
 
@@ -140,7 +146,7 @@ export default function Dashboard() {
   async function triggerGeneration(mode = 'AUTO', category = 'random', script = '') {
     const plan = userConfig?.plan?.toLowerCase() || 'free';
     const generationsUsed = userConfig?.generations_used || 0;
-    const maxVideos = userConfig?.max_videos || 3;
+    const maxVideos = userConfig?.max_videos || 1;
 
     if (plan === 'free' && generationsUsed >= maxVideos) {
       alert(`❌ Usage limit reached! You have used all ${maxVideos} generations in your free plan. Upgrade to Pro for unlimited!`);
@@ -246,14 +252,14 @@ export default function Dashboard() {
             <p className="font-extrabold text-sm capitalize">{userConfig?.plan || 'Free'}</p>
               {userConfig?.plan === 'free' && (
                 <div className="text-sm font-medium text-slate-400">
-                  {userConfig?.generations_used || 0} / {userConfig?.max_videos || 3} generations used
+                  {userConfig?.generations_used || 0} / {userConfig?.max_videos || 1} generations used
                 </div>
               )}
           </div>
           <div className="w-full bg-zinc-800 h-1.5 rounded-full mb-4 overflow-hidden">
             <div 
               className="bg-gradient-to-r from-[#9d4edd] to-[#00e5ff] h-full transition-all duration-1000" 
-              style={{ width: `${Math.min((videoLogs.length / (userConfig?.max_videos || 3)) * 100, 100)}%` }}
+              style={{ width: `${Math.min((videoLogs.length / (userConfig?.max_videos || 1)) * 100, 100)}%` }}
             />
           </div>
           <Link href="/pricing" className="block w-full py-2 bg-gradient-to-r from-[#9d4edd]/20 to-[#00e5ff]/20 hover:from-[#9d4edd]/30 hover:to-[#00e5ff]/30 text-center text-[10px] font-bold rounded-lg border border-white/5 transition-all">
@@ -449,25 +455,30 @@ export default function Dashboard() {
             <h3 className="text-xl font-bold">Generation Config</h3>
             <div className="glass-card p-6 space-y-6">
               
-              {/* Mode Selection */}
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Select Mode</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {modes.map(m => (
-                    <button 
-                      key={m.id} 
-                      onClick={() => setSelectedMode(m.id)}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all ${
-                        selectedMode === m.id 
-                          ? 'bg-white/10 border-white/20 text-white' 
-                          : 'bg-white/5 border-white/5 text-zinc-500 hover:border-white/10'
-                      }`}
-                    >
-                      <span className={m.color}>{m.icon}</span>
-                      <span className="text-[10px] font-bold uppercase truncate">{m.label.split(' ')[0]}</span>
-                    </button>
-                  ))}
-                </div>
+              {/* Mode Selection (Categorized) */}
+              <div className="space-y-4">
+                <p className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Advanced AI Templates</p>
+                {['Templates', 'Games', 'News'].map(cat => (
+                  <div key={cat} className="space-y-2">
+                    <p className="text-[10px] font-bold text-zinc-600 uppercase ml-1">{cat}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {modes.filter(m => m.category === cat).map(m => (
+                        <button 
+                          key={m.id} 
+                          onClick={() => setSelectedMode(m.id)}
+                          className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all ${
+                            selectedMode === m.id 
+                              ? 'bg-white/10 border-white/20 text-white' 
+                              : 'bg-white/5 border-white/5 text-zinc-500 hover:border-white/10'
+                          }`}
+                        >
+                          <span className={m.color}>{m.icon}</span>
+                          <span className="text-[10px] font-bold uppercase truncate">{m.label.split(' ')[0]}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Niche Selection */}
@@ -595,6 +606,30 @@ export default function Dashboard() {
                     </p>
                   </div>
                 )}
+
+                {/* Audio-Visual Highlighting Toggle (COMING SOON) */}
+                <div className="flex items-center justify-between opacity-50 grayscale cursor-not-allowed">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-cyan-500/10 rounded-lg">
+                      <Zap size={18} className="text-cyan-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-white">Audio-Visual AI Analysis</p>
+                        <span className="px-1.5 py-0.5 bg-cyan-500 text-white text-[8px] font-black rounded uppercase tracking-tighter shadow-lg shadow-cyan-500/40">BETA</span>
+                      </div>
+                      <p className="text-[10px] text-zinc-500">Hybrid Pitch & Energy Detection</p>
+                    </div>
+                  </div>
+                  <div className="w-12 h-6 rounded-full p-1 bg-zinc-700">
+                    <div className="w-4 h-4 bg-zinc-500 rounded-full shadow-sm" />
+                  </div>
+                </div>
+                <div className="p-3 bg-cyan-500/5 border border-cyan-500/10 rounded-xl">
+                  <p className="text-[10px] text-cyan-300/50 leading-relaxed italic">
+                    🔒 CLOSED BETA: This feature uses deep audio analysis to find emotional spikes. Coming soon to all users!
+                  </p>
+                </div>
               </div>
 
               {/* Cartoon Mode & Persona Selection */}
