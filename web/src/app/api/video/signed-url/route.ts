@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { createClient as createUserClient } from '@/utils/supabase/server';
+import { getSupabaseAdmin } from '@/utils/supabase/admin';
 
 export async function POST(request: Request) {
   try {
@@ -20,16 +20,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'storage_path is required' }, { status: 400 });
     }
 
-    // Use service role to generate signed URL (server-side only)
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('[SignedURL API] SUPABASE_SERVICE_ROLE_KEY is missing from environment variables!');
-      return NextResponse.json({ error: 'Server misconfiguration: Service key missing' }, { status: 500 });
-    }
-
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // Use singleton admin client to generate signed URL
+    const supabaseAdmin = getSupabaseAdmin();
 
     const { data, error } = await supabaseAdmin.storage
       .from('videos')
