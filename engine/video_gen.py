@@ -1163,9 +1163,6 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     print(f"[Log] Exporting ODD_ONE_OUT short: {output_path}")
     # 🟢 PHASE 16: HQ Parameter Integration
     ffmpeg_params = ["-vcodec", "libx264", "-crf", "18", "-preset", preset]
-    if use_hq:
-        # Note: hqdn3d and sharpening can be slow but look great
-        ffmpeg_params.extend(["-vf", get_hq_vf()])
 
     final_video.write_videofile(
         output_path, 
