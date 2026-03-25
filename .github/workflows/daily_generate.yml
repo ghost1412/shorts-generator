@@ -53,6 +53,10 @@ on:
         description: 'Cartoon Persona (mafia_cat, rabbit, robot, squirrel)'
         required: false
         default: 'mafia_cat'
+      source_video:
+        description: 'Source Video URL for Extraction'
+        required: false
+        default: ''
 
 jobs:
   generate-and-post:
@@ -136,7 +140,9 @@ jobs:
           $p_val = if ("${{ github.event.inputs.persona }}" -ne "") { "${{ github.event.inputs.persona }}" } else { "" }
           $s_flag = if ("${{ github.event.inputs.custom_script }}" -ne "") { "--script" } else { "" }
           $s_val = if ("${{ github.event.inputs.custom_script }}" -ne "") { "${{ github.event.inputs.custom_script }}" } else { "" }
-          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val
+          $v_flag = if ("${{ github.event.inputs.source_video }}" -ne "") { "--source_video" } else { "" }
+          $v_val = if ("${{ github.event.inputs.source_video }}" -ne "") { "${{ github.event.inputs.source_video }}" } else { "" }
+          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val $v_flag $v_val
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
@@ -162,5 +168,6 @@ jobs:
         ARG_PERSONA="${{ github.event.inputs.persona && format('--persona {0}', github.event.inputs.persona) || '' }}"
         ARG_BITRATE="${{ github.event.inputs.bitrate && format('--bitrate {0}', github.event.inputs.bitrate) || '--bitrate 12000k' }}"
         ARG_PRESET="${{ github.event.inputs.preset && format('--preset {0}', github.event.inputs.preset) || '--preset medium' }}"
+        ARG_SOURCE_VIDEO="${{ github.event.inputs.source_video && format('--source_video {0}', github.event.inputs.source_video) || '' }}"
         
-        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET
+        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET $ARG_SOURCE_VIDEO
