@@ -12,7 +12,7 @@ LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL") # Default Ollama #, "http://localhost
 def get_llm_response(
     prompt,
     system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
-    max_tokens=16384, # 🔥 increased for massive 2+ hour transcripts
+    max_tokens=12000, # 🔥 increased for massive 2+ hour transcripts
     temperature=0.3,
     model="meta-llama/Llama-3.1-8B-Instruct"
 ):
@@ -195,7 +195,7 @@ def generate_mixed_facts(category="science"):
     selected_sub = get_sub_topic(category)
     print(f"[Log] FACTS: Selected sub-topic: {selected_sub}")
     
-    prompt = f"""Generate 2-3 SHOCKING and BIZARRE facts about {selected_sub}.
+    prompt = f"""Generate EXACTLY 3 SHOCKING and BIZARRE facts about {selected_sub}.
     One of them MUST be a plausible-sounding LIE (False), the others must be TRUE.
     
     RULES:
@@ -205,11 +205,13 @@ def generate_mixed_facts(category="science"):
     4. Format as JSON ONLY:
     
     {{
-      "hook": "Wait, did you know that {selected_sub}...",
+      "hook": "99% of people fail this... Can you spot the lie about {selected_sub}?",
       "facts": [
         {{"fact": "shocking fact text", "truth": true}},
+        {{"fact": "another shocking fact", "truth": true}},
         {{"fact": "plausible lie text", "truth": false}}
-      ]
+      ],
+      "loop_lead": "Wait, did you catch the first one?"
     }}
     """
 
@@ -226,7 +228,7 @@ def generate_story(category="general"):
     """
     selected_sub = get_sub_topic(category)
     print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
-    prompt = f"Write a SHOCKING, high-drama 1st-person story about {selected_sub}. Focus on a bizarre personal experience. Keep it under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...'}}"
+    prompt = f"Write a SHOCKING, high-drama 1st-person story about {selected_sub}. Focus on a bizarre personal experience. Keep it under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
     
     def llm_call(attempt):
         response_text = get_llm_response(prompt, temperature=0.7, max_tokens=600)
@@ -478,7 +480,8 @@ CRITICAL VALIDATION:
 JSON Structure:
 {{
   "title": "A short viral title regarding {selected_sub}",
-  "story": "The full story text..."
+  "story": "The full story text...",
+  "loop_lead": "But wait, it gets crazier..."
 }}
 """
 
@@ -525,7 +528,8 @@ Format as JSON ONLY:
   "opt_a": "Option A",
   "opt_b": "Option B",
   "opt_c": "Option C",
-  "answer": "Correct Option Text"
+  "answer": "Correct Option Text",
+  "loop_lead": "Could you do better next time?"
 }}
 """
 
@@ -571,7 +575,8 @@ CRITICAL VALIDATION:
 JSON Structure:
 {{
   "quote": "Profound quote text about {category}",
-  "author": "Author Name"
+  "author": "Author Name",
+  "loop_lead": "Think about it..."
 }}
 """
 
