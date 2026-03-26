@@ -36,16 +36,29 @@ def compute_audio_score(chunk, sr, prev_energy=None):
     energy = np.mean(chunk ** 2)
     
     # 2. Pitch variation (Emotion/Intensity)
-    # Using a smaller window for speed
+    # 🟢 PHASE 16: Dynamic FFT size to avoid "n_fft too large" warnings on short segments
+    safe_n_fft = 2048
+    if len(chunk) < 2048:
+        safe_n_fft = 1024 if len(chunk) >= 1024 else (512 if len(chunk) >= 512 else 256)
+
     try:
-        pitches, magnitudes = librosa.piptrack(y=chunk, sr=sr, fmin=75, fmax=1600)
-        pitch_var = np.var(pitches[pitches > 0]) if np.any(pitches > 0) else 0
+        if len(chunk) < safe_n_fft:
+            pitch_var = 0
+        else:
+            pitches, magnitudes = librosa.piptrack(y=chunk, sr=sr, fmin=75, fmax=1600, n_fft=safe_n_fft)
+            pitches = pitches[pitches > 0]
+            pitch_var = np.var(pitches) if len(pitches) > 0 else 0
     except:
         pitch_var = 0
         
     # 3. Silence Ratio
     try:
-        non_silent = librosa.effects.split(y=chunk, top_db=25)
+        # Ensure frame_length doesn't exceed signal length
+        split_frame = safe_n_fft
+        while split_frame > len(chunk) and split_frame > 128:
+            split_frame //= 2
+            
+        non_silent = librosa.effects.split(y=chunk, top_db=25, frame_length=split_frame, hop_length=split_frame//4)
         active_len = sum(e - s for s, e in non_silent)
         silence_ratio = 1 - (active_len / len(chunk))
     except:
@@ -423,18 +436,16 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         2. High Delta (d_signal): Sudden shifts in intensity/tone (very viral!).
         3. Audio Spikes (a_signal): Emotional peaks even if text is neutral.
         
-        CRITICAL:
-        - Prioritize segments with high d_signal (intensity change) and a_signal.
-        - d_signal represents sudden change in intensity; these are strong viral candidates.
-        - Audio spikes indicate real emotional peaks.
+        CRITICAL RULES FOR WATCHABILITY:
+        - **HOOK FIRST**: The first 2 seconds of each clip MUST have a visual or audio 'hook'. Look for segments where 'ad' (audio delta) or 'd' (text delta) is high right at the 'start' timestamp.
+        - **SIGNAL PEAKS**: Prioritize segments where a signal (a, ad, d) spikes relative to the previous segment.
+        - **ENGAGEMENT**: Each moment MUST be between 8 and 45 seconds long.
+        - **MANDATORY**: 'start' and 'end' timestamps MUST be provided.
+        - **MANDATORY**: For each clip, provide a 'hook_text' (under 10 words) that describes the opening "hook" moment.
+        - REJECT: slow setups, generic intros, filler conversation.
+        - Wrap JSON array in START_JSON and END_JSON markers.
         
-        STRICT RULES:
-        1. Each moment MUST be between 8 and 45 seconds long.
-        2. MANDATORY: 'start' and 'end' timestamps MUST be provided.
-        3. REJECT: slow setups, generic intros, filler conversation.
-        4. Wrap JSON array in START_JSON and END_JSON markers.
-        
-        Log Data (Signal/Delta marked): 15-30 segments provided:
+        Log Data (Signal/Delta marked):
         {full_text_with_ts}"""
     else: # Long-Form Highlight Reel
         system_prompt = "You are a narrative editor. Provide TIMESTAMPS for all story beats."
@@ -451,18 +462,24 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         prompt = f"""Objective: Generate a cohesive narrative summary reel.
         Aim to identify approximately {segment_target} key segments to reach the target duration of {target_duration}s.
         Ensure you cover the story comprehensively. Do not be overly selective; include all meaningful story beats and reactions.
-        MANDATORY: You must continue generating the list until you reach the target count or duration. DO NOT STOP EARLY.
-        MANDATORY: include 'start' and 'end' timestamps.
         
+        WATCHABILITY & RETENTION:
+        - **REACTION HOOKS**: Include segments with high 'ad' (audio delta) as these often represent the most watchable reactions.
+        - **NARRATIVE FLOW**: Ensure the 'start' of each segment feels like a fresh beat or hook.
+        - **MANDATORY**: For each clip, provide a 'hook_text' (short teaser for the clip).
+
         SIGNAL GUIDE:
         - t: Narrative density / flow
         - d: Signal change (important beat)
         - a: Audio intensity
-        - ad: Sudden audio spike (VERY important for reactions)
+        - ad: Sudden audio spike (VERY important for reactions/hooks)
         - sd: Silence to sound transition (highly viral hook potential)
+        
+        STRICT RULES:
         1. Wrap JSON in START_JSON and END_JSON.
         2. Provide 'viral_score' (0-100) and 'hook_text' for each.
-        3. RAW JSON ONLY. NO EXTRA TEXT.
+        3. MANDATORY: include 'start' and 'end' timestamps.
+        4. RAW JSON ONLY. NO EXTRA TEXT.
         
         Log Data (Signal/Delta marked):
         {full_text_with_ts}
@@ -470,9 +487,15 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         MANDATORY: Return a JSON LIST of objects. Even if only one moment is found, wrap it in []."""
 
     try:
-        print(f"[Log] Sending {len(compressed_segments)} high-signal candidates to LLM for viral analysis...")
-        response_text = get_llm_response(prompt, system_prompt, max_tokens=16384)
-        print(f"[Log] LLM analysis received ({len(response_text)} chars).")
+        # 🟢 HEARTBEAT: Clear logging for user visibility on long runs
+        print(f"[Log] Sending {len(compressed_segments)} logic-filtered segments to LLM for viral curation...")
+        print(f"[Log] This may take up to 2-3 minutes for large 60+ min videos. Please wait...")
+        
+        # Adjust max_tokens based on segment count to guide LLM focus
+        dynamic_max = min(4096, max(1024, len(compressed_segments) * 35))
+        
+        response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
+        print(f"[Log] LLM analysis received ({len(response_text)} chars). Processing results...")
         res_data = robust_json_parse(response_text)
         
         highlights = []

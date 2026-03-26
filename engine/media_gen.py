@@ -19,7 +19,11 @@ HIGH_RETENTION_QUERIES = [
     "kinetic sand", 
     "slime asmr", 
     "subway surfers gameplay", 
-    "soap cutting"
+    "soap cutting",
+    "minecraft dropper",
+    "satisfying industrial machine",
+    "paint mixing asmr",
+    "deep sea satisfying"
 ]
 
 def extract_keywords(text):

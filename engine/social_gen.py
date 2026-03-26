@@ -44,8 +44,10 @@ Generate a VIRAL title, high-retention description, and trending SEO tags for {t
 {input_text}
 
 CRITICAL SEO RULES:
-1. Title: Must be "Pattern-Interrupting" (e.g., "STOP SCROLLING! 🛑", "I was lied to... 💀", "99% MISS THIS"). Use extreme emotional hooks. Keep it under 60 chars.
-   - NOTE: For NEWS reports, avoid game titles. Use reporting hooks like "BREAKING: [Headline] 🚨" or "DEVELOPING: [Headline]".
+1. Title: Must be "Pattern-Interrupting". 
+   - For FACTS/CHALLENGE: ALWAYS use "99% MISS THIS! 🛑" or "99.9% FAIL! 😱" or "Can You Spot the Lie? 🤯" as the primary hook.
+   - For NEWS: ALWAYS start with "BREAKING: [Headline] 🚨" or "DEVELOPING: [Headline] 🚨".
+   - Keep it under 60 chars. Use extreme emotional hooks.
 2. Description: 
    - First line must be a CTA (e.g., "Comment your guess or you owe me a sub!").
    - For NEWS, first line should be "Stay tuned for more updates on this! 🚨"

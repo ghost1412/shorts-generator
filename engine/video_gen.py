@@ -1062,7 +1062,7 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
     
     return output_path
 
-def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out.mp4", music_path=None, bitrate="8000k", preset="medium"):
+def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out.mp4", music_path=None, bitrate="8000k", preset="medium", use_hq=False):
     """
     Composes an Odd One Out puzzle video.
     Builds a 5x6 grid of the base image, but modifies one (the odd one) to be slightly rotated/flipped.
