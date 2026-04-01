@@ -776,7 +776,7 @@ if not actually_skip_upload:
 
         print("[Log] Instagram uploader ready.")
         ig_uploader = InstagramUploader()
-        # ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
+        ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
 
 if actually_skip_upload:
     print("[Log] Skip Upload flag detected (or forced). Social media steps ignored.")
