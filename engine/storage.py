@@ -13,7 +13,7 @@ def cleanup_old_videos(supabase: Client, user_id: str):
             return
 
         now = datetime.utcnow()
-        expiry_limit = now - timedelta(hours=24)
+        expiry_limit = now - timedelta(hours=1)
 
         for file in res:
             # Supabase 'list' returns metadata including 'created_at'
@@ -75,3 +75,17 @@ def upload_to_storage(file_path: str, video_id: str, is_video: bool = True) -> s
     except Exception as e:
         print(f"[Error] Storage upload failed ({file_path}): {e}")
         return None
+
+def get_public_url(storage_path: str) -> str:
+    """Returns the public URL for a file in Supabase Storage."""
+    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
+    if not supabase_url:
+        return None
+    
+    # Construct the public URL (Standard Supabase format)
+    # https://<project_id>.supabase.co/storage/v1/object/public/<bucket>/<path>
+    return f"{supabase_api_url(supabase_url)}/storage/v1/object/public/videos/{storage_path}"
+
+def supabase_api_url(url: str) -> str:
+    """Ensures the URL is clean."""
+    return url.rstrip('/')

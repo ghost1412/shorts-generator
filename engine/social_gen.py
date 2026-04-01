@@ -256,13 +256,31 @@ class InstagramUploader:
         print(f"[Log] Preparing Instagram Reel (Temporary Hosting)...")
         
         try:
-            # Step 0: Upload to temporary host
-            with open(video_file_path, "rb") as f:
-                host_res = requests.post("https://file.io", files={"file": f})
-                host_res.raise_for_status()
-                video_url = host_res.json().get("link")
+            # Step 0: Upload to Supabase Storage (Stable Hosting)
+            from engine.storage import upload_to_storage, get_public_url
+            import uuid
             
-            print(f"[Log] Temporary URL generated: {video_url}")
+            print(f"[Log] Uploading to Supabase Storage for stable hosting...")
+            temp_id = str(uuid.uuid4())[:8]
+            storage_path = upload_to_storage(video_file_path, f"ig_temp_{temp_id}")
+            
+            if not storage_path:
+                print(f"[Error] Storage upload failed. Falling back to file.io (unreliable)...")
+                with open(video_file_path, "rb") as f:
+                    host_res = requests.post("https://file.io", files={"file": f}, timeout=60)
+                    if host_res.ok:
+                        video_url = host_res.json().get("link")
+                    else:
+                        print(f"[Error] file.io fallback also failed.")
+                        return None
+            else:
+                video_url = get_public_url(storage_path)
+            
+            if not video_url:
+                print(f"[Error] No public URL generated for Instagram.")
+                return None
+
+            print(f"[Log] Stable URL generated: {video_url}")
 
             # Step 1: Create Media Container
             container_url = f"{self.base_url}/{self.page_id}/media"
@@ -273,10 +291,21 @@ class InstagramUploader:
                 "access_token": self.access_token
             }
             
-            res = requests.post(container_url, data=payload)
-            res.raise_for_status()
-            container_id = res.json().get("id")
+            print(f"[Log] Creating Instagram Media Container...")
+            res = requests.post(container_url, data=payload, timeout=30)
+            print(f"[Log] Container Creation Status: {res.status_code}")
             
+            if not res.ok:
+                print(f"[Error] Instagram Container Check failed: {res.text}")
+                return None
+
+            try:
+                container_data = res.json()
+            except Exception as je:
+                print(f"[Error] Instagram JSON decode error (Step 1): {je}. Raw: {res.text}")
+                return None
+                
+            container_id = container_data.get("id")
             print(f"[Log] Container created: {container_id}. Publishing (can take 30-60s)...")
             
             # Step 2: Publish
@@ -286,10 +315,14 @@ class InstagramUploader:
                 "access_token": self.access_token
             }
             pub_res = requests.post(publish_url, data=publish_payload)
-            pub_res.raise_for_status()
             
+            if not pub_res.ok:
+                print(f"[Error] Instagram Publish failed: {pub_res.text}")
+                pub_res.raise_for_status()
+            
+            pub_data = pub_res.json()
             print("[Log] Successfully published to Instagram!")
-            return pub_res.json()
+            return pub_data
             
         except Exception as e:
             print(f"[Error] Instagram Error: {e}")
