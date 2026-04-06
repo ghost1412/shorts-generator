@@ -20,7 +20,11 @@ export async function POST(request: Request) {
       useAiAudio,
       cartoon,
       persona,
-      sourceVideoUrl
+      sourceVideoUrl,
+      editingStyle,
+      useAudioDetect,
+      userContext,
+      styleContext
     } = body;
 
     // Defensive check: support snake_case from older/misc clients
@@ -101,7 +105,12 @@ export async function POST(request: Request) {
           customScript,
           vibe,
           userId: user.id,
-          video_id: videoId 
+          video_id: videoId,
+          style: editingStyle,
+          sourceVideoUrl,
+          useAudioDetect,
+          userContext,
+          styleContext
         })
       });
 
@@ -156,7 +165,11 @@ export async function POST(request: Request) {
             use_ai_audio: useAiAudio ? 'true' : 'false',
             cartoon: cartoon ? 'true' : 'false',
             persona: persona || '',
-            source_video: sourceVideoUrl || ''
+            source_video: sourceVideoUrl || '',
+            style: editingStyle || '',
+            use_audio_detect: useAudioDetect ? 'true' : 'false',
+            user_context: userContext || '',
+            style_context: styleContext || ''
           },
         }),
       }

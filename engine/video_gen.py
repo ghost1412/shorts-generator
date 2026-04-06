@@ -12,6 +12,143 @@ SAFE_TOP = 220
 SAFE_MID = 750
 SAFE_BOTTOM = 1600
 
+def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=1080, target_h=1920):
+    """
+    Generates an FFmpeg crop filter string for dynamic focal point tracking.
+    Uses piecewise linear interpolation with optimized sampling and smoothing.
+    """
+    if not interest_points:
+        return f"crop=ih*9/16:ih:(iw-ow)/2:0"
+    
+    # Filter and sort interest points for this segment
+    pts = sorted([(t, x) for t, x in interest_points.items() if start_time <= t <= end_time])
+    if not pts:
+        return f"crop=ih*9/16:ih:(iw-ow)/2:0"
+        
+    # 🟢 ADAPTIVE SAMPLING: Use more points for longer segments (up to 40)
+    # This prevents jerkiness while staying within Windows command line limits
+    duration = end_time - start_time
+    max_pts = min(40, int(duration * 2) + 5) # ~2 points per second
+    if len(pts) > max_pts:
+        step = len(pts) // max_pts
+        pts = pts[::step][:max_pts]
+    
+    def get_focal_x_expr():
+        # Compact piecewise linear construction with smoothing
+        expr = f"{pts[-1][1]}"
+        for i in range(len(pts) - 2, -1, -1):
+            t1, x1 = round(pts[i][0] - start_time, 2), pts[i][1]
+            t2, x2 = round(pts[i+1][0] - start_time, 2), pts[i+1][1] 
+            
+            t_diff = round(t2 - t1, 3)
+            if t_diff <= 0.01: t_diff = 0.01
+            
+            # Linear interpolation: x1 + (x2-x1)*(t-t1)/(t2-t1)
+            # 🟢 SMOOTHING: Using 'staircase' if too close, else linear
+            seg = f"if(lt(t,{t2}),{x1}+({round(x2-x1,4)})*(t-{t1})/{t_diff},{expr})"
+            expr = seg
+        return expr
+
+    focal_x_pct = get_focal_x_expr()
+    crop_w = "ih*9/16"
+    # Ensure crop focal position is constrained within video bounds
+    x_expr = f"min(max(0,({focal_x_pct}*iw)-({crop_w}/2)),iw-{crop_w})"
+    
+    return f"crop={crop_w}:ih:'{x_expr}':0"
+
+def tighten_clip(clip, keep_intervals, mode="cut", speed=None):
+    """
+    Tightens a clip by removing non-keep intervals (Auto-Editor style).
+    mode: "cut" to remove skipped parts, "speed" to speed them up.
+    """
+    if not keep_intervals: return clip
+    
+    # Adjust for clip start in global timeline if needed
+    # (Assuming keep_intervals are relative to the video file)
+    
+    parts = []
+    last_end = 0
+    
+    for start, end in keep_intervals:
+        # Segment and keep
+        if start > last_end and mode == "speed" and speed:
+            # Speed up the 'skipped' part instead of cutting
+            skipped = clip.subclipped(last_end, start).with_effects([vfx.MultiplySpeed(speed)])
+            parts.append(skipped)
+        
+        parts.append(clip.subclipped(start, end))
+        last_end = end
+        
+    if not parts: return clip
+    
+    from moviepy import concatenate_videoclips
+    return concatenate_videoclips(parts)
+
+def smart_vertical_crop(clip, interest_points, damping=0.1):
+    """
+    Dynamically crops a clip to 1080x1920, following interest points (AutoClip style).
+    interest_points: dict of timestamp -> x_center (0-1).
+    """
+    w, h = clip.size
+    target_w, target_h = 1080, 1920
+    
+    # Calculate initial scale
+    scale = max(target_w / w, target_h / h)
+    new_w, new_h = int(w * scale), int(h * scale)
+    if new_w % 2 != 0: new_w += 1
+    if new_h % 2 != 0: new_h += 1
+    scaled_clip = clip.resized(width=new_w, height=new_h)
+    
+    # Actual crop window width/height in scaled dimensions
+    # We want to crop a 1080x1920 window from (new_w, new_h)
+    
+    def get_crop_x(t):
+        # Find nearest interest point
+        ts = sorted(interest_points.keys())
+        if not ts: return new_w / 2 # Center
+        
+        # Binary search or just find nearest
+        from bisect import bisect_left
+        pos = bisect_left(ts, t)
+        if pos == 0:
+            target_x_percent = interest_points[ts[0]]
+        elif pos == len(ts):
+            target_x_percent = interest_points[ts[-1]]
+        else:
+            # Interpolate
+            t1, t2 = ts[pos-1], ts[pos]
+            x1, x2 = interest_points[t1], interest_points[t2]
+            target_x_percent = x1 + (x2 - x1) * (t - t1) / (t2 - t1)
+            
+        # target_x_percent is 0-1 of the ORIGINAL width.
+        # Shift crop focal point
+        focal_x = target_x_percent * new_w
+        
+        # Constrain crop window within bounds
+        half_w = target_w / 2
+        crop_x_center = max(half_w, min(new_w - half_w, focal_x))
+        return crop_x_center
+
+    # MoviePy's cropped takes x1, y1, x2, y2 or x_center, y_center, width, height
+    # However, for DYNAMIC cropping, we use transform
+    def dynamic_crop(get_frame, t):
+        frame = get_frame(t)
+        x_center = get_crop_x(t)
+        
+        x1 = int(x_center - target_w / 2)
+        x2 = x1 + target_w
+        y1 = int((new_h - target_h) / 2)
+        y2 = y1 + target_h
+        
+        # Safety check for slice bounds
+        x1 = max(0, min(new_w - target_w, x1))
+        x2 = x1 + target_w
+        
+        return frame[y1:y2, x1:x2]
+
+    # Note: moviepy's transform/image_transform can be slow for every frame
+    # But for a 30s short it's fine.
+    return scaled_clip.transform(dynamic_crop)
 def add_pattern_interrupt(duration):
     """Adds a mid-video 'pattern interrupt' flash to regain attention."""
     interrupt_time = duration * 0.5
@@ -47,6 +184,79 @@ def apply_handheld_jitter(clip, intensity=1.5):
         return (x, y)
     return clip.with_position(jitter_pos)
 
+def apply_shake(clip, intensity=15, frequency=15):
+    """Refined screen shake for action moments."""
+    def shake(t):
+        x = intensity * np.sin(t * frequency)
+        y = intensity * np.cos(t * frequency * 1.1)
+        return (int(x), int(y))
+    return clip.with_position(shake)
+
+def apply_sticker_with_mask(path, width=250, start=0, duration=2.0, pos="center"):
+    """Loads a sticker and attempts to transparentize white backgrounds/checkerboards."""
+    if not os.path.exists(path): return None
+    try:
+        sticker = ImageClip(path).resized(width=width).with_start(start).with_duration(duration)
+        # 🟢 UPGRADE: Professional Masking - Removes common 'fake transparency' white/grey backgrounds
+        # We use a slight threshold to catch slightly off-white checkerboards
+        sticker = sticker.with_effects([vfx.MaskColor(color=[255, 255, 255], thr=30, s=5)])
+        return sticker.with_position(pos)
+    except:
+        return None
+
+def apply_meme_gif(tone, duration=2.5, start_time=1.0, gif_dir=None):
+    """Injects a contextual meme GIF into the frame, searching recursively if gif_dir is provided."""
+    primary_dir = "assets/memes"
+    search_paths = [primary_dir]
+    if gif_dir and os.path.exists(gif_dir):
+        search_paths.insert(0, gif_dir) # Prioritize external library
+    
+    # Map tone to keywords for recursive searching
+    tone_keywords = {
+        "funny": ["laugh", "lol", "funny", "cat", "haha", "smile"],
+        "fail": ["fail", "facepalm", "oops", "sad", "nooo", "mistake"],
+        "action_peak": ["hype", "action", "boom", "wow", "explosion", "fight"],
+        "neutral": ["meme", "random", "interesting", "yeah"]
+    }
+    
+    keywords = tone_keywords.get(tone, ["meme", "random"])
+    found_gifs = []
+    
+    # Recursive search for matching GIFs
+    for s_path in search_paths:
+        if not os.path.exists(s_path): continue
+        for root, _, files in os.walk(s_path):
+            for f in files:
+                if f.lower().endswith(".gif"):
+                    # Check if any keyword is in the filename
+                    if any(kw in f.lower() for kw in keywords):
+                        found_gifs.append(os.path.join(root, f))
+    
+    if not found_gifs:
+        # Final fallback: just grab any gif from the first available path
+        for s_path in search_paths:
+            for root, _, files in os.walk(s_path):
+                gifs = [os.path.join(root, f) for f in files if f.endswith(".gif")]
+                if gifs: return VideoFileClip(random.choice(gifs)).with_effects([vfx.Loop(duration=duration)]).resized(width=400).with_start(start_time).with_position(("center", "bottom"))
+        return None
+        
+    gif_path = random.choice(found_gifs)
+    try:
+        gif = VideoFileClip(gif_path).with_effects([vfx.Loop(duration=duration)])
+        gif = gif.resized(width=400).with_start(start_time).with_position(("center", "bottom"))
+        return gif
+    except:
+        return None
+
+def apply_zoom_center(clip, zoom_factor=1.3):
+    """
+    Performs a sudden zoom on the center of the clip (Spotlight effect).
+    """
+    w, h = clip.size
+    zoomed = clip.with_effects([vfx.Resize(zoom_factor)])
+    # Recrop to original size to keep it centered
+    return zoomed.cropped(x_center=zoomed.w/2, y_center=zoomed.h/2, width=w, height=h)
+
 def make_bounce_pos(st, y_base=0):
     return lambda t: ("center", y_base + int(15 * np.sin((t - st) * 12)))
 
@@ -55,6 +265,153 @@ def apply_blur(image, radius=2):
     pil_img = Image.fromarray(image)
     blurred_pil = pil_img.filter(ImageFilter.GaussianBlur(radius=radius))
     return np.array(blurred_pil)
+
+# --- KEYWORD EMOJI & COLOR MAP (Viral v2) ---
+VIRAL_PALETTE = ["#FFFF00", "#00FF00", "#00FFFF", "#FF6600", "#FFFFFF"]
+KEYWORD_CONFIG = {
+    "money": {"emoji": "💰", "color": "#00FF00"},
+    "cash": {"emoji": "💸", "color": "#00FF00"},
+    "rich": {"emoji": "🤑", "color": "#00FF00"},
+    "fire": {"emoji": "🔥", "color": "#FF6600"},
+    "hot": {"emoji": "🥵", "color": "#FF6600"},
+    "crazy": {"emoji": "🤯", "color": "#FFFF00"},
+    "insane": {"emoji": "🤪", "color": "#FFFF00"},
+    "shocking": {"emoji": "😨", "color": "#FF0000"},
+    "danger": {"emoji": "🚨", "color": "#FF0000"},
+    "win": {"emoji": "🏆", "color": "#FFFF00"},
+    "perfect": {"emoji": "✨", "color": "#00FFFF"},
+    "smart": {"emoji": "🧠", "color": "#00FFFF"},
+    "love": {"emoji": "❤️", "color": "#FF007F"}
+}
+
+def create_stylish_text_image(words, highlight_index=None, size=(1080, 1920), font_size=115, y_pos=None, add_box=False, stroke_width=10, stroke_color="black"):
+    """
+    V2: Ultra-bold viral text with high-impact strokes and keyword-aware coloring.
+    """
+    img = Image.new("RGBA", size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    try:
+        font_paths = ["assets/fonts/impact.ttf", "C:/Windows/Fonts/impact.ttf", "C:/Windows/Fonts/ariblk.ttf"]
+        font_path = next((p for p in font_paths if os.path.exists(p)), None)
+        font = ImageFont.truetype(font_path, font_size) if font_path else ImageFont.load_default(size=font_size)
+    except:
+        font = ImageFont.load_default(size=font_size)
+
+    # Calculate total width
+    pixel_words = []
+    total_w = 0
+    space_w = draw.textbbox((0, 0), " ", font=font)[2]
+    
+    for i, word in enumerate(words):
+        # Determine color for this word
+        clean_word = "".join(filter(str.isalnum, word.lower()))
+        cfg = KEYWORD_CONFIG.get(clean_word, {})
+        
+        # Color logic: Highlighted word gets its keyword color or Yellow. Others are white.
+        if i == highlight_index:
+            color = cfg.get("color", "#FFFF00") # Yellow default for highlight
+        else:
+            color = "white"
+            
+        bbox = draw.textbbox((0, 0), word, font=font)
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        pixel_words.append({"text": word, "w": w, "h": h, "color": color})
+        total_w += w + space_w
+    total_w -= space_w
+    
+    max_h = max(p["h"] for p in pixel_words) if pixel_words else 0
+    start_y = y_pos if y_pos is not None else (size[1] - max_h) / 2
+    start_x = (size[0] - total_w) / 2
+    
+    # Optional Sleek Background Box (Rarely used in v2, but kept for readability if requested)
+    if add_box:
+        px, py = 45, 15
+        draw.rounded_rectangle([start_x - px, start_y - py, start_x + total_w + px, start_y + max_h + py + 10], radius=20, fill=(0, 0, 0, 160))
+
+    curr_x = start_x
+    for i, p in enumerate(pixel_words):
+        # High-impact drop shadow (Subtle but effective)
+        draw.text((curr_x + 6, start_y + 6), p["text"], font=font, fill=(0,0,0,180), anchor="lt")
+        # Main text with thick stroke
+        draw.text((curr_x, start_y), p["text"], font=font, fill=p["color"], stroke_width=stroke_width, stroke_fill=stroke_color, anchor="lt")
+        curr_x += p["w"] + space_w
+
+    return np.array(img)
+
+def apply_stylish_captions(transcript_data, start_offset, end_offset, size=(1080, 1920), y_pos=960):
+    """
+    V2: Burst grouping with random tilting and snappy animations.
+    """
+    word_clips = []
+    relevant_words = []
+    
+    segments = transcript_data.get('segments', [])
+    for segment in segments:
+        if segment['end'] < start_offset or segment['start'] > end_offset: continue
+        for word in segment.get('words', []):
+            if word['start'] >= start_offset and word['end'] <= end_offset:
+                relevant_words.append({
+                    "word": word['word'].strip(), 
+                    "start": word['start'] - start_offset, 
+                    "end": word['end'] - start_offset, 
+                    "duration": word['end'] - word['start']
+                })
+    
+    if not relevant_words: return []
+
+    # Smarter Burst Grouping (Group by natural pauses or max 3 words)
+    bursts, curr_burst = [], []
+    for i, w in enumerate(relevant_words):
+        curr_burst.append(w)
+        is_last = i == len(relevant_words) - 1
+        # Burst ends if: 3 words reached, or a pause > 0.4s
+        if is_last or len(curr_burst) >= 3 or (relevant_words[i+1]['start'] - w['end'] > 0.4):
+            bursts.append(curr_burst)
+            curr_burst = []
+            
+    for burst in bursts:
+        burst_text_list = [w['word'].upper() for w in burst]
+        burst_start = burst[0]['start']
+        burst_end = burst[-1]['end']
+        
+        # Check for keywords to add emojis
+        emoji = ""
+        for w in burst:
+            clean_w = "".join(filter(str.isalnum, w['word'].lower()))
+            if clean_w in KEYWORD_CONFIG:
+                emoji = " " + KEYWORD_CONFIG[clean_w]["emoji"]
+                break
+        if emoji: burst_text_list[-1] += emoji
+
+        # Apply a random tilt to the ENTIRE burst (adds dynamic handheld feel)
+        tilt_angle = random.uniform(-3, 3)
+
+        for i, word_info in enumerate(burst):
+            img = create_stylish_text_image(burst_text_list, highlight_index=i, size=size, y_pos=y_pos)
+            
+            h_start = word_info['start']
+            h_next_start = burst[i+1]['start'] if i + 1 < len(burst) else burst_end
+            h_dur = h_next_start - h_start
+            
+            c = ImageClip(img).with_start(h_start).with_duration(max(0.05, h_dur))
+            
+            # V3 Subtle & Smooth Pop Animation
+            def pop_effect_v3(t):
+                # Much more subtle: 1.0 -> 1.08 -> 1.0 over 0.2s
+                if t < 0.1: return 1.0 + (0.08 * (t / 0.1))
+                elif t < 0.2: return 1.08 - (0.08 * ((t - 0.1) / 0.1))
+                return 1.0
+            
+            # 🟢 UPGRADE: Only apply the scale pop to the FIRST word of a burst to prevent "vibrating"
+            if i == 0:
+                c = c.with_effects([vfx.Resize(pop_effect_v3)])
+            
+            c = c.with_effects([vfx.Rotate(tilt_angle)])
+            c = c.with_position("center")
+            word_clips.append(c)
+            
+    return word_clips
 
 def color_shift_green_kill(get_frame, t, duration):
     """Gradually kills the green channel to transition Yellow (255,255,0) -> Red (255,0,0)."""
@@ -204,9 +561,11 @@ def apply_ken_burns(clip, duration):
     cropped = zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
     return cropped.image_transform(np.ascontiguousarray)
 
-def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium", avatar_path=None, category="general"):
+def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium", avatar_path=None, category="general", interest_points=None, silence_intervals=None, tighten_mode="cut"):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
+    interest_points: AI-detected focus points for smart cropping.
+    silence_intervals: AI-detected non-silent intervals for tightening.
     """
     try:
         audio_clip = AudioFileClip(audio_path)
@@ -228,9 +587,17 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     
     for i, path in enumerate(video_paths):
         try:
+            # Determine segment duration
+            if use_natural_stitch:
+                seg_dur = duration # Fallback, will be trimmed
+            else:
+                seg_dur = duration / len(video_paths)
+
             if path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                # 🟢 UPGRADE: AI-Generated Image Background Support
-                clip = ImageClip(path).with_duration(duration) # Images fill the whole or remaining duration
+                # 🟢 UPGRADE: Image Sequence Support
+                clip = ImageClip(path).with_duration(seg_dur)
+                if not use_natural_stitch:
+                    clip = clip.with_start(i * seg_dur)
             else:
                 clip = VideoFileClip(path)
                 
@@ -241,13 +608,24 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                     clip = clip.with_duration(this_dur).with_start(current_time)
                     current_time += this_dur
                 else:
-                    # Standard equal-segment layering (FACTS/STORY/WYR)
-                    seg_dur = duration / len(video_paths)
+                    # Standard equal-segment layering (FACTS/STORY/WYR/JWST)
                     n_loops = int(np.ceil(seg_dur / clip.duration)) if clip.duration > 0 else 1
                     clip = clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(seg_dur).with_start(i * seg_dur)
             
-            # Robust resize to cover 1080x1920
-            clip = cover_resize(clip, (1080, 1920))
+            # 🟢 UPGRADE: AI-Powered Smart Editing
+            if interest_points:
+                # Use smart vertical crop if interest points are available
+                print(f"[Log] Applying Smart Vertical Crop (AI-Tracked) to {path}")
+                clip = smart_vertical_crop(clip, interest_points)
+            else:
+                # Robust resize to cover 1080x1920 (Center Crop)
+                clip = cover_resize(clip, (1080, 1920))
+                
+            if silence_intervals:
+                # Tighten the clip (Remove dead air)
+                print(f"[Log] Tightening clip (Removing silences) for {path}")
+                clip = tighten_clip(clip, silence_intervals, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None)
+
             bg_segments.append(clip)
         except Exception as e:
             print(f"[Warning] Error processing background {path}: {e}")
@@ -1281,11 +1659,11 @@ POOL_SIZE = 8
 
 def get_hq_vf():
     """Returns an FFmpeg filter chain for 'Premium' enhancement."""
-    # 1. hqdn3d: High Quality Denoise (Spatial 3.0, Temporal 2.0)
-    # 2. cas: Contrast Adaptive Sharpen (0.5 strength)
+    # 1. hqdn3d: High Quality Denoise (Slightly reduced temporal for less ghosting)
+    # 2. cas: Contrast Adaptive Sharpen (0.4 strength for natural look)
     # 3. unsharp: Standard luma sharpening
-    # 4. eq: Subtle contrast/vibrance boost (contrast 1.03, saturation 1.05)
-    return "hqdn3d=1.5:1.5:6:6,cas=0.5,unsharp=5:5:0.5:5:5:0.0,eq=contrast=1.03:saturation=1.05"
+    # 4. eq: Subtle contrast/vibrance boost
+    return "hqdn3d=1.2:1.2:4:4,cas=0.4,unsharp=5:5:0.4:5:5:0.0,eq=contrast=1.02:saturation=1.04"
 
 def _check_nvenc():
     """Checks if NVIDIA hardware acceleration is available."""
@@ -1328,7 +1706,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -1370,7 +1748,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
 
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
         if mode == "shorts":
-            crop_filter = "crop=ih*9/16:ih:(iw-ow)/2:0"
+            if interest_points:
+                crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h)
+            else:
+                crop_filter = "crop=ih*9/16:ih:(iw-ow)/2:0"
             vf_filter = f"{crop_filter},scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
             vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
@@ -1386,12 +1767,13 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         target_codec = 'h264_nvenc' if use_gpu else codec
         # 🟢 UPGRADE: Intermediate quality should be higher than 'ultrafast' to prevent generation loss
         target_preset = 'p6' if use_gpu else 'veryfast'
-        # 🟢 UPGRADE: Ensure intermediate segments have high bitrate (25M+) to survive re-encoding
-        intermediate_bitrate = "25M"
+        # 🟢 UPGRADE: Ensure intermediate segments have high bitrate (50M for HQ) to survive re-encoding
+        intermediate_bitrate = "50M" if use_hq else "25M"
         
         cmd = [
             ffmpeg_exe, '-y', '-ss', str(hi['start']), '-i', source_path,
             '-t', str(duration), '-vf', vf_filter,
+            '-r', '24', # 🟢 FORCE 24FPS: Standardize extraction to prevent stuttering in MoviePy
             '-c:v', target_codec, '-preset', target_preset,
             '-b:v', intermediate_bitrate,
             '-pix_fmt', 'yuv420p',
@@ -1399,11 +1781,16 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             target
         ]
         
-        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        # 🟢 OPTIMIZED: Reduce parallel I/O pressure for long videos. 
+        # If using GPU, 2 concurrent extractions are safer than 4.
+        local_pool_size = 2 if use_gpu else 4
+        
+        # 🟢 FIXED: Added stdin=DEVNULL to prevent hangs on interactive prompts (e.g. overwriting)
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
         processes.append(p)
         
-        if len(processes) >= POOL_SIZE:
-            for proc in processes: proc.communicate()
+        if len(processes) >= local_pool_size:
+            for proc in processes: proc.wait()
             processes = []
 
     for proc in processes: proc.communicate()
@@ -1431,27 +1818,150 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         for clip in clips: clip.close()
     else:
         # Shorts mode: Add subtitles and effects
-        for i, hi in enumerate(highlights):
+        from concurrent.futures import ThreadPoolExecutor
+        def render_short_item(idx_hi):
+            i, hi = idx_hi
             task_path = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
-            if not os.path.exists(task_path) or os.path.getsize(task_path) < 1000: continue
+            if not os.path.exists(task_path) or os.path.getsize(task_path) < 1000: return
             
-            sub = VideoFileClip(task_path).with_position("center")
-            # Handheld feel
-            sub = apply_handheld_jitter(sub)
+            # Track all clips for explicit cleanup to prevent WinError 6 on Windows
+            loop_clips = []
+            sub = VideoFileClip(task_path)
             
-            # Simple word overlays
-            subs = apply_influencer_subtitles(sub, transcript_data, hi['start'], hi['end'], size=(1080, 1920), y_pos=960)
+            # 🟢 UPGRADE: AI-Powered Smart Editing (AutoClip & Auto-Editor)
+            # Note: Smart Crop is now handled via FFmpeg filters during initial extraction for speed.
+            
+            if silence_intervals:
+                local_silence = []
+                for s_start, s_end in silence_intervals:
+                    overlap_s = max(s_start, hi['start'])
+                    overlap_e = min(s_end, hi['end'])
+                    if overlap_e > overlap_s:
+                        local_silence.append((overlap_s - hi['start'], overlap_e - hi['start']))
+                
+                if local_silence:
+                    print(f"[Log] Tightening Short {i+1} (Removing silences)")
+                    sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None)
+            
+            sub = sub.with_position("center")
+            loop_clips.append(sub)
+            # Normalize editing_style to a list for multi-style support
+            styles = editing_style if isinstance(editing_style, list) else ([editing_style] if editing_style else [])
+            
+            # 🟢 UPGRADE: Handheld feel is now optional and style-dependent
+            if any(s in ["action", "meme", "vlog"] for s in styles):
+                sub = apply_handheld_jitter(sub)
+            
+            # Caption selection based on style
+            if "stylish" in styles:
+                print(f"[Log] Applying STYLISH Captions (Word-level highlights + Pop)")
+                subs = apply_stylish_captions(transcript_data, hi['start'], hi['end'], size=(1080, 1920), y_pos=960)
+            else:
+                # Simple word overlays (Default)
+                subs = apply_influencer_subtitles(sub, transcript_data, hi['start'], hi['end'], size=(1080, 1920), y_pos=960)
             
             overlays = subs
+            
+            # --- CONTEXT-AWARE STYLE ENHANCEMENTS ---
+            tone = hi.get('tone', 'neutral')
+            
+            if "sarcastic" in styles:
+                if tone in ["fail", "funny", "neutral"]:
+                    # Add "Sarcastic" text overlay at the start
+                    s_img = create_text_image("EXPERT LEVEL... 🤡", font_size=90, color="white", y_pos=SAFE_TOP, add_box=True)
+                    s_clip = ImageClip(s_img).with_start(0.5).with_duration(2.0).with_position("center")
+                    overlays.append(s_clip)
+                    # Add thinking emoji sticker
+                    sticker = apply_sticker_with_mask("assets/stickers/thinking.png", width=200, start=1.0, duration=2.5, pos=(100, 400))
+                    if sticker: overlays.append(sticker)
+                    
+                    gif = apply_meme_gif(tone, gif_dir=gif_dir)
+                    if gif: 
+                        overlays.append(gif)
+                        loop_clips.append(gif)
+            
+            if "action" in styles:
+                if tone == "action_peak":
+                    # Apply Screen Shake and Zoom
+                    sub = apply_shake(sub, intensity=25)
+                    sub = apply_zoom_center(sub, zoom_factor=1.25)
+                    # Add "BAM!" text
+                    bam_img = create_text_image("BAM!", font_size=160, color="yellow", stroke_color="red", stroke_width=12, y_pos=SAFE_MID - 200, add_box=False)
+                    bam_clip = ImageClip(bam_img).with_start(0).with_duration(1.0).with_position("center").with_effects([vfx.CrossFadeIn(0.1)])
+                    overlays.append(bam_clip)
+            
+            if "meme" in styles:
+                gif = apply_meme_gif(tone, gif_dir=gif_dir)
+                if gif:
+                    overlays.append(gif)
+                    loop_clips.append(gif)
+                else:
+                    meme_stickers = [f for f in os.listdir("assets/") if f.startswith("img_") and f.endswith("_meme.png")]
+                    if meme_stickers:
+                        choice = random.choice(meme_stickers)
+                        m_sticker = apply_sticker_with_mask(os.path.join("assets/", choice), width=350, start=1.5, duration=2.5, pos=("right", "bottom"))
+                        if m_sticker: overlays.append(m_sticker)
+            
+            if "funny" in styles:
+                if tone in ["funny", "fail"]:
+                    # Add eyeroll/funny sticker
+                    f_sticker = apply_sticker_with_mask("assets/stickers/funny_eyes.png", width=250, start=0.5, duration=2.0, pos="center")
+                    if f_sticker: overlays.append(f_sticker)
+                    
+                    gif = apply_meme_gif(tone, start_time=0.5, gif_dir=gif_dir)
+                    if gif: 
+                        overlays.append(gif)
+                        loop_clips.append(gif)
+
             if is_challenge:
                 overlays += apply_progress_bar(sub, sub.duration)
                 
             final = CompositeVideoClip([sub] + overlays)
+            
+            # --- STYLE-SPECIFIC AUDIO ---
+            final_audio = sub.audio
+            if "meme" in styles and tone in ["funny", "fail", "action_peak"]:
+                if os.path.exists("assets/sfx/vine_thud.mp3"):
+                    thud = AudioFileClip("assets/sfx/vine_thud.mp3").with_start(0.1).with_volume_scaled(1.2)
+                    loop_clips.append(thud)
+                    final_audio = CompositeAudioClip([final_audio, thud])
+            if "action" in styles and tone == "action_peak":
+                if os.path.exists("assets/sfx/impact.mp3"):
+                    hit = AudioFileClip("assets/sfx/impact.mp3").with_start(0).with_volume_scaled(1.0)
+                    loop_clips.append(hit)
+                    final_audio = CompositeAudioClip([final_audio, hit])
+            
+            final = final.with_audio(final_audio)
             out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
-            # Note: HQ filters were already applied during extraction for performance
-            final.write_videofile(out, fps=24, bitrate=bitrate, preset=preset, threads=8)
-            extracted_files.append(out)
-            sub.close()
+            # GPU OPTIMIZATION: Final render should also use h264_nvenc if available
+            encode_codec = 'h264_nvenc' if use_gpu else codec
+            print(f"[Log] Rendering Final Short {i+1} ({encode_codec})...")
+            try:
+                # 🟢 STABILITY FIX: Use threads=1 for final compositing when on GPU to avoid deadlocks
+                final_threads = 1 if use_gpu else 8
+                final.write_videofile(out, fps=24, bitrate=bitrate, preset=preset, threads=final_threads, codec=encode_codec, logger=None)
+                extracted_files.append(out)
+            finally:
+                # 🟢 ROBUST CLEANUP: Explicitly close everything to avoid [WinError 6]
+                for c in overlays:
+                    try: c.close()
+                    except: pass
+                if final_audio and final_audio != sub.audio:
+                    try: final_audio.close()
+                    except: pass
+                for c in loop_clips:
+                    try: c.close()
+                    except: pass
+                try: final.close()
+                except: pass
+                try: sub.close()
+                except: pass
+
+        # 🟢 OPTIMIZED: Consumer NVIDIA cards have a 3-5 NVENC session limit.
+        # Parallelizing too many GPU renders can cause hangs or session failures.
+        render_workers = min(2 if use_gpu else 4, len(highlights))
+        with ThreadPoolExecutor(max_workers=render_workers) as executor:
+            list(executor.map(render_short_item, enumerate(highlights)))
             
     return extracted_files
 

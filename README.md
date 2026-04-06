@@ -4,6 +4,17 @@ Welcome to **ShortsFlow**, the lean SaaS for generating viral YouTube Shorts aut
 
 ---
 
+## 🔥 At a Glance
+- **AI Highlight Extraction**: Turn long-form videos into shorts automatically.
+- **Smart Editing**: Auto-cropping, silence removal, and dynamic framing.
+- **Viral Modes**: 12+ content modes including Facts, News, and Cosmic (JWST).
+- **Automation**: Fully automated social media uploading via GitHub Actions.
+
+> [!TIP]
+> For a deep dive into every feature and our future vision, see [PROJECT_OVERVIEW.md](file:///c:/Users/win10/.gemini/antigravity/scratch/shorts-generator/PROJECT_OVERVIEW.md)
+
+---
+
 ## 📂 Project Structure
 - `engine/`: The core Python logic (Script Gen, Voice Gen, Video Gen).
 - `web/`: The Next.js SaaS dashboard & API Bridge.

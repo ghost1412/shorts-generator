@@ -89,6 +89,7 @@ export default function LandingPage() {
                     { id: 'REDDIT', label: 'Reddit', icon: <ArrowRight size={32} />, color: 'text-red-400', desc: 'Subreddit viral stories.' },
                     { id: 'QUOTE', label: 'Quotes', icon: <Clock size={32} />, color: 'text-pink-400', desc: 'Daily motivational clips.' },
                     { id: 'TREND', label: 'Viral Trends', icon: <TrendingUp size={32} />, color: 'text-yellow-300', desc: 'Algorithm-focused trends.' },
+                    { id: 'JWST', label: 'James Webb', icon: <Sparkles size={32} />, color: 'text-indigo-400', desc: 'Fresh deep space images.' },
                   ] 
                 },
                 { 

@@ -13,6 +13,7 @@ def extract_audio_mono(video_path, output_dir):
     audio_path = os.path.join(output_dir, "audio_mono.wav")
     
     if os.path.exists(audio_path):
+        # Optional: check if file is too small or corrupt, but usually cache is fine
         return audio_path
         
     print(f"[Log] Extracting mono audio for analysis: {audio_path}")
@@ -24,64 +25,367 @@ def extract_audio_mono(video_path, output_dir):
     subprocess.run(cmd, check=True, capture_output=True)
     return audio_path
 
-def compute_audio_score(chunk, sr, prev_energy=None):
+def detect_silence_intervals(audio_path, threshold_db=25, min_silence_len=0.5, margin=0.1):
     """
-    Computes a heuristic audio score based on energy, pitch variation, and silence.
-    chunk: numpy array of audio samples
+    Returns a list of (start, end) intervals of 'keep' (non-silent) segments.
+    threshold_db: volume below this is considered silence.
+    min_silence_len: minimum duration (seconds) of silence to be cut.
+    margin: breathing room added before/after cuts.
     """
     import librosa
-    if len(chunk) == 0: return 0
+    audio, sr = librosa.load(audio_path, sr=16000)
+    
+    # librosa.effects.split returns non-silent intervals
+    # frame_length=2048, hop_length=512 are defaults
+    non_silent_intervals = librosa.effects.split(y=audio, top_db=threshold_db)
+    
+    keep_intervals = []
+    total_samples = len(audio)
+    
+    for start_idx, end_idx in non_silent_intervals:
+        start_sec = max(0, start_idx / sr - margin)
+        end_sec = min(total_samples / sr, end_idx / sr + margin)
+        keep_intervals.append((start_sec, end_sec))
+        
+    # Merge overlapping intervals after margin expansion
+    if not keep_intervals: return []
+    
+    merged = []
+    curr_start, curr_end = keep_intervals[0]
+    for next_start, next_end in keep_intervals[1:]:
+        if next_start < curr_end:
+            curr_end = max(curr_end, next_end)
+        else:
+            merged.append((curr_start, curr_end))
+            curr_start, curr_end = next_start, next_end
+    merged.append((curr_start, curr_end))
+    
+    return merged
+
+def detect_motion_intervals(video_path, threshold=0.03, skip_frames=15, candidate_intervals=None):
+    """
+    Identifies 'keep' intervals based on visual motion.
+    🟢 OPTIMIZED: Support for candidate-only scanning and increased skip_frames.
+    """
+    import cv2
+    import numpy as np
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened(): return []
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    ret, prev_frame = cap.read()
+    if not ret: return []
+    
+    prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+    prev_gray = cv2.GaussianBlur(prev_gray, (21, 21), 0)
+    
+    motion_frames = []
+    
+    def scan_range(cap_obj, start_sec, end_sec):
+        res = []
+        cap_obj.set(cv2.CAP_PROP_POS_MSEC, start_sec * 1000)
+        start_frame = int(start_sec * fps)
+        end_frame = int(end_sec * fps)
+        
+        ret, prev_f = cap_obj.read()
+        if not ret: return []
+        p_gray = cv2.cvtColor(prev_f, cv2.COLOR_BGR2GRAY)
+        p_gray = cv2.GaussianBlur(p_gray, (21, 21), 0)
+        
+        f_idx = start_frame + 1
+        m_values = []
+        while f_idx < end_frame:
+            for _ in range(skip_frames): 
+                cap_obj.grab()
+                f_idx += 1
+            ret, frame = cap_obj.read()
+            f_idx += 1
+            if not ret: break
+            
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray = cv2.GaussianBlur(gray, (21, 21), 0)
+            diff = cv2.absdiff(p_gray, gray)
+            thr = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)[1]
+            thr = cv2.dilate(thr, None, iterations=2)
+            m_pct = np.sum(thr) / (thr.shape[0] * thr.shape[1] * 255)
+            m_values.append((f_idx, m_pct))
+            p_gray = gray
+        return m_values
+
+    def worker_job(intervals):
+        import cv2
+        c = cv2.VideoCapture(video_path)
+        data = []
+        for s, e in intervals:
+            data.extend(scan_range(c, s, e))
+        c.release()
+        return data
+
+    raw_motion_data = []
+    if candidate_intervals:
+        from concurrent.futures import ThreadPoolExecutor
+        import os
+        # 🟢 OPTIMIZED: Adaptive worker count using CPU core count
+        num_workers = min(os.cpu_count() or 4, len(candidate_intervals), 6)
+        if num_workers > 1:
+            chunks = [candidate_intervals[i::num_workers] for i in range(num_workers)]
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                results = list(executor.map(worker_job, chunks))
+                for r in results: raw_motion_data.extend(r)
+        else:
+            raw_motion_data = worker_job(candidate_intervals)
+    else:
+        raw_motion_data = worker_job([(0, total_frames / fps)])
+
+    if not raw_motion_data: 
+        cap.release()
+        return []
+        
+    # 🟢 ADAPTIVE THRESHOLDING: Use 75th percentile to handle different video levels
+    all_pcts = [x[1] for x in raw_motion_data]
+    dynamic_threshold = max(threshold, np.percentile(all_pcts, 75))
+    motion_frames = [f for f, p in raw_motion_data if p >= dynamic_threshold]
+    
+    cap.release()
+    
+    if not motion_frames: return []
+    
+    # Convert frames to time intervals
+    keep_intervals = []
+    start_frame = motion_frames[0]
+    last_frame = motion_frames[0]
+    
+    # Margin of 1 second for motion continuity
+    frame_margin = int(fps * 1.0)
+    
+    for f in motion_frames[1:]:
+        if f - last_frame > frame_margin:
+            keep_intervals.append((max(0, start_frame/fps), min(total_frames/fps, last_frame/fps)))
+            start_frame = f
+        last_frame = f
+    keep_intervals.append((max(0, start_frame/fps), min(total_frames/fps, last_frame/fps)))
+    
+    return keep_intervals
+
+def detect_interest_points(video_path, skip_frames=10, segments=None):
+    """
+    Detects the 'center of interest' (e.g., face) using OpenCV Haar Cascades.
+    Optimized: Only processes specific segments if provided.
+    🟢 UPGRADE: Reduced skip_frames for higher resolution tracking and improved EMA smoothing.
+    """
+    import cv2
+    
+    # Load pre-trained Haar Cascade for face detection
+    face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+    face_cascade = cv2.CascadeClassifier(face_cascade_path)
+    
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    interest_points = {}
+    
+    frame_idx = 0
+    last_x = 0.5 # Default to center
+    
+    # Adaptive EMA alpha based on skip_frames/fps
+    # We want a half-life of about 0.5s for smoothing
+    # skip_frames=10 at 30fps means 3 pts/sec.
+    # alpha=0.15 gives decent smoothing across ~6-7 points (2 seconds)
+    ema_alpha = 0.15 
+
+    if segments:
+        for start, end in segments:
+            cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
+            frame_idx = int(start * fps)
+            
+            while frame_idx / fps < end:
+                # Optimized skipping
+                for _ in range(skip_frames): 
+                    cap.grab()
+                    frame_idx += 1
+                
+                ret, frame = cap.read()
+                frame_idx += 1
+                if not ret: break
+                
+                # Downscale for faster detection
+                small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+                gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+                
+                if len(faces) > 0:
+                    # Pick largest face
+                    (x, y, w, h) = max(faces, key=lambda f: f[2] * f[3])
+                    x_center = (x + w / 2) / small_frame.shape[1]
+                    # Heavy weight on new detection if it's a solid hit
+                    last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
+                else:
+                    # Slow drift back to center if lost
+                    last_x = last_x * (1 - ema_alpha) + 0.5 * ema_alpha
+                    
+                interest_points[round(frame_idx / fps, 2)] = round(last_x, 3)
+    else:
+        # Fallback to whole video (slower)
+        while True:
+            for _ in range(skip_frames): 
+                cap.grab()
+                frame_idx += 1
+                
+            ret, frame = cap.read()
+            frame_idx += 1
+            if not ret: break
+            
+            small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+            gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+            
+            if len(faces) > 0:
+                (x, y, w, h) = max(faces, key=lambda f: f[2] * f[3])
+                x_center = (x + w / 2) / small_frame.shape[1]
+                last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
+            else:
+                last_x = last_x * (1 - ema_alpha) + 0.5 * ema_alpha
+                
+            interest_points[round(frame_idx / fps, 2)] = round(last_x, 3)
+        
+    cap.release()
+    return interest_points
+
+def extract_video_outline(transcript_path):
+    """
+    Generates a high-level outline of the video for structured analysis.
+    """
+    from engine.script_gen import get_llm_response
+    with open(transcript_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    segments = data.get('segments', [])
+    if not segments: return "Empty video."
+    
+    # Take samples from start, middle, end to summarize
+    samples = []
+    step = max(1, len(segments) // 15)
+    for i in range(0, len(segments), step):
+        s = segments[i]
+        samples.append(f"[{s['start']:.1f}s]: {s['text']}")
+    
+    text_sample = "\n".join(samples)
+    prompt = f"Summarize this video content into a high-level outline (topics and themes):\n\n{text_sample}"
+    try:
+        outline = get_llm_response(prompt, "You are a video analyst.")
+    except Exception as e:
+        print(f"[Warning] LLM Analysis for outline failed: {e}. Using fallback.")
+        outline = "No outline available (LLM Offline)."
+    return outline
+
+def compute_global_audio_features(audio, sr):
+    """
+    🟢 PERFORMANCE: Computes heavy audio features (RMSE + Silence) once per video.
+    """
+    import librosa
+    print("[Log] Computing global audio features (Energy + Silence)...")
+    
+    hop_length = 512
+    rmse = librosa.feature.rms(y=audio, hop_length=hop_length)[0]
+    total_frames = len(rmse)
+    
+    # Frame-level silence mask for memory efficiency
+    non_silent_intervals = librosa.effects.split(y=audio, top_db=25)
+    silence_mask_frames = np.ones(total_frames, dtype=bool)  # True = Silent
+    for start_idx, end_idx in non_silent_intervals:
+        s_frame = start_idx // hop_length
+        e_frame = min(end_idx // hop_length, total_frames)
+        silence_mask_frames[s_frame:e_frame] = False
+        
+    return {
+        "rmse": rmse,
+        "hop_length": hop_length,
+        "silence_mask_frames": silence_mask_frames,
+        "total_frames": total_frames
+    }
+
+def compute_audio_score(chunk, sr, prev_energy=None, global_features=None, start_sec=0, end_sec=0, energy_baseline=None):
+    """
+    Computes a heuristic audio score, reusing global features if available.
+    """
+    import librosa
+    if len(chunk) == 0: return 0, 0, 0, False
     
     # 1. Energy (Loudness)
-    energy = np.mean(chunk ** 2)
+    if global_features:
+        hop = global_features["hop_length"]
+        total_frames = global_features["total_frames"]
+        s_idx = int(start_sec * sr / hop)
+        e_idx = int(end_sec * sr / hop)
+        s_idx = max(0, min(s_idx, total_frames - 1))
+        e_idx = max(s_idx + 1, min(e_idx, total_frames))
+        energy_slice = global_features["rmse"][s_idx:e_idx]
+        energy = np.mean(energy_slice**2) if len(energy_slice) > 0 else 0
+    else:
+        energy = np.mean(chunk ** 2)
     
-    # 2. Pitch variation (Emotion/Intensity)
-    # 🟢 PHASE 16: Dynamic FFT size to avoid "n_fft too large" warnings on short segments
-    safe_n_fft = 2048
-    if len(chunk) < 2048:
-        safe_n_fft = 1024 if len(chunk) >= 1024 else (512 if len(chunk) >= 512 else 256)
+    # 2. Pitch variation
+    # 🟢 PERFORMANCE: Pitch tracking is slow. Skip if using global features for speed.
+    if global_features:
+        pitch_var = 0 # Sacrifice pitch for massive speedup on long videos
+    else:
+        safe_n_fft = 2048
+        if len(chunk) < 2048:
+            safe_n_fft = 1024 if len(chunk) >= 1024 else (512 if len(chunk) >= 512 else 256)
 
-    try:
-        if len(chunk) < safe_n_fft:
+        try:
+            if len(chunk) < safe_n_fft:
+                pitch_var = 0
+            else:
+                pitches, _ = librosa.piptrack(y=chunk, sr=sr, fmin=75, fmax=1600, n_fft=safe_n_fft)
+                pitches = pitches[pitches > 0]
+                pitch_var = np.var(pitches) if len(pitches) > 0 else 0
+        except:
             pitch_var = 0
-        else:
-            pitches, magnitudes = librosa.piptrack(y=chunk, sr=sr, fmin=75, fmax=1600, n_fft=safe_n_fft)
-            pitches = pitches[pitches > 0]
-            pitch_var = np.var(pitches) if len(pitches) > 0 else 0
-    except:
-        pitch_var = 0
         
     # 3. Silence Ratio
-    try:
-        # Ensure frame_length doesn't exceed signal length
-        split_frame = safe_n_fft
-        while split_frame > len(chunk) and split_frame > 128:
-            split_frame //= 2
-            
-        non_silent = librosa.effects.split(y=chunk, top_db=25, frame_length=split_frame, hop_length=split_frame//4)
-        active_len = sum(e - s for s, e in non_silent)
-        silence_ratio = 1 - (active_len / len(chunk))
-    except:
-        silence_ratio = 0.5 # Default if split fails
-        valid_silence = False
-    else:
+    if global_features:
+        hop = global_features["hop_length"]
+        total_frames = global_features["total_frames"]
+        s_idx = int(start_sec * sr / hop)
+        e_idx = int(end_sec * sr / hop)
+        s_idx = max(0, min(s_idx, total_frames - 1))
+        e_idx = max(s_idx + 1, min(e_idx, total_frames))
+        silence_slice = global_features["silence_mask_frames"][s_idx:e_idx]
+        silence_ratio = np.mean(silence_slice) if len(silence_slice) > 0 else 0
         valid_silence = True
+    else:
+        try:
+            split_frame = safe_n_fft
+            while split_frame > len(chunk) and split_frame > 128: split_frame //= 2
+            non_silent = librosa.effects.split(y=chunk, top_db=25, frame_length=split_frame)
+            active_len = sum(e - s for s, e in non_silent)
+            silence_ratio = 1 - (active_len / len(chunk))
+        except:
+            silence_ratio = 0.5
+            valid_silence = False
+        else:
+            valid_silence = True
         
-    # 4. Energy Delta (Sudden shifts)
+    # 🟢 Energy Delta (Sudden shifts)
     raw_energy = energy
-    delta = abs(raw_energy - prev_energy) if prev_energy is not None else 0
+    # Compare against EMA baseline for stability
+    if energy_baseline is not None:
+        delta = abs(raw_energy - energy_baseline)
+    elif prev_energy is not None:
+        delta = abs(raw_energy - prev_energy)
+    else:
+        delta = 0
     
-    # 🟢 PHASE 14: Log-Normalization for cross-video stability
-    energy = np.log1p(raw_energy)
-    delta = np.log1p(delta)
-    pitch_var = np.log1p(pitch_var)
+    # Log-Normalization
+    norm_energy = np.log1p(raw_energy)
+    norm_delta = np.log1p(delta)
+    # Pitch variation is only used if calculated (low CPU mode skips it)
+    norm_pitch = np.log1p(pitch_var) if pitch_var > 0 else 0
     
-    # Combined Audio Score (Weighted)
-    # Rewards energy spikes, pitch variation, and contrast; penalizes silence.
-    score = (energy * 2.0) + (delta * 3.0) + (pitch_var * 1.0) - (silence_ratio * 2.0)
+    score = (norm_energy * 2.0) + (norm_delta * 3.0) + (norm_pitch * 1.5) - (silence_ratio * 2.0)
     return max(0, score), raw_energy, silence_ratio, valid_silence
 
-def score_segment(text, mode="shorts", start=None, end=None):
+def score_segment(text, mode="shorts", start=None, end=None, target_duration=None):
     """
     Heuristic scoring to identify high-potential highlights.
     - 'shorts': Focuses on intensity (shouting, punctuation) and viral keywords.
@@ -104,10 +408,21 @@ def score_segment(text, mode="shorts", start=None, end=None):
         if 5 < word_count < 25: score += 10 
         
         # 🟢 EXPERT REFINEMENT: Duration Heuristics for Shorts
-        if 5 < duration < 15:
-            score += 12  # Ideal punchy length
-        elif duration > 40:
-            score -= 10  # Too long for a single short candidate
+        # Adaptive scoring based on target_duration
+        if target_duration and target_duration < 60:
+            target = target_duration
+            if abs(duration - target) < 5:
+                score += 15  # Very close to user target
+            elif duration > 60:
+                score -= 30  # YouTube Short physical limit
+            elif duration < 10:
+                score -= 5   # A bit too punchy if they asked for something specific
+        else:
+            # Default legacy behavior if no target or target is weird
+            if 5 < duration < 25:
+                score += 12  # Ideal punchy length
+            elif duration > 50:
+                score -= 15  # Getting risky for shorts
     else:
         # Narrative signals (Density & flow)
         score += text.count(".") * 6
@@ -198,8 +513,18 @@ def transcribe_video(video_path, output_dir):
     transcript_path = os.path.join(output_dir, "transcript.json")
     
     if os.path.exists(transcript_path):
-        print(f"[Log] Using cached transcript: {transcript_path}")
-        return transcript_path
+        try:
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # 🟢 EXPERT CACHE VALIDATION: Prevent using old transcript for new video
+                cached_source = data.get('source_video_path')
+                if cached_source == os.path.abspath(video_path):
+                    print(f"[Log] Using valid cached transcript for: {video_path}")
+                    return transcript_path
+                else:
+                    print(f"[Warning] Session Cache Mismatch: Old={cached_source}, New={os.path.abspath(video_path)}. Re-transcribing...")
+        except:
+            pass
         
     print(f"[Log] Starting AI Transcription (GPU Optimized - MEDIUM Model)...")
     start_time = time.time()
@@ -209,9 +534,17 @@ def transcribe_video(video_path, output_dir):
     model = whisper.load_model("medium", device=device) 
     result = model.transcribe(video_path, language="en")
     
-    # Save the full result for debugging and reuse
+    # Save the full result with source metadata
     print(f"[Log] Saving transcript to {transcript_path}...")
-    result.save_as_json(transcript_path)
+    # Add metadata to the whisper result before saving
+    result_dict = result.to_dict() if hasattr(result, 'to_dict') else result
+    if isinstance(result_dict, dict):
+        result_dict['source_video_path'] = os.path.abspath(video_path)
+        with open(transcript_path, 'w', encoding='utf-8') as f:
+            json.dump(result_dict, f, indent=2)
+    else:
+        # Fallback if stable_whisper result is weird
+        result.save_as_json(transcript_path)
     print(f"[Log] Transcript saved successfully.")
     
     print(f"[Log] Transcription completed in {time.time() - start_time:.1f}s")
@@ -248,7 +581,7 @@ def merge_segments(segments, min_gap=6.0, max_dur=95.0, score_sensitive=False):
     merged.append(curr)
     return merged
 
-def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, use_audio_detect=False):
+def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None):
     from engine.script_gen import robust_json_parse, get_llm_response
     
     with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -272,97 +605,159 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             "reason": "Challenge Backdrop"
         }]
 
-    # 🟢 ADAPTIVE COMPRESSION: Tighter windows for shorts to keep spikes focused
-    window_size = 15.0 if mode == "shorts" else 40.0
+    # 🟢 EXPERT REFINEMENT: transcript compression logic
+    if mode == "shorts":
+        # Shorts: Small windows (25-60s) for punchy peaks
+        window_size = float(max(25.0, min(60.0, (target_duration or 15.0) * 1.5)))
+    else:
+        # Long-form: Narrative windows (45-120s) to allow for story flow
+        # Capping at 120s prevents the AI from being forced into picking massive blocks
+        window_size = float(max(45.0, min(120.0, (target_duration or 300.0) / 5.0)))
+        
+    print(f"[Log] Mode: {mode} | Target: {target_duration}s | Window: {window_size}s")
     print(f"[Log] Compressing {len(segments)} fragments into {window_size}s context windows...")
     compressed_segments = compress_transcript(segments, window=window_size)
     
-    # 🟢 PHASE 13: Optional Audio Signal Detection
+    # 🟢 PHASE 0: Parallel Analysis (Outline + Audio)
+    from concurrent.futures import ThreadPoolExecutor
+    video_outline = ""
     audio_full = None
     sr = 16000
-    if use_audio_detect and video_path:
-        try:
-            import librosa
-            wav_path = extract_audio_mono(video_path, os.path.dirname(transcript_path))
-            print(f"[Log] Loading audio for signal analysis...")
-            audio_full, sr = librosa.load(wav_path, sr=sr)
-        except Exception as e:
-            print(f"[Warning] Audio analysis initialization failed: {e}. Falling back to text-only.")
-            use_audio_detect = False
+    global_audio_features = None
 
-    # 🟢 PHASE 2: Signal Pre-Ranking & Delta (Contrast) Detection
+    def get_outline():
+        if video_path:
+            try:
+                print("[Log] Generating video outline (Parallel)...")
+                return extract_video_outline(transcript_path)
+            except: return ""
+        return ""
+
+    def get_audio():
+        nonlocal use_audio_detect
+        if use_audio_detect and video_path:
+            try:
+                wav_path = extract_audio_mono(video_path, os.path.dirname(transcript_path))
+                print(f"[Log] Loading audio for analysis (Parallel)...")
+                import librosa
+                a, s = librosa.load(wav_path, sr=sr)
+                g = compute_global_audio_features(a, s)
+                return a, s, g
+            except Exception as e:
+                print(f"[Warning] Audio analysis failed: {e}")
+                use_audio_detect = False
+        return None, 16000, None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        f_outline = executor.submit(get_outline)
+        f_audio = executor.submit(get_audio)
+        
+        video_outline = f_outline.result()
+        audio_full, sr, global_audio_features = f_audio.result()
+
+    # 🟢 PHASE 2: Signal Pre-Ranking (Text + Audio)
+    ENERGY_ALPHA = 0.3
+    energy_baseline = None
     prev_energy = None
     for i, seg in enumerate(compressed_segments):
-        seg['score'] = score_segment(seg['text'], mode=mode, start=seg['start'], end=seg['end'])
-        
-        # Audio Hybrid Signal
+        seg['score'] = score_segment(seg['text'], mode=mode, start=seg['start'], end=seg['end'], target_duration=target_duration)
         seg['audio_score'] = 0
         if use_audio_detect and audio_full is not None:
             s_idx = int(seg['start'] * sr)
             e_idx = int(seg['end'] * sr)
             chunk = audio_full[s_idx:e_idx]
-            a_score, energy, s_ratio, v_silence = compute_audio_score(chunk, sr, prev_energy=prev_energy)
+            a_score, raw_energy, s_ratio, v_silence = compute_audio_score(
+                chunk, sr, prev_energy=prev_energy, 
+                global_features=global_audio_features, start_sec=seg['start'], 
+                end_sec=seg['end'], energy_baseline=energy_baseline
+            )
             seg['audio_score'] = round(a_score, 3)
             seg['silence_ratio'] = s_ratio
             seg['valid_silence'] = v_silence
-            prev_energy = energy
+            if energy_baseline is None: energy_baseline = raw_energy
+            else: energy_baseline = ENERGY_ALPHA * raw_energy + (1 - ENERGY_ALPHA) * energy_baseline
+            prev_energy = raw_energy
+
+    # 🟢 PHASE 16: Motion Analysis (on Pre-Ranked Candidates)
+    if video_path:
+        try:
+            print("[Log] Analyzing visual motion on candidate segments...")
+            candidates = sorted(compressed_segments, key=lambda x: x.get('score', 0) + x.get('audio_score', 0), reverse=True)[:100]
+            candidate_intervals = [(c['start'], c['end']) for c in candidates]
             
-        # Change in intensity (Delta) captures "moments" better than static high volume
+            motion_intervals = detect_motion_intervals(video_path, candidate_intervals=candidate_intervals)
+            for seg in compressed_segments:
+                seg['motion_score'] = 0
+                for m_start, m_end in motion_intervals:
+                    overlap_s = max(seg['start'], m_start)
+                    overlap_e = min(seg['end'], m_end)
+                    if overlap_e > overlap_s:
+                        seg['motion_score'] += (overlap_e - overlap_s) / (seg['end'] - seg['start'])
+                seg['motion_score'] = min(1.0, seg['motion_score'])
+        except Exception as e:
+            print(f"[Warning] Outline/Motion analysis failed: {e}")
+
+    # 🟢 PHASE 2: Final Signal & Delta (Contrast) Detection
+    # Now that we have all signals (Text, Audio, Motion), we calculate context-aware deltas.
+    for i, seg in enumerate(compressed_segments):
+        # 🟢 NEW: Silence Delta (Viral signal for sudden sound after pause)
         if i > 0:
             seg['delta'] = abs(seg['score'] - compressed_segments[i-1]['score'])
+            prev_audio = compressed_segments[i-1].get('audio_score', 0)
+            seg['audio_delta'] = abs(seg['audio_score'] - prev_audio)
+            
+            # Robust silence delta check
+            if seg.get('valid_silence', True):
+                prev_silence = compressed_segments[i-1].get('silence_ratio', 0)
+                seg['silence_delta'] = abs(seg.get('silence_ratio', 0) - prev_silence)
+            else:
+                seg['silence_delta'] = 0
         else:
             seg['delta'] = 0
-            
-        # Capture sudden audio spikes
-        prev_audio = compressed_segments[i-1]['audio_score'] if i > 0 else 0
-        seg['audio_delta'] = abs(seg['audio_score'] - prev_audio)
-
-        # 🟢 NEW: Silence Delta (Viral signal for sudden sound after pause)
-        silence_ratio = seg.get('silence_ratio', 0) # This comes from the audio detection block if present
-        # Note: If use_audio_detect is False, we might not have silence_ratio here.
-        # But compute_audio_score currently doesn't return silence_ratio.
-        # Let's fix compute_audio_score or just handle it if available.
-        if i > 0:
-            prev_silence = compressed_segments[i-1].get('silence_ratio', 0)
-            seg['silence_delta'] = abs(seg.get('silence_ratio', 0) - prev_silence)
-        else:
+            seg['audio_delta'] = 0
             seg['silence_delta'] = 0
 
     # 🟢 EXPERT REFINEMENT: Robust Signal Normalization (v2)
     def get_robust_max(values):
-        if not values: return 1
+        if not values: return 1.0
         p95 = np.percentile(values, 95)
         p50 = np.percentile(values, 50)
-        # Prevents flat distributions or few spikes from breaking normalization
         return max(0.1, p95, p50 * 2)
 
     max_orig_score = get_robust_max([s['score'] for s in compressed_segments])
     max_audio_score = get_robust_max([s['audio_score'] for s in compressed_segments])
     max_delta = get_robust_max([s['delta'] for s in compressed_segments])
+    max_motion = get_robust_max([s.get('motion_score', 0) for s in compressed_segments])
     max_audio_delta = get_robust_max([s.get('audio_delta', 0) for s in compressed_segments])
     max_silence_delta = get_robust_max([s.get('silence_delta', 0) for s in compressed_segments])
     
+    # 🟢 ADAPTIVE WEIGHTING: Motion can overpower dialogue in non-action videos (Moved out of loop)
+    avg_motion = sum(s.get('motion_score', 0) for s in compressed_segments) / len(compressed_segments) if compressed_segments else 0
+    motion_weight = 0.25 if avg_motion > 0.3 else 0.15
+    audio_weight = 0.30 if motion_weight == 0.15 else 0.20
+
     for seg in compressed_segments:
         seg['norm_score'] = round(min(1.0, seg['score'] / max_orig_score), 2)
         seg['norm_audio'] = round(min(1.0, seg['audio_score'] / max_audio_score), 2)
         seg['norm_delta'] = round(min(1.0, seg['delta'] / max_delta), 2)
+        seg['norm_motion'] = round(min(1.0, seg.get('motion_score', 0) / max_motion), 2)
         seg['norm_audio_delta'] = round(min(1.0, seg.get('audio_delta', 0) / max_audio_delta), 2)
         
-        # 🟢 Refined Silence Logic: Only count if detected correctly
         if seg.get('valid_silence', True):
             seg['norm_silence_delta'] = round(min(1.0, seg.get('silence_delta', 0) / max_silence_delta), 2) if max_silence_delta > 0 else 0
         else:
             seg['norm_silence_delta'] = 0
 
-        # Combined Final Ranking Score for Pruning (Rebalanced v2)
-        # 45% Text Score, 30% Audio Score, 10% Text Delta, 10% Audio Delta, 5% Silence Delta
-        seg['pruning_score'] = (
-            seg['norm_score'] * 0.45 + 
-            seg['norm_audio'] * 0.30 + 
+        # combined_signal: Text(35%) + Audio(Adaptive) + Motion(Adaptive) + Deltas(20%)
+        combined_signal = (
+            seg['norm_score'] * 0.35 + 
+            seg['norm_audio'] * audio_weight + 
+            seg['norm_motion'] * motion_weight +
             seg['norm_delta'] * 0.10 + 
-            seg['norm_audio_delta'] * 0.10 +
-            seg['norm_silence_delta'] * 0.05
+            seg['norm_audio_delta'] * 0.10
         )
+        pos = round(seg['start'] / total_duration, 2) if total_duration > 0 else 0
+        seg['pruning_score'] = combined_signal * (0.8 + 0.4 * pos)
             
     # 🟢 PHASE 15: Peak Sharpening (Local Maxima Boost)
     for i in range(1, len(compressed_segments)-1):
@@ -372,9 +767,9 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         if curr_p > prev_p and curr_p > nxt_p:
             compressed_segments[i]['pruning_score'] *= 1.2
             
-    # 🟢 EXPERT REFINEMENT: Decile-Based Distributed Pruning
-    context_window = 2 if mode == "shorts" else 4
-    limit = 25 if mode == "shorts" else 250 # Increased significantly for massive duration targets
+    # 🟢 EXPERT REFINEMENT: Updated Context Window & Limit
+    context_window = 3 
+    limit = 100 
     
     if len(compressed_segments) > limit:
         if mode == "long":
@@ -389,16 +784,11 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                 end_bin = (d + 1) * chunk_size if d < 9 else len(compressed_segments)
                 if start_bin >= end_bin: continue
                 
-                # 🟢 FILTER: Avoid oversampling low-signal "garbage" bins
-                # Only take candidates that cross a minimum quality threshold
-                bin_candidates = [
-                    i for i in range(start_bin, end_bin)
-                    if compressed_segments[i]['pruning_score'] > 0.3
-                ]
+                # 🟢 NARRATIVE: Remove absolute quality threshold to prevent story gaps
+                bin_candidates = range(start_bin, end_bin)
                 
                 # Best peaks in this 10% of the video
-                bin_indices = sorted(bin_candidates if bin_candidates else range(start_bin, end_bin), 
-                                     key=lambda i: compressed_segments[i]['pruning_score'], reverse=True)
+                bin_indices = sorted(bin_candidates, key=lambda i: compressed_segments[i]['pruning_score'], reverse=True)
                 distributed_indices.extend(bin_indices[:seeds_per_decile])
             
             top_indices = sorted(list(set(distributed_indices)))
@@ -413,23 +803,51 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                 if 0 <= idx < len(compressed_segments):
                     selected_indices.add(idx)
         
-        # 🟢 NEW: Ensure the final segments are included to avoid skipping video ending
-        if mode == "long":
-            for i in range(max(0, len(compressed_segments)-4), len(compressed_segments)):
-                selected_indices.add(i)
-                
         compressed_segments = [compressed_segments[i] for i in sorted(list(selected_indices))]
     
     full_text_with_ts = ""
     for segment in compressed_segments:
-        # 🟢 UPGRADE: Enriched signal richness for LLM 
-        # t=text, d=text_delta, a=audio, ad=audio_delta, sd=silence_delta
-        sigs = f"t={segment['norm_score']} d={segment['norm_delta']} a={segment['norm_audio']} ad={segment['norm_audio_delta']} sd={segment['norm_silence_delta']}"
+        # 🟢 UPGRADE: Enriched signal richness for LLM
+        # pos=timeline position, t=text, d=text_delta, a=audio, ad=audio_delta, sd=silence_delta
+        pos = round(segment['start'] / total_duration, 2) if total_duration > 0 else 0
+        sigs = f"pos={pos} t={segment['norm_score']} d={segment['norm_delta']} a={segment['norm_audio']} ad={segment['norm_audio_delta']} sd={segment['norm_silence_delta']}"
         full_text_with_ts += f"[{segment['start']:.2f}s - {segment['end']:.2f}s | {sigs}]: {segment['text']}\n"
     
+    # Style-specific injections (Handle list or string)
+    styles_list = style if isinstance(style, list) else ([style] if style else [])
+    
+    style_instr_parts = []
+    if "sarcastic" in styles_list:
+        style_instr_parts.append("FOCUS: Identify moments that are ironic, eye-rolling, or 'facepalm' fails.")
+    if "action" in styles_list:
+        style_instr_parts.append("FOCUS: Identify 'Action Peaks'—climactic battles, boss fights, or high-intensity gameplay moments.")
+    if "meme" in styles_list:
+        style_instr_parts.append("FOCUS: Identify moments with high meme potential—funny reactions or bizarre occurrences.")
+    if "funny" in styles_list:
+        style_instr_parts.append("FOCUS: Identify funny dialogue, situational comedy, or humorous fails.")
+    
+    style_instructions = " ".join(style_instr_parts)
+
+    context_injection = ""
+    if user_context:
+        context_injection = f"\nUSER EXTRA CONTEXT: {user_context}\n(PRIORITIZE moments that match this context while maintaining virality rules.)"
+        
+    style_injection = ""
+    if style_context:
+        style_injection = f"\nEDITING STYLE CONTEXT: {style_context}\n(Follow this editing/pacing style for the selected moments.)"
+
+    outline_injection = ""
+    # 🟢 ADAPTIVE OUTLINE: Only include for long videos and label as low priority
+    if video_outline and total_duration > 1800: # > 30 mins
+        outline_injection = f"\n[LOW PRIORITY CONTEXT - MAY BE NOISY]:\n{video_outline}\n"
+
     if mode == "shorts":
-        system_prompt = "You are a professional social media manager. Identify high-impact viral moments. YOU MUST PROVIDE TIMESTAMPS FOR EVERY CLIP."
+        system_prompt = f"You are a professional social media manager. Identify high-impact viral moments. {style_instructions} {context_injection} {style_injection} {outline_injection} YOU MUST PROVIDE TIMESTAMPS FOR EVERY CLIP."
         prompt = f"""Objective: Identify viral moments for YouTube Shorts.
+        
+        {context_injection}
+        {style_injection}
+        {outline_injection}
         
         VIRALITY SIGNALS (Look for high 'signal' or high 'delta' in the log):
         1. High Signal: Intense yelling, punctuation, or shock keywords.
@@ -438,28 +856,41 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         
         CRITICAL RULES FOR WATCHABILITY:
         - **HOOK FIRST**: The first 2 seconds of each clip MUST have a visual or audio 'hook'. Look for segments where 'ad' (audio delta) or 'd' (text delta) is high right at the 'start' timestamp.
-        - **SIGNAL PEAKS**: Prioritize segments where a signal (a, ad, d) spikes relative to the previous segment.
-        - **ENGAGEMENT**: Each moment MUST be between 8 and 45 seconds long.
+        - **VIRALITY**: Prioritize high-energy, funny, or shocking moments. {style_instructions}
+        - **ENGAGEMENT**: Each moment MUST be between {max(5, (target_duration or 15)-15)} and {min(59, (target_duration or 45)+15)} seconds long.
+        - **TARGET**: Specifically aim for moments around {min(58, target_duration or 30)}s each for maximum flow. NEVER exceed 60 seconds.
         - **MANDATORY**: 'start' and 'end' timestamps MUST be provided.
-        - **MANDATORY**: For each clip, provide a 'hook_text' (under 10 words) that describes the opening "hook" moment.
+        - **MANDATORY**: For each clip, provide a 'hook_text' (under 10 words).
+        - **MANDATORY**: For each clip, identify the 'tone' (one of: action_peak, funny, fail, tense, educational, neutral).
         - REJECT: slow setups, generic intros, filler conversation.
         - Wrap JSON array in START_JSON and END_JSON markers.
         
         Log Data (Signal/Delta marked):
         {full_text_with_ts}"""
     else: # Long-Form Highlight Reel
-        system_prompt = "You are a narrative editor. Provide TIMESTAMPS for all story beats."
+        context_injection = ""
+        if user_context:
+            context_injection = f"\nUSER EXTRA CONTEXT: {user_context}\n(ENSURE these specific parts/styles are included in the summary reel.)"
+            
+        style_injection = ""
+        if style_context:
+            style_injection = f"\nEDITING STYLE CONTEXT: {style_context}\n(Ensure the summary reel follows this specific narrative/pacing vibe.)"
+
+        system_prompt = f"You are a narrative editor. Provide TIMESTAMPS for all story beats. {context_injection} {style_injection}"
         if target_duration and target_duration > 1200:
             avg_seg_dur = 65 
             segment_target = int(target_duration / avg_seg_dur)
             dur_msg = "Each segment MUST be between 45 and 95 seconds."
         else:
-            avg_seg_dur = 45
+            avg_seg_dur = 35  # More segments → better chance of reaching target duration
             segment_target = int((target_duration or 300) / avg_seg_dur)
-            dur_msg = "Each segment SHOULD be between 30 and 70 seconds."
+            dur_msg = f"Each segment MUST be between 20 and 90 seconds. Do NOT return segments shorter than 20 seconds. You MUST reach {target_duration}s total."
         
-        segment_target = max(5, min(segment_target, 250))
+        segment_target = max(8, min(segment_target, 250))
         prompt = f"""Objective: Generate a cohesive narrative summary reel.
+        {context_injection}
+        {style_injection}
+        
         Aim to identify approximately {segment_target} key segments to reach the target duration of {target_duration}s.
         Ensure you cover the story comprehensively. Do not be overly selective; include all meaningful story beats and reactions.
         
@@ -482,6 +913,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         4. RAW JSON ONLY. NO EXTRA TEXT.
         
         Log Data (Signal/Delta marked):
+        [OUTLINE]: {video_outline}
+        
         {full_text_with_ts}
         
         MANDATORY: Return a JSON LIST of objects. Even if only one moment is found, wrap it in []."""
@@ -491,8 +924,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         print(f"[Log] Sending {len(compressed_segments)} logic-filtered segments to LLM for viral curation...")
         print(f"[Log] This may take up to 2-3 minutes for large 60+ min videos. Please wait...")
         
-        # Adjust max_tokens based on segment count to guide LLM focus
-        dynamic_max = min(4096, max(1024, len(compressed_segments) * 35))
+        # 🟢 PERFORMANCE: Adjusted dynamic_max to be more token-efficient
+        dynamic_max = min(4096, max(1024, len(compressed_segments) * 20))
         
         response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
         print(f"[Log] LLM analysis received ({len(response_text)} chars). Processing results...")
@@ -530,16 +963,17 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                     if relevant_segs:
                         avg_norm_score = sum(s['norm_score'] for s in relevant_segs) / len(relevant_segs)
                         avg_norm_audio = sum(s['norm_audio'] for s in relevant_segs) / len(relevant_segs)
+                        avg_norm_motion = sum(s['norm_motion'] for s in relevant_segs) / len(relevant_segs)
                         avg_norm_delta = sum(s['norm_delta'] for s in relevant_segs) / len(relevant_segs)
                         avg_norm_ad    = sum(s['norm_audio_delta'] for s in relevant_segs) / len(relevant_segs)
                         avg_norm_sd    = sum(s['norm_silence_delta'] for s in relevant_segs) / len(relevant_segs)
                         
                         combined_signal = (
-                            avg_norm_score * 0.40 + 
-                            avg_norm_audio * 0.30 + 
+                            avg_norm_score * 0.35 + 
+                            avg_norm_audio * 0.20 + 
+                            avg_norm_motion * 0.25 +
                             avg_norm_delta * 0.10 + 
-                            avg_norm_ad    * 0.10 + 
-                            avg_norm_sd    * 0.10
+                            avg_norm_ad    * 0.10
                         )
                         h['final_score'] = (v_score * 0.7) + (combined_signal * 100 * 0.3)
                     else:
@@ -547,12 +981,21 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                     
                     valid_highlights.append(h)
                 elif isinstance(h, (list, tuple)) and len(h) >= 2:
-                    valid_highlights.append({"start": float(h[0]), "end": float(h[1]), "viral_score": 50, "final_score": 50, "reason": "Recovered"})
+                    valid_highlights.append({"start": float(h[0]), "end": float(h[1]), "viral_score": 50, "final_score": 50, "reason": "Action Sequence"})
             
             # 🟢 NEW FLOW: Merge adjacent parts BEFORE trimming to count
-            max_merge_dur = 50.0 if mode == "shorts" else 180.0
-            print(f"[Log] Merging adjacent highlights (score-aware)...")
+            effective_target = target_duration if target_duration else 60.0
+            max_merge_dur = min(59.9, effective_target) if mode == "shorts" else 150.0 # Strict cap for shorts
+            print(f"[Log] Merging adjacent highlights (score-aware, max={max_merge_dur}s)...")
             valid_highlights = merge_segments(valid_highlights, min_gap=8.0, max_dur=max_merge_dur, score_sensitive=True)
+            
+            # 🟢 STABILITY: Strict Duration Truncation for Shorts
+            if mode == "shorts":
+                for h in valid_highlights:
+                    actual_dur = h['end'] - h['start']
+                    if actual_dur > max_merge_dur:
+                        print(f"[Warning] Truncating segment from {actual_dur:.1f}s to {max_merge_dur}s")
+                        h['end'] = h['start'] + max_merge_dur
             
             # 🟢 OPUS-STYLE SORTING: Prioritize high hybrid scores
             valid_highlights.sort(key=lambda x: x.get('final_score', 0), reverse=True)
@@ -560,6 +1003,36 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             # Limit segments for shorts mode AFTER merge to keep only the best substantial clips
             if mode == "shorts":
                 valid_highlights = valid_highlights[:clip_count]
+            elif mode == "long" and target_duration:
+                # 🟢 EXPERT REFINEMENT: Soft Duration Capping for Highlight Reels
+                valid_highlights.sort(key=lambda x: x.get('final_score', 0), reverse=True)
+                capped_highlights = []
+                current_total = 0
+                for h in valid_highlights:
+                    dur = h['end'] - h['start']
+                    if current_total < target_duration * 1.3: # Allow 30% overage for impact
+                        capped_highlights.append(h)
+                        current_total += dur
+                    else:
+                        break
+                valid_highlights = capped_highlights
+                
+                # 🟢 FILL-UP: Backfill from pruned segments if LLM under-delivered
+                current_total = sum(h['end'] - h['start'] for h in valid_highlights)
+                if current_total < target_duration * 0.95:
+                    print(f"[Log] Duration shortfall ({current_total:.0f}s < {target_duration}s). Backfilling from signal peaks...")
+                    used_ranges = [(h['start'], h['end']) for h in valid_highlights]
+                    for seg in sorted(compressed_segments, key=lambda x: x['pruning_score'], reverse=True):
+                        overlaps = any(not (seg['end'] < u[0] or seg['start'] > u[1]) for u in used_ranges)
+                        seg_dur = seg['end'] - seg['start']
+                        if overlaps or seg_dur < 15: continue
+                        valid_highlights.append({'start': seg['start'], 'end': seg['end'],
+                            'viral_score': int(seg['pruning_score'] * 100),
+                            'final_score': int(seg['pruning_score'] * 100), 'reason': 'Signal Peak (Backfill)'})
+                        used_ranges.append((seg['start'], seg['end']))
+                        current_total += seg_dur
+                        if current_total >= target_duration * 1.05: break
+                    print(f"[Log] After backfill: {current_total:.0f}s, {len(valid_highlights)} segments")
             
             # 🟢 MANDATORY: Re-sort chronologically to ensure narrative flow and fix timing mismatch
             # This ensures that even if we picked top scores, they play back in order.
@@ -597,15 +1070,29 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         print(f"[Error] Highlight identification failed: {e}")
         import traceback
         traceback.print_exc()
-        return [{"start": 10.0, "end": 40.0, "reason": "Emergency Fallback Moment"}]
+        return [{"start": 10.0, "end": 40.0, "reason": "Epic Highlight"}]
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, use_audio_detect=False):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
     
     transcript_path = transcribe_video(video_path, output_dir)
     highlights = identify_highlights(
         transcript_path, video_path=video_path, clip_count=clip_count, 
-        mode=mode, target_duration=target_duration, use_audio_detect=use_audio_detect
+        mode=mode, target_duration=target_duration, use_audio_detect=use_audio_detect,
+        style=style, user_context=user_context, style_context=style_context
     )
-    return highlights, transcript_path
+    
+    # 🟢 UPGRADE: Extra AI Signals for Auto-Edit & Auto-Crop (Optimized)
+    highlight_intervals = [(h['start'], h['end']) for h in highlights]
+    
+    print(f"[Log] Extracting interest points for {len(highlights)} segments (Auto-Crop)...")
+    interest_points = detect_interest_points(video_path, segments=highlight_intervals)
+    
+    print("[Log] Extracting silence intervals for Auto-Edit...")
+    audio_path = os.path.join(output_dir, "audio_mono.wav")
+    if not os.path.exists(audio_path): 
+        audio_path = extract_audio_mono(video_path, output_dir)
+    silence_intervals = detect_silence_intervals(audio_path)
+    
+    return highlights, transcript_path, interest_points, silence_intervals
