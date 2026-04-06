@@ -8,7 +8,7 @@ from engine.utils import decrypt_secret
 
 load_dotenv()
 
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge
+from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_background_video, download_image, download_sfx
 from engine.video_gen import create_shorts_video
@@ -23,7 +23,7 @@ VIBE_VOICE_MAP = {
 
 def main():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
@@ -56,8 +56,8 @@ def main():
             mode = args.mode
         else:
             mode = random.choices(
-                ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND"],
-                weights=[15, 0, 0, 10, 15, 5, 10, 5, 15, 15, 10]
+                ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE"],
+                weights=[20, 0, 0, 10, 10, 5, 0, 5, 20, 15, 0, 25]
             )[0]
         print(f"[Log] Mode selected: {mode}", flush=True)
         
@@ -121,9 +121,15 @@ def main():
                 facts_data = []
                 print(f"[Log] QUOTE Data: {quote_data}")
             elif mode == "ODD_ONE_OUT":
-                full_script = "Spot the odd one out! 🧐 99% of people fail this test... You have 5 seconds... ... ... ... ... Did you find it? Like and subscribe!"
+                odd_res = generate_odd_one_out_script(category)
+                full_script = f"{odd_res['hook']} ... {odd_res['theme']} ... ... {odd_res.get('hint', 'Look closely!')}"
                 facts_data = []
-                print(f"[Log] ODD_ONE_OUT Selected")
+                print(f"[Log] ODD_ONE_OUT Data: {odd_res}")
+            elif mode == "RIDDLE":
+                riddle_data = generate_riddle(category)
+                full_script = f"{riddle_data['hook']} ... {riddle_data['question']} ... ... ... ... Comment the answer below! I bet you can't!"
+                facts_data = []
+                print(f"[Log] RIDDLE Data: {riddle_data}")
             elif mode == "NEWS":
                 news_data = generate_funny_news(category, tone="funny")
                 news_source = news_data.get('source', 'Unknown')
@@ -163,7 +169,7 @@ def main():
     print(f"[Log] Selected voice for '{args.vibe}' vibe: {selected_voice}")
     
     # Voice CTA only for interactive/game modes
-    add_cta = mode in ["FACTS", "WYR", "FIND_IT", "ODD_ONE_OUT", "TRIVIA", "GUESS_SOUND"]
+    add_cta = mode in ["FACTS", "WYR", "FIND_IT", "ODD_ONE_OUT", "TRIVIA", "GUESS_SOUND", "RIDDLE"]
     audio_path, subs_path = generate_voice(full_script, output_audio=voice_file, output_subs=subs_file, voice_name=selected_voice, add_cta=add_cta)
     
     if args.video_id and args.user_id:
@@ -257,6 +263,15 @@ def main():
         # Download sound effect
         sfx_filename = os.path.join(session_dir, "challenge_sfx.mp3")
         download_sfx(sound_data["sound_query"], output_path=sfx_filename)
+    elif mode == "RIDDLE":
+        # Engaging background
+        bg_filename = os.path.join(session_dir, "bg_riddle.mp4")
+        path = download_background_video("minecraft parkour", output_path=bg_filename)
+        if path: bg_video_paths.append(path)
+
+        # Download visual clue image
+        clue_filename = os.path.join(session_dir, "riddle_clue.png")
+        download_image(riddle_data["search_term"], output_path=clue_filename)
 
     if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
         print("[Error] Failed to download any background videos.")
@@ -333,7 +348,20 @@ def main():
             audio_path,
             target_path,
             output_filename,
-            music_path=bg_music
+            music_path=bg_music,
+            hook=odd_res['hook'],
+            theme=odd_res['theme']
+        )
+    elif mode == "RIDDLE":
+        from engine.video_gen import create_riddle_video
+        clue_path = os.path.join(session_dir, "riddle_clue.png")
+        final_video = create_riddle_video(
+            audio_path,
+            riddle_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            clue_path=clue_path if os.path.exists(clue_path) else None
         )
     elif mode == "GUESS_SOUND":
         from engine.video_gen import create_sound_challenge_video
@@ -389,6 +417,8 @@ def main():
             metadata['description'] = metadata.get('description', '') + f"\n\n📰 Source: {source_credit}"
     elif mode == "GUESS_SOUND":
         metadata = generate_viral_metadata(f"Can you guess this sound? It's a {sound_data['object']}", mode="STORY", category=category)
+    elif mode == "RIDDLE":
+        metadata = generate_viral_metadata(f"Riddle: {riddle_data['question']} Did you solve it?", mode="STORY", category=category)
     else:
         # For STORY or other modes
         story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"

@@ -57,6 +57,7 @@ export default function Dashboard() {
     { id: 'TRIVIA', label: 'Genius Trivia', icon: <PlusCircle size={16} />, color: 'text-yellow-400', category: 'Games' },
     { id: 'QUOTE', label: 'Daily Quotes', icon: <Clock size={16} />, color: 'text-pink-400', category: 'Templates' },
     { id: 'ODD_ONE_OUT', label: 'Spot the Odd', icon: <Users size={16} />, color: 'text-indigo-400', category: 'Games' },
+    { id: 'RIDDLE', label: 'Brain Riddle', icon: <Sparkles size={16} />, color: 'text-rose-400', category: 'Games' },
     { id: 'NEWS', label: '😂 Funny News', icon: <TrendingUp size={16} />, color: 'text-green-400', category: 'News' },
     { id: 'NEWS_SERIOUS', label: '📰 Serious News', icon: <TrendingUp size={16} />, color: 'text-blue-400', category: 'News' },
     { id: 'TREND', label: '📈 Viral Trends', icon: <TrendingUp size={16} />, color: 'text-yellow-300', category: 'Templates' },
@@ -552,6 +553,7 @@ export default function Dashboard() {
                           vid.mode === 'FIND_IT' ? 'bg-red-500/20 text-red-400' :
                           vid.mode === 'TREND' ? 'bg-yellow-500/20 text-yellow-500' :
                           vid.mode === 'CHALLENGE' ? 'bg-rose-500/20 text-rose-400' :
+                          vid.mode === 'RIDDLE' ? 'bg-purple-500/20 text-purple-400' :
                           'bg-cyan-500/20 text-cyan-400'
                         }`}>
                           {vid.mode}

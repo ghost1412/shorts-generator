@@ -1273,6 +1273,79 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
     
     return output_path
 
+def create_riddle_video(audio_path, riddle_data, video_paths, output_path="riddle_short.mp4", music_path=None, bitrate="8000k", preset="medium", clue_path=None):
+    """
+    Composes a Riddle video using the standard game overlay style.
+    """
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load main audio: {e}")
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+        
+    duration = audio_clip.duration + 3.0
+    
+    # 1. Background
+    if isinstance(video_paths, str): video_paths = [video_paths]
+    try:
+        bg_clip = VideoFileClip(video_paths[0])
+        n_loops = int(np.ceil(duration / bg_clip.duration)) if bg_clip.duration > 0 else 1
+        bg_clip = bg_clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(duration)
+        bg_clip = cover_resize(bg_clip, (1080, 1920))
+        bg_clip = apply_ken_burns(bg_clip, duration)
+    except Exception as e:
+        bg_clip = ColorClip(size=(1080, 1920), color=(20, 20, 30)).with_duration(duration)
+
+    dark_overlay = ColorClip(size=(1080, 1920), color=(0,0,0)).with_opacity(0.5).with_duration(duration)
+    
+    # 2. Header "RIDDLE"
+    header_img = create_text_image("RIDDLE", font_size=180, color="yellow", y_pos=180, add_box=True)
+    header_clip = ImageClip(header_img).with_start(0).with_duration(duration)
+    
+    # 3. Riddle Text (Centered)
+    q_text = riddle_data.get("question", "").upper()
+    q_font = 85 if len(q_text) < 40 else 70
+    q_img = create_text_image(q_text, font_size=q_font, color="white", y_pos=700, add_box=True)
+    q_clip = ImageClip(q_img).with_start(0).with_duration(duration)
+    
+    # 4. (Visual Clue Graphic Removed per user request)
+    clue_clip = None
+    
+    # 5. Question Mark Graphic
+    q_mark_img = create_text_image("❓", font_size=180, color="orange", y_pos=1350, add_box=False)
+    q_mark_clip = ImageClip(q_mark_img).with_start(0).with_duration(duration).with_position("center")
+
+    # 6. Timer Bar
+    timer_start = audio_clip.duration - 0.5
+    timer_dur = 3.5
+    bar_height = 30
+    timer_bg = ColorClip(size=(900, bar_height), color=(40, 40, 40)).with_start(timer_start).with_duration(timer_dur).with_position(("center", 1750))
+    timer_fg = ColorClip(size=(900, bar_height), color=(255, 255, 0)).with_start(timer_start).with_duration(timer_dur)
+    timer_fg = timer_fg.with_position(lambda t: (int((1080 - 900)/2 - 900 * min(max(t - timer_start, 0) / timer_dur, 1.0)), 1750))
+    
+    # 7. Final CTA
+    cta_img = create_text_image("COMMENT ANSWER! 👇", font_size=110, color="lime", y_pos=800, add_box=True)
+    cta_clip = ImageClip(cta_img).with_start(timer_start + timer_dur).with_duration(duration - (timer_start + timer_dur))
+
+    overlays = [header_clip, q_clip, q_mark_clip, timer_bg, timer_fg, cta_clip]
+
+    final_video = CompositeVideoClip(
+        [bg_clip, dark_overlay] + overlays,
+        size=(1080, 1920)
+    )
+    
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_video = final_video.with_audio(CompositeAudioClip([audio_clip, music_clip])).with_duration(duration)
+    else:
+        final_video = final_video.with_audio(audio_clip).with_duration(duration)
+        
+    final_video = final_video.with_fps(24)
+    print(f"[Log] Exporting STANDARD RIDDLE short: {output_path}")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
+    
+    return output_path
+
 
 # --- AI EXTRACTION ENGINE (Long-Form Support) ---
 # Parallel extraction and highlight reel generation logic from commit 1eeef17.
