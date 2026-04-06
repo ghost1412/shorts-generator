@@ -174,6 +174,12 @@ def validate_news(data):
 def validate_sound_challenge(data):
     return isinstance(data, dict) and "hook" in data and "sound_query" in data
 
+def validate_odd_one_out(data):
+    return isinstance(data, dict) and "hook" in data and "theme" in data
+
+def validate_riddle(data):
+    return isinstance(data, dict) and "question" in data and "answer" in data and "search_term" in data
+
 # --- Generation Functions ---
 
 def generate_mixed_facts(category="science"):
@@ -888,6 +894,60 @@ Format:
         return robust_json_parse(response_text)
 
     return with_best_of_n(llm_call, validate_sound_challenge, n=3)
+
+def generate_odd_one_out_script(category="general"):
+    """
+    Generates a funny and engaging script for 'Odd One Out' mode.
+    """
+    selected_sub = get_sub_topic(category)
+    prompt = f"""Generate a funny, high-energy YouTube Shorts hook and theme for an 'Odd One Out' game about {selected_sub}.
+RULES:
+1. Make the hook extremely engaging (e.g., "99% of people fail this...").
+2. Focus on OBSCURE or BIZARRE themes.
+3. The 'theme' should be a short description of what person/thing is 'different' (e.g., "One of these Doge emojis is actually a cat").
+4. Respond in JSON ONLY.
+
+Format:
+{{
+  "hook": "Only GIGACHADS can find this! 🗿",
+  "theme": "One of these is NOT a {selected_sub}...",
+  "hint": "Look closely at the rotations!"
+}}
+"""
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, temperature=0.8, max_tokens=256)
+        return robust_json_parse(response_text)
+
+    return with_best_of_n(llm_call, validate_odd_one_out, n=3)
+
+def generate_riddle(category="general"):
+    """
+    Generates a SHORT lateral-thinking riddle ('What am I?').
+    """
+    selected_sub = get_sub_topic(category)
+    prompt = f"""Generate a classic 'What am I?' lateral-thinking riddle about {selected_sub}.
+RULES:
+1. Avoid trivia, history facts, or GK. (e.g., "Who was Einstein?" is BAD).
+2. Use wordplay or metaphorical descriptions. (e.g., "I have a face but no eyes..." is GOOD).
+3. The riddle should be SHORT (max 15 words) and EASY for viral engagement.
+4. Provide a 'hint' and the 'answer'.
+5. Provide a 'search_term' for a visual clue (e.g., 'river' or 'clock').
+6. Respond in JSON ONLY.
+
+Format:
+{{
+  "question": "The lateral thinking riddle here...",
+  "hint": "One word clue...",
+  "answer": "The answer",
+  "hook": "GENIUS TEST! 🧠",
+  "search_term": "visual clue keyword"
+}}
+"""
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=256)
+        return robust_json_parse(response_text)
+
+    return with_best_of_n(llm_call, validate_riddle, n=3)
 
 def generate_trend_script(topic):
     """Generates a viral news script for a specific trending topic."""
