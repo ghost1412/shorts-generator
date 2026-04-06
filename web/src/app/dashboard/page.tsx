@@ -38,6 +38,8 @@ export default function Dashboard() {
   const [selectedMode, setSelectedMode] = useState('AUTO');
   const [selectedCategory, setSelectedCategory] = useState('random');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [editingStyle, setEditingStyle] = useState('');
+  const [useAudioDetect, setUseAudioDetect] = useState(true);
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [cartoon, setCartoon] = useState(true);
   const [persona, setPersona] = useState('mafia_cat');
@@ -47,6 +49,8 @@ export default function Dashboard() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [sourceVideoUrl, setSourceVideoUrl] = useState('');
   const [extractionFormat, setExtractionFormat] = useState<'shorts' | 'highlights'>('shorts');
+  const [userContext, setUserContext] = useState('');
+  const [styleContext, setStyleContext] = useState('');
 
   const modes = [
     { id: 'AUTO', label: 'Magic Auto ✨', icon: <Sparkles size={16} />, color: 'text-purple-400', category: 'Templates' },
@@ -158,7 +162,20 @@ export default function Dashboard() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, category, customScript: script || customScript, vibe, useComfy, useAiAudio, cartoon, persona }),
+        body: JSON.stringify({
+          mode,
+          category,
+          customScript: script,
+          vibe,
+          useComfy,
+          useAiAudio,
+          editingStyle,
+          useAudioDetect,
+          cartoon,
+          persona,
+          userContext,
+          styleContext
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -338,8 +355,8 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Extraction Hero - High Fidelity */}
-          <section className="lg:col-span-2 relative group-hover:cursor-not-allowed">
-            <div className="glass-card p-6 md:p-8 relative overflow-hidden bg-gradient-to-br from-[#9d4edd]/10 to-[#00e5ff]/10 border-[#00e5ff]/30 shadow-[0_0_50px_rgba(157,78,221,0.1)] opacity-50 grayscale pointer-events-none">
+          <section className="lg:col-span-2 relative">
+            <div className="glass-card p-6 md:p-8 relative overflow-hidden bg-gradient-to-br from-[#9d4edd]/10 to-[#00e5ff]/10 border-[#00e5ff]/30 shadow-[0_0_50px_rgba(157,78,221,0.1)]">
               <div className="absolute top-0 right-0 p-4">
                 <div className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff]/40 rounded text-[8px] font-black text-[#00e5ff] uppercase tracking-widest">
                   Premium AI Extraction
@@ -358,7 +375,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Upload long-form podcasts or streams. Our AI identifies high-impact moments using audio signals and visual cues. <span className="text-[#00e5ff] font-bold">(Coming Soon)</span>
+                    Upload long-form podcasts or streams. Our AI identifies high-impact moments using audio signals and visual cues.
                   </p>
                   
                   <div className="flex gap-2">
@@ -374,6 +391,53 @@ export default function Dashboard() {
                     >
                       Highlight Video
                     </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Editing Style</label>
+                       <select 
+                        value={editingStyle}
+                        onChange={(e) => setEditingStyle(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#00e5ff]/50 transition-colors"
+                       >
+                         <option value="">Default (None)</option>
+                         <option value="sarcastic">Sarcastic 🤡</option>
+                         <option value="meme">Meme Style 🐸</option>
+                         <option value="funny">Funny Stickers 😂</option>
+                         <option value="action">Action Hype 💥</option>
+                       </select>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Audio Intelligence</label>
+                       <button 
+                        onClick={() => setUseAudioDetect(!useAudioDetect)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${useAudioDetect ? 'bg-[#00e5ff]/10 border-[#00e5ff]/50 text-[#00e5ff]' : 'bg-white/5 border-white/10 text-zinc-500'}`}
+                       >
+                         <span className="text-xs font-bold uppercase">{useAudioDetect ? 'ON' : 'OFF'}</span>
+                         <Zap size={14} className={useAudioDetect ? 'animate-pulse' : ''} />
+                       </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Extra Context (Optional)</label>
+                    <textarea 
+                      value={userContext}
+                      onChange={(e) => setUserContext(e.target.value)}
+                      placeholder="e.g. Focus on the ending jump scare or look for funny reactions..."
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-[#00e5ff]/50 transition-colors h-16 resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Style Vibe / Editing Narrative (Optional)</label>
+                    <textarea 
+                      value={styleContext}
+                      onChange={(e) => setStyleContext(e.target.value)}
+                      placeholder="e.g. Fast cuts, multiple screen shakes, neon purple captions, high energy..."
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-[#00e5ff]/50 transition-colors h-16 resize-none"
+                    />
                   </div>
 
                   {!isExtracting ? (
@@ -418,6 +482,12 @@ export default function Dashboard() {
                           style={{ width: `${uploadProgress}%` }}
                         />
                       </div>
+                      <button 
+                        onClick={() => triggerGeneration(extractionFormat.toUpperCase(), 'gaming')}
+                        className="w-full py-3 bg-gradient-to-r from-[#00e5ff] to-[#9d4edd] text-black text-[10px] font-black uppercase rounded-xl shadow-[0_0_20px_rgba(0,229,255,0.3)] hover:scale-[1.02] transition-transform"
+                      >
+                        Process High-Impact Clips
+                      </button>
                       <button 
                         onClick={() => setIsExtracting(false)}
                         className="text-[8px] font-bold text-zinc-600 uppercase hover:text-white transition-colors self-center"

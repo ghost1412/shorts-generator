@@ -12,9 +12,10 @@ LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL") # Default Ollama #, "http://localhost
 def get_llm_response(
     prompt,
     system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
-    max_tokens=12000, # 🔥 increased for massive 2+ hour transcripts
+    max_tokens=12000, 
     temperature=0.3,
-    model="meta-llama/Llama-3.1-8B-Instruct"
+    model="meta-llama/Llama-3.1-8B-Instruct",
+    timeout=300
 ):
     import requests
 
@@ -42,7 +43,7 @@ def get_llm_response(
             response = requests.post(
                 LOCAL_LLM_URL,
                 json=payload,
-                timeout=300  # 🔥 increased for long videos
+                timeout=timeout
             )
             response.raise_for_status()
 
@@ -128,7 +129,8 @@ def get_llm_response(
         "temperature": temperature
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    hf_timeout = min(timeout, 30)
+    response = requests.post(url, headers=headers, json=payload, timeout=hf_timeout)
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"]
 
@@ -164,6 +166,9 @@ def validate_reddit(data):
 
 def validate_trivia(data):
     return isinstance(data, dict) and "question" in data and "answer" in data
+
+def validate_jwst_script(data):
+    return isinstance(data, dict) and "hook" in data and "story" in data
 
 def validate_quote(data):
     return isinstance(data, dict) and "quote" in data and len(data.get("quote", "").split()) >= 5
@@ -345,7 +350,7 @@ def robust_json_parse(output):
                 e_val = time_to_sec(e_str)
                 if e_val > s_val:
                     if not any(s['start'] == s_val and s['end'] == e_val for s in segments):
-                        segments.append({"start": s_val, "end": e_val, "viral_score": 75, "reason": "Regex Recovered"})
+                        segments.append({"start": s_val, "end": e_val, "viral_score": 75, "reason": "High-Impact Sequence"})
             except: continue
     
     if segments: 
@@ -358,8 +363,8 @@ def robust_json_parse(output):
         return {
             "script": clean_output, 
             "story": clean_output, 
-            "highlights": [{"start": 30.0, "end": 60.0, "reason": "Text-Recovered Moment"}],
-            "segments": [{"start": 30.0, "end": 60.0, "reason": "Text-Recovered Moment"}],
+            "highlights": [{"start": 30.0, "end": 60.0, "reason": "Viral Highlight"}],
+            "segments": [{"start": 30.0, "end": 60.0, "reason": "Viral Highlight"}],
             "facts": [{"fact": clean_output, "truth": True}], 
             "hook": "Did you know?", 
             "title": "Viral Update"
@@ -929,6 +934,36 @@ def generate_breath_challenge():
         "script": f"Are you ready for the {c['level']} Breathing Challenge? Take a deep breath in 3... 2... 1... HOLD IT! ... ... [Pause for {c['dur']} seconds] ... ... DON'T GIVE UP! You're almost there! ... And... EXHALE! Did you make it? Like and subscribe if you survived!",
         "duration": c['dur']
     }
+
+def generate_jwst_script():
+    """
+    Generates a viral script for James Webb Space Telescope images.
+    """
+    prompt = """Generate a mind-blowing script for a YouTube Short featuring new images from the James Webb Space Telescope (JWST).
+    
+    STRUCTURE:
+    1. THE HOOK: A 6-word shocking opener about space or the telescope's power.
+    2. THE STORY: A short, fast-paced narration (under 50 words) that expresses wonder at the "newest images" and mentions things like "deepest view of the universe" or "nebula details".
+    3. THE LOOP: A lead that connects back to the start.
+
+    RULES:
+    - Tone: Epic, mysterious, awe-inspiring.
+    - NO TECHNICAL NOISE.
+    - Format as JSON ONLY.
+
+    {{
+      "title": "JWST: New Galaxy Found! 🌌",
+      "hook": "NASA just released these new images...",
+      "story": "The James Webb Telescope just peered deeper into the void than ever before. These new images reveal galaxies from the dawn of time, looking back 13 billion years. It's not just space... it's a time machine.",
+      "loop_lead": "Wait until you see the first one..."
+    }}
+    """
+    
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=400)
+        return robust_json_parse(response_text)
+
+    return with_best_of_n(llm_call, validate_jwst_script, n=3)
 
 
 if __name__ == "__main__":

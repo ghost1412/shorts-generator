@@ -1,4 +1,5 @@
 import os
+import json
 import requests
 import random
 import re
@@ -9,6 +10,8 @@ from engine.comfy_bridge import generate_cinematic_backgrounds
 load_dotenv()
 
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+JWST_API_KEY = os.getenv("JWST_API_KEY")
+
 
 # Viral high-retention background types
 HIGH_RETENTION_QUERIES = [
@@ -301,6 +304,80 @@ def download_sfx(query, output_path="assets/sfx.mp3"):
     except Exception as e:
         print(f"[Error] Failed to download SFX: {e}")
         return None
+
+def fetch_jwst_images(num_images=5, output_dir="assets/jwst"):
+    """
+    Fetches random high-quality images from the James Webb Space Telescope API.
+    Implements repetition avoidance via a local history file.
+    """
+    if not JWST_API_KEY:
+        print("[Error] JWST_API_KEY is missing in .env")
+        return []
+
+    os.makedirs(output_dir, exist_ok=True)
+    history_file = os.path.join(output_dir, "history.json")
+    history = []
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, "r") as f:
+                history = json.load(f)
+        except:
+            history = []
+
+    # JWESTAPI.com endpoint
+    url = "https://api.jwstapi.com/all/type/jpg"
+    headers = {"X-API-KEY": JWST_API_KEY}
+    
+    try:
+        # 1. Get total count or a large page to randomize
+        print("[Log] Fetching JWST image list...")
+        # Note: We use a random page to get different images each time
+        random_page = random.randint(1, 10)
+        r = requests.get(f"{url}?page={random_page}&perPage=50", headers=headers, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        
+        items = data.get("body", [])
+        if not items:
+            return []
+
+        # Filter out already seen images
+        available = [item for item in items if item.get("id") not in history]
+        
+        # If we ran out of new images, clear history and restart
+        if len(available) < num_images:
+            history = []
+            available = items
+
+        selected = random.sample(available, min(num_images, len(available)))
+        downloaded_paths = []
+
+        for i, item in enumerate(selected):
+            img_id = item.get("id")
+            img_url = item.get("location")
+            if not img_url: continue
+
+            ext = os.path.splitext(img_url)[1] or ".jpg"
+            path = os.path.join(output_dir, f"jwst_{img_id}{ext}")
+            
+            if not os.path.exists(path):
+                print(f"[Log] Downloading JWST Image: {img_url}")
+                img_data = requests.get(img_url, timeout=30).content
+                with open(path, "wb") as f:
+                    f.write(img_data)
+            
+            downloaded_paths.append(path)
+            history.append(img_id)
+
+        # Update history (keep last 200 IDs)
+        with open(history_file, "w") as f:
+            json.dump(history[-200:], f)
+
+        return downloaded_paths
+
+    except Exception as e:
+        print(f"[Error] JWST Fetch failed: {e}")
+        return []
 
 if __name__ == "__main__":
     # download_background_video("A day on Venus is longer than a year on Venus.")
