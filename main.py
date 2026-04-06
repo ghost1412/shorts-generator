@@ -226,7 +226,7 @@ else:
         # GROWTH UPDATE: Favoring high-engagement "Challenge" modes based on analytics (FACTS, FIND_IT, WYR)
         mode = random.choices(
             ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE"],
-            weights=[20, 0, 0, 10, 10, 5, 0, 5, 20, 15, 0, 25]
+            weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20]
         )[0]
     if args.recap_title: mode = "MOVIE_RECAP"
     
