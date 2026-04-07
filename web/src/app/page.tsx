@@ -334,8 +334,12 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="py-10 border-t border-white/5 text-center text-zinc-500 text-sm">
+      <footer className="py-10 border-t border-white/5 text-center text-zinc-500 text-sm space-y-4">
         <p>&copy; 2026 ShortsFlow. All rights reserved.</p>
+        <div className="flex justify-center gap-6">
+          <Link href="/terms" className="hover:text-white transition-colors">Terms of Use</Link>
+          <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+        </div>
       </footer>
     </div>
   )

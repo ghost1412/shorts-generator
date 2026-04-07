@@ -100,6 +100,8 @@ def parse_args():
     parser.add_argument("--video_id", help="The unique ID for this video job.")
     parser.add_argument("--skip-upload", "--skip_upload", action="store_true", dest="skip_upload", help="Generate video but do not upload to social media.")
     parser.add_argument("--recap_title", help="Movie/Story title for MOVIE_RECAP mode.")
+    parser.add_argument("--pinterest", action="store_true", help="Enable optional upload to Pinterest.")
+    parser.add_argument("--pinterest_link", help="Optional destination URL for Pinterest Pin (e.g. affiliate link).")
     
     # AI Extraction Flags (Long-form to Short-form)
     parser.add_argument("--source_video", help="Path to long-form source video for AI extraction")
@@ -696,7 +698,7 @@ print(f"[Log] SUCCESS! Interactive video created: {final_video}")
 # 5. Social Media Automation
 # 5. Viral Metadata Generation (Required for both Upload and Local Report)
 print("[Log] Generating viral metadata...")
-from engine.social_gen import generate_viral_metadata, YouTubeUploader, InstagramUploader
+from engine.social_gen import generate_viral_metadata, generate_pinterest_metadata, YouTubeUploader, InstagramUploader, PinterestUploader
     
 if mode == "FACTS":
     metadata = generate_viral_metadata(facts_data, category=category)
@@ -796,6 +798,22 @@ if not actually_skip_upload:
             )
         else:
             print("🚀 YouTube Auth failed or skipped.")
+
+    # 6c. Optional Pinterest Upload
+    if args.pinterest and not actually_skip_upload:
+        print("[Log] Pinterest upload flag detected. Generating Pinterest-specific SEO metadata...")
+        # Note: We pass the core data to ensure Pinterest gets its own optimized keywords
+        pinterest_info = facts_data if mode == "FACTS" else (story_data if 'story_data' in locals() else {"title": metadata['title']})
+        p_metadata = generate_pinterest_metadata(pinterest_info, mode=mode, category=category)
+        
+        print(f"[Log] Pinterest Title: {p_metadata['title']}")
+        p_uploader = PinterestUploader()
+        p_uploader.upload_video(
+            final_video,
+            p_metadata['title'],
+            p_metadata['description'],
+            link=args.pinterest_link
+        )
 
         print("[Log] Instagram uploader ready.")
         ig_uploader = InstagramUploader()

@@ -41,6 +41,8 @@ export default function Dashboard() {
   const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
   const [cartoon, setCartoon] = useState(true);
   const [persona, setPersona] = useState('mafia_cat');
+  const [pinterest, setPinterest] = useState(false);
+  const [pinterestLink, setPinterestLink] = useState('');
   
   // 🟢 NEW STATE: Extraction Flow
   const [isExtracting, setIsExtracting] = useState(false);
@@ -159,7 +161,7 @@ export default function Dashboard() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, category, customScript: script || customScript, vibe, useComfy, useAiAudio, cartoon, persona }),
+        body: JSON.stringify({ mode, category, customScript: script || customScript, vibe, useComfy, useAiAudio, cartoon, persona, pinterest, pinterestLink }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -783,6 +785,46 @@ export default function Dashboard() {
                   <p className="text-[10px] text-cyan-300/50 leading-relaxed italic">
                     🔒 CLOSED BETA: This feature uses deep audio analysis to find emotional spikes. Coming soon to all users!
                   </p>
+                </div>
+
+                {/* Pinterest Integration Toggle */}
+                <div className="pt-6 border-t border-white/5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 bg-rose-500/10 rounded-lg">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="#f43f5e">
+                          <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.966 1.406-5.966s-.359-.72-.359-1.781c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738.098.119.112.224.083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.631-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146 1.124.347 2.317.535 3.554.535 6.607 0 11.985-5.365 11.985-11.987C23.999 5.368 18.631 0 12.017 0z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white">Pinterest Auto-Post</p>
+                        <p className="text-[10px] text-zinc-500">Enable SEO-optimized Pins</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setPinterest(!pinterest)}
+                      className={`w-12 h-6 rounded-full p-1 transition-all duration-300 ${pinterest ? 'bg-rose-500' : 'bg-zinc-700'}`}
+                    >
+                      <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-300 ${pinterest ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                  {pinterest && (
+                    <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Destination Link (Optional)</label>
+                        <input 
+                          type="text"
+                          value={pinterestLink}
+                          onChange={(e) => setPinterestLink(e.target.value)}
+                          placeholder="https://your-affiliate-link.com"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-xs focus:border-rose-500/50 outline-none transition-all placeholder:text-zinc-600"
+                        />
+                      </div>
+                      <p className="text-[9px] text-rose-300/70 italic leading-tight">
+                        ⚡ Tip: Pinterest traffic is search-driven. Adding an affiliate link here can automate your passive income stream!
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
