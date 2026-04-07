@@ -173,7 +173,14 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
         {"name": "Cheems", "query": "cheems meme"},
         {"name": "SpongeBob", "query": "spongebob mockup"},
         {"name": "Patrick", "query": "patrick star meme"},
-        {"name": "Spider-Man", "query": "spider man pointing meme"}
+        {"name": "Spider-Man", "query": "spider man pointing meme"},
+        {"name": "Grinch", "query": "the grinch funny"},
+        {"name": "Thanos", "query": "thanos meme"},
+        {"name": "Batman", "query": "batman funny"},
+        {"name": "Skibidi", "query": "skibidi toilet"},
+        {"name": "Minion", "query": "funny minion"},
+        {"name": "Rick Sanchez", "query": "rick and morty rick"},
+        {"name": "Walter White", "query": "breaking bad walter white"}
     ]
     
     selected_target = random.choice(targets) if not target_query else {"name": "Object", "query": target_query}
