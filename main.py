@@ -310,10 +310,20 @@ else:
             facts_data = []
             print(f"[Log] QUOTE Data: {quote_data}")
         elif mode == "ODD_ONE_OUT":
-            odd_res = generate_odd_one_out_script(category)
-            full_script = f"{odd_res['hook']} ... {odd_res['theme']} ... ... ... ... Did you find it? Like and subscribe!"
+            # 🟢 REVERT: Static high-tension script for better viral engagement
+            intros = [
+                "99% of people FAIL this test! 🧠",
+                "Only a GENIUS can spot the odd one! 🗿",
+                "Is your brain awake? Find the difference! 🧐",
+                "Bro, this one is actually impossible! 🤫",
+                "If you find it in 3 seconds, you're a LEGEND! 🏆"
+            ]
+            hook = random.choice(intros)
+            theme = f"One of these is NOT a {category}..."
+            full_script = f"{hook} ... {theme} ... Find it before the time runs out! ... ... ... ... ... Did you spot the odd one? Let me know!"
+            odd_res = {"hook": hook, "theme": theme} # For metadata consistency
             facts_data = []
-            print(f"[Log] ODD_ONE_OUT Data: {odd_res}")
+            print(f"[Log] ODD_ONE_OUT (Revert): {full_script}")
         elif mode == "RIDDLE":
             riddle_data = generate_riddle(category)
             full_script = f"{riddle_data['hook']} ... {riddle_data['question']} ... ... ... ... Comment the answer below!"
