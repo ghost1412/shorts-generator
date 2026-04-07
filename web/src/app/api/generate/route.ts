@@ -160,8 +160,8 @@ export async function POST(request: Request) {
             cartoon: cartoon ? 'true' : 'false',
             persona: persona || '',
             source_video: sourceVideoUrl || '',
-            pinterest: pinterest ? 'true' : 'false',
-            pinterest_link: pinterestLink || ''
+            ...(pinterest && { pinterest: 'true' }),
+            ...(pinterestLink && { pinterest_link: pinterestLink })
           },
         }),
       }
