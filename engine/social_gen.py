@@ -14,6 +14,72 @@ import pickle
 load_dotenv()
 HF_API_KEY = os.getenv("HF_API_KEY")
 
+def generate_pinterest_metadata(content_info, mode="FACTS", category="science"):
+    """
+    Generates Pinterest-optimized metadata focusing on long-term search SEO.
+    Pinterest metadata prioritizes keywords in titles and clear, helpful descriptions.
+    """
+    url = "https://router.huggingface.co/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    model = "meta-llama/Llama-3.1-8B-Instruct"
+    
+    if mode == "FACTS":
+        input_text = "\n".join([f"- {f['fact']}" for f in content_info])
+        task_desc = f"interesting facts about {category}."
+    elif mode == "FIND_IT":
+        input_text = f"Target: {content_info['target_name']}"
+        task_desc = f"a visual puzzle/game to find the {content_info['target_name']}."
+    elif mode == "RIDDLE":
+        input_text = str(content_info)
+        task_desc = f"a brain-teasing riddle about {category}."
+    elif mode == "QUOTE":
+        input_text = str(content_info)
+        task_desc = f"a deep motivational quote about {category}."
+    else:
+        input_text = str(content_info)
+        task_desc = f"a video about {category}."
+
+    prompt = f"""You are a Pinterest SEO Expert. 
+Generate a search-optimized title and a detailed, helpful description for a Pin about {task_desc}:
+{input_text}
+
+PINTEREST SEO RULES:
+1. Title: Must be keyword-rich and descriptive (max 100 chars). 
+   - E.g., "3 Mind-Blowing Science Facts You Didn't Know" or "Can You Find the Hidden Cat? Visual Puzzle".
+2. Description: 
+   - Write a compelling 2-3 sentence summary that naturally includes keywords.
+   - Include a Call to Action (e.g., "Check out our channel for more!").
+   - Include 5-10 niche-specific hashtags (e.g., #sciencefacts #education #trivia).
+3. Pinterest does not use a separate 'tags' field like YouTube, so include them in the description.
+
+Format as JSON ONLY:
+{{
+  "title": "...",
+  "description": "..."
+}}
+"""
+    from engine.script_gen import get_llm_response, robust_json_parse
+
+    for attempt in range(2):
+        try:
+            output = get_llm_response(prompt, temperature=0.7, max_tokens=800)
+            metadata = robust_json_parse(output)
+            if not metadata or not metadata.get("title"):
+                raise ValueError("Invalid Pinterest metadata")
+            return metadata
+        except Exception as e:
+            print(f"[Warning] Pinterest metadata attempt {attempt+1} failed: {e}")
+    
+    # Generic Fallback
+    return {
+        "title": f"Amazing {category.title()} Challenge! ✨",
+        "description": f"Don't miss this incredible {category} video. Like and follow for more daily inspiration! #pinterest #viral #{category}"
+    }
+
 def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     """
     Generates viral, humorous metadata for YouTube Shorts as a "Channel Manager".
@@ -326,4 +392,97 @@ class InstagramUploader:
             
         except Exception as e:
             print(f"[Error] Instagram Error: {e}")
+            return None
+
+class PinterestUploader:
+    """
+    Handles video uploads to Pinterest using REST API v5.
+    Requires: PINTEREST_ACCESS_TOKEN and PINTEREST_BOARD_ID
+    """
+    def __init__(self):
+        self.access_token = os.getenv("PINTEREST_ACCESS_TOKEN")
+        self.board_id = os.getenv("PINTEREST_BOARD_ID")
+        self.base_url = "https://api.pinterest.com/v5"
+
+    def upload_video(self, video_file_path, title, description, link=None):
+        if not self.access_token or not self.board_id:
+            print("[Log] Pinterest credentials missing. Skipping Pinterest upload.")
+            return None
+
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            # Step 1: Register Media
+            print(f"[Log] Registering Pinterest Media...")
+            reg_res = requests.post(
+                f"{self.base_url}/media",
+                json={"media_type": "video"},
+                headers=headers,
+                timeout=30
+            )
+            reg_res.raise_for_status()
+            reg_data = reg_res.json()
+            
+            media_id = reg_data["media_id"]
+            upload_url = reg_data["upload_url"]
+            upload_params = reg_data["upload_parameters"]
+
+            # Step 2: Upload to S3
+            print(f"[Log] Uploading video to Pinterest S3 storage...")
+            with open(video_file_path, "rb") as f:
+                upload_res = requests.post(
+                    upload_url,
+                    data=upload_params,
+                    files={"file": f},
+                    timeout=120
+                )
+            
+            if upload_res.status_code not in [201, 204]:
+                print(f"[Error] Pinterest S3 upload failed: {upload_res.text}")
+                return None
+
+            # Step 3: Poll for Media Status (Must be 'succeeded' before creating Pin)
+            import time
+            print(f"[Log] Waiting for Pinterest to process video (media_id: {media_id})...")
+            for _ in range(10): # Max 100s wait
+                status_res = requests.get(f"{self.base_url}/media/{media_id}", headers=headers)
+                if status_res.ok and status_res.json().get("status") == "succeeded":
+                    print("[Log] Media processing complete.")
+                    break
+                time.sleep(10)
+            else:
+                print("[Warning] Media processing timed out. Pin creation might fail.")
+
+            # Step 4: Create Pin
+            pin_payload = {
+                "title": title[:100],
+                "description": description[:500],
+                "board_id": self.board_id,
+                "media_source": {
+                    "source_type": "video_id",
+                    "media_id": media_id
+                }
+            }
+            if link:
+                pin_payload["link"] = link
+
+            print(f"[Log] Creating Pinterest Pin...")
+            pin_res = requests.post(
+                f"{self.base_url}/pins",
+                json=pin_payload,
+                headers=headers,
+                timeout=30
+            )
+            pin_res.raise_for_status()
+            
+            print("[Log] Successfully created Pinterest Pin!")
+            return pin_res.json()
+
+        except Exception as e:
+            print(f"[Error] Pinterest Upload Error: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"[Log] Response: {e.response.text}")
             return None
