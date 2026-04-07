@@ -22,6 +22,8 @@ export async function saveUserSettings(config: any) {
     youtube_client_id: encrypt(config.youtube_client_id?.trim()), 
     youtube_client_secret: encrypt(config.youtube_client_secret?.trim()),
     youtube_refresh_token: encrypt(config.youtube_refresh_token?.trim()),
+    pinterest_access_token: encrypt(config.pinterest_access_token?.trim()),
+    pinterest_board_id: encrypt(config.pinterest_board_id?.trim()),
     default_vibe: config.default_vibe,
     updated_at: new Date().toISOString()
   };

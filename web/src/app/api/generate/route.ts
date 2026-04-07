@@ -20,7 +20,9 @@ export async function POST(request: Request) {
       useAiAudio,
       cartoon,
       persona,
-      sourceVideoUrl
+      sourceVideoUrl,
+      pinterest,
+      pinterestLink
     } = body;
 
     // Defensive check: support snake_case from older/misc clients
@@ -156,7 +158,9 @@ export async function POST(request: Request) {
             use_ai_audio: useAiAudio ? 'true' : 'false',
             cartoon: cartoon ? 'true' : 'false',
             persona: persona || '',
-            source_video: sourceVideoUrl || ''
+            source_video: sourceVideoUrl || '',
+            pinterest: pinterest ? 'true' : 'false',
+            pinterest_link: pinterestLink || ''
           },
         }),
       }

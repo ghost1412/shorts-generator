@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS user_configs (
     youtube_client_id TEXT,
     youtube_client_secret TEXT,
     youtube_refresh_token TEXT,
+    pinterest_access_token TEXT,
+    pinterest_board_id TEXT,
     default_vibe TEXT DEFAULT 'suspense',
     plan TEXT DEFAULT 'free',
     max_videos INTEGER DEFAULT 3,
