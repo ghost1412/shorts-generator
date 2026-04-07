@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     // 0. Security & Plan Limit Check (Backend enforcement)
     const { data: userConfig, error: configError } = await supabase
       .from('user_configs')
-      .select('plan, max_videos, github_token, github_repo, generations_used')
+      .select('plan, max_videos, github_token, github_repo, generations_used, pinterest_access_token, pinterest_board_id')
       .eq('user_id', user.id)
       .single();
 

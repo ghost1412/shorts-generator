@@ -101,6 +101,7 @@ def parse_args():
     parser.add_argument("--skip-upload", "--skip_upload", action="store_true", dest="skip_upload", help="Generate video but do not upload to social media.")
     parser.add_argument("--recap_title", help="Movie/Story title for MOVIE_RECAP mode.")
     parser.add_argument("--pinterest", action="store_true", help="Enable optional upload to Pinterest.")
+    parser.add_argument("--instagram", action="store_true", help="Enable optional upload to Instagram.")
     parser.add_argument("--pinterest_link", help="Optional destination URL for Pinterest Pin (e.g. affiliate link).")
     
     # AI Extraction Flags (Long-form to Short-form)
@@ -815,6 +816,8 @@ if not actually_skip_upload:
             link=args.pinterest_link
         )
 
+    # 6d. Optional Instagram Upload
+    if args.instagram and not actually_skip_upload:
         print("[Log] Instagram uploader ready.")
         ig_uploader = InstagramUploader()
         ig_uploader.upload_reel(final_video, f"{metadata['title']}\n\n{metadata['description']}")
