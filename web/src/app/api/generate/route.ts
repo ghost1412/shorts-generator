@@ -22,6 +22,10 @@ export async function POST(request: Request) {
       cartoon,
       persona,
       sourceVideoUrl,
+      editingStyle,
+      useAudioDetect,
+      userContext,
+      styleContext,
       pinterest,
       pinterestLink
     } = body;
@@ -104,7 +108,12 @@ export async function POST(request: Request) {
           customScript,
           vibe,
           userId: user.id,
-          video_id: videoId 
+          video_id: videoId,
+          style: editingStyle,
+          sourceVideoUrl,
+          useAudioDetect,
+          userContext,
+          styleContext
         })
       });
 
@@ -160,6 +169,10 @@ export async function POST(request: Request) {
             cartoon: cartoon ? 'true' : 'false',
             persona: persona || '',
             source_video: sourceVideoUrl || '',
+            style: editingStyle || '',
+            use_audio_detect: useAudioDetect ? 'true' : 'false',
+            user_context: userContext || '',
+            style_context: styleContext || '',
             ...(pinterest && { pinterest: 'true' }),
             ...(pinterestLink && { pinterest_link: pinterestLink })
           },
