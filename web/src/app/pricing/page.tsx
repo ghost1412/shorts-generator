@@ -9,6 +9,7 @@ const tiers = [
     name: 'Free',
     price: '$0',
     priceId: '', // No Stripe for free
+    variantId: '', // No LS for free
     description: 'Perfect for starters and hobbyists.',
     features: [
       '3 Videos per month',
@@ -23,6 +24,7 @@ const tiers = [
     name: 'Pro',
     price: '$19',
     priceId: 'price_1QvExamplePro', // Placeholder
+    variantId: '12345', // Placeholder for Lemon Squeezy Variant ID
     description: 'The viral secret weapon for creators.',
     features: [
       'Unlimited Videos',
@@ -39,6 +41,7 @@ const tiers = [
     name: 'Agency',
     price: '$49',
     priceId: 'price_1QvExampleAgency', // Placeholder
+    variantId: '67890', // Placeholder for Lemon Squeezy Variant ID
     description: 'Build your automated empire at scale.',
     features: [
       'Managing Multi-Channels',
@@ -64,11 +67,17 @@ export default function PricingPage() {
 
     setLoading(tier.name)
     try {
-      const res = await fetch('/api/stripe/checkout', {
+      // 🟢 PREFERENCE: If variantId exists, we use Lemon Squeezy (Easier for India/Global MoR)
+      // If only priceId exists, we use Stripe.
+      const isLemonSqueezy = !!tier.variantId;
+      const apiEndpoint = isLemonSqueezy ? '/api/lemon/checkout' : '/api/stripe/checkout';
+      
+      const res = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           priceId: tier.priceId,
+          variantId: tier.variantId,
           planName: tier.name 
         })
       })
@@ -169,9 +178,9 @@ export default function PricingPage() {
           <div className="flex flex-col items-center gap-4 text-zinc-500 text-sm">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
-              <span>Secure payments powered by Stripe</span>
+              <span>Secure payments via Stripe or Lemon Squeezy (MoR)</span>
             </div>
-            <p>Taxes may apply based on your location. Cancel anytime.</p>
+            <p>Taxes handled automatically. Global compliance guaranteed. Cancel anytime.</p>
           </div>
         </div>
       </div>

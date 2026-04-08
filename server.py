@@ -12,7 +12,7 @@ app = Flask(__name__)
 # This is a basic worker server that listens for render requests from the Next.js dashboard.
 # It runs the python main.py command in the background.
 
-def run_generation(mode, category, script, vibe, video_id, user_id):
+def run_generation(mode, category, script, vibe, video_id, user_id, style=None, source_video=None, use_audio_detect=False, user_context=None, style_context=None):
     """Executes the main.py script as a separate process."""
     cmd = [
         "python", "main.py", 
@@ -21,6 +21,17 @@ def run_generation(mode, category, script, vibe, video_id, user_id):
         "--video_id", video_id,
         "--user_id", user_id
     ]
+    
+    if style:
+        cmd.extend(["--style", style])
+    if source_video:
+        cmd.extend(["--source_video", source_video])
+    if use_audio_detect:
+        cmd.append("--use_audio_detect")
+    if user_context:
+        cmd.extend(["--user_context", user_context])
+    if style_context:
+        cmd.extend(["--style_context", style_context])
     
     if category:
         cmd.extend(["--category", category])
@@ -53,9 +64,14 @@ def trigger_render():
     vibe = data.get('vibe', 'suspense')
     user_id = data.get('userId', '')
     video_id = data.get('video_id', str(uuid.uuid4()))
+    style = data.get('style')
+    source_video = data.get('sourceVideoUrl') # The dashboard sends this for extraction
+    use_audio_detect = data.get('useAudioDetect', False)
+    user_context = data.get('userContext')
+    style_context = data.get('styleContext')
     
     # Start the processing in a background thread so the HTTP request returns immediately
-    thread = threading.Thread(target=run_generation, args=(mode, category, script, vibe, video_id, user_id))
+    thread = threading.Thread(target=run_generation, args=(mode, category, script, vibe, video_id, user_id, style, source_video, use_audio_detect, user_context, style_context))
     thread.start()
     
     return jsonify({

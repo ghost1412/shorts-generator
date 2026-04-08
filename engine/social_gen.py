@@ -101,6 +101,9 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     elif mode.startswith("NEWS"):
         input_text = str(content_info)
         task_desc = "a serious news report."
+    elif mode == "JWST":
+        input_text = str(content_info)
+        task_desc = "a mind-blowing space exploration video featuring new James Webb Telescope images."
     else:
         input_text = str(content_info)
         task_desc = "a story."
@@ -111,15 +114,17 @@ Generate a VIRAL title, high-retention description, and trending SEO tags for {t
 
 CRITICAL SEO RULES:
 1. Title: Must be "Pattern-Interrupting". 
-   - For FACTS/CHALLENGE: ALWAYS use "99% MISS THIS! 🛑" or "99.9% FAIL! 😱" or "Can You Spot the Lie? 🤯" as the primary hook.
-   - For NEWS: ALWAYS start with "BREAKING: [Headline] 🚨" or "DEVELOPING: [Headline] 🚨".
+   - For FACTS/CHALLENGE: Use "99% MISS THIS! 🛑" or "99.9% FAIL! 😱" or "Can You Spot the Lie? 🤯" as the primary hook.
+   - For NEWS: Start with "BREAKING: [Headline] 🚨" or "DEVELOPING: [Headline] 🚨".
+   - For STORY/EXTRACT: DO NOT use "99% fail" or "Spot the lie". Instead, use "The Moment Everyone Missed... 😱" or "Wait for the ending... 🗿" or "POV: [Context] 🤯".
    - Keep it under 60 chars. Use extreme emotional hooks.
 2. Description: 
    - First line must be a CTA (e.g., "Comment your guess or you owe me a sub!").
    - For NEWS, first line should be "Stay tuned for more updates on this! 🚨"
+   - For STORY, first line should be "This moment was absolutely insane! 😱"
    - Include 3 paragraphs: The Hook, The Details, The Community Call. 
    - Use emojis liberally but strategically.
-   - Include EXPLICIT tags in description: #shorts #trending #viral #news + 3 specific to {category}.
+   - Include EXPLICIT tags in description: #shorts #trending #viral + 3 specific to {category}.
 3. Tags: 15-20 highly relevant, high-volume SEO keywords.
 
 Format as JSON ONLY:
@@ -142,10 +147,11 @@ Format as JSON ONLY:
 
     from engine.script_gen import get_llm_response, robust_json_parse
 
-    for attempt in range(3):
+    for attempt in range(2): # 🟢 Reduced to 2 attempts for faster failover
         try:
             temp = 0.7 + (attempt * 0.1)
-            output = get_llm_response(prompt, temperature=temp, max_tokens=1000)
+            # 🟢 Short timeout (30s) for metadata since it's a small JSON
+            output = get_llm_response(prompt, temperature=temp, max_tokens=1000, timeout=30)
             metadata = robust_json_parse(output)
             
             # Validation

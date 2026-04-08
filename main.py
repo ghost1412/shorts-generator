@@ -16,11 +16,12 @@ if sys.stderr.encoding != 'utf-8':
 from supabase import create_client, Client
 from engine.utils import decrypt_secret
 
+POOL_SIZE = 4
 load_dotenv()
 
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle
+from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
-from engine.media_gen import download_background_video, download_image, download_sfx
+from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images
 from engine.video_gen import create_shorts_video
 from engine.storage import upload_to_storage
 
@@ -91,8 +92,8 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
         traceback.print_exc()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "AUTO"], help="Force a specific mode.")
+    parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE or ODD_ONE_OUT shorts.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
@@ -111,6 +112,10 @@ def parse_args():
     parser.add_argument("--target_duration", type=int, default=30)
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
     parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
+    parser.add_argument("--style", choices=["sarcastic", "meme", "funny", "action", "stylish"], action="append", help="Optional viral editing styles (can be used multiple times).")
+    parser.add_argument("--user_context", help="Extra context to guide AI extraction (specific scenes/styles).")
+    parser.add_argument("--style_context", help="Context for editing style and pacing (e.g. 'fast cuts', 'cinematic').")
+    parser.add_argument("--gif_dir", help="Path to external GIF library (e.g. animated-gifs repo).")
     parser.add_argument("--hq", action="store_true", help="Enable High-Quality (Premium) enhancements (sharpening, denoising).")
     
     parser.add_argument("--use_comfy", action="store_true", help="Use local ComfyUI for premium AI backgrounds.")
@@ -118,6 +123,11 @@ def parse_args():
     parser.add_argument("--bitrate", type=str, help="Manual bitrate override (e.g. 12000k)")
     parser.add_argument("--preset", type=str, help="Manual preset override (e.g. medium)")
     parser.add_argument("--quality", type=str, default="medium", choices=["low", "medium", "high", "ultra"], help="Output quality preset")
+    
+    # 🟢 Auto-Editor & AutoClip Flags
+    parser.add_argument("--tighten", action="store_true", help="Remove silences from the final video.")
+    parser.add_argument("--tighten_mode", choices=["cut", "speed"], default="cut", help="How to handle silences: 'cut' them or 'speed' them up.")
+    parser.add_argument("--smart_crop", action="store_true", help="Enabled AI-powered face/interest tracking for vertical cropping.")
     
     # Cartoon/Persona Flags
     parser.add_argument("--cartoon", action="store_true", help="Enable cartoon-style news persona.")
@@ -131,6 +141,10 @@ args = parse_args()
 # Quality Mapping (Overridden by manual flags if present)
 bitrate_map = {"low": "4M", "medium": "12M", "high": "25M", "ultra": "50M"}
 preset_map = {"low": "ultrafast", "medium": "medium", "high": "slow", "ultra": "slower"}
+
+# 🟢 HQ AUTO-BOOST: If --hq is set, default to 'high' quality unless manually specified
+if args.hq and (not hasattr(args, 'quality') or args.quality == "medium"):
+    args.quality = "high"
 
 target_bitrate = args.bitrate if args.bitrate else bitrate_map.get(args.quality or "medium")
 target_preset = args.preset if args.preset else preset_map.get(args.quality or "medium")
@@ -163,11 +177,22 @@ if getattr(args, "source_video", None):
     os.makedirs(session_dir, exist_ok=True)
     
     print("[Log] Running Transcript-based Highlight Analysis...")
-    highlights, transcript_path = process_source_video(
+    # 🟢 EXPERT GUARD: Prevention of Mode Confusion
+    if args.extract_mode == "shorts" and args.target_duration > 60:
+        print(f"[Warning] Target duration {args.target_duration}s exceeds YouTube Shorts limit (60s).")
+        print(f"[Log] Capping short duration at 60s. For longer highlights, use --extract_mode long.")
+        args.target_duration = 60
+
+    highlights, transcript_path, interest_points, silence_intervals = process_source_video(
         args.source_video, session_dir, mode=args.extract_mode, 
         clip_count=args.clip_count, target_duration=args.target_duration,
-        use_audio_detect=args.use_audio_detect
+        use_audio_detect=args.use_audio_detect, style=args.style,
+        user_context=args.user_context, style_context=args.style_context
     )
+    
+    # Filter signals based on user flags
+    final_interest = interest_points if args.smart_crop else None
+    final_silence = silence_intervals if args.tighten else None
     
     if not highlights:
         print("[Error] No highlights identified.")
@@ -177,8 +202,15 @@ if getattr(args, "source_video", None):
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, session_dir, 
         mode=args.extract_mode, bitrate=target_bitrate, preset=target_preset, codec="libx264",
-        is_challenge=(args.mode == "CHALLENGE"), use_hq=args.hq
+        is_challenge=(args.mode == "CHALLENGE"), use_hq=args.hq, 
+        editing_style=args.style, gif_dir=args.gif_dir,
+        interest_points=final_interest, silence_intervals=final_silence,
+        tighten_mode=args.tighten_mode
     )
+    
+    if not extracted_files:
+        print("[Error] No videos were generated. Check the logs for FFmpeg failures.")
+        sys.exit(1)
     
     # Generate viral metadata for Highlights
     print("[Log] Generating viral metadata for extracted clips...")
@@ -194,15 +226,26 @@ if getattr(args, "source_video", None):
             "tags": meta.get('tags', [])
         })
     else:
-        for i, h in enumerate(highlights):
-            if i >= len(extracted_files): break
-            meta = generate_viral_metadata(h.get('context', h.get('reason', 'Gamer Highlight')), mode="STORY", category="gaming")
-            highlights_meta.append({
+        from concurrent.futures import ThreadPoolExecutor
+        def fetch_meta(idx_h):
+            i, h = idx_h
+            if i >= len(extracted_files): return None
+            # Sanitize technical jargon from the context/reason
+            raw_context = h.get('context', h.get('reason', 'Gamer Highlight'))
+            if "Recovered" in raw_context or "Regex" in raw_context:
+                raw_context = "Epic Gaming Moment"
+            
+            meta = generate_viral_metadata(raw_context, mode="STORY", category="gaming")
+            return {
                 "file": os.path.basename(extracted_files[i]),
                 "title": meta.get('title', 'Viral Moment'),
                 "description": meta.get('description', ''),
                 "tags": meta.get('tags', [])
-            })
+            }
+
+        with ThreadPoolExecutor(max_workers=min(POOL_SIZE, len(highlights))) as executor:
+            results = list(executor.map(fetch_meta, enumerate(highlights)))
+            highlights_meta = [r for r in results if r is not None]
         
     with open(os.path.join(session_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(highlights_meta, f, indent=4)
@@ -226,7 +269,7 @@ else:
     if args.mode and args.mode != "AUTO":
         mode = args.mode
     else:
-        # GROWTH UPDATE: Favoring high-engagement "Challenge" modes based on analytics (FACTS, FIND_IT, WYR)
+        # 🟢 WINNER-HEAVY SELECTION: Facts (Spot the Lie) and News are 2x more likely than others
         mode = random.choices(
             ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE"],
             weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20]
@@ -255,13 +298,16 @@ else:
             hook = facts_res["hook"]
             facts_data = facts_res["facts"]
             
-            # Construct the script: Hook -> Challenge Intro -> Fact 1, 2, 3 -> Loop Outro
+            # Construct the script: Hook -> Challenge Intro -> Facts -> Loop Outro
             full_script = f"{hook} ... One of these facts is a LIE! ... "
-            full_script += f"1: {facts_data[0]['fact']} ... "
-            full_script += f"2: {facts_data[1]['fact']} ... "
-            full_script += f"3: {facts_data[2]['fact']} ... "
+            fact_segments = []
+            for i, f in enumerate(facts_data[:3]): # Max 3 segments for UI consistency
+                fact_segments.append(f"{i+1}: {f['fact']}")
+            
+            full_script += " ... ".join(fact_segments)
+            
             # 🟢 UPGRADE: Seamless Viral Loop
-            full_script += f"The real answer is ... wait... {facts_res.get('loop_lead', 'Go back and check again.')}"
+            full_script += f" ... The real answer is ... wait... {facts_res.get('loop_lead', 'Go back and check again.')}"
         elif mode == "MOVIE_RECAP":
             from engine.script_gen import generate_movie_recap
             recap_data = generate_movie_recap(args.recap_title)
@@ -361,6 +407,11 @@ else:
             full_script = trend_data.get("script") or trend_data.get("story", "")
             facts_data = []
             print(f"[Log] TREND Data: {trend_data}")
+        elif mode == "JWST":
+            jwst_data = generate_jwst_script()
+            full_script = f"{jwst_data['hook']} ... {jwst_data['story']} ... {jwst_data.get('loop_lead', '')}"
+            facts_data = []
+            print(f"[Log] JWST Data: {jwst_data}")
     except RuntimeError as e:
         print(f"[Error] Generation failed: {e}")
         print("[Log] Gracefully skipping this video to maintain channel diversity.")
@@ -539,15 +590,24 @@ elif mode == "GUESS_SOUND":
     # Download sound effect
     sfx_filename = os.path.join(session_dir, "challenge_sfx.mp3")
     download_sfx(sound_data["sound_query"], output_path=sfx_filename)
-elif mode in ["CHALLENGE", "TREND"]:
     bg_filename = os.path.join(session_dir, "bg_gen.mp4")
     path = get_bg_path(category + " satisfying", bg_filename)
     if path: bg_video_paths.append(path)
+<<<<<<< HEAD
 elif mode == "RIDDLE":
     bg_filename = os.path.join(session_dir, "bg_riddle.mp4")
     paths = get_bg_path(category + " background", bg_filename, target_duration=total_bg_duration)
     bg_video_paths.extend(paths)
     clue_path = None
+=======
+elif mode == "JWST":
+    print("[Log] Fetching James Webb Telescope images...")
+    bg_video_paths = fetch_jwst_images(num_images=random.randint(1, 4))
+    if not bg_video_paths:
+        print("[Warning] No JWST images found, falling back to Pexels space video.")
+        bg_filename = os.path.join(session_dir, "bg_jwst_fallback.mp4")
+        bg_video_paths = get_bg_path("outer space james webb telescope", bg_filename)
+>>>>>>> origin/analysisv2
 
 if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
     print("[Error] Failed to download any background videos.")
@@ -710,35 +770,55 @@ print(f"[Log] SUCCESS! Interactive video created: {final_video}")
 # 5. Viral Metadata Generation (Required for both Upload and Local Report)
 print("[Log] Generating viral metadata...")
 from engine.social_gen import generate_viral_metadata, generate_pinterest_metadata, YouTubeUploader, InstagramUploader, PinterestUploader
+
+def ensure_dict(data):
+    if isinstance(data, list) and len(data) > 0:
+        data = data[0]
+    if not isinstance(data, dict):
+        return {"title": "Viral Short", "description": "", "tags": []}
     
+    # Ensure description is a string
+    desc = data.get("description", "")
+    if isinstance(desc, list):
+        data["description"] = "\n".join([str(i) for i in desc])
+    elif not isinstance(desc, str):
+        data["description"] = str(desc)
+    
+    # Ensure title is a string
+    title = data.get("title", "")
+    if not isinstance(title, str):
+        data["title"] = str(title) if title else "Viral Short"
+        
+    return data
+
 if mode == "FACTS":
-    metadata = generate_viral_metadata(facts_data, category=category)
+    metadata = ensure_dict(generate_viral_metadata(facts_data, category=category))
 elif mode == "FIND_IT" or mode == "FIND_CAT":
-    metadata = generate_viral_metadata({"target_name": target_name}, mode="FIND_IT")
+    metadata = ensure_dict(generate_viral_metadata({"target_name": target_name}, mode="FIND_IT"))
 elif mode == "WYR":
-    metadata = generate_viral_metadata(f"Would You Rather: {wyr_data['option_a']} OR {wyr_data['option_b']}", mode="STORY", category=category)
+    metadata = ensure_dict(generate_viral_metadata(f"Would You Rather: {wyr_data['option_a']} OR {wyr_data['option_b']}", mode="STORY", category=category))
 elif mode == "REDDIT":
-    metadata = generate_viral_metadata(reddit_data['story'], mode="STORY", category=category)
+    metadata = ensure_dict(generate_viral_metadata(reddit_data['story'], mode="STORY", category=category))
     # Use reddit title but enforce YouTube's length limit (100 chars max, use 95 for safety)
     metadata['title'] = reddit_data['title'][:95]
 elif mode == "TRIVIA":
-    metadata = generate_viral_metadata(f"Trivia: {trivia_data['question']} Did you guess right?", mode="STORY", category=category)
+    metadata = ensure_dict(generate_viral_metadata(f"Trivia: {trivia_data['question']} Did you guess right?", mode="STORY", category=category))
 elif mode == "QUOTE":
-    metadata = generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category)
+    metadata = ensure_dict(generate_viral_metadata(f"Deep Quote: {quote_data['quote']}", mode="STORY", category=category))
 elif mode == "ODD_ONE_OUT":
-    metadata = generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT")
+    metadata = ensure_dict(generate_viral_metadata({"target_name": f"Odd {target_name}"}, mode="FIND_IT"))
 elif mode in ("NEWS", "NEWS_SERIOUS"):
-    metadata = generate_viral_metadata(news_data.get('story', 'Breaking News'), mode="NEWS", category=category)
+    metadata = ensure_dict(generate_viral_metadata(news_data.get('story', 'Breaking News'), mode="NEWS", category=category))
     # Append source credit to description
     source_credit = news_data.get('source', '')
     if source_credit:
         metadata['description'] = metadata.get('description', '') + f"\n\n📰 Source: {source_credit}"
 elif mode == "GUESS_SOUND":
-    metadata = generate_viral_metadata(f"Can you guess this sound? It's a {sound_data['object']}", mode="STORY", category=category)
+    metadata = ensure_dict(generate_viral_metadata(f"Can you guess this sound? It's a {sound_data['object']}", mode="STORY", category=category))
 else:
     # For STORY or other modes
     story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"
-    metadata = generate_viral_metadata(story_content, mode=mode, category=category)
+    metadata = ensure_dict(generate_viral_metadata(story_content, mode=mode, category=category))
 
 # Ensure title is never empty or too long
 if not metadata.get("title"):
