@@ -2,9 +2,6 @@
 
 > **An AI system that runs an entire YouTube Shorts channel — on autopilot.**
 
-[![Live Dashboard](https://img.shields.io/badge/🌐_Live_Dashboard-Visit-black?style=for-the-badge)](https://shorts-generator-projects.vercel.app/dashboard)
-[![YouTube](https://img.shields.io/badge/📺_YouTube-Watch-red?style=for-the-badge)](https://www.youtube.com/channel/UCO6JXWQh_l4Tk9ld4UIr46Q/)
-
 [![Python](https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python)](https://python.org)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=flat&logo=supabase)](https://supabase.com)
