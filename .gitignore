@@ -18,7 +18,11 @@ actions-runner/*
 
 # Secrets
 client_secrets.json
+client_secrets*.json
 token.json
+token*.json
+.env
+.env.*
 
 # IDE
 .vscode/

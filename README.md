@@ -1,93 +1,129 @@
-# 🚀 ShortsFlow: The Automated Video Empire
+# ⚡ ShortsFlow
 
-Welcome to **ShortsFlow**, the lean SaaS for generating viral YouTube Shorts automatically. This project is a monorepo containing both a high-performance Python video engine and a premium Next.js dashboard.
+> **An AI system that runs an entire YouTube Shorts channel — on autopilot.**
+
+[![Live Dashboard](https://img.shields.io/badge/🌐_Live_Dashboard-Visit-black?style=for-the-badge)](https://shorts-generator-projects.vercel.app/dashboard)
+[![YouTube](https://img.shields.io/badge/📺_YouTube-Watch-red?style=for-the-badge)](https://www.youtube.com/channel/UCO6JXWQh_l4Tk9ld4UIr46Q/)
+
+[![Python](https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python)](https://python.org)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?style=flat&logo=next.js)](https://nextjs.org)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-green?style=flat&logo=supabase)](https://supabase.com)
+[![FFmpeg](https://img.shields.io/badge/FFmpeg-Powerful_Video-orange?style=flat&logo=ffmpeg)](https://ffmpeg.org)
+
+Welcome to **ShortsFlow**, an end-to-end content automation system. It doesn't just generate text; it **writes the script → generates the voice → composes the video → uploads to YouTube, Instagram & Pinterest.**
 
 ---
 
 ## 🔥 At a Glance
-- **AI Highlight Extraction**: Turn long-form videos into shorts automatically.
-- **Smart Editing**: Auto-cropping, silence removal, and dynamic framing.
-- **Viral Modes**: 12+ content modes including Facts, News, and Cosmic (JWST).
-- **Automation**: Fully automated social media uploading via GitHub Actions.
+- **🚀 AI Clip Extraction**: Turn hours of long-form video (Podcasts, Gaming, Vlogs) into a series of high-impact, viral-ready shorts automatically.
+- **🤖 Dual LLM Support**: Use Cloud APIs (OpenAI, Hugging Face) or run locally (Ollama, local LLMs) for maximum privacy and $0 cost.
+- **✨ Smart Editing**: AI-driven face tracking (Haar Cascades), auto-cropping, and silence removal.
+- **🎬 12+ Viral Modes**: Interactive Facts (2 Truths, 1 Lie), News, Cosmic (JWST), Trivia, and more.
+- **☁️ Automated Pipeline**: Fully automated rendering and scheduling via GitHub Actions.
+- **💳 SaaS Foundation**: Integrated Authentication via Supabase and Payment ready via Stripe.
 
-> [!TIP]
-> For a deep dive into every feature and our future vision, see [PROJECT_OVERVIEW.md](file:///c:/Users/win10/.gemini/antigravity/scratch/shorts-generator/PROJECT_OVERVIEW.md)
+---
+
+## ✂️ AI Powered Clipping (Long-form to Shorts)
+This is the core power of ShortsFlow. Give it a 2-hour podcast, and it will return the top 10 most viral moments.
+
+```mermaid
+graph TD
+    A[Long-form Video] -->|Stable Whisper| B(AI Transcription)
+    B --> C{Signal Analysis}
+    C -->|Text| D[Viral Hooks & Keywords]
+    C -->|Audio| E[Loudness & Energy Deltas]
+    C -->|Visual| F[Motion & Face Tracking]
+    D & E & F --> G(Heuristic Scoring Engine)
+    G --> H{Smart Editing}
+    H -->|Auto-Crop| I[9:16 Vertical Format]
+    H -->|Tighten| J[Silence Removal]
+    I & J --> K[Viral Shorts / Highlights]
+```
+
+**How it works:**
+1.  **AI Analysis**: Scans transcripts for high-energy segments, viral hook keywords, and narrative peaks.
+2.  **Audio/Visual Signals**: Uses energy deltas and motion tracking to find "loud" or "active" moments.
+3.  **Auto-Crop**: Dynamically tracks faces and centers them for vertical 9:16 format.
+4.  **Silence Stripping**: Automatically removes "uhms", "ahs", and dead air to keep pacing fast.
+
+```bash
+# Extract the top 5 viral clips from a long video
+python main.py --source_video "./podcast.mp4" --clip_count 5 --smart_crop --tighten
+```
+
+---
+
+## 🎬 Content Modes
+Every format is a complete, standalone short — scripted, voiced, and composed entirely by AI.
+
+| Mode | What It Is |
+|---|---|
+| 🕵️ **Investigator** | Mystery-framed facts — 2 truths, 1 lie, comment to find out |
+| 📖 **Story** | First-person AI story in a consistent narrator voice |
+| 🧩 **Riddle** | Lateral thinking challenge designed to drive comments |
+| 🤔 **Would You Rather** | Split-screen dilemma with dual atmospheric backgrounds |
+| 📰 **News** | Real RSS headlines rewritten by AI with cartoon personas |
+| 💬 **Reddit Story** | Dramatic first-person AITA-style story with moral conflict |
+| 🎯 **Find It** | Visual challenge — spot the hidden target among distractors |
+| 🔢 **Odd One Out** | Spot the item that doesn't belong |
+| 🔊 **Guess The Sound** | Audio challenge with mystery reveal |
+| 🧠 **Trivia** | Single question, 3 options, dramatic reveal |
+| 💬 **Quote** | Deep cinematic quote over moody footage |
+| 🌌 **JWST** | Mind-blowing space facts using the latest James Webb images |
 
 ---
 
 ## 📂 Project Structure
-- `engine/`: The core Python logic (Script Gen, Voice Gen, Video Gen).
-- `web/`: The Next.js SaaS dashboard & API Bridge.
-- `main.py`: The local entry point and GitHub Action worker script.
-- `.github/workflows/`: Automated 6-hour posting and on-demand triggers.
+- `engine/`: Core Python modules for Scripting, Voiceover, and FFmpeg Compositing.
+- `web/`: Next.js 14 Dashboard, API routes, and Supabase integration.
+- `scripts/`: Development utilities, seeding tools, and testing scripts.
+- `samples/`: Archive of generated video samples and text logs.
+- `main.py`: Primary entry point for local generation and CI/CD workers.
 
 ---
 
-## 🛠️ How to Run
+## 🛠️ Getting Started
 
-### 1. The Python Engine (Backend)
-To generate a video manually:
+### 1. Prerequisites
+- Python 3.12+
+- FFmpeg (installed and added to your PATH)
+- Node.js 18+
+
+### 2. Basic Setup
 ```bash
+# Install engine dependencies
+pip install -r requirements.txt
+
+# Rename and fill env variables
+cp .env.example .env
+
+# Generate a video manually
 python main.py --mode FACTS --category history
 ```
-
-### 2. The Dedicated Render Server (Optional)
-If you don't want to use GitHub Actions, run this to start an HTTP listener for the website:
-```bash
-# Install server dependencies
-pip install flask python-dotenv
-
-# Start the server
-python server.py
-```
-*The server will listen on port 5000 by default.*
-
-### 2. The Web Dashboard (Frontend)
-To launch the SaaS interface:
-```bash
-cd web
-
-# Install dependencies
-npm install
-
-# Run the dev server
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) to see your dashboard.
 
 ---
 
 ## ☁️ Zero-Cost Cloud Setup
-This project uses a **Hybrid Hosting** strategy to keep your costs at $0:
-- **UI**: Hosted on Vercel.
-- **Heavy Rendering**: Performed for free by GitHub Actions.
+- **Frontend**: Hosted on Vercel.
+- **Heavy Rendering**: Powered by GitHub Actions (Free tier capacity).
 - **Database/Auth**: Powered by Supabase.
 
 ---
 
 ## 🔐 Configuration
-Rename `.env` and `web/.env.local` and add your keys:
-- `HF_API_KEY`: Hugging Face (AI Scripting).
-- `PEXELS_API_KEY`: Pexels (Background Videos).
-- `STRIPE_SECRET_KEY`: Stripe (Payments).
-- `NEXT_PUBLIC_SUPABASE_URL`: Supabase (Auth).
+Rename `.env.example` to `.env` and configure your preferences:
+
+### LLM Options (Choose One or Both)
+- **Cloud (Hugging Face)**: Set `HF_API_KEY` for high-speed generation.
+- **Local (Ollama)**: Set `LOCAL_LLM_URL=http://localhost:11434/api/chat` to run entirely on your own GPU/CPU for free.
+
+### Media & SaaS Keys
+- `PEXELS_API_KEY`: Pexels (Stock Media)
+- `STRIPE_SECRET_KEY`: Stripe (Payments)
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase (Auth/Database)
 
 ---
 
-## 🔑 Authentication
-ShortsFlow uses **Supabase Auth** for secure user management:
-- **Service**: Supabase (Free Tier).
-- **Login Methods**: Supports Email/Password and Social Login (Google/GitHub).
-- **Security**: Next.js Middleware protects dashboard routes, and Supabase RLS (Row Level Security) ensures users can only see their own videos.
-
-## ⚙️ Backend Architecture
-We use a **Dual-Server** approach:
-1.  **API Server (Next.js)**: 
-    - Handles logins, database queries, and Stripe payments.
-    - Path: `web/`
-2.  **Rendering Worker (Python/FFmpeg)**:
-    - Handles the heavy processing of video generation.
-    - Default: Runs for free on **GitHub Actions**.
-    - Optional: Can be run on your own dedicated VPS (via the `RENDER_TARGET=server` setting).
-
----
+## ⚖️ License
+This project is licensed under the **CC BY-NC-SA 4.0** (Attribution-NonCommercial-ShareAlike). See the [LICENSE](file:///c:/Users/win10/.gemini/antigravity/scratch/shorts-generator/LICENSE) file for details.

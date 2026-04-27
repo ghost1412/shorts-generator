@@ -593,13 +593,11 @@ elif mode == "GUESS_SOUND":
     bg_filename = os.path.join(session_dir, "bg_gen.mp4")
     path = get_bg_path(category + " satisfying", bg_filename)
     if path: bg_video_paths.append(path)
-<<<<<<< HEAD
 elif mode == "RIDDLE":
     bg_filename = os.path.join(session_dir, "bg_riddle.mp4")
     paths = get_bg_path(category + " background", bg_filename, target_duration=total_bg_duration)
     bg_video_paths.extend(paths)
     clue_path = None
-=======
 elif mode == "JWST":
     print("[Log] Fetching James Webb Telescope images...")
     bg_video_paths = fetch_jwst_images(num_images=random.randint(1, 4))
@@ -607,7 +605,6 @@ elif mode == "JWST":
         print("[Warning] No JWST images found, falling back to Pexels space video.")
         bg_filename = os.path.join(session_dir, "bg_jwst_fallback.mp4")
         bg_video_paths = get_bg_path("outer space james webb telescope", bg_filename)
->>>>>>> origin/analysisv2
 
 if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
     print("[Error] Failed to download any background videos.")
