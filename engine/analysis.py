@@ -843,7 +843,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
 
     if mode == "shorts":
         system_prompt = f"You are a professional social media manager. Identify high-impact viral moments. {style_instructions} {context_injection} {style_injection} {outline_injection} YOU MUST PROVIDE TIMESTAMPS FOR EVERY CLIP."
-        prompt = f"""Objective: Identify viral moments for YouTube Shorts.
+        prompt = f"""Objective: Identify up to {clip_count} distinct viral moments for YouTube Shorts.
         
         {context_injection}
         {style_injection}
@@ -855,13 +855,15 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         3. Audio Spikes (a_signal): Emotional peaks even if text is neutral.
         
         CRITICAL RULES FOR WATCHABILITY:
+        - **CLIP COUNT**: You MUST identify and extract exactly {clip_count} distinct viral clips (or as close to {clip_count} as possible, aiming for at least 12-15) covering different parts of the video. If the USER EXTRA CONTEXT mentions multiple scenes, timestamps, or parts, you MUST extract multiple separate, distinct clips for EACH requested scene/timestamp to meet the requested count. Do not be overly selective; include all moments of action, humor, or banter.
         - **HOOK FIRST**: The first 2 seconds of each clip MUST have a visual or audio 'hook'. Look for segments where 'ad' (audio delta) or 'd' (text delta) is high right at the 'start' timestamp.
         - **VIRALITY**: Prioritize high-energy, funny, or shocking moments. {style_instructions}
         - **ENGAGEMENT**: Each moment MUST be between {max(5, (target_duration or 15)-15)} and {min(59, (target_duration or 45)+15)} seconds long.
         - **TARGET**: Specifically aim for moments around {min(58, target_duration or 30)}s each for maximum flow. NEVER exceed 60 seconds.
-        - **MANDATORY**: 'start' and 'end' timestamps MUST be provided.
+        - **MANDATORY**: 'start' and 'end' timestamps MUST be provided as numbers (float/seconds).
         - **MANDATORY**: For each clip, provide a 'hook_text' (under 10 words).
         - **MANDATORY**: For each clip, identify the 'tone' (one of: action_peak, funny, fail, tense, educational, neutral).
+        - **MANDATORY**: For each clip, provide a 'viral_score' (integer between 1 and 100, representing virality/engagement potential).
         - REJECT: slow setups, generic intros, filler conversation.
         - Wrap JSON array in START_JSON and END_JSON markers.
         
@@ -924,10 +926,11 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         print(f"[Log] Sending {len(compressed_segments)} logic-filtered segments to LLM for viral curation...")
         print(f"[Log] This may take up to 2-3 minutes for large 60+ min videos. Please wait...")
         
-        # 🟢 PERFORMANCE: Adjusted dynamic_max to be more token-efficient
-        dynamic_max = min(4096, max(1024, len(compressed_segments) * 20))
+        # 🟢 PERFORMANCE: Set dynamic_max to 8192 to prevent Gemini token truncation
+        dynamic_max = 8192
         
         response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
+        print(f"[DEBUG] Raw LLM Response: {response_text}")
         print(f"[Log] LLM analysis received ({len(response_text)} chars). Processing results...")
         res_data = robust_json_parse(response_text)
         
@@ -953,6 +956,11 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         if isinstance(highlights, list) and highlights:
             for h in highlights:
                 if isinstance(h, dict) and 'start' in h and 'end' in h:
+                    try:
+                        h['start'] = float(h['start'])
+                        h['end'] = float(h['end'])
+                    except (ValueError, TypeError):
+                        continue
                     v_score = h.get('viral_score', 0)
                     if isinstance(v_score, str): v_score = int(''.join(filter(str.isdigit, v_score)) or 0)
                     h['viral_score'] = v_score
@@ -1046,14 +1054,29 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             # 🟢 DYNAMIC RECOVERY: Use top heuristic signal peaks (Text + Audio)
             fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0), reverse=True)
             
-            for f in fallback_candidates[:clip_count]:
-                valid_highlights.append({
-                    "start": f['start'],
-                    "end": f['end'],
-                    "viral_score": int(f['norm_score'] * 100),
-                    "final_score": int(f['norm_score'] * 100),
-                    "reason": "High-Signal Moment (Heuristic Fallback)"
-                })
+            if mode == "long" and target_duration:
+                accumulated_duration = 0
+                for f in fallback_candidates:
+                    seg_dur = f['end'] - f['start']
+                    if accumulated_duration >= target_duration:
+                        break
+                    valid_highlights.append({
+                        "start": f['start'],
+                        "end": f['end'],
+                        "viral_score": int(f['norm_score'] * 100),
+                        "final_score": int(f['norm_score'] * 100),
+                        "reason": "High-Signal Moment (Heuristic Fallback)"
+                    })
+                    accumulated_duration += seg_dur
+            else:
+                for f in fallback_candidates[:clip_count]:
+                    valid_highlights.append({
+                        "start": f['start'],
+                        "end": f['end'],
+                        "viral_score": int(f['norm_score'] * 100),
+                        "final_score": int(f['norm_score'] * 100),
+                        "reason": "High-Signal Moment (Heuristic Fallback)"
+                    })
             
             # Sort chronologically for playback reliability
             valid_highlights.sort(key=lambda x: x['start'])
@@ -1072,27 +1095,88 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         traceback.print_exc()
         return [{"start": 10.0, "end": 40.0, "reason": "Epic Highlight"}]
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
     
     transcript_path = transcribe_video(video_path, output_dir)
-    highlights = identify_highlights(
-        transcript_path, video_path=video_path, clip_count=clip_count, 
-        mode=mode, target_duration=target_duration, use_audio_detect=use_audio_detect,
-        style=style, user_context=user_context, style_context=style_context
-    )
+    
+    highlights_cache_path = os.path.join(output_dir, "highlights.json")
+    highlights = None
+    if use_cache and os.path.exists(highlights_cache_path):
+        try:
+            with open(highlights_cache_path, "r", encoding="utf-8") as f:
+                highlights = json.load(f)
+            print(f"[Log] Loaded cached highlights from {highlights_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached highlights: {e}")
+            
+    if highlights is None:
+        highlights = identify_highlights(
+            transcript_path, video_path=video_path, clip_count=clip_count, 
+            mode=mode, target_duration=target_duration, use_audio_detect=use_audio_detect,
+            style=style, user_context=user_context, style_context=style_context
+        )
+        try:
+            with open(highlights_cache_path, "w", encoding="utf-8") as f:
+                json.dump(highlights, f, indent=4)
+            print(f"[Log] Saved highlights to cache: {highlights_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache highlights: {e}")
     
     # 🟢 UPGRADE: Extra AI Signals for Auto-Edit & Auto-Crop (Optimized)
-    highlight_intervals = [(h['start'], h['end']) for h in highlights]
+    interest_points_cache_path = os.path.join(output_dir, "interest_points.json")
+    interest_points = {}
+    interest_points_loaded = False
+    if use_cache and smart_crop and os.path.exists(interest_points_cache_path):
+        try:
+            with open(interest_points_cache_path, "r", encoding="utf-8") as f:
+                raw_pts = json.load(f)
+                interest_points = {float(k): v for k, v in raw_pts.items()}
+            interest_points_loaded = True
+            print(f"[Log] Loaded cached interest points from {interest_points_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached interest points: {e}")
+            
+    if smart_crop and not interest_points_loaded:
+        highlight_intervals = [(h['start'], h['end']) for h in highlights]
+        print(f"[Log] Extracting interest points for {len(highlights)} segments (Auto-Crop)...")
+        interest_points = detect_interest_points(video_path, segments=highlight_intervals)
+        try:
+            with open(interest_points_cache_path, "w", encoding="utf-8") as f:
+                json.dump(interest_points, f, indent=4)
+            print(f"[Log] Saved interest points to cache: {interest_points_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache interest points: {e}")
+    elif not smart_crop:
+        print("[Log] Smart crop disabled. Skipping interest point detection to speed up extraction.")
     
-    print(f"[Log] Extracting interest points for {len(highlights)} segments (Auto-Crop)...")
-    interest_points = detect_interest_points(video_path, segments=highlight_intervals)
-    
-    print("[Log] Extracting silence intervals for Auto-Edit...")
-    audio_path = os.path.join(output_dir, "audio_mono.wav")
-    if not os.path.exists(audio_path): 
-        audio_path = extract_audio_mono(video_path, output_dir)
-    silence_intervals = detect_silence_intervals(audio_path)
+    silence_intervals_cache_path = os.path.join(output_dir, "silence_intervals.json")
+    silence_intervals = []
+    silence_intervals_loaded = False
+    if use_cache and tighten and os.path.exists(silence_intervals_cache_path):
+        try:
+            with open(silence_intervals_cache_path, "r", encoding="utf-8") as f:
+                raw_silence = json.load(f)
+                silence_intervals = [tuple(item) for item in raw_silence]
+            silence_intervals_loaded = True
+            print(f"[Log] Loaded cached silence intervals from {silence_intervals_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached silence intervals: {e}")
+            
+    if tighten and not silence_intervals_loaded:
+        print("[Log] Extracting silence intervals for Auto-Edit...")
+        audio_path = os.path.join(output_dir, "audio_mono.wav")
+        if not os.path.exists(audio_path): 
+            audio_path = extract_audio_mono(video_path, output_dir)
+        silence_intervals = detect_silence_intervals(audio_path)
+        try:
+            with open(silence_intervals_cache_path, "w", encoding="utf-8") as f:
+                json.dump(silence_intervals, f, indent=4)
+            print(f"[Log] Saved silence intervals to cache: {silence_intervals_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache silence intervals: {e}")
+    elif not tighten:
+        print("[Log] Tighten (silence removal) disabled. Skipping silence interval detection to speed up extraction.")
     
     return highlights, transcript_path, interest_points, silence_intervals

@@ -583,7 +583,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     current_time = 0
     # If we have many clips (likely from local concat experiment), use natural durations
     # Otherwise, split equally for standard staggered layouts (FACTS, STORY)
-    use_natural_stitch = len(video_paths) > 5 or mode in ["REDDIT", "TRIVIA", "QUOTE", "NEWS", "GUESS_SOUND"]
+    use_natural_stitch = len(video_paths) > 5 or mode in ["REDDIT", "TRIVIA", "QUOTE", "NEWS", "GUESS_SOUND", "TRAILER_MISSED"]
     
     for i, path in enumerate(video_paths):
         try:
@@ -1779,7 +1779,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut"):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -1800,13 +1800,18 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     os.makedirs(os.path.join(output_dir, "temp_segments"), exist_ok=True)
     
     _has_nvenc = _check_nvenc()
+    use_gpu = _has_nvenc and codec == 'libx264'
     if _has_nvenc: print("[Log] NVIDIA GPU Detected: Using NVENC for ultra-fast encoding 🚀")
     
     processes = []
     
     for i, hi in enumerate(highlights):
-        print(f"[Log] Queueing extraction for clip {i+1}/{len(highlights)}: {hi['start']:.2f}s - {hi['end']:.2f}s")
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
+        if use_cache and os.path.exists(target) and os.path.getsize(target) > 1000:
+            print(f"[Log] Segment {i} already exists at {target}. Skipping extraction.")
+            continue
+            
+        print(f"[Log] Queueing extraction for clip {i+1}/{len(highlights)}: {hi['start']:.2f}s - {hi['end']:.2f}s")
         duration = hi['end'] - hi['start']
         
         # Text burn for Landscape mode (Highlight Reels)
@@ -1840,15 +1845,15 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         target_codec = 'h264_nvenc' if use_gpu else codec
         # 🟢 UPGRADE: Intermediate quality should be higher than 'ultrafast' to prevent generation loss
         target_preset = 'p6' if use_gpu else 'veryfast'
-        # 🟢 UPGRADE: Ensure intermediate segments have high bitrate (50M for HQ) to survive re-encoding
-        intermediate_bitrate = "50M" if use_hq else "25M"
+        # 🟢 UPGRADE: Ensure intermediate segments have high quality (constant quality / low crf)
+        quality_flags = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
         
         cmd = [
             ffmpeg_exe, '-y', '-ss', str(hi['start']), '-i', source_path,
             '-t', str(duration), '-vf', vf_filter,
-            '-r', '24', # 🟢 FORCE 24FPS: Standardize extraction to prevent stuttering in MoviePy
+            '-r', '30', # 🟢 FORCE 30FPS: Standardize extraction to prevent stuttering in MoviePy & match Remotion
             '-c:v', target_codec, '-preset', target_preset,
-            '-b:v', intermediate_bitrate,
+        ] + quality_flags + [
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '192k',
             target
@@ -1872,6 +1877,11 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     from moviepy import concatenate_videoclips # Lazy import
     
     if mode == "long":
+        out = os.path.join(output_dir, "highlight_reel.mp4")
+        if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000:
+            print(f"[Log] Highlight Reel already exists at {out}. Skipping rendering.")
+            extracted_files.append(out)
+            return extracted_files
         print(f"[Log] Merging {len(highlights)} clips into Highlight Reel...")
         clips = []
         for i, hi in enumerate(highlights):
@@ -1886,7 +1896,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             
         final_reel = concatenate_videoclips(clips, method="chain")
         out = os.path.join(output_dir, "highlight_reel.mp4")
-        final_reel.write_videofile(out, fps=24, bitrate=bitrate, preset=preset, threads=8)
+        encode_codec = 'h264_nvenc' if use_gpu else codec
+        final_threads = 1 if use_gpu else 8
+        quality_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
+        final_reel.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params)
         extracted_files.append(out)
         for clip in clips: clip.close()
     else:
@@ -1897,6 +1910,32 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             task_path = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
             if not os.path.exists(task_path) or os.path.getsize(task_path) < 1000: return
             
+            out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
+            if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000:
+                print(f"[Log] Final clip {i+1} already exists at {out}. Skipping rendering.")
+                extracted_files.append(out)
+                return
+            
+            if use_remotion:
+                out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
+                print(f"[Log] Rendering Final Short {i+1} via Remotion...")
+                try:
+                    from engine.remotion_renderer import render_with_remotion
+                    render_with_remotion(
+                        audio_path=task_path,
+                        subs_path=transcript_path,
+                        output_path=out,
+                        mode="FACTS",
+                        title_text=None,
+                        background_paths=[task_path],
+                        duration=hi['end'] - hi['start'],
+                        start_offset=hi['start']
+                    )
+                    extracted_files.append(out)
+                except Exception as e:
+                    print(f"[Error] Remotion render failed for segment {i+1}: {e}")
+                return
+
             # Track all clips for explicit cleanup to prevent WinError 6 on Windows
             loop_clips = []
             sub = VideoFileClip(task_path)
@@ -2009,12 +2048,25 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             # GPU OPTIMIZATION: Final render should also use h264_nvenc if available
             encode_codec = 'h264_nvenc' if use_gpu else codec
             print(f"[Log] Rendering Final Short {i+1} ({encode_codec})...")
+            
+            orig_remove = os.remove
+            def safe_remove(path):
+                try:
+                    orig_remove(path)
+                except PermissionError:
+                    print(f"[Warning] PermissionError: Ignored failed delete of temp file: {path}")
+                except Exception as e:
+                    orig_remove(path)
+            
+            os.remove = safe_remove
             try:
                 # 🟢 STABILITY FIX: Use threads=1 for final compositing when on GPU to avoid deadlocks
                 final_threads = 1 if use_gpu else 8
-                final.write_videofile(out, fps=24, bitrate=bitrate, preset=preset, threads=final_threads, codec=encode_codec, logger=None)
+                quality_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
+                final.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params, logger=None)
                 extracted_files.append(out)
             finally:
+                os.remove = orig_remove
                 # 🟢 ROBUST CLEANUP: Explicitly close everything to avoid [WinError 6]
                 for c in overlays:
                     try: c.close()
@@ -2035,6 +2087,94 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         render_workers = min(2 if use_gpu else 4, len(highlights))
         with ThreadPoolExecutor(max_workers=render_workers) as executor:
             list(executor.map(render_short_item, enumerate(highlights)))
+            
+        if mashup:
+            out = os.path.join(output_dir, "mashup_reel.mp4")
+            if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000:
+                print(f"[Log] Mashup Reel already exists at {out}. Skipping rendering.")
+                return [out]
+                
+            print(f"[Log] Concatenating {len(highlights)} clips into Mashup Reel ({mashup_mode} mode)...")
+            clips = []
+            for i in range(len(highlights)):
+                clip_path = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
+                if not os.path.exists(clip_path) or os.path.getsize(clip_path) < 1000: continue
+                try:
+                    clip = VideoFileClip(clip_path)
+                    clips.append(clip)
+                except Exception as e:
+                    print(f"[Warning] Failed to load clip {clip_path} for mashup: {e}")
+                    continue
+            
+            if not clips:
+                print("[Error] No clips found to create mashup.")
+                return []
+            
+            if mashup_mode == "edit":
+                print("[Log] Applying premium mashup edit transitions and soundtrack...")
+                # 1. White Flash visual transitions (fade to white and from white) using high-performance effects
+                flash_clips = []
+                for idx, c in enumerate(clips):
+                    edited_clip = c
+                    # Fade out to white at the end of the clip (except the last clip)
+                    if idx < len(clips) - 1:
+                        try:
+                            edited_clip = edited_clip.with_effects([vfx.FadeOut(0.12, final_color=[255, 255, 255])])
+                        except Exception as e:
+                            print(f"[Warning] Failed to apply FadeOut to clip {idx+1}: {e}")
+                    # Fade in from white at the start of the clip (except the first clip)
+                    if idx > 0:
+                        try:
+                            edited_clip = edited_clip.with_effects([vfx.FadeIn(0.12, initial_color=[255, 255, 255])])
+                        except Exception as e:
+                            print(f"[Warning] Failed to apply FadeIn to clip {idx+1}: {e}")
+                    flash_clips.append(edited_clip)
+                
+                final_reel = concatenate_videoclips(flash_clips, method="chain")
+                
+                # 2. Whoosh SFX at boundaries
+                whoosh_audio_clips = [final_reel.audio]
+                current_time = 0
+                whoosh_path = "assets/synth_whoosh.mp3"
+                has_whoosh = os.path.exists(whoosh_path)
+                
+                for clip in clips[:-1]:
+                    current_time += clip.duration
+                    if has_whoosh:
+                        try:
+                            whoosh_clip = AudioFileClip(whoosh_path).with_start(max(0, current_time - 0.25))
+                            whoosh_audio_clips.append(whoosh_clip)
+                        except Exception as e:
+                            print(f"[Warning] Failed to add whoosh SFX at {current_time}: {e}")
+                
+                # 3. Continuous Background Music
+                music_path = "music/bg_music.mp3"
+                if os.path.exists(music_path):
+                    try:
+                        music_clip = apply_audio_ducking(None, music_path, final_reel.duration, duck_vol=0.08)
+                        if music_clip:
+                            whoosh_audio_clips.append(music_clip)
+                    except Exception as e:
+                        print(f"[Warning] Failed to add background music to mashup: {e}")
+                
+                final_audio = CompositeAudioClip(whoosh_audio_clips).with_duration(final_reel.duration)
+                final_reel = final_reel.with_audio(final_audio)
+            else:
+                final_reel = concatenate_videoclips(clips, method="chain")
+                
+            encode_codec = 'h264_nvenc' if use_gpu else codec
+            final_threads = 1 if use_gpu else 8
+            quality_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
+            
+            print(f"[Log] Rendering Mashup Reel to {out}...")
+            final_reel.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params)
+            
+            # Close all clips
+            final_reel.close()
+            for clip in clips:
+                clip.close()
+                
+            return [out]
             
     return extracted_files
 
