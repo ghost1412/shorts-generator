@@ -93,7 +93,9 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--prompt", help="Prompt for AI Music/Image generation.")
+    parser.add_argument("--ckpt_name", default="stable_audio_3_medium_base.safetensors", help="Checkpoint name for ComfyUI audio model.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
     parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
@@ -117,6 +119,9 @@ def parse_args():
     parser.add_argument("--style_context", help="Context for editing style and pacing (e.g. 'fast cuts', 'cinematic').")
     parser.add_argument("--gif_dir", help="Path to external GIF library (e.g. animated-gifs repo).")
     parser.add_argument("--hq", action="store_true", help="Enable High-Quality (Premium) enhancements (sharpening, denoising).")
+    parser.add_argument("--use_cache", action="store_true", help="Reuse cached highlights and skip existing segments/rendered clips.")
+    parser.add_argument("--mashup", action="store_true", help="Create a single mashup/remix video of all highlights instead of separate clips.")
+    parser.add_argument("--mashup_mode", choices=["attach", "edit"], default="edit", help="Assembly style for mashup: 'attach' for simple concatenation, 'edit' for premium transition effects and background music.")
     
     parser.add_argument("--use_comfy", action="store_true", help="Use local ComfyUI for premium AI backgrounds.")
     parser.add_argument("--use_ai_audio", action="store_true", help="Use local ComfyUI for premium AI music & SFX.")
@@ -132,7 +137,16 @@ def parse_args():
     # Cartoon/Persona Flags
     parser.add_argument("--cartoon", action="store_true", help="Enable cartoon-style news persona.")
     parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
+    parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
     
+    # Interactive Kids Story Creator Flags
+    parser.add_argument("--interactive", action="store_true", help="Launch interactive CLI prompt to create kids characters.")
+    parser.add_argument("--hero", help="Type of hero (e.g. teddy bear, friendly dragon).")
+    parser.add_argument("--hero_name", help="Name of the hero (e.g. Luna).")
+    parser.add_argument("--companion", help="Hero's companion (e.g. Twinkle the Pixie).")
+    parser.add_argument("--quest", help="Hero's adventure quest.")
+    parser.add_argument("--setting", help="Adventure setting (e.g. Starry Night Forest).")
+
     args = parser.parse_args()
     return args
 
@@ -164,8 +178,172 @@ if sys.platform == "win32":
     import io
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+# 🟢 Standalone AI Music Generation Mode
+if getattr(args, "mode", None) == "MUSIC":
+    import os
+    import sys
+    import time
+    from engine.comfy_bridge import generate_ai_audio, generate_cinematic_backgrounds, is_comfy_available
+    from engine.social_gen import generate_expanded_music_prompt, generate_viral_metadata
+    
+    # Check ComfyUI Availability
+    if not is_comfy_available():
+        print("[Error] ComfyUI server is not running or unreachable at the configured URL.")
+        if args.video_id and args.user_id:
+            report_status(args.video_id, args.user_id, "ComfyUI Unreachable", "Failed", None, "MUSIC")
+        sys.exit(1)
+        
+    prompt = args.prompt if args.prompt else (args.script if args.script else (args.user_context if args.user_context else "cinematic synthwave track, high quality"))
+    duration = args.target_duration if args.target_duration else 30
+    ckpt_name = args.ckpt_name if args.ckpt_name else "ace_step_v1_3.5b.safetensors"
+    
+    print(f"--- Starting Standalone AI Music Generation ---")
+    print(f"[Log] Original Prompt: '{prompt}'")
+    
+    # Expand Prompt via LLM
+    expanded_prompt = generate_expanded_music_prompt(prompt)
+    print(f"[Log] Expanded Prompt: '{expanded_prompt}'")
+    
+    if args.video_id and args.user_id:
+        report_status(args.video_id, args.user_id, f"AI Music: {prompt}", "Processing", None, "MUSIC")
+        
+    # Generate metadata for the AI music video
+    meta = generate_viral_metadata(f"AI Music Track: {expanded_prompt}", mode="MUSIC", category="music")
+    if not meta.get("title"):
+        meta["title"] = f"AI Music: {prompt[:30]} ⚡"
+    meta["title"] = meta["title"][:95]
+    
+    # Setup session directory
+    session_id = args.video_id if args.video_id else str(int(time.time()))
+    if args.session_dir:
+        session_dir = args.session_dir
+    else:
+        session_dir = os.path.join("sessions", f"music_{session_id}")
+    os.makedirs(session_dir, exist_ok=True)
+    print(f"[Log] Session directory initialized at: {session_dir}")
+
+    # Generate Audio
+    print(f"[Log] Generating AI audio...")
+    audio_path = generate_ai_audio(expanded_prompt, duration=duration, output_dir=session_dir, ckpt_name=ckpt_name)
+    if not audio_path:
+        print("[Error] AI Music generation failed.")
+        if args.video_id and args.user_id:
+            report_status(args.video_id, args.user_id, meta["title"], "Failed", None, "MUSIC")
+        sys.exit(1)
+        
+    print(f"[Log] AI Audio generated successfully at: {audio_path}")
+    
+    # Generate visual background & compile video
+    print(f"[Log] Creating visual video container for the generated music...")
+    if args.video_id and args.user_id:
+        report_status(args.video_id, args.user_id, meta["title"], "Processing", None, "MUSIC")
+        
+    # Generate matching background image
+    bg_images = generate_cinematic_backgrounds(expanded_prompt, count=1, output_dir=session_dir, width=768, height=1344)
+    if bg_images and len(bg_images) > 0:
+        bg_image_path = bg_images[0]
+        print(f"[Log] Generated matching visual background: {bg_image_path}")
+    else:
+        print("[Warning] Background generation failed, using fallback image.")
+        bg_image_path = os.path.join(session_dir, "fallback_bg.png")
+        if not os.path.exists(bg_image_path):
+            import subprocess
+            subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=1080x1920", "-frames:v", "1", bg_image_path], capture_output=True)
+            
+    # output video path
+    output_filename = f"music_short_{session_id}.mp4"
+    output_path = os.path.join("sessions", output_filename)
+    
+    # Helper to escape special characters for FFmpeg drawtext filter
+    def escape_ffmpeg_text(text):
+        escaped = text.replace('\\', '\\\\')
+        escaped = escaped.replace("'", "'\\''")
+        escaped = escaped.replace(':', '\\:')
+        escaped = escaped.replace(',', '\\,')
+        escaped = escaped.replace('%', '\\%')
+        return escaped
+
+    title_escaped = escape_ffmpeg_text(meta.get("title", "AI Music Track"))
+    import re
+    title_clean = re.sub(r'[^\x00-\x7F]+', '', title_escaped).strip()
+    if not title_clean:
+        title_clean = "AI Music Track"
+        
+    prompt_clean = re.sub(r'[^\x00-\x7F]+', '', prompt).strip()
+    prompt_escaped = escape_ffmpeg_text(prompt_clean[:40] + "..." if len(prompt_clean) > 40 else prompt_clean)
+    if not prompt_escaped:
+        prompt_escaped = "ComfyUI Generated Soundtrack"
+        
+    font_arg = "fontfile='C\\:/Windows/Fonts/arial.ttf':" if sys.platform == "win32" else ""
+    
+    # Build filter complex for scaling, cropping and title card drawing
+    video_filter = (
+        f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+        f"drawtext=text='{title_clean}':{font_arg}fontcolor=white:fontsize=54:x=(w-text_w)/2:y=(h-text_h)/2-60:box=1:boxcolor=black@0.5:boxborderw=20,"
+        f"drawtext=text='{prompt_escaped}':{font_arg}fontcolor=gray:fontsize=30:x=(w-text_w)/2:y=(h-text_h)/2+60"
+    )
+    
+    # Combine image + audio into MP4
+    print(f"[Log] Compiling final video...")
+    import subprocess
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-loop", "1", "-i", bg_image_path,
+        "-i", audio_path,
+        "-vf", video_filter,
+        "-c:v", "libx264", "-tune", "stillimage",
+        "-c:a", "aac", "-b:a", "192k",
+        "-pix_fmt", "yuv420p",
+        "-shortest", output_path
+    ]
+    
+    result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+    if result.returncode == 0 and os.path.exists(output_path):
+        print(f"[Log] SUCCESS! Combined video created: {output_path}")
+        
+        # Post-processing / upload if tracked in Supabase
+        if args.video_id and args.user_id:
+            os.environ["USER_ID"] = args.user_id
+            from engine.storage import upload_to_storage
+            
+            # Extract thumbnail
+            thumbnail_file = os.path.join(session_dir, f"thumb_music_{session_id}.jpg")
+            thumbnail_path = None
+            try:
+                subprocess.run([
+                    'ffmpeg', '-y', '-i', output_path, 
+                    '-ss', '00:00:01', '-vframes', '1', 
+                    thumbnail_file
+                ], check=True, capture_output=True)
+                thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
+                try: os.remove(thumbnail_file)
+                except: pass
+            except Exception as te:
+                print(f"[Warning] Thumbnail extraction failed: {te}")
+                
+            storage_path = upload_to_storage(output_path, args.video_id, is_video=True)
+            
+            report_status(
+                args.video_id,
+                args.user_id,
+                meta["title"],
+                "Published",
+                None,
+                "MUSIC",
+                None,
+                storage_path,
+                thumbnail_path
+            )
+        print(f"[Log] Standalone AI music job complete: {output_path}")
+        sys.exit(0)
+    else:
+        print(f"[Error] FFmpeg compilation failed: {result.stderr}")
+        if args.video_id and args.user_id:
+            report_status(args.video_id, args.user_id, meta["title"], "Failed", None, "MUSIC")
+        sys.exit(1)
+
 # 🟢 PHASE 13: AI Extraction (High-Speed FFmpeg path)
-if getattr(args, "source_video", None):
+if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     import time
     from engine.video_gen import extract_segments
     from engine.analysis import process_source_video
@@ -187,7 +365,8 @@ if getattr(args, "source_video", None):
         args.source_video, session_dir, mode=args.extract_mode, 
         clip_count=args.clip_count, target_duration=args.target_duration,
         use_audio_detect=args.use_audio_detect, style=args.style,
-        user_context=args.user_context, style_context=args.style_context
+        user_context=args.user_context, style_context=args.style_context,
+        smart_crop=args.smart_crop, tighten=args.tighten, use_cache=args.use_cache
     )
     
     # Filter signals based on user flags
@@ -205,7 +384,9 @@ if getattr(args, "source_video", None):
         is_challenge=(args.mode == "CHALLENGE"), use_hq=args.hq, 
         editing_style=args.style, gif_dir=args.gif_dir,
         interest_points=final_interest, silence_intervals=final_silence,
-        tighten_mode=args.tighten_mode
+        tighten_mode=args.tighten_mode, use_remotion=args.use_remotion, use_cache=args.use_cache,
+        mashup=args.mashup,
+        mashup_mode=args.mashup_mode
     )
     
     if not extracted_files:
@@ -216,12 +397,13 @@ if getattr(args, "source_video", None):
     print("[Log] Generating viral metadata for extracted clips...")
     highlights_meta = []
     
-    if args.extract_mode == "long":
+    if args.extract_mode == "long" or getattr(args, "mashup", False):
         summary_context = " ".join([h.get('context', h.get('reason', '')) for h in highlights[:5]])
         meta = generate_viral_metadata(summary_context, mode="STORY", category="gaming")
+        filename = "mashup_reel.mp4" if getattr(args, "mashup", False) else "highlight_reel.mp4"
         highlights_meta.append({
-            "file": "highlight_reel.mp4",
-            "title": meta.get('title', 'Viral Highlight Reel'),
+            "file": filename,
+            "title": meta.get('title', 'Viral Mashup' if getattr(args, "mashup", False) else 'Viral Highlight Reel'),
             "description": meta.get('description', ''),
             "tags": meta.get('tags', [])
         })
@@ -235,7 +417,24 @@ if getattr(args, "source_video", None):
             if "Recovered" in raw_context or "Regex" in raw_context:
                 raw_context = "Epic Gaming Moment"
             
-            meta = generate_viral_metadata(raw_context, mode="STORY", category="gaming")
+            # Auto-detect game name from session dir or source video name
+            lower_session = args.session_dir.lower() if args.session_dir else ""
+            lower_source = args.source_video.lower() if args.source_video else ""
+            game_name = "Gaming"
+            if "gta" in lower_session or "gta" in lower_source:
+                game_name = "GTA 6"
+            elif "rdr" in lower_session or "rdr" in lower_source:
+                game_name = "Red Dead Redemption 2"
+            elif "witcher" in lower_session or "witcher" in lower_source:
+                game_name = "The Witcher 3"
+                
+            content_info = {
+                "game_name": game_name,
+                "scene_description": raw_context,
+                "styles": args.style if isinstance(args.style, list) else ([args.style] if args.style else [])
+            }
+            
+            meta = generate_viral_metadata(content_info, mode="STORY", category="gaming")
             return {
                 "file": os.path.basename(extracted_files[i]),
                 "title": meta.get('title', 'Viral Moment'),
@@ -261,8 +460,8 @@ if args.script:
     print("[Log] Manual script detected. Skipping generation...")
     full_script = args.script
     mode = "STORY" # Default to story-style branding for manual scripts
-    category = "general"
-    story_data = {"title": "Manual Upload", "story": full_script}
+    category = "tech"
+    story_data = {"title": "coding setup", "story": full_script}
     facts_data = [] # Not used in story mode but kept for metadata function compatibility
 else:
     # 1. Choose Mode (Manual override or random)
@@ -274,7 +473,7 @@ else:
             ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE"],
             weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20]
         )[0]
-    if args.recap_title: mode = "MOVIE_RECAP"
+    if args.recap_title and not args.mode: mode = "MOVIE_RECAP"
     
     # 🟢 AUTO-CARTOON: Enforce character personas for all News modes
     if mode in ("NEWS", "NEWS_SERIOUS"):
@@ -288,8 +487,10 @@ else:
             print(f"[Log] Randomly selected persona: {args.persona}")
     
     # 2. Choose Category
-    categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports"]
+    categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports", "kids", "children", "bedtime"]
     category = args.category if args.category and args.category in categories else random.choice(categories)
+    if args.hero or args.interactive:
+        category = "kids"
     print(f"[Log] Generating content for category: {category}...", flush=True)
     
     try:
@@ -314,12 +515,118 @@ else:
             full_script = recap_data.get("story") or recap_data.get("script", "")
             facts_data = []
             story_data = {"title": args.recap_title, "story": full_script}
+        elif mode == "TRAILER_MISSED":
+            from engine.script_gen import generate_trailer_missed_script
+            trailer_title = args.recap_title or args.category
+            if not trailer_title and args.source_video:
+                base = os.path.splitext(os.path.basename(args.source_video))[0]
+                trailer_title = base.replace("_", " ").replace("-", " ")
+            if not trailer_title:
+                trailer_title = "the trailer"
+            
+            recap_data = generate_trailer_missed_script(trailer_title)
+            full_script = f"{recap_data['story']} ... {recap_data.get('loop_lead', 'Go back and check for yourself.')}"
+            facts_data = []
+            story_data = {"title": trailer_title, "story": full_script}
         elif mode == "STORY":
-            story_data = generate_story(category)
+            hero = args.hero
+            hero_name = args.hero_name
+            companion = args.companion
+            quest = args.quest
+            setting = args.setting
+
+            if args.interactive:
+                print("\n🌟 --- Welcome to the Interactive Children's Story Creator! --- 🌟\n")
+                print("Let's build a character together!")
+                
+                # 1. Hero selection
+                heroes = [
+                    "Sleepy Bear 🧸",
+                    "Friendly Dragon 🐉",
+                    "Brave Squirrel 🐿️",
+                    "Magic Unicorn 🦄",
+                    "Curious Fish 🐟"
+                ]
+                print("\n1. Choose a Hero type:")
+                for idx, h in enumerate(heroes):
+                    print(f"  [{idx + 1}] {h}")
+                try:
+                    choice = int(input("Enter number (1-5): "))
+                    hero = heroes[choice - 1]
+                except Exception:
+                    hero = "Sleepy Bear 🧸"
+                
+                # 2. Hero name
+                hero_name = input("\n2. Enter your Hero's name: ").strip()
+                if not hero_name:
+                    hero_name = "Luna"
+                
+                # 3. Companion selection
+                companions = [
+                    "Twinkle the Pixie 🧚",
+                    "Oliver the Wise Owl 🦉",
+                    "Barnaby the Busy Beaver 🦫",
+                    "Flutter the Rainbow Butterfly 🦋"
+                ]
+                print("\n3. Choose a friendly companion:")
+                for idx, c in enumerate(companions):
+                    print(f"  [{idx + 1}] {c}")
+                try:
+                    choice = int(input("Enter number (1-4): "))
+                    companion = companions[choice - 1]
+                except Exception:
+                    companion = "Twinkle the Pixie 🧚"
+
+                # 4. Quest selection
+                quests = [
+                    "find the lost star 🌟",
+                    "learn to fly high in the sky 🎈",
+                    "find a secret hidden treasure 💎",
+                    "help a sad friend feel better 🤝"
+                ]
+                print("\n4. Choose a magical quest:")
+                for idx, q in enumerate(quests):
+                    print(f"  [{idx + 1}] {q}")
+                try:
+                    choice = int(input("Enter number (1-4): "))
+                    quest = quests[choice - 1]
+                except Exception:
+                    quest = "find the lost star 🌟"
+
+                # 5. Setting selection
+                settings = [
+                    "Starry Night Forest 🌌",
+                    "Candy Land Hills 🍭",
+                    "Underwater Castle 🏰",
+                    "Sky Island Palace ☁️"
+                ]
+                print("\n5. Choose the setting:")
+                for idx, s in enumerate(settings):
+                    print(f"  [{idx + 1}] {s}")
+                try:
+                    choice = int(input("Enter number (1-4): "))
+                    setting = settings[choice - 1]
+                except Exception:
+                    setting = "Starry Night Forest 🌌"
+                
+                # Force category to kids
+                category = "kids"
+
+            if hero:
+                story_data = generate_story(
+                    category=category,
+                    hero=hero,
+                    hero_name=hero_name,
+                    companion=companion,
+                    quest=quest,
+                    setting=setting
+                )
+            else:
+                story_data = generate_story(category)
+
             if not story_data: sys.exit(0)
             
             # Construct script with strategic viral pauses
-            # 🟢 UPGRADE: Removed "Bot-like" title and added Seamless Loop
             full_script = f"{story_data['story']} ... {story_data.get('loop_lead', 'Hit the plus if you want more.')}"
             facts_data = [] # Not used in story mode but kept for metadata function compatibility
             print(f"[Log] Story: {story_data['story']}")
@@ -430,9 +737,16 @@ voice_file = os.path.join(session_dir, "voice.mp3")
 subs_file = os.path.join(session_dir, "subs.json")
 
 # Map vibe to an emotional voice
-selected_voice = VIBE_VOICE_MAP.get(args.vibe, "en-US-AriaNeural")
-selected_pitch = "+0Hz"
-selected_rate = "+15%"
+is_kids_story = category.lower() in ["kids", "children", "bedtime"] or bool(args.hero or args.interactive)
+if is_kids_story:
+    selected_voice = "en-US-AvaNeural"
+    selected_pitch = "+0Hz"
+    selected_rate = "+5%"
+    print(f"[Log] Kids Story Mode Active: Voice={selected_voice}, Pitch={selected_pitch}, Rate={selected_rate}")
+else:
+    selected_voice = VIBE_VOICE_MAP.get(args.vibe, "en-US-AriaNeural")
+    selected_pitch = "+0Hz"
+    selected_rate = "+15%"
 
 # Overwrite voice if Cartoon persona is active
 selected_persona = args.persona if args.persona else ("mafia_cat" if args.cartoon else None)
@@ -528,9 +842,18 @@ if mode == "FACTS":
 elif mode == "STORY":
     # 2 segments
     seg_len = total_bg_duration / 2
-    search_query = f"{category} {story_data['title']}"
+    is_custom_kids = bool(args.hero or args.interactive)
+    
     for i in range(2):
         bg_filename = os.path.join(session_dir, f"bg_story_{i}.mp4")
+        if is_custom_kids:
+            if args.use_comfy:
+                search_query = f"Whimsical Pixar style 3D render, claymation, cute colorful cartoon illustration for children, scene {i+1}: {story_data['story']}"
+            else:
+                search_query = f"{args.setting or category or 'magical forest'}"
+        else:
+            search_query = f"{category} {story_data['title']}"
+            
         paths = get_bg_path(search_query, bg_filename, target_duration=seg_len)
         bg_video_paths.extend(paths)
 elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
@@ -605,6 +928,35 @@ elif mode == "JWST":
         print("[Warning] No JWST images found, falling back to Pexels space video.")
         bg_filename = os.path.join(session_dir, "bg_jwst_fallback.mp4")
         bg_video_paths = get_bg_path("outer space james webb telescope", bg_filename)
+elif mode == "TRAILER_MISSED":
+    if not getattr(args, "source_video", None):
+        print("[Error] --source_video is required for TRAILER_MISSED mode.")
+        sys.exit(1)
+        
+    print("[Log] Extracting high-energy clips from trailer video to use as backgrounds...")
+    temp_trailer_dir = os.path.join(session_dir, "trailer_clips")
+    os.makedirs(temp_trailer_dir, exist_ok=True)
+    
+    from engine.analysis import process_source_video
+    from engine.video_gen import extract_segments
+    
+    # We want 5 highlights of about 8 seconds each
+    highlights, transcript_path, interest_points, silence_intervals = process_source_video(
+        args.source_video, temp_trailer_dir, mode="shorts", 
+        clip_count=5, target_duration=8,
+        use_audio_detect=True
+    )
+    
+    extracted_files = extract_segments(
+        args.source_video, highlights, transcript_path, temp_trailer_dir, 
+        mode="shorts", bitrate=target_bitrate, preset=target_preset, codec="libx264",
+        is_challenge=False, use_hq=args.hq, 
+        editing_style=args.style, gif_dir=args.gif_dir,
+        interest_points=interest_points, silence_intervals=None,
+        use_remotion=args.use_remotion
+    )
+    
+    bg_video_paths = extracted_files
 
 if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
     print("[Error] Failed to download any background videos.")
@@ -640,126 +992,155 @@ if args.use_ai_audio:
     else:
         print("[Warning] AI Music generation failed, falling back to stock music.")
 
-if mode == "FIND_IT" or mode == "FIND_CAT":
-    from engine.video_gen import create_game_video
-    final_video = create_game_video(
-        audio_path,
-        subs_path,
-        target_path,
-        obj_paths,
-        output_filename,
-        target_name=target_name,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset
-    )
-elif mode == "WYR":
-    from engine.video_gen import create_wyr_video
-    final_video = create_wyr_video(
-        audio_path,
-        wyr_data,
-        bg_video_paths,
-        output_filename,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset
-    )
-elif mode == "REDDIT":
-    from engine.video_gen import create_reddit_video
-    final_video = create_reddit_video(
-        audio_path,
-        subs_path,
-        reddit_data,
-        bg_video_paths,
-        output_filename,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset
-    )
-elif mode == "TRIVIA":
-    from engine.video_gen import create_trivia_video
-    final_video = create_trivia_video(
-        audio_path,
-        trivia_data,
-        bg_video_paths,
-        output_filename,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset
-    )
-elif mode == "QUOTE":
-    from engine.video_gen import create_quote_video
-    final_video = create_quote_video(
-        audio_path,
-        quote_data,
-        bg_video_paths,
-        output_filename,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset
-    )
-elif mode == "ODD_ONE_OUT":
-    from engine.video_gen import create_odd_one_out_video
-    final_video = create_odd_one_out_video(
-        audio_path,
-        target_path,
-        output_filename,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset
-    )
-elif mode == "RIDDLE":
-    from engine.video_gen import create_riddle_video
-    final_video = create_riddle_video(
-        audio_path,
-        riddle_data,
-        bg_video_paths,
-        output_filename,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset,
-        clue_path=clue_path
-    )
-elif mode == "GUESS_SOUND":
-    from engine.video_gen import create_sound_challenge_video
-    sfx_path = os.path.join(session_dir, "challenge_sfx.mp3")
-    obj_path = os.path.join(session_dir, "reveal_obj.png")
-    final_video = create_sound_challenge_video(
-        audio_path,
-        subs_path,
-        sfx_path,
-        obj_path,
-        bg_video_paths,
-        output_filename,
-        music_path=bg_music,
-        bitrate=target_bitrate,
-        preset=target_preset
+remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR"]
+if args.use_remotion and mode in remotion_supported_modes:
+    from engine.remotion_renderer import render_with_remotion
+    
+    remotion_mode = mode
+    this_or_that_data = None
+    
+    if mode == "WYR":
+        remotion_mode = "THIS_OR_THAT"
+        path_a = bg_video_paths[0] if len(bg_video_paths) > 0 else None
+        path_b = bg_video_paths[1] if len(bg_video_paths) > 1 else (path_a if path_a else None)
+        this_or_that_data = {
+            "option_a": wyr_data.get("option_a", "Option A"),
+            "option_b": wyr_data.get("option_b", "Option B"),
+            "path_a": path_a,
+            "path_b": path_b
+        }
+    
+    final_video = render_with_remotion(
+        audio_path=audio_path,
+        subs_path=subs_path,
+        output_path=output_filename,
+        mode=remotion_mode,
+        bg_music_path=bg_music,
+        title_text=args.recap_title or args.category or "ShortsFlow",
+        background_paths=bg_video_paths,
+        this_or_that=this_or_that_data
     )
 else:
-    # Check for avatar if persona is active
-    avatar_path = None
-    # 🟢 UPGRADE: Mafia Cat is now the default persona for Cartoon News
-    selected_persona = args.persona if args.persona else ("mafia_cat" if args.cartoon else None)
-    if selected_persona:
-        for ext in [".mp4", ".mov", ".png"]:
-            p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
-            if os.path.exists(p_path):
-                avatar_path = p_path
-                break
+    if mode == "FIND_IT" or mode == "FIND_CAT":
+        from engine.video_gen import create_game_video
+        final_video = create_game_video(
+            audio_path,
+            subs_path,
+            target_path,
+            obj_paths,
+            output_filename,
+            target_name=target_name,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "WYR":
+        from engine.video_gen import create_wyr_video
+        final_video = create_wyr_video(
+            audio_path,
+            wyr_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "REDDIT":
+        from engine.video_gen import create_reddit_video
+        final_video = create_reddit_video(
+            audio_path,
+            subs_path,
+            reddit_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "TRIVIA":
+        from engine.video_gen import create_trivia_video
+        final_video = create_trivia_video(
+            audio_path,
+            trivia_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "QUOTE":
+        from engine.video_gen import create_quote_video
+        final_video = create_quote_video(
+            audio_path,
+            quote_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "ODD_ONE_OUT":
+        from engine.video_gen import create_odd_one_out_video
+        final_video = create_odd_one_out_video(
+            audio_path,
+            target_path,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "RIDDLE":
+        from engine.video_gen import create_riddle_video
+        final_video = create_riddle_video(
+            audio_path,
+            riddle_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset,
+            clue_path=clue_path
+        )
+    elif mode == "GUESS_SOUND":
+        from engine.video_gen import create_sound_challenge_video
+        sfx_path = os.path.join(session_dir, "challenge_sfx.mp3")
+        obj_path = os.path.join(session_dir, "reveal_obj.png")
+        final_video = create_sound_challenge_video(
+            audio_path,
+            subs_path,
+            sfx_path,
+            obj_path,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    else:
+        # Check for avatar if persona is active
+        avatar_path = None
+        # 🟢 UPGRADE: Mafia Cat is now the default persona for Cartoon News
+        selected_persona = args.persona if args.persona else ("mafia_cat" if args.cartoon else None)
+        if selected_persona:
+            for ext in [".mp4", ".mov", ".png"]:
+                p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
+                if os.path.exists(p_path):
+                    avatar_path = p_path
+                    break
 
-    final_video = create_shorts_video(
-        audio_path, 
-        subs_path, 
-        bg_video_paths, 
-        output_filename,
-        music_path=bg_music,
-        mode=mode,
-        use_ai_audio=args.use_ai_audio,
-        bitrate=target_bitrate,
-        preset=target_preset,
-        avatar_path=avatar_path,
-        category=category
-    )
+        final_video = create_shorts_video(
+            audio_path, 
+            subs_path, 
+            bg_video_paths, 
+            output_filename,
+            music_path=bg_music,
+            mode=mode,
+            use_ai_audio=args.use_ai_audio,
+            bitrate=target_bitrate,
+            preset=target_preset,
+            avatar_path=avatar_path,
+            category=category
+        )
 
 print(f"[Log] SUCCESS! Interactive video created: {final_video}")
 

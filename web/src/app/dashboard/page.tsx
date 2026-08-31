@@ -68,6 +68,7 @@ export default function Dashboard() {
     { id: 'NEWS_SERIOUS', label: '📰 Serious News', icon: <TrendingUp size={16} />, color: 'text-blue-400', category: 'News' },
     { id: 'TREND', label: '📈 Viral Trends', icon: <TrendingUp size={16} />, color: 'text-yellow-300', category: 'Templates' },
     { id: 'CHALLENGE', label: '🫁 Breathing Game', icon: <Sparkles size={16} />, color: 'text-rose-400', category: 'Games' },
+    { id: 'MUSIC', label: '🎵 AI Music Gen', icon: <Sparkles size={16} />, color: 'text-purple-400', category: 'Templates' },
   ];
   const supabase = createClient();
 

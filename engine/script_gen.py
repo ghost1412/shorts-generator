@@ -9,6 +9,9 @@ load_dotenv()
 
 HF_API_KEY = os.getenv("HF_API_KEY")
 LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL") # Default Ollama #, "http://localhost:11434/api/chat"
+LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen3:8b")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 def get_llm_response(
     prompt,
     system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
@@ -24,13 +27,53 @@ def get_llm_response(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
+    # 0. Try Gemini API
+    if GEMINI_API_KEY:
+        try:
+            print("[Log] Attempting Gemini API...")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
+            headers = {
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": temperature,
+                    "maxOutputTokens": max_tokens,
+                    "responseMimeType": "application/json"
+                }
+            }
+            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+            res_json = response.json()
+            print(f"[DEBUG] Gemini candidates: {json.dumps(res_json.get('candidates', []), indent=2)}")
+            content = res_json["candidates"][0]["content"]["parts"][0]["text"]
+            print("[Log] Gemini API success!")
+            return content
+        except Exception as e:
+            try:
+                if 'response' in locals() and response is not None:
+                    print(f"[Warning] Gemini API failed: {e}. Response: {response.text}")
+                else:
+                    print(f"[Warning] Gemini API failed: {e}")
+            except:
+                print(f"[Warning] Gemini API failed: {e}")
+            print("Falling back to other providers...")
+
     # 1. Try Local LLM (Ollama)
     if LOCAL_LLM_URL:
         try:
             print(f"[Log] Attempting local LLM at {LOCAL_LLM_URL}...")
 
             payload = {
-                "model": "llama3.2:3b",  # 🔥 better model
+                "model": LOCAL_LLM_MODEL,  # 🔥 better model
                 "messages": messages,
                 "stream": True,
                 "options": {
@@ -156,13 +199,25 @@ def validate_mixed_facts(data):
     return isinstance(data, dict) and ("hook" in data or "facts" in data)
 
 def validate_story(data):
-    return isinstance(data, dict) and "title" in data and len(data.get("story", "").split()) > 20
+    if not isinstance(data, dict): return False
+    story = data.get("story", "")
+    if isinstance(story, list):
+        story = " ".join(story)
+    elif not isinstance(story, str):
+        story = str(story)
+    return "title" in data and len(story.split()) > 20
 
 def validate_wyr(data):
     return isinstance(data, dict) and "option_a" in data and "option_b" in data
 
 def validate_reddit(data):
-    return isinstance(data, dict) and "title" in data and len(data.get("story", "").split()) > 20
+    if not isinstance(data, dict): return False
+    story = data.get("story", "")
+    if isinstance(story, list):
+        story = " ".join(story)
+    elif not isinstance(story, str):
+        story = str(story)
+    return "title" in data and len(story.split()) > 20
 
 def validate_trivia(data):
     return isinstance(data, dict) and "question" in data and "answer" in data
@@ -232,14 +287,23 @@ def generate_mixed_facts(category="science"):
 
     return with_best_of_n(llm_call, validate_mixed_facts, n=3)
 
-def generate_story(category="general"):
+def generate_story(category="general", hero=None, hero_name=None, companion=None, quest=None, setting=None):
     """
     Generates a dramatic or emotional viral story.
+    Supports interactive/kids mode story customization.
     Returns: {"title": str, "story": str}
     """
-    selected_sub = get_sub_topic(category)
-    print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
-    prompt = f"Write a SHOCKING, high-drama 1st-person story about {selected_sub}. Focus on a bizarre personal experience. Keep it under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
+    if hero:
+        prompt = f"Write a charming, magical, and educational children's bedtime story about a hero named {hero_name or 'Buddy'} who is a {hero}. The hero's companion is a {companion or 'friend'}. Their adventure is to {quest or 'explore'} in the setting of {setting or 'a magical land'}. Focus on a fun, gentle, and heartwarming adventure with a positive moral. Keep it simple, sweet, and under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
+    else:
+        selected_sub = get_sub_topic(category)
+        print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
+        
+        is_kids = category.lower() in ["kids", "children", "bedtime", "children_story"]
+        if is_kids:
+            prompt = f"Write a charming, magical, and educational children's bedtime story about {selected_sub}. Focus on a fun, gentle, and heartwarming adventure with a positive moral. Keep it simple, sweet, and under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
+        else:
+            prompt = f"Write a SHOCKING, high-drama 1st-person story about {selected_sub}. Focus on a bizarre personal experience. Keep it under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
     
     def llm_call(attempt):
         response_text = get_llm_response(prompt, temperature=0.7, max_tokens=600)
@@ -393,7 +457,10 @@ def get_sub_topic(category):
         "wyr": ["awkward social dilemmas", "impossible survival choices", "weird superpower trade-offs", "historical alternate realities", "bizarre sensory swaps"],
         "trivia": ["unbelievable geography", "forgotten inventions", "extreme nature", "pop culture butterfly effects", "obscure mythology"],
         "quotes": ["stoic wisdom for chaos", "cinematic metaphors", "minimalist life philosophy", "forgotten ancient scrolls", "poetic nihilism"],
-        "sound_challenge": ["rare animals", "vintage machinery", "unknown instruments", "nature's whispers", "mechanical failures"]
+        "sound_challenge": ["rare animals", "vintage machinery", "unknown instruments", "nature's whispers", "mechanical failures"],
+        "kids": ["a magical forest adventure", "a friendly dragon who lost his fire", "the puppy who learned to share", "a curious squirrel and the magical acorn", "the sleepy teddy bear's adventure", "the star that forgot how to shine", "the little boat that crossed the pond", "a baby elephant learning to swim"],
+        "children": ["a magical forest adventure", "a friendly dragon who lost his fire", "the puppy who learned to share", "a curious squirrel and the magical acorn", "the sleepy teddy bear's adventure", "the star that forgot how to shine", "the little boat that crossed the pond", "a baby elephant learning to swim"],
+        "bedtime": ["a magical forest adventure", "a friendly dragon who lost his fire", "the puppy who learned to share", "a curious squirrel and the magical acorn", "the sleepy teddy bear's adventure", "the star that forgot how to shine", "the little boat that crossed the pond", "a baby elephant learning to swim"]
     }
     
     # Try direct mapping first
@@ -1024,6 +1091,46 @@ def generate_jwst_script():
         return robust_json_parse(response_text)
 
     return with_best_of_n(llm_call, validate_jwst_script, n=3)
+
+
+def generate_trailer_missed_script(title):
+    """
+    Generates a viral script about hidden details/easter eggs missed in a trailer.
+    """
+    prompt = f"""Write a viral, high-energy YouTube Shorts script about 3 hidden details, secrets, or easter eggs people missed in the trailer for "{title}".
+    
+    STRUCTURE:
+    1. THE HOOK: A shocking opening statement (e.g., "GTA 6 just changed everything, and you missed this massive detail...").
+    2. THE DETAILS: Mention 2-3 specific, mind-blowing easter eggs or hidden frames.
+    3. THE LOOP: A seamless transition loop back to the first word of the hook.
+    
+    RULES:
+    - Tone: Enthusiastic, shocking, fast-paced.
+    - Word count: Under 90 words.
+    - Format as JSON ONLY:
+    
+    {{
+      "title": "Secrets in the {title} Trailer",
+      "story": "The full voiceover script text here...",
+      "search_term": "action cinematic",
+      "loop_lead": "Go back and check for yourself..."
+    }}
+    """
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, max_tokens=600)
+        data = robust_json_parse(response_text)
+        if isinstance(data, dict) and "story" in data:
+            story = data["story"]
+            if isinstance(story, list):
+                data["story"] = " ".join(story)
+            elif not isinstance(story, str):
+                data["story"] = str(story)
+        return data
+
+    return with_best_of_n(llm_call, validate_story, n=3)
+
+
+
 
 
 if __name__ == "__main__":

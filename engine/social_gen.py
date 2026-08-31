@@ -79,6 +79,60 @@ Format as JSON ONLY:
         "title": f"Amazing {category.title()} Challenge! ✨",
         "description": f"Don't miss this incredible {category} video. Like and follow for more daily inspiration! #pinterest #viral #{category}"
     }
+def generate_expanded_music_prompt(user_prompt):
+    """
+    Enriches a simple user music description into a highly detailed, professional prompt
+    for audio generation models like Stable Audio or AudioLDM.
+    """
+    from engine.script_gen import get_llm_response, robust_json_parse
+    
+    system_instruction = """You are a professional Music Producer and Audio Engineering Prompt Expert.
+Your job is to expand a simple, basic music or sound effect query into a highly descriptive, detailed prompt suitable for professional Text-to-Audio (T2A) models.
+
+Respond ONLY with a JSON object in this format:
+{
+  "expanded_prompt": "<expanded prompt here>"
+}
+
+Guidelines:
+1. Describe the genre, mood, tempo (BPM), and primary instruments (e.g. Rhodes piano, sub-bass, sidechained drums, synthesized pads).
+2. If the input specifies vocals, singing, or voice, put the vocals front-and-center in the description (e.g., "clear female lead vocals singing", "expressive vocals") and make sure they are prominent.
+3. Use professional production and audio quality terms (e.g. "warm vinyl crackle", "reverb-drenched", "analog warmth", "low-pass filter", "high-fidelity studio recording").
+4. Avoid vague marketing buzzwords like "amazing", "beautiful", "epic". Describe the sonic texture instead.
+5. Keep the output relatively concise but dense with descriptive words (max 60-70 words).
+
+Examples:
+- Input: "lofi hiphop"
+  Output: {"expanded_prompt": "chill lofi hip hop track, warm dusty rhodes keys, sidechained boom-bap drum loop, nostalgic vinyl crackle, mellow sub-bass, 85 bpm, relaxed cozy mood, studio master"}
+- Input: "heavy rock"
+  Output: {"expanded_prompt": "energetic hard rock, distorted electric guitar riff, punchy acoustic drums, heavy driving bassline, high energy, fast tempo, garage rock style, raw stereo recording"}
+- Input: "pop song with female vocals"
+  Output: {"expanded_prompt": "clear female lead vocals singing a melodic line, upbeat pop track, shimmering electric piano, driving drums, warm analog bassline, 120 bpm, polished radio production, studio master"}
+"""
+    
+    full_prompt = f"{system_instruction}\n\nInput: \"{user_prompt}\"\nOutput:"
+    
+    try:
+        output = get_llm_response(
+            full_prompt,
+            system_prompt="You are a professional music prompt engineer. Output raw JSON only.",
+            temperature=0.7,
+            max_tokens=4000
+        )
+        data = robust_json_parse(output)
+        if data and "expanded_prompt" in data:
+            expanded = data["expanded_prompt"].strip()
+            print(f"[SocialGen] Expanded prompt: '{user_prompt}' -> '{expanded}'")
+            return expanded
+        
+        # Fallback if parse failed
+        cleaned = output.strip().strip('"').strip("'")
+        if cleaned:
+            return cleaned
+        return user_prompt
+    except Exception as e:
+        print(f"[Warning] Prompt expansion failed: {e}. Using original user prompt.")
+        return user_prompt
 
 def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     """
@@ -104,6 +158,20 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     elif mode == "JWST":
         input_text = str(content_info)
         task_desc = "a mind-blowing space exploration video featuring new James Webb Telescope images."
+    elif mode == "MUSIC":
+        input_text = str(content_info)
+        task_desc = "a viral AI generated music track video showcase."
+    elif category == "gaming":
+        if isinstance(content_info, dict):
+            game_name = content_info.get("game_name", "GTA 6")
+            scene = content_info.get("scene_description", "")
+            styles = content_info.get("styles", [])
+            style_str = f" with {', '.join(styles)} style" if styles else ""
+            input_text = f"Game: {game_name}\nScene/Highlight Content: {scene}\nStyle Context: {style_str}"
+            task_desc = f"a viral gaming highlight clip of {game_name}{style_str}."
+        else:
+            input_text = str(content_info)
+            task_desc = "a gaming highlight clip."
     else:
         input_text = str(content_info)
         task_desc = "a story."
@@ -113,19 +181,18 @@ Generate a VIRAL title, high-retention description, and trending SEO tags for {t
 {input_text}
 
 CRITICAL SEO RULES:
-1. Title: Must be "Pattern-Interrupting". 
+1. Title: Must be "Pattern-Interrupting" and highly relevant to the actual scene.
    - For FACTS/CHALLENGE: Use "99% MISS THIS! 🛑" or "99.9% FAIL! 😱" or "Can You Spot the Lie? 🤯" as the primary hook.
    - For NEWS: Start with "BREAKING: [Headline] 🚨" or "DEVELOPING: [Headline] 🚨".
-   - For STORY/EXTRACT: DO NOT use "99% fail" or "Spot the lie". Instead, use "The Moment Everyone Missed... 😱" or "Wait for the ending... 🗿" or "POV: [Context] 🤯".
+   - For MUSIC: Use catchy music hooks like "Rate this AI track 1-10! 🎧", "This beat goes way too hard! 🔥", "POV: Listening to this AI track... 🤯", or "This AI music is out of this world! 🚀".
+   - For GAMING/STORY/EXTRACT: DO NOT use generic "99% fail" or "Spot the lie" or music tags. Instead, use specific emotional hooks about the actual action in the scene, for example: "Lucia and Jason ALMOST got busted! 🚔", "POV: GTA 6 Gas Station Shootout 💥", "This GTA 6 detail changes everything... 🤯", or "Lucia's grenade escape was insane! 💀". Include the game name (e.g. 'GTA 6' or 'GTA VI') and key characters/events in the title.
    - Keep it under 60 chars. Use extreme emotional hooks.
 2. Description: 
-   - First line must be a CTA (e.g., "Comment your guess or you owe me a sub!").
-   - For NEWS, first line should be "Stay tuned for more updates on this! 🚨"
-   - For STORY, first line should be "This moment was absolutely insane! 😱"
-   - Include 3 paragraphs: The Hook, The Details, The Community Call. 
+   - First line must be an engaging, high-retention CTA (e.g., "This AI track is an absolute masterpiece! 😱 Comment your thoughts or you owe me a sub!" for music mode, or gaming specific hooks for gaming mode).
+   - Include 3 short paragraphs: The Hook (why they should watch), The Details (what happened), The Community Call (ask them to subscribe/comment). 
    - Use emojis liberally but strategically.
-   - Include EXPLICIT tags in description: #shorts #trending #viral + 3 specific to {category}.
-3. Tags: 15-20 highly relevant, high-volume SEO keywords.
+   - Include EXPLICIT tags in description: #shorts #trending #viral + 3 specific to the video category (e.g., #aimusic #music #beats for music mode, #gta6 #gta #gaming for gaming mode).
+3. Tags: 15-20 highly relevant, high-volume SEO keywords suitable for the content.
 
 Format as JSON ONLY:
 {{
@@ -188,6 +255,13 @@ Format as JSON ONLY:
             "title": f"BREAKING NEWS: {category.upper()} UPDATE! 🚨 #shorts #news",
             "description": f"New developing story. Make sure you're following for more daily updates on this! 🚨\n\n#breakingnews #latest #updates",
             "tags": [category, "shorts", "news", "breaking", "latest", "update"]
+        }
+    
+    if mode == "MUSIC":
+        return {
+            "title": "This AI music is out of this world! 🎧 #shorts #music",
+            "description": "Check out this incredible AI generated music track! Let me know what you think in the comments. 🗿\n\n#aimusic #beats #trending",
+            "tags": ["music", "aimusic", "shorts", "beats", "trending", category]
         }
     
     # Default for FACTS or unknown
