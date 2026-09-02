@@ -561,6 +561,99 @@ def apply_ken_burns(clip, duration):
     cropped = zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
     return cropped.image_transform(np.ascontiguousarray)
 
+def render_manim_scene(script_content, output_dir, extract_mode="shorts"):
+    """
+    Renders a Manim scene from a python script content.
+    Supports extract_mode='shorts' (vertical 9:16) or 'long' (horizontal 16:9).
+    Returns the path to the generated video.
+    """
+    import subprocess
+    import shutil
+    
+    os.makedirs(output_dir, exist_ok=True)
+    script_path = os.path.join(output_dir, "temp_explainer.py")
+
+    # Inject color & rate_func aliases for Manim CE compatibility to prevent NameErrors (e.g. CYAN, ease_in_out_sine, ORANGE_E)
+    color_header = """
+# Compatibility color & rate_func aliases
+CYAN = "#00FFFF"
+MAGENTA = "#FF00FF"
+LIME = "#00FF00"
+NAVY = "#000080"
+INDIGO = "#4B0082"
+VIOLET = "#EE82EE"
+BROWN = "#8B4513"
+CORAL = "#FF7F50"
+CRIMSON = "#DC143C"
+TURQUOISE = "#40E0D0"
+OLIVE = "#808000"
+
+ORANGE_E = "#C85A00"
+ORANGE_A = "#FFA500"
+ORANGE_B = "#FF8C00"
+ORANGE_C = "#FF7F00"
+ORANGE_D = "#E65100"
+PINK_E = "#C71585"
+GOLD_E = "#996515"
+
+for _c_base in ["ORANGE", "PINK", "GOLD", "YELLOW", "RED", "BLUE", "GREEN", "PURPLE", "TEAL"]:
+    for _suffix in ["_A", "_B", "_C", "_D", "_E"]:
+        _c_name = _c_base + _suffix
+        if _c_name not in globals():
+            globals()[_c_name] = globals()[_c_base] if _c_base in globals() else "#FF8C00"
+
+try:
+    from manim.utils.rate_functions import *
+except Exception:
+    pass
+
+for _rf in ["ease_in_out_sine", "ease_in_sine", "ease_out_sine", "ease_in_out_quad", "ease_in_quad", "ease_out_quad", "ease_in_out_cubic", "ease_in_cubic", "ease_out_cubic"]:
+    if _rf not in globals():
+        globals()[_rf] = smooth
+"""
+    if "from manim import *" in script_content:
+        script_content = script_content.replace("from manim import *", "from manim import *" + color_header)
+    else:
+        script_content = color_header + script_content
+
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(script_content)
+        
+    print(f"[Log] Rendering Manim scene from {script_path} (Mode: {extract_mode})...")
+    
+    # Run Manim: for shorts mode, pass -r 720,1280 for vertical 9:16 ratio
+    if extract_mode == "shorts":
+        cmd = ["manim", "-qm", "-r", "720,1280", "--media_dir", output_dir, script_path, "ExplainerScene"]
+    else:
+        cmd = ["manim", "-qm", "--media_dir", output_dir, script_path, "ExplainerScene"]
+    
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        final_path = os.path.join(output_dir, "manim_output.mp4")
+        
+        # Search output directory for rendered MP4
+        videos_dir = os.path.join(output_dir, "videos")
+        if os.path.exists(videos_dir):
+            for root, dirs, files in os.walk(videos_dir):
+                for file in files:
+                    if file.endswith(".mp4"):
+                        found_file = os.path.join(root, file)
+                        shutil.copy(found_file, final_path)
+                        return final_path
+
+        # Fallback check
+        expected_output_dir = os.path.join(output_dir, "videos", "temp_explainer", "720p30")
+        expected_file = os.path.join(expected_output_dir, "ExplainerScene.mp4")
+        if os.path.exists(expected_file):
+            shutil.copy(expected_file, final_path)
+            return final_path
+        else:
+            print(f"[Error] Manim output not found under {videos_dir}")
+            return None
+    except subprocess.CalledProcessError as e:
+        print(f"[Error] Manim failed: {e.stderr}")
+        return None
+
 def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium", avatar_path=None, category="general", interest_points=None, silence_intervals=None, tighten_mode="cut"):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
