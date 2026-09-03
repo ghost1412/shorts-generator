@@ -381,8 +381,9 @@ def generate_story(category="general", hero=None, hero_name=None, companion=None
     if hero:
         prompt = f"Write a charming, magical, and educational children's bedtime story about a hero named {hero_name or 'Buddy'} who is a {hero}. The hero's companion is a {companion or 'friend'}. Their adventure is to {quest or 'explore'} in the setting of {setting or 'a magical land'}. Focus on a fun, gentle, and heartwarming adventure with a positive moral. Keep it simple, sweet, and under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
     else:
-        selected_sub = get_sub_topic(category)
-        print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
+        known_cats = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "facts", "wyr", "trivia", "quotes", "sound_challenge", "kids", "children", "bedtime"]
+        selected_sub = category if (len(category.split()) > 1 or category.lower() not in known_cats) else get_sub_topic(category)
+        print(f"[Log] STORY: Selected sub-topic/prompt: {selected_sub}")
         
         is_kids = category.lower() in ["kids", "children", "bedtime", "children_story"]
         if is_kids:

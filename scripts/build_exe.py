@@ -33,15 +33,21 @@ def build_standalone_exe():
         "stable_whisper",
         "moviepy",
         "scipy",
-        "tkinter",
-        "ttk"
+        "customtkinter",
+        "manim",
+        "engine.analysis",
+        "engine.script_gen",
+        "engine.video_gen",
+        "engine.voice_gen"
     ]
     
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--onefile",
+        "--onedir",
         "--noconsole",
         "--name", output_name,
+        "--collect-all", "customtkinter",
+        "--collect-all", "manim",
         "gui_app.py"
     ]
     

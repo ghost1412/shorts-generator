@@ -85,10 +85,42 @@ class ModernShortsGeneratorUI(ctk.CTk):
         gpu_badge.pack(side="right", padx=20, pady=15)
 
     def build_llms_tab(self):
+        # 1. API Keys & Provider Settings Card
+        keys_card = ctk.CTkFrame(self.tab_llms, fg_color="#1E293B", corner_radius=10)
+        keys_card.pack(fill="x", padx=15, pady=(10, 5))
+
+        ctk.CTkLabel(keys_card, text="🔑 API Keys & Provider Integration", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 2))
+        ctk.CTkLabel(keys_card, text="Paste your custom Gemini, HuggingFace, or Stock API keys below to integrate your own accounts.", font=ctk.CTkFont(size=11), text_color="#94A3B8").pack(anchor="w", padx=15, pady=(0, 10))
+
+        grid_keys = ctk.CTkFrame(keys_card, fg_color="transparent")
+        grid_keys.pack(fill="x", padx=15, pady=(0, 10))
+
+        # Gemini API Key
+        ctk.CTkLabel(grid_keys, text="⚡ Gemini API Key:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#38BDF8").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=6)
+        self.gemini_key_entry = ctk.CTkEntry(grid_keys, placeholder_text="Paste your Gemini API Key (e.g. AIzaSy...)", width=450, show="*")
+        self.gemini_key_entry.insert(0, os.getenv("GEMINI_API_KEY", ""))
+        self.gemini_key_entry.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=6)
+
+        # HuggingFace API Key
+        ctk.CTkLabel(grid_keys, text="🤗 HuggingFace Key:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#FBBF24").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=6)
+        self.hf_key_entry = ctk.CTkEntry(grid_keys, placeholder_text="Paste your HuggingFace Token (hf_...)", width=450, show="*")
+        self.hf_key_entry.insert(0, os.getenv("HF_API_KEY", ""))
+        self.hf_key_entry.grid(row=1, column=1, sticky="w", padx=(0, 10), pady=6)
+
+        # Pexels API Key
+        ctk.CTkLabel(grid_keys, text="📹 Pexels Stock Key:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#34D399").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=6)
+        self.pexels_key_entry = ctk.CTkEntry(grid_keys, placeholder_text="Paste your Pexels Stock API Key", width=450, show="*")
+        self.pexels_key_entry.insert(0, os.getenv("PEXELS_API_KEY", ""))
+        self.pexels_key_entry.grid(row=2, column=1, sticky="w", padx=(0, 10), pady=6)
+
+        save_btn = ctk.CTkButton(grid_keys, text="💾 Save API Keys", width=140, fg_color="#0284C7", hover_color="#0369A1", command=self.save_api_keys)
+        save_btn.grid(row=0, column=2, rowspan=3, padx=15, pady=6, sticky="ns")
+
+        # 2. Model Status & Cascading Hierarchy Card
         card = ctk.CTkFrame(self.tab_llms, fg_color="#1E293B", corner_radius=10)
         card.pack(fill="both", expand=True, padx=15, pady=10)
 
-        ctk.CTkLabel(card, text="🤖 Integrated AI LLMs & Transcription Models", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 5))
+        ctk.CTkLabel(card, text="🤖 Integrated AI LLMs & Cascading Fallback Hierarchy", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 5))
         ctk.CTkLabel(card, text="ShortsFlow AI automatically cascades across these models for maximum intelligence and zero downtime.", text_color="#94A3B8").pack(anchor="w", padx=15, pady=(0, 15))
 
         # Model Grid Cards
@@ -100,7 +132,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
         m1.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
 
         ctk.CTkLabel(m1, text="⚡ Google Gemini API", font=ctk.CTkFont(size=13, weight="bold"), text_color="#38BDF8").pack(anchor="w", padx=12, pady=(10, 2))
-        ctk.CTkLabel(m1, text="Models: gemini-3.7-flash, gemini-3.5-flash\nStatus: Integrated Primary API\nRole: Viral script generation & narrative extractions", font=ctk.CTkFont(size=11), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=12, pady=(0, 10))
+        ctk.CTkLabel(m1, text="Models: gemini-3.7-flash, gemini-3.6-flash\nStatus: Integrated Primary API\nRole: Viral script generation & narrative extractions", font=ctk.CTkFont(size=11), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=12, pady=(0, 10))
 
         # 2. Local Ollama LLM
         m2 = ctk.CTkFrame(grid, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#10B981")
@@ -122,6 +154,40 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
         ctk.CTkLabel(m4, text="🎙️ Faster-Whisper GPU Engine", font=ctk.CTkFont(size=13, weight="bold"), text_color="#C084FC").pack(anchor="w", padx=12, pady=(10, 2))
         ctk.CTkLabel(m4, text="Models: Whisper Medium/Large-v3 (FP16 CUDA)\nStatus: NVIDIA RTX GPU Accelerated (~10x speed)\nRole: Word-level timestamped transcription", font=ctk.CTkFont(size=11), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=12, pady=(0, 10))
+
+    def save_api_keys(self):
+        gemini_key = self.gemini_key_entry.get().strip()
+        hf_key = self.hf_key_entry.get().strip()
+        pexels_key = self.pexels_key_entry.get().strip()
+
+        if gemini_key: os.environ["GEMINI_API_KEY"] = gemini_key
+        if hf_key: os.environ["HF_API_KEY"] = hf_key
+        if pexels_key: os.environ["PEXELS_API_KEY"] = pexels_key
+
+        env_file = ".env"
+        env_vars = {}
+        if os.path.exists(env_file):
+            try:
+                with open(env_file, "r", encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        if "=" in line and not line.strip().startswith("#"):
+                            parts = line.strip().split("=", 1)
+                            env_vars[parts[0].strip()] = parts[1].strip()
+            except Exception:
+                pass
+
+        if gemini_key: env_vars["GEMINI_API_KEY"] = gemini_key
+        if hf_key: env_vars["HF_API_KEY"] = hf_key
+        if pexels_key: env_vars["PEXELS_API_KEY"] = pexels_key
+
+        try:
+            with open(env_file, "w", encoding="utf-8") as f:
+                for k, v in env_vars.items():
+                    f.write(f"{k}={v}\n")
+        except Exception as e:
+            print(f"[Warning] Failed to write .env file: {e}")
+
+        messagebox.showinfo("ShortsFlow AI", "✅ API Keys saved successfully!\nYour custom Gemini API Key will be used for all video generations.")
 
     def build_clipping_tab(self):
         card1 = ctk.CTkFrame(self.tab_clipping, fg_color="#1E293B", corner_radius=10)
@@ -593,7 +659,25 @@ class ModernShortsGeneratorUI(ctk.CTk):
             self.log(f"   {' '.join(cmd)}")
             self.log("============================================================\n")
 
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
+            if hasattr(self, "gemini_key_entry") and self.gemini_key_entry.get().strip():
+                env["GEMINI_API_KEY"] = self.gemini_key_entry.get().strip()
+            if hasattr(self, "hf_key_entry") and self.hf_key_entry.get().strip():
+                env["HF_API_KEY"] = self.hf_key_entry.get().strip()
+            if hasattr(self, "pexels_key_entry") and self.pexels_key_entry.get().strip():
+                env["PEXELS_API_KEY"] = self.pexels_key_entry.get().strip()
+
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+                env=env
+            )
 
             for line in proc.stdout:
                 self.after(0, self.log, line.strip())

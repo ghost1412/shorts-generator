@@ -621,6 +621,7 @@ else:
             print(f"[Log] Randomly selected persona: {args.persona}")
     
     # 2. Choose Category
+    categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports", "kids", "children", "bedtime"]
     category = args.category if args.category and args.category in categories else random.choice(categories)
     topic = args.prompt if args.prompt else category
     if args.hero or args.interactive:
@@ -762,7 +763,7 @@ else:
                     setting=setting
                 )
             else:
-                story_data = generate_story(category)
+                story_data = generate_story(topic if topic else category)
 
             if not story_data: sys.exit(0)
             

@@ -24,6 +24,11 @@ token*.json
 .env
 .env.*
 
+# PyInstaller & Build Temp Files
+build/
+*.spec
+*.log
+
 # IDE
 .vscode/
 .idea/
