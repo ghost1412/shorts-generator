@@ -26,6 +26,7 @@ token*.json
 
 # PyInstaller & Build Temp Files
 build/
+dist/
 *.spec
 *.log
 
