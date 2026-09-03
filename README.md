@@ -135,4 +135,9 @@ Rename `.env.example` to `.env` and configure your preferences:
 ---
 
 ## ⚖️ License
-This project is licensed under the **CC BY-NC-SA 4.0** (Attribution-NonCommercial-ShareAlike). See the [LICENSE](file:///c:/Users/win10/.gemini/antigravity/scratch/shorts-generator/LICENSE) file for details.
+License
+License
+
+This project is licensed under the MIT License.
+
+You may use, modify, distribute, and use this project commercially, including for monetized YouTube channels, YouTube Shorts, SaaS applications, client projects, and paid services.
