@@ -143,6 +143,10 @@ def parse_args():
     parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
     
+    # Provider & Media Overrides
+    parser.add_argument("--use_ollama", action="store_true", help="Force local Ollama LLM execution.")
+    parser.add_argument("--bg_media", help="Path to custom local background image (.jpg, .png) or video (.mp4, .mov).")
+    
     # Interactive Kids Story Creator Flags
     parser.add_argument("--interactive", action="store_true", help="Launch interactive CLI prompt to create kids characters.")
     parser.add_argument("--hero", help="Type of hero (e.g. teddy bear, friendly dragon).")
@@ -155,6 +159,10 @@ def parse_args():
     return args
 
 args = parse_args()
+
+if getattr(args, "use_ollama", False):
+    os.environ["FORCE_OLLAMA"] = "true"
+    print("[Log] 🦙 FORCING Local Ollama LLM execution.")
 
 # Quality Mapping (Overridden by manual flags if present)
 bitrate_map = {"low": "4M", "medium": "12M", "high": "25M", "ultra": "50M"}
@@ -947,6 +955,11 @@ def get_video_duration(path):
         return 10.0 # Fallback
 
 def get_bg_path(query, out_path, target_duration=15.0):
+    if getattr(args, "bg_media", None) and os.path.exists(args.bg_media):
+        from engine.media_gen import download_background_video
+        path = download_background_video(query, output_path=out_path, custom_bg=args.bg_media)
+        return [path] if path else []
+
     if is_local_experiment and local_bg_pool:
         # Pick one or more random videos from the local pool until target_duration is covered
         selected_paths = []

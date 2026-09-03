@@ -113,8 +113,12 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.pexels_key_entry.insert(0, os.getenv("PEXELS_API_KEY", ""))
         self.pexels_key_entry.grid(row=2, column=1, sticky="w", padx=(0, 10), pady=6)
 
+        # Force Ollama Switch
+        self.ollama_switch = ctk.CTkSwitch(grid_keys, text="🦙 Force Local Ollama LLM (Bypass Cloud API for Offline/Privacy)")
+        self.ollama_switch.grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
+
         save_btn = ctk.CTkButton(grid_keys, text="💾 Save API Keys", width=140, fg_color="#0284C7", hover_color="#0369A1", command=self.save_api_keys)
-        save_btn.grid(row=0, column=2, rowspan=3, padx=15, pady=6, sticky="ns")
+        save_btn.grid(row=0, column=2, rowspan=4, padx=15, pady=6, sticky="ns")
 
         # 2. Model Status & Cascading Hierarchy Card
         card = ctk.CTkFrame(self.tab_llms, fg_color="#1E293B", corner_radius=10)
@@ -411,8 +415,19 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
         # Custom Script Box
         ctk.CTkLabel(grid, text="Custom Script (Optional):").grid(row=2, column=0, sticky="nw", padx=(0, 10), pady=5)
-        self.script_box = ctk.CTkTextbox(grid, width=480, height=80)
+        self.script_box = ctk.CTkTextbox(grid, width=480, height=75)
         self.script_box.grid(row=2, column=1, columnspan=2, sticky="w", pady=5)
+
+        # Custom Background Media (Image or Video)
+        ctk.CTkLabel(grid, text="Custom BG Media:").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=5)
+        bg_frame = ctk.CTkFrame(grid, fg_color="transparent")
+        bg_frame.grid(row=3, column=1, columnspan=2, sticky="w", pady=5)
+
+        self.bg_media_entry = ctk.CTkEntry(bg_frame, placeholder_text="Path to custom background video (.mp4/.mov) or image (.png/.jpg)...", width=380)
+        self.bg_media_entry.pack(side="left", padx=(0, 10))
+
+        browse_bg_btn = ctk.CTkButton(bg_frame, text="📁 Browse Media", width=100, command=self.browse_bg_media)
+        browse_bg_btn.pack(side="left")
 
         # Category, Persona, Vibe
         opt_grid = ctk.CTkFrame(card, fg_color="transparent")
@@ -541,6 +556,12 @@ class ModernShortsGeneratorUI(ctk.CTk):
             self.batch_entry.delete(0, "end")
             self.batch_entry.insert(0, fn)
 
+    def browse_bg_media(self):
+        fn = filedialog.askopenfilename(filetypes=[("Media Files", "*.mp4 *.mov *.png *.jpg *.jpeg *.webp"), ("All Files", "*.*")])
+        if fn:
+            self.bg_media_entry.delete(0, "end")
+            self.bg_media_entry.insert(0, fn)
+
     def log(self, msg):
         self.log_text.insert("end", msg + "\n")
         self.log_text.see("end")
@@ -653,6 +674,10 @@ class ModernShortsGeneratorUI(ctk.CTk):
             if self.remotion_switch.get(): cmd.append("--use_remotion")
             if self.comfy_switch.get(): cmd.append("--use_comfy")
             if self.skip_upload_switch.get(): cmd.append("--skip-upload")
+            if hasattr(self, "ollama_switch") and self.ollama_switch.get(): cmd.append("--use_ollama")
+
+            bg_media = self.bg_media_entry.get().strip() if hasattr(self, "bg_media_entry") else ""
+            if bg_media: cmd.extend(["--bg_media", bg_media])
 
             self.log("============================================================")
             self.log(f"[ShortsFlow Studio] Executing Command:")

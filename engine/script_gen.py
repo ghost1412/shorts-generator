@@ -27,8 +27,9 @@ def get_llm_response(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    # 0. Try Gemini API
-    if GEMINI_API_KEY:
+    # 0. Try Gemini API (unless FORCE_OLLAMA is set)
+    force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"]
+    if not force_ollama and GEMINI_API_KEY:
         gemini_models = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
         for g_model in gemini_models:
             try:
