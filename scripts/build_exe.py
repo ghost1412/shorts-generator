@@ -2,9 +2,16 @@ import os
 import sys
 import subprocess
 
+# Force UTF-8 stdout for Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 def build_standalone_exe():
     print("============================================================")
-    print("      🚀 ShortsGenerator Executable Build Script 🚀")
+    print("      ShortsGenerator Executable Build Script")
     print("============================================================")
     
     # 1. Ensure PyInstaller is installed
@@ -15,7 +22,7 @@ def build_standalone_exe():
         print("[Log] Installing PyInstaller...")
         subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
 
-    output_name = "ShortsGenerator"
+    output_name = "ShortsGeneratorUI"
     hidden_imports = [
         "yt_dlp",
         "requests",
@@ -25,29 +32,30 @@ def build_standalone_exe():
         "numpy",
         "stable_whisper",
         "moviepy",
-        "scipy"
+        "scipy",
+        "tkinter",
+        "ttk"
     ]
     
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",
+        "--noconsole",
         "--name", output_name,
-        "--console"
+        "gui_app.py"
     ]
     
     for imp in hidden_imports:
         cmd.extend(["--hidden-import", imp])
 
-    cmd.append("main.py")
-
-    print(f"[Log] Building executable: {output_name}.exe ...")
+    print(f"[Log] Building Desktop GUI Executable: {output_name}.exe ...")
     print(f"[Log] Running command: {' '.join(cmd)}")
     
     res = subprocess.run(cmd)
     if res.returncode == 0:
         exe_path = os.path.join("dist", f"{output_name}.exe")
         print("\n============================================================")
-        print(f"🎉 BUILD COMPLETE! Executable generated at:")
+        print(f"BUILD COMPLETE! GUI Executable generated at:")
         print(f"   --> {os.path.abspath(exe_path)}")
         print("============================================================")
     else:
