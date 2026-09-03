@@ -350,7 +350,7 @@ if getattr(args, "mode", None) == "EXPLAINER":
     
     extract_mode = getattr(args, "extract_mode", "shorts") or "shorts"
     print(f"--- Starting Standalone EXPLAINER Animation Generation (Extract Mode: {extract_mode}) ---")
-    topic = args.category if args.category else (args.prompt if args.prompt else "Pythagorean Theorem")
+    topic = args.prompt if args.prompt else (args.category if args.category else "Pythagorean Theorem")
     print(f"[Log] Explaining topic: '{topic}'")
     
     if args.video_id and args.user_id:
@@ -621,14 +621,20 @@ else:
             print(f"[Log] Randomly selected persona: {args.persona}")
     
     # 2. Choose Category
-    categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports", "kids", "children", "bedtime"]
     category = args.category if args.category and args.category in categories else random.choice(categories)
+    topic = args.prompt if args.prompt else category
     if args.hero or args.interactive:
         category = "kids"
-    print(f"[Log] Generating content for category: {category}...", flush=True)
+    print(f"[Log] Generating content for category/topic: '{topic}' (Category: {category})...", flush=True)
     
     try:
-        if mode == "FACTS":
+        if mode == "EXPLAINER":
+            from engine.script_gen import generate_manim_script
+            manim_data = generate_manim_script(topic, extract_mode=args.extract_mode)
+            full_script = manim_data["voiceover_text"]
+            facts_data = []
+            print(f"[Log] EXPLAINER Script generated for topic '{topic}': Title='{manim_data['title']}'")
+        elif mode == "FACTS":
             facts_res = generate_mixed_facts(category)
             hook = facts_res["hook"]
             facts_data = facts_res["facts"]
@@ -1062,6 +1068,11 @@ elif mode == "JWST":
         print("[Warning] No JWST images found, falling back to Pexels space video.")
         bg_filename = os.path.join(session_dir, "bg_jwst_fallback.mp4")
         bg_video_paths = get_bg_path("outer space james webb telescope", bg_filename)
+elif mode == "EXPLAINER":
+    print("[Log] Rendering Manim animation code...")
+    from engine.video_gen import render_manim_scene
+    manim_mp4 = render_manim_scene(manim_data["code"], output_dir=session_dir, extract_mode=args.extract_mode)
+    bg_video_paths = [manim_mp4]
 elif mode == "TRAILER_MISSED":
     if not getattr(args, "source_video", None):
         print("[Error] --source_video is required for TRAILER_MISSED mode.")
@@ -1245,6 +1256,16 @@ else:
             sfx_path,
             obj_path,
             bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "EXPLAINER":
+        from engine.video_gen import create_explainer_video
+        final_video = create_explainer_video(
+            audio_path,
+            manim_mp4,
             output_filename,
             music_path=bg_music,
             bitrate=target_bitrate,

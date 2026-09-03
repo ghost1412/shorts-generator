@@ -29,7 +29,7 @@ def get_llm_response(
 
     # 0. Try Gemini API
     if GEMINI_API_KEY:
-        gemini_models = ["gemini-3.5-flash", "gemini-3.6-flash"]
+        gemini_models = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
         for g_model in gemini_models:
             try:
                 print(f"[Log] Attempting Gemini API ({g_model})...")
