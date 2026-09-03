@@ -29,43 +29,47 @@ def get_llm_response(
 
     # 0. Try Gemini API
     if GEMINI_API_KEY:
-        try:
-            print("[Log] Attempting Gemini API...")
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={GEMINI_API_KEY}"
-            headers = {
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "temperature": temperature,
-                    "maxOutputTokens": max_tokens,
-                    "responseMimeType": "application/json"
-                }
-            }
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-            response.raise_for_status()
-            res_json = response.json()
-            print(f"[DEBUG] Gemini candidates: {json.dumps(res_json.get('candidates', []), indent=2)}")
-            content = res_json["candidates"][0]["content"]["parts"][0]["text"]
-            print("[Log] Gemini API success!")
-            return content
-        except Exception as e:
+        gemini_models = ["gemini-3.5-flash", "gemini-3.6-flash"]
+        for g_model in gemini_models:
             try:
-                if 'response' in locals() and response is not None:
-                    print(f"[Warning] Gemini API failed: {e}. Response: {response.text}")
-                else:
-                    print(f"[Warning] Gemini API failed: {e}")
-            except:
-                print(f"[Warning] Gemini API failed: {e}")
-            print("Falling back to other providers...")
+                print(f"[Log] Attempting Gemini API ({g_model})...")
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={GEMINI_API_KEY}"
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [
+                                {"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}
+                            ]
+                        }
+                    ],
+                    "generationConfig": {
+                        "temperature": temperature,
+                        "maxOutputTokens": max_tokens,
+                        "responseMimeType": "application/json"
+                    }
+                }
+                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                response.raise_for_status()
+                res_json = response.json()
+                print(f"[DEBUG] Gemini candidates ({g_model}): {json.dumps(res_json.get('candidates', []), indent=2)}")
+                content = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                print(f"[Log] Gemini API success with {g_model}!")
+                return content
+            except Exception as e:
+                try:
+                    if 'response' in locals() and response is not None:
+                        print(f"[Warning] Gemini API ({g_model}) failed: {e}. Response: {response.text}")
+                    else:
+                        print(f"[Warning] Gemini API ({g_model}) failed: {e}")
+                except:
+                    print(f"[Warning] Gemini API ({g_model}) failed: {e}")
+                print("Trying next Gemini model...")
+
+        print("[Warning] All Gemini API models failed. Falling back to other providers...")
 
     # 1. Try Local LLM (Ollama)
     if LOCAL_LLM_URL:
@@ -240,7 +244,88 @@ def validate_odd_one_out(data):
 def validate_riddle(data):
     return isinstance(data, dict) and "question" in data and "answer" in data and "search_term" in data
 
+def validate_manim(data):
+    if not isinstance(data, dict):
+        return False
+    if "code" not in data or "title" not in data or "voiceover_text" not in data:
+        return False
+    
+    code = data.get("code", "")
+    voiceover = data.get("voiceover_text", "")
+    
+    if not isinstance(code, str) or not isinstance(voiceover, str):
+        return False
+        
+    cleaned_voiceover = voiceover.strip()
+    if len(cleaned_voiceover) < 15 or not (cleaned_voiceover.endswith('.') or cleaned_voiceover.endswith('!') or cleaned_voiceover.endswith('?')):
+        print("[Log] Validation failed: voiceover_text is incomplete or missing sentence-ending punctuation.")
+        return False
+
+    if "Tex(" in code or "MathTex(" in code:
+        print("[Log] Validation failed: code contains Tex or MathTex (LaTeX not supported).")
+        return False
+
+    if "ExplainerScene" not in code:
+        print("[Log] Validation failed: code missing ExplainerScene class.")
+        return False
+
+    import ast
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        print(f"[Log] Validation failed: Python SyntaxError in code ({e}).")
+        return False
+
+    return True
+
 # --- Generation Functions ---
+
+def generate_manim_script(topic, extract_mode="shorts"):
+    """
+    Generates a Manim CE Python script for an educational explainer.
+    Supports extract_mode='shorts' (vertical 9:16 format) or 'long' (horizontal 16:9 format).
+    Returns: {"title": str, "code": str, "voiceover_text": str}
+    """
+    is_shorts = (extract_mode == "shorts")
+    layout_instructions = """11. VERTICAL SHORTS LAYOUT (9:16 ASPECT RATIO):
+    - This video is formatted for YouTube Shorts / Reels / TikTok (9:16 vertical screen).
+    - Visible screen coordinate bounds: x is narrow [-3.8, 3.8], y is tall [-6.5, 6.5].
+    - Stack all titles, diagrams, text, and labels VERTICALLY from top to bottom (e.g. `VGroup(...).arrange(DOWN, buff=0.4)` or `.next_to(..., DOWN)`).
+    - Keep text lines short and font sizes modest (e.g., font_size=24-32 for descriptions, font_size=34-40 for main titles) so nothing gets clipped on mobile screens on the left or right edges.""" if is_shorts else """11. HORIZONTAL WIDESCREEN LAYOUT (16:9 ASPECT RATIO):
+    - This video is formatted for traditional 16:9 widescreen display.
+    - Screen bounds: x [-6.5, 6.5], y [-3.8, 3.8]. Utilize horizontal space cleanly."""
+
+    prompt = f"""Generate a Manim Community Edition (manim) Python script explaining {topic}.
+REQUIREMENTS:
+1. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
+2. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
+3. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")`).
+4. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures and labels.
+5. GEOMETRIC ACCURACY FOR TOPICS:
+   - If the topic is 'Pythagorean Theorem' or related to right triangles:
+     * You MUST draw a clear right-angled triangle first using `Polygon` (e.g. `Polygon([-2, -1, 0], [1, -1, 0], [1, 1.25, 0], color=BLUE)` where the legs meet at a 90-degree right angle).
+     * DO NOT draw just a square or rectangle as the primary subject. The right-angled triangle with legs 'a', 'b' and hypotenuse 'c' MUST be the central visual element.
+     * Optionally add squares attached to the sides a, b, and c to visually illustrate a² + b² = c², or highlight the sides and show the formula `Text("a² + b² = c²")`.
+   - For all geometry topics, ensure the shapes accurately represent the math principles being taught.
+6. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
+7. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
+8. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
+9. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
+10. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
+{layout_instructions}
+
+Format as JSON ONLY:
+{{
+  "title": "Title of the explainer",
+  "code": "from manim import *\\n\\nclass ExplainerScene(Scene):\\n    def construct(self):\\n        ...",
+  "voiceover_text": "The complete voiceover script to be spoken during this animation."
+}}
+"""
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, temperature=0.3, max_tokens=8192)
+        return robust_json_parse(response_text)
+    
+    return with_best_of_n(llm_call, validate_manim, n=3)
 
 def generate_mixed_facts(category="science"):
     """

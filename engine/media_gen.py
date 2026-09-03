@@ -386,6 +386,100 @@ def fetch_jwst_images(num_images=5, output_dir="assets/jwst"):
         print(f"[Error] JWST Fetch failed: {e}")
         return []
 
+def is_url(path_or_url):
+    """Returns True if the input is an HTTP/HTTPS URL."""
+    if not isinstance(path_or_url, str):
+        return False
+    clean = path_or_url.strip()
+    return clean.startswith("http://") or clean.startswith("https://") or clean.startswith("www.")
+
+def download_source_video_from_url(url, output_dir, filename="source_video.mp4"):
+    """
+    Downloads a video from a URL (YouTube, Twitch, Twitter, TikTok, direct video links, etc.)
+    using yt-dlp or direct requests streaming fallback. Caches downloaded files to prevent re-downloading.
+    Returns path to the downloaded video file.
+    """
+    import hashlib
+    import shutil
+
+    url = url.strip()
+    if url.startswith("www."):
+        url = "https://" + url
+
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 🟢 Global URL cache directory
+    url_hash = hashlib.md5(url.encode("utf-8")).hexdigest()
+    global_cache_dir = os.path.join("sessions", "url_cache")
+    os.makedirs(global_cache_dir, exist_ok=True)
+    cached_video_path = os.path.join(global_cache_dir, f"{url_hash}.mp4")
+    target_path = os.path.join(output_dir, filename)
+
+    # If already cached globally, copy and return immediately
+    if os.path.exists(cached_video_path) and os.path.getsize(cached_video_path) > 1024:
+        print(f"[Log] Found cached video for URL: '{url}'")
+        print(f"[Log] Reusing cached file: {cached_video_path}")
+        if os.path.abspath(cached_video_path) != os.path.abspath(target_path):
+            shutil.copy2(cached_video_path, target_path)
+        return target_path
+
+    print(f"[Log] Downloading video from URL: {url}")
+    
+    # 1. Try yt-dlp first (handles YouTube, Twitch, Vimeo, Twitter, TikTok, and direct stream links)
+    try:
+        import yt_dlp
+        
+        ydl_opts = {
+            'format': 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'outtmpl': os.path.join(global_cache_dir, f'{url_hash}.%(ext)s'),
+            'merge_output_format': 'mp4',
+            'quiet': False,
+            'no_warnings': True,
+            'nocheckcertificate': True,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            downloaded_file = ydl.prepare_filename(info)
+            base, _ = os.path.splitext(downloaded_file)
+            possible_mp4 = base + ".mp4"
+            if os.path.exists(possible_mp4):
+                final_file = possible_mp4
+            elif os.path.exists(downloaded_file):
+                final_file = downloaded_file
+            else:
+                files = [os.path.join(global_cache_dir, f) for f in os.listdir(global_cache_dir) if f.startswith(url_hash)]
+                if files:
+                    final_file = files[0]
+                else:
+                    raise FileNotFoundError("yt-dlp completed but output file was not found.")
+
+            print(f"[Log] Successfully downloaded video via yt-dlp: {final_file}")
+            # Ensure cached file is copied to session target_path
+            if os.path.abspath(final_file) != os.path.abspath(target_path):
+                shutil.copy2(final_file, target_path)
+            return target_path
+
+    except Exception as e:
+        print(f"[Warning] yt-dlp download failed: {e}. Attempting direct HTTP fallback...")
+        
+    # 2. Fallback to direct HTTP request streaming if yt-dlp failed (e.g. direct mp4 link)
+    try:
+        import requests
+        r = requests.get(url, stream=True, timeout=60)
+        r.raise_for_status()
+        with open(cached_video_path, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        print(f"[Log] Successfully downloaded video via direct HTTP fallback: {cached_video_path}")
+        if os.path.abspath(cached_video_path) != os.path.abspath(target_path):
+            shutil.copy2(cached_video_path, target_path)
+        return target_path
+    except Exception as e2:
+        raise RuntimeError(f"Failed to download video from URL '{url}': {e2}")
+
+
 if __name__ == "__main__":
     # download_background_video("A day on Venus is longer than a year on Venus.")
     print(get_game_assets(3))

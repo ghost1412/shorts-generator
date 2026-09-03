@@ -605,6 +605,15 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             "reason": "Challenge Backdrop"
         }]
 
+    if mode == "EXPLAINER":
+        print("[Log] Mode: EXPLAINER. Extracting topic segment for Manim animation.")
+        return [{
+            "start": 0.0, 
+            "end": min(total_duration, target_duration or 60), 
+            "viral_score": 100, 
+            "reason": "Explainer Animation Block"
+        }]
+
     # 🟢 EXPERT REFINEMENT: transcript compression logic
     if mode == "shorts":
         # Shorts: Small windows (25-60s) for punchy peaks

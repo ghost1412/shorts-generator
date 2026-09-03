@@ -8,10 +8,11 @@ import subprocess
 from dotenv import load_dotenv
 
 # 🟢 Force UTF-8 for all standard streams (fixes CP1252/Emoji crashes on Windows)
-if sys.stdout.encoding != 'utf-8':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-if sys.stderr.encoding != 'utf-8':
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+# Use line_buffering=True to prevent prints from different stages/threads from buffering and overlapping.
+if sys.stdout.encoding != 'utf-8' or sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+if sys.stderr.encoding != 'utf-8' or sys.platform == "win32":
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
 
 from supabase import create_client, Client
 from engine.utils import decrypt_secret
@@ -21,7 +22,7 @@ load_dotenv()
 
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
-from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images
+from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images, is_url, download_source_video_from_url
 from engine.video_gen import create_shorts_video
 from engine.storage import upload_to_storage
 
@@ -93,7 +94,7 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--prompt", help="Prompt for AI Music/Image generation.")
     parser.add_argument("--ckpt_name", default="stable_audio_3_medium_base.safetensors", help="Checkpoint name for ComfyUI audio model.")
     parser.add_argument("--category", help="Specify content category.")
@@ -172,11 +173,7 @@ if args.use_comfy or args.use_ai_audio:
         args.use_comfy = False
         args.use_ai_audio = False
 
-# Force UTF-8 encoding for Windows terminals to handle emojis if possible, 
-# but we'll also remove them to be safe.
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+# Force UTF-8 encoding for Windows was handled above with line buffering.
 
 # 🟢 Standalone AI Music Generation Mode
 if getattr(args, "mode", None) == "MUSIC":
@@ -342,6 +339,75 @@ if getattr(args, "mode", None) == "MUSIC":
             report_status(args.video_id, args.user_id, meta["title"], "Failed", None, "MUSIC")
         sys.exit(1)
 
+# 🟢 Standalone EXPLAINER Mode
+if getattr(args, "mode", None) == "EXPLAINER":
+    import time
+    from engine.script_gen import generate_manim_script
+    from engine.video_gen import render_manim_scene
+    
+    extract_mode = getattr(args, "extract_mode", "shorts") or "shorts"
+    print(f"--- Starting Standalone EXPLAINER Animation Generation (Extract Mode: {extract_mode}) ---")
+    topic = args.category if args.category else (args.prompt if args.prompt else "Pythagorean Theorem")
+    print(f"[Log] Explaining topic: '{topic}'")
+    
+    if args.video_id and args.user_id:
+        report_status(args.video_id, args.user_id, f"Explainer: {topic}", "Processing", None, "EXPLAINER")
+        
+    session_id = args.video_id if args.video_id else str(int(time.time()))
+    session_dir = args.session_dir if args.session_dir else os.path.join("sessions", f"explainer_{session_id}")
+    os.makedirs(session_dir, exist_ok=True)
+    
+    script_data = generate_manim_script(topic, extract_mode=extract_mode)
+    title = script_data.get('title', f"Explainer: {topic}")
+    
+    print(f"[Log] LLM Script Generated. Title: {title}")
+    
+    # 1. Generate Voiceover
+    from engine.voice_gen import generate_voice
+    voiceover_text = script_data.get('voiceover_text', f"Today we are explaining {topic}.")
+    audio_path, subs_path = generate_voice(
+        voiceover_text, 
+        output_audio=os.path.join(session_dir, "voice.mp3"), 
+        output_subs=os.path.join(session_dir, "subs.json"),
+        add_cta=False
+    )
+    
+    # 2. Render Manim Scene
+    manim_output_path = render_manim_scene(script_data['code'], session_dir, extract_mode=extract_mode)
+    
+    if manim_output_path and os.path.exists(manim_output_path):
+        output_path = manim_output_path
+        # 3. Merge Audio and Video if voiceover succeeded
+        if audio_path and os.path.exists(audio_path):
+            merged_path = os.path.join(session_dir, "final_explainer.mp4")
+            import subprocess
+            ffmpeg_cmd = [
+                "ffmpeg", "-y",
+                "-i", manim_output_path,
+                "-i", audio_path,
+                "-vf", "tpad=stop_mode=clone:stop_duration=60",
+                "-c:v", "libx264",
+                "-c:a", "aac", "-b:a", "192k",
+                "-shortest", merged_path
+            ]
+            res = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+            if res.returncode == 0 and os.path.exists(merged_path):
+                output_path = merged_path
+            else:
+                print(f"[Warning] Failed to merge audio: {res.stderr}")
+
+        print(f"[Log] SUCCESS! Explainer video created: {output_path}")
+        if args.video_id and args.user_id:
+            from engine.storage import upload_to_storage
+            storage_path = upload_to_storage(output_path, args.video_id, is_video=True)
+            report_status(args.video_id, args.user_id, title, "Published", None, "EXPLAINER", None, storage_path)
+        sys.exit(0)
+    else:
+        print("[Error] Manim rendering failed.")
+        if args.video_id and args.user_id:
+            report_status(args.video_id, args.user_id, title, "Failed", None, "EXPLAINER")
+        sys.exit(1)
+
 # 🟢 PHASE 13: AI Extraction (High-Speed FFmpeg path)
 if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     import time
@@ -354,6 +420,12 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     session_dir = args.session_dir if args.session_dir else f"sessions/extraction_{int(time.time())}"
     os.makedirs(session_dir, exist_ok=True)
     
+    # 🟢 Auto-download video if source_video is a URL
+    if is_url(args.source_video):
+        print(f"[Log] Detected Video URL: '{args.source_video}'. Downloading stream...")
+        args.source_video = download_source_video_from_url(args.source_video, session_dir)
+        print(f"[Log] Video downloaded locally to: {args.source_video}")
+
     print("[Log] Running Transcript-based Highlight Analysis...")
     # 🟢 EXPERT GUARD: Prevention of Mode Confusion
     if args.extract_mode == "shorts" and args.target_duration > 60:

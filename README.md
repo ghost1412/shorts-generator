@@ -12,50 +12,61 @@ Welcome to **ShortsFlow**, an end-to-end content automation system. It doesn't j
 ---
 
 ## 🔥 At a Glance
-- **🚀 AI Clip Extraction**: Turn hours of long-form video (Podcasts, Gaming, Vlogs) into a series of high-impact, viral-ready shorts automatically.
-- **🤖 Dual LLM Support**: Use Cloud APIs (OpenAI, Hugging Face) or run locally (Ollama, local LLMs) for maximum privacy and $0 cost.
-- **✨ Smart Editing**: AI-driven face tracking (Haar Cascades), auto-cropping, and silence removal.
-- **🎬 12+ Viral Modes**: Interactive Facts (2 Truths, 1 Lie), News, Cosmic (JWST), Trivia, and more.
+- **🚀 AI Clip Extraction**: Turn long-form videos or YouTube links (Podcasts, Gaming, Vlogs) into a series of high-impact, viral-ready shorts automatically.
+- **📥 Direct Video URL Ingestion & Caching**: Pass any YouTube, Twitch, TikTok, Twitter/X, or direct video link (`--source_video "https://..."`). Built-in persistent caching prevents re-downloading.
+- **⚡ GPU (CUDA) Acceleration**: Native PyTorch CUDA acceleration for 10x faster Whisper transcriptions and high-speed FFmpeg processing.
+- **🤖 Dual LLM Support**: Use Cloud APIs (Gemini, OpenAI, Hugging Face) or run locally (Ollama, local LLMs) for maximum privacy and $0 cost.
+- **✨ Smart Editing**: AI-driven face tracking (Haar Cascades), auto-cropping, style presets (`--style meme`), and silence removal (`--tighten`).
+- **🎬 15+ Content & Explainer Modes**: Interactive Facts, Stories, Riddles, Manim Educational Explanations (`EXPLAINER`), AI Music, Trivia, and more.
 - **☁️ Automated Pipeline**: Fully automated rendering and scheduling via GitHub Actions.
-- **💳 SaaS Foundation**: Integrated Authentication via Supabase and Payment ready via Stripe.
+- **💳 SaaS Foundation**: Integrated Next.js 14 Dashboard with Supabase Auth and Stripe payments.
 
 ---
 
-## ✂️ AI Powered Clipping (Long-form to Shorts)
-This is the core power of ShortsFlow. Give it a 2-hour podcast, and it will return the top 10 most viral moments.
+## ✂️ AI Powered Clipping (YouTube / Video URL or Local File)
+This is the core power of ShortsFlow. Pass a local video path **or a YouTube URL**, and it will extract the top viral moments.
 
 ```mermaid
 graph TD
-    A[Long-form Video] -->|Stable Whisper| B(AI Transcription)
-    B --> C{Signal Analysis}
-    C -->|Text| D[Viral Hooks & Keywords]
-    C -->|Audio| E[Loudness & Energy Deltas]
-    C -->|Visual| F[Motion & Face Tracking]
-    D & E & F --> G(Heuristic Scoring Engine)
-    G --> H{Smart Editing}
-    H -->|Auto-Crop| I[9:16 Vertical Format]
-    H -->|Tighten| J[Silence Removal]
-    I & J --> K[Viral Shorts / Highlights]
+    A[Video URL / YouTube Link / File] -->|yt-dlp / Cache| B(Local Video Ingestion)
+    B -->|Stable Whisper + CUDA| C(AI Transcription)
+    C --> D{Signal Analysis}
+    D -->|Text| E[Viral Hooks & Keywords]
+    D -->|Audio| F[Loudness & Energy Deltas]
+    D -->|Visual| G[Motion & Face Tracking]
+    E & F & G --> H(Heuristic Scoring Engine)
+    H --> I{Smart Editing}
+    I -->|Auto-Crop| J[9:16 Vertical Format]
+    I -->|Tighten| K[Silence Removal]
+    I -->|Style Presets| L[Meme / Dramatic Effects]
+    J & K & L --> M[Viral Shorts / Highlights / Mashup]
 ```
 
-**How it works:**
-1.  **AI Analysis**: Scans transcripts for high-energy segments, viral hook keywords, and narrative peaks.
-2.  **Audio/Visual Signals**: Uses energy deltas and motion tracking to find "loud" or "active" moments.
-3.  **Auto-Crop**: Dynamically tracks faces and centers them for vertical 9:16 format.
-4.  **Silence Stripping**: Automatically removes "uhms", "ahs", and dead air to keep pacing fast.
+### Usage Examples
 
 ```bash
-# Extract the top 5 viral clips from a long video
-python main.py --source_video "./podcast.mp4" --clip_count 5 --smart_crop --tighten
+# 1. Extract shorts from a YouTube video with CUDA GPU & Smart Crop
+py -3.12 main.py --source_video "https://www.youtube.com/watch?v=..." --extract_mode shorts --clip_count 3 --smart_crop --tighten
+
+# 2. Extract with Meme style editing & custom clip target duration
+py -3.12 main.py --source_video "./podcast.mp4" --clip_count 5 --target_duration 30 --style meme --smart_crop --tighten
+
+# 3. Create a single combined Highlight Reel / Mashup
+py -3.12 main.py --source_video "https://www.youtube.com/watch?v=..." --extract_mode shorts --mashup --smart_crop --tighten
 ```
+
+> **Note on GPU Acceleration**: Make sure PyTorch with CUDA support is installed (`torch.cuda.is_available() == True`) for maximum Whisper transcription speed.
 
 ---
 
-## 🎬 Content Modes
-Every format is a complete, standalone short — scripted, voiced, and composed entirely by AI.
+## 🎬 Content & Animation Modes
+Every format is a complete, standalone short — scripted, voiced, animated, and composed entirely by AI.
 
 | Mode | What It Is |
 |---|---|
+| 📺 **AI Extraction** | Turn YouTube links or local videos into viral shorts |
+| 🧮 **Explainer (Manim)** | Automated educational math, science, and coding animations |
+| 🎵 **Music** | AI-generated music tracks with dynamic visual themes |
 | 🕵️ **Investigator** | Mystery-framed facts — 2 truths, 1 lie, comment to find out |
 | 📖 **Story** | First-person AI story in a consistent narrator voice |
 | 🧩 **Riddle** | Lateral thinking challenge designed to drive comments |
@@ -72,18 +83,19 @@ Every format is a complete, standalone short — scripted, voiced, and composed 
 ---
 
 ## 📂 Project Structure
-- `engine/`: Core Python modules for Scripting, Voiceover, and FFmpeg Compositing.
+- `engine/`: Core Python modules for Scripting, Voiceover, Analysis, Media Generation, and FFmpeg/Manim Compositing.
 - `web/`: Next.js 14 Dashboard, API routes, and Supabase integration.
 - `scripts/`: Development utilities, seeding tools, and testing scripts.
+- `remotion-video/`: Remotion React-based video animation compositions.
 - `samples/`: Archive of generated video samples and text logs.
-- `main.py`: Primary entry point for local generation and CI/CD workers.
+- `main.py`: Primary CLI entry point and backend process router.
 
 ---
 
 ## 🛠️ Getting Started
 
 ### 1. Prerequisites
-- Python 3.12+
+- Python 3.12+ (with PyTorch CUDA for GPU support)
 - FFmpeg (installed and added to your PATH)
 - Node.js 18+
 
@@ -92,11 +104,11 @@ Every format is a complete, standalone short — scripted, voiced, and composed 
 # Install engine dependencies
 pip install -r requirements.txt
 
-# Rename and fill env variables
+# Setup environment variables
 cp .env.example .env
 
 # Generate a video manually
-python main.py --mode FACTS --category history
+py -3.12 main.py --mode FACTS --category history
 ```
 
 ---
