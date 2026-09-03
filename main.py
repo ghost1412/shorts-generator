@@ -22,7 +22,7 @@ load_dotenv()
 
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
-from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images
+from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images, is_url, download_source_video_from_url
 from engine.video_gen import create_shorts_video
 from engine.storage import upload_to_storage
 
@@ -420,6 +420,12 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     session_dir = args.session_dir if args.session_dir else f"sessions/extraction_{int(time.time())}"
     os.makedirs(session_dir, exist_ok=True)
     
+    # 🟢 Auto-download video if source_video is a URL
+    if is_url(args.source_video):
+        print(f"[Log] Detected Video URL: '{args.source_video}'. Downloading stream...")
+        args.source_video = download_source_video_from_url(args.source_video, session_dir)
+        print(f"[Log] Video downloaded locally to: {args.source_video}")
+
     print("[Log] Running Transcript-based Highlight Analysis...")
     # 🟢 EXPERT GUARD: Prevention of Mode Confusion
     if args.extract_mode == "shorts" and args.target_duration > 60:

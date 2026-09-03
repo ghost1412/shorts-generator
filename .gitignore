@@ -27,3 +27,6 @@ token*.json
 # IDE
 .vscode/
 .idea/
+
+assets*
+sessions*
