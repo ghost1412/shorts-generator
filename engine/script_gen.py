@@ -304,24 +304,25 @@ def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
             topic = granular_topic
             print(f"[Log] EXPLAINER: Selected granular sub-topic: {topic}")
 
-    prompt = f"""Generate a Manim Community Edition (manim) Python script explaining {topic}.
+    prompt = f"""Generate a Manim Community Edition (manim) Python script explaining a HIGHLY SPECIFIC, obscure, and random concept related to: {topic}. 
 REQUIREMENTS:
-1. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
-2. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
-3. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")`).
-4. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures and labels.
-5. GEOMETRIC ACCURACY FOR TOPICS:
+1. DO NOT explain the broad category. You must pick a very specific, singular mathematical/scientific concept, algorithm, or paradox within "{topic}" to ensure unique videos every time.
+2. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
+3. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
+4. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")`).
+5. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures and labels.
+6. GEOMETRIC ACCURACY FOR TOPICS:
    - If the topic is 'Pythagorean Theorem' or related to right triangles:
      * You MUST draw a clear right-angled triangle first using `Polygon` (e.g. `Polygon([-2, -1, 0], [1, -1, 0], [1, 1.25, 0], color=BLUE)` where the legs meet at a 90-degree right angle).
      * DO NOT draw just a square or rectangle as the primary subject. The right-angled triangle with legs 'a', 'b' and hypotenuse 'c' MUST be the central visual element.
      * Optionally add squares attached to the sides a, b, and c to visually illustrate a² + b² = c², or highlight the sides and show the formula `Text("a² + b² = c²")`.
    - For all geometry topics, ensure the shapes accurately represent the math principles being taught.
-6. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
-7. CRITICAL TIMING: The voiceover script MUST take exactly {target_duration} seconds to read aloud at a normal speaking pace (approximately {int(target_duration * 2.5)} words). Count your words!
-8. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
-9. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
-10. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
-11. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
+7. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
+8. CRITICAL TIMING: The voiceover script MUST take exactly {target_duration} seconds to read aloud at a normal speaking pace (approximately {int(target_duration * 2.5)} words). Count your words!
+9. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
+10. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
+11. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
+12. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
 {layout_instructions}
 
 Format as JSON ONLY:
@@ -545,11 +546,12 @@ def get_sub_topic(category, is_explainer=False):
     """
     if is_explainer:
         explainer_topics = {
-            "science": ["How neural networks learn", "The double-slit experiment", "How batteries work", "The physics of a pendulum", "What is DNA replication"],
-            "space": ["How orbits work", "The geometry of black holes", "Calculating the speed of light", "The expansion of the universe", "How eclipses happen"],
-            "math": ["The Pythagorean theorem", "Visualizing Pi", "The Fibonacci sequence", "What is a derivative?", "Understanding exponents"],
-            "tech": ["How binary code works", "Sorting algorithms visualized", "How encryption works", "What is an API?", "How GPS calculates location"],
-            "general": ["How gears work", "The golden ratio in nature", "How sound waves travel", "The mechanics of flight", "How lenses bend light"]
+            "science": ["advanced physics concepts", "chemical reactions visualized", "how complex machines work", "biological processes", "quantum mechanics principles", "thermodynamics"],
+            "space": ["orbital mechanics", "astrophysics equations", "scale of the universe", "relativity concepts", "celestial geometry", "physics of black holes"],
+            "math": ["geometric proofs", "calculus concepts visualized", "number theory phenomena", "probability and statistics", "fractals and chaos theory", "famous math paradoxes"],
+            "tech": ["computer science algorithms", "cryptography methods", "data structures visualized", "network topology", "hardware logic gates", "machine learning math"],
+            "puzzle": ["visual logic puzzles (without revealing the answer)", "lateral thinking riddles visualized", "math aptitude questions (cliffhanger ending)", "geometry brain teasers"],
+            "general": ["mechanical engineering concepts", "architectural geometry", "fluid dynamics", "optics and light", "sound wave physics", "geometry in nature"]
         }
         
         if category.lower() in explainer_topics:
