@@ -553,6 +553,11 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.bg_media_entry = ctk.CTkEntry(bg_frame, placeholder_text="Path to custom background video (.mp4/.mov) or image (.png/.jpg)...", width=380)
         self.bg_media_entry.pack(side="left", padx=(0, 10))
 
+        # Target Duration (For Standalone Modes)
+        ctk.CTkLabel(grid, text="Target Duration (s):").grid(row=4, column=0, sticky="w", padx=(0, 10), pady=5)
+        self.modes_dur_entry = ctk.CTkEntry(grid, placeholder_text="e.g. 45 or 60", width=120)
+        self.modes_dur_entry.grid(row=4, column=1, sticky="w", pady=5)
+
         browse_bg_btn = ctk.CTkButton(bg_frame, text="📁 Browse Media", width=100, command=self.browse_bg_media)
         browse_bg_btn.pack(side="left")
 
@@ -745,7 +750,12 @@ class ModernShortsGeneratorUI(ctk.CTk):
             if setting: cmd.extend(["--setting", setting])
 
             # Unlimited Target Duration (Applies to ALL modes, including EXPLAINER)
-            target_dur = self.dur_entry.get().strip()
+            target_dur = ""
+            if hasattr(self, "modes_dur_entry") and self.modes_dur_entry.get().strip():
+                target_dur = self.modes_dur_entry.get().strip()
+            elif hasattr(self, "dur_entry") and self.dur_entry.get().strip():
+                target_dur = self.dur_entry.get().strip()
+            
             if target_dur:
                 cmd.extend(["--target_duration", target_dur])
 
