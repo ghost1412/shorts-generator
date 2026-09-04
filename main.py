@@ -113,6 +113,7 @@ def parse_args():
     parser.add_argument("--extract_mode", choices=["shorts", "long"], default="shorts")
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
+    parser.add_argument("--min_duration", type=int, default=15, help="Minimum clip duration for extraction (default 15s).")
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
     parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
     parser.add_argument("--style", choices=["sarcastic", "meme", "funny", "action", "stylish"], action="append", help="Optional viral editing styles (can be used multiple times).")
@@ -149,6 +150,7 @@ def parse_args():
     parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
     parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI).")
+    parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for subtitles in Remotion (default: 1150).")
     
     # Provider & Media Overrides
     parser.add_argument("--use_ollama", action="store_true", help="Force local Ollama LLM execution.")
@@ -534,6 +536,7 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     highlights, transcript_path, interest_points, silence_intervals = process_source_video(
         args.source_video, session_dir, mode=args.extract_mode, 
         clip_count=args.clip_count, target_duration=args.target_duration,
+        min_duration=args.min_duration,
         use_audio_detect=args.use_audio_detect, style=args.style,
         user_context=args.user_context, style_context=args.style_context,
         smart_crop=args.smart_crop, tighten=args.tighten, use_cache=args.use_cache,
@@ -589,7 +592,8 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
         interest_points=final_interest, silence_intervals=final_silence,
         tighten_mode=args.tighten_mode, use_remotion=args.use_remotion, use_cache=args.use_cache,
         mashup=args.mashup, mashup_mode=args.mashup_mode,
-        orientation=orientation, letterbox_crop=letterbox_crop
+        orientation=orientation, letterbox_crop=letterbox_crop,
+        caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos
     )
     
     # Export SRT for each extracted file
@@ -1217,7 +1221,8 @@ elif mode == "TRAILER_MISSED":
         is_challenge=False, use_hq=args.hq, 
         editing_style=args.style, gif_dir=args.gif_dir,
         interest_points=interest_points, silence_intervals=None,
-        use_remotion=args.use_remotion
+        use_remotion=args.use_remotion,
+        caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos
     )
     
     bg_video_paths = extracted_files

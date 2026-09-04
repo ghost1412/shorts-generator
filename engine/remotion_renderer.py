@@ -38,7 +38,8 @@ def render_with_remotion(
     caption_this=None,  # dict: {"image_path": str, "prompt_text": str}
     duration=None,
     start_offset=0.0,
-    caption_style="HORMOZI"
+    caption_style="HORMOZI",
+    subtitle_y_pos=1150
 ):
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
@@ -167,7 +168,7 @@ def render_with_remotion(
           "mode": mode,
           "category": "general",
           "titleText": title_text,
-          "subtitleYPos": 1600,
+          "subtitleYPos": subtitle_y_pos,
           "captionStyle": caption_style,
           "backgrounds": remotion_bg
         }
