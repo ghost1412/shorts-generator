@@ -40,6 +40,13 @@ if "%API_OK%"=="0" (
 echo.
 echo [Info] Launching ShortsFlow Studio GUI...
 python gui_app.py
+if %errorlevel% neq 0 (
+    echo.
+    echo [Error] ShortsFlow Studio GUI failed to launch!
+    echo Please check the error messages above.
+    pause
+    exit /b %errorlevel%
+)
 exit /b 0
 
 :CLI_MODE
