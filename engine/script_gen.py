@@ -600,9 +600,9 @@ Format as JSON ONLY:
 """
 
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
+        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=1500)
         wyr = robust_json_parse(response_text)
-        if vyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
+        if wyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
             wyr["percent_b"] = 100 - wyr.get("percent_a", 50)
         return wyr
 
