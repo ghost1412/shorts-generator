@@ -169,10 +169,10 @@ const Subtitles: React.FC<{
                 textTransform: "uppercase",
                 transform: `scale(${scale}) rotate(${rotation}deg)`,
                 display: "inline-block",
-                letterSpacing: "-2px",
+                letterSpacing: "-4px",
                 textShadow: isActive 
-                  ? "0px 15px 35px rgba(0,0,0,0.9), 6px 6px 0px #000000" 
-                  : "0px 8px 20px rgba(0,0,0,0.7), 4px 4px 0px #000000",
+                  ? "0px 20px 45px rgba(0,0,0,1.0), 8px 8px 0px #000000" 
+                  : "0px 10px 25px rgba(0,0,0,0.9), 5px 5px 0px #000000",
                 WebkitTextStroke: "6px #000000",
                 transition: "transform 0.04s cubic-bezier(0.17, 0.67, 0.83, 0.67), opacity 0.05s ease",
               }}
@@ -288,7 +288,8 @@ const BackgroundSegment: React.FC<{
   bg: z.infer<typeof backgroundSchema>;
   fps: number;
   durationInFrames: number;
-}> = ({ bg, fps, durationInFrames }) => {
+  isFirst: boolean;
+}> = ({ bg, fps, durationInFrames, isFirst }) => {
   const frame = useCurrentFrame();
   
   // Smooth continuous camera zoom (Ken Burns)
@@ -299,13 +300,15 @@ const BackgroundSegment: React.FC<{
     { extrapolateRight: "clamp" }
   );
 
-  // Crossfade opacity (0.4s fade out at end)
-  const fadeOutFrames = 12; // 0.4s at 30fps
+  // Crossfade opacity (0.4s fade out at end, fade in at start)
+  const fadeFrames = 12; // 0.4s at 30fps
+  
+  // Opacity calculation for Crossfade
   const opacity = interpolate(
     frame,
-    [durationInFrames - fadeOutFrames, durationInFrames],
-    [1, 0],
-    { extrapolateRight: "clamp" }
+    [0, isFirst ? 0 : fadeFrames, durationInFrames - fadeFrames, durationInFrames],
+    [isFirst ? 1 : 0, 1, 1, 0],
+    { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
   );
 
   return (
@@ -353,7 +356,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   // If we have words, check if someone is speaking near the current time
   if (words && words.length > 0) {
     const isSpeaking = words.some(w => currentTime >= w.start - 0.1 && currentTime <= w.end + 0.3);
-    currentVolume = isSpeaking ? bgMusicVolume * 0.4 : bgMusicVolume; // duck by 60% when speaking
+    currentVolume = isSpeaking ? 0.08 : bgMusicVolume; // specifically request 0.08 when speaking
   }
 
   // Snap progression for progress bar
@@ -615,6 +618,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   bg={bg}
                   fps={fps}
                   durationInFrames={durationInFrames}
+                  isFirst={idx === 0}
                 />
               </Sequence>
             );
