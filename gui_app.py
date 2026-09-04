@@ -744,6 +744,11 @@ class ModernShortsGeneratorUI(ctk.CTk):
             setting = self.setting_entry.get().strip()
             if setting: cmd.extend(["--setting", setting])
 
+            # Unlimited Target Duration (Applies to ALL modes, including EXPLAINER)
+            target_dur = self.dur_entry.get().strip()
+            if target_dur:
+                cmd.extend(["--target_duration", target_dur])
+
             # Mode vs Extraction determination
             if source:
                 cmd.extend(["--source_video", source])
@@ -753,11 +758,6 @@ class ModernShortsGeneratorUI(ctk.CTk):
                 cmd.extend(["--extract_mode", ext_fmt])
 
                 cmd.extend(["--clip_count", str(int(self.clip_slider.get()))])
-
-                # Unlimited Target Duration
-                target_dur = self.dur_entry.get().strip()
-                if target_dur:
-                    cmd.extend(["--target_duration", target_dur])
 
                 if self.smart_crop_switch.get(): cmd.append("--smart_crop")
                 if self.tighten_switch.get(): cmd.append("--tighten")
