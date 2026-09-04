@@ -1,6 +1,13 @@
 # ⚡ ShortsFlow AI Studio
 
-> **An Autonomous AI Video Studio — Turn Long Videos, YouTube Links, or AI Concepts into High-Retention 9:16 Shorts on Autopilot.**
+> **The Open-Source Opus Clip Alternative**
+> Turn Long Videos, YouTube Links, or AI Concepts into High-Retention 9:16 Shorts on Autopilot.
+
+<div align="center">
+  <video src="demos/demo_short.mp4" width="250" autoplay loop muted playsinline></video>
+  <video src="demos/demo_facts.mp4" width="250" autoplay loop muted playsinline></video>
+  <video src="demos/demo_wyr.mp4" width="250" autoplay loop muted playsinline></video>
+</div>
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python)](https://python.org)
 [![Remotion](https://img.shields.io/badge/Remotion-Video_Engine-61DAFB?style=flat&logo=react)](https://remotion.dev)
@@ -11,13 +18,16 @@
 
 ## ⚡ Quick Start (Get Your First Video in 60 Seconds)
 
-### 1-Click Automated Setup
+### 1-Click Automated Setup (Windows)
+
+We've built a zero-friction setup script that handles all dependencies (Python, Node.js, FFmpeg) automatically.
+
 ```bash
 # Clone the repository
 git clone https://github.com/ghost1412/shorts-generator.git
 cd shorts-generator
 
-# Run 1-Click Setup (Installs Python dependencies, Node packages & verifies FFmpeg)
+# Run 1-Click Setup 
 setup.bat
 ```
 
@@ -25,7 +35,7 @@ setup.bat
 ```bash
 # Launch 1-Click Desktop GUI
 launch.bat
-# (Or double click launch.bat and press Enter!)
+# (Or just double click launch.bat and press Enter!)
 ```
 
 ---

@@ -302,14 +302,22 @@ const BackgroundSegment: React.FC<{
 
   // Crossfade opacity (0.4s fade out at end, fade in at start)
   const fadeFrames = 12; // 0.4s at 30fps
+  const safeEndFade = Math.max(fadeFrames + 1, durationInFrames - fadeFrames);
   
   // Opacity calculation for Crossfade
-  const opacity = interpolate(
-    frame,
-    [0, isFirst ? 0 : fadeFrames, durationInFrames - fadeFrames, durationInFrames],
-    [isFirst ? 1 : 0, 1, 1, 0],
-    { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
-  );
+  const opacity = isFirst
+    ? interpolate(
+        frame,
+        [safeEndFade, durationInFrames],
+        [1, 0],
+        { extrapolateRight: "clamp" }
+      )
+    : interpolate(
+        frame,
+        [0, fadeFrames, safeEndFade, durationInFrames],
+        [0, 1, 1, 0],
+        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
+      );
 
   return (
     <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center", opacity }}>
