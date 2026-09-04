@@ -310,19 +310,20 @@ REQUIREMENTS:
 2. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
 3. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
 4. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")`).
-5. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures and labels.
-6. GEOMETRIC ACCURACY FOR TOPICS:
+5. CRITICAL SCREEN BOUNDS: If you write a long sentence in `Text()`, YOU MUST insert `\\n` every 4-5 words so it wraps properly and does not run off the edges of the screen!
+6. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures and labels.
+7. GEOMETRIC ACCURACY FOR TOPICS:
    - If the topic is 'Pythagorean Theorem' or related to right triangles:
      * You MUST draw a clear right-angled triangle first using `Polygon` (e.g. `Polygon([-2, -1, 0], [1, -1, 0], [1, 1.25, 0], color=BLUE)` where the legs meet at a 90-degree right angle).
      * DO NOT draw just a square or rectangle as the primary subject. The right-angled triangle with legs 'a', 'b' and hypotenuse 'c' MUST be the central visual element.
      * Optionally add squares attached to the sides a, b, and c to visually illustrate a² + b² = c², or highlight the sides and show the formula `Text("a² + b² = c²")`.
    - For all geometry topics, ensure the shapes accurately represent the math principles being taught.
-7. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
-8. CRITICAL TIMING: The voiceover script MUST take exactly {target_duration} seconds to read aloud at a normal speaking pace (approximately {int(target_duration * 2.5)} words). Count your words!
-9. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
-10. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
-11. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
-12. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
+8. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
+9. CRITICAL TIMING: The voiceover script MUST take exactly {target_duration} seconds to read aloud at a normal speaking pace (approximately {int(target_duration * 2.5)} words). Count your words!
+10. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
+11. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
+12. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
+13. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
 {layout_instructions}
 
 Format as JSON ONLY:
