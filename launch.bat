@@ -20,6 +20,22 @@ if "%LAUNCH_CHOICE%"=="3" (
 
 if "%LAUNCH_CHOICE%"=="2" goto CLI_MODE
 
+:: --- API KEY VALIDATION ---
+set API_OK=0
+if exist ".env" (
+    findstr /C:"GEMINI_API_KEY=" .env >nul 2>&1
+    if %errorlevel% equ 0 set API_OK=1
+    findstr /C:"HF_API_KEY=" .env >nul 2>&1
+    if %errorlevel% equ 0 set API_OK=1
+)
+
+if "%API_OK%"=="0" (
+    echo  [33m[Warning] No GEMINI_API_KEY or HF_API_KEY found in .env! [0m
+    echo The pipeline will attempt to fallback to a local Ollama instance (localhost:11434).
+    echo For best results, add an API key in the GUI or .env file.
+    echo.
+)
+
 :: DEFAULT: LAUNCH DESKTOP GUI
 echo.
 echo [Info] Launching ShortsFlow Studio GUI...
@@ -66,7 +82,8 @@ echo Subtitle Style: %CAPTION_PRESET%
 echo ============================================================
 echo.
 
-python main.py --source_video "%VIDEO_INPUT%" --clip_count %CLIP_COUNT% --target_duration 30 --smart_crop --tighten --use_remotion --caption_style %CAPTION_PRESET% --output_json "latest_run.json"
+:: Happy Path Default Command (Best settings for long-form to shorts)
+python main.py --source_video "%VIDEO_INPUT%" --clip_count %CLIP_COUNT% --target_duration 45 --min_duration 15 --smart_crop --tighten --broll --use_remotion --caption_style %CAPTION_PRESET% --output_json "latest_run.json"
 
 echo.
 echo ============================================================
