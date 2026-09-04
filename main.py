@@ -442,11 +442,24 @@ if getattr(args, "mode", None) == "EXPLAINER":
         if audio_path and os.path.exists(audio_path):
             merged_path = os.path.join(session_dir, "final_explainer.mp4")
             import subprocess
+            
+            # Helper to get media duration
+            def get_dur(p):
+                try:
+                    res = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", p], capture_output=True, text=True)
+                    return float(res.stdout.strip())
+                except: return 0.1
+                
+            v_dur = get_dur(manim_output_path)
+            a_dur = get_dur(audio_path)
+            speed_factor = a_dur / v_dur if v_dur > 0 else 1.0
+            print(f"[Log] Synchronizing Explainer Timing... Video: {v_dur:.2f}s, Audio: {a_dur:.2f}s (Stretch: {speed_factor:.2f}x)")
+
             ffmpeg_cmd = [
                 "ffmpeg", "-y",
                 "-i", manim_output_path,
                 "-i", audio_path,
-                "-vf", "tpad=stop_mode=clone:stop_duration=60",
+                "-vf", f"setpts={speed_factor}*PTS,tpad=stop_mode=clone:stop_duration=2",
                 "-c:v", "libx264",
                 "-c:a", "aac", "-b:a", "192k",
                 "-shortest", merged_path
@@ -748,7 +761,7 @@ else:
     try:
         if mode == "EXPLAINER":
             from engine.script_gen import generate_manim_script
-            manim_data = generate_manim_script(topic, extract_mode=args.extract_mode)
+            manim_data = generate_manim_script(topic, extract_mode=args.extract_mode, target_duration=args.target_duration)
             full_script = manim_data["voiceover_text"]
             facts_data = []
             print(f"[Log] EXPLAINER Script generated for topic '{topic}': Title='{manim_data['title']}'")

@@ -1,5 +1,12 @@
 import os
 import sys
+
+# PyInstaller Subprocess Hook: If running as compiled executable and given our flag, run backend.
+if getattr(sys, 'frozen', False) and len(sys.argv) > 1 and sys.argv[1] == "--run-main-pipeline":
+    sys.argv.pop(1) # Remove the flag so argparse doesn't break
+    import main
+    sys.exit(0)
+
 import threading
 import subprocess
 import json
@@ -21,8 +28,8 @@ class ModernShortsGeneratorUI(ctk.CTk):
         super().__init__()
 
         self.title("⚡ ShortsFlow AI Studio - Complete AI & Master Engine")
-        self.geometry("1040x840")
-        self.minsize(940, 740)
+        self.geometry("1200x900")
+        self.minsize(1000, 800)
 
         # Header Frame
         self.create_header()
@@ -546,6 +553,20 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.bg_media_entry = ctk.CTkEntry(bg_frame, placeholder_text="Path to custom background video (.mp4/.mov) or image (.png/.jpg)...", width=380)
         self.bg_media_entry.pack(side="left", padx=(0, 10))
 
+        # Target Duration (For Standalone Modes)
+        ctk.CTkLabel(grid, text="Target Duration (s):").grid(row=4, column=0, sticky="w", padx=(0, 10), pady=5)
+        self.modes_dur_entry = ctk.CTkEntry(grid, placeholder_text="e.g. 45 or 60", width=120)
+        self.modes_dur_entry.grid(row=4, column=1, sticky="w", pady=5)
+
+        # Video Format (Shorts vs Long)
+        ctk.CTkLabel(grid, text="Video Format:").grid(row=5, column=0, sticky="w", padx=(0, 10), pady=5)
+        self.modes_extract_dropdown = ctk.CTkOptionMenu(
+            grid,
+            values=["shorts (Vertical 9:16)", "long (Horizontal 16:9)"],
+            width=180
+        )
+        self.modes_extract_dropdown.grid(row=5, column=1, sticky="w", pady=5)
+
         browse_bg_btn = ctk.CTkButton(bg_frame, text="📁 Browse Media", width=100, command=self.browse_bg_media)
         browse_bg_btn.pack(side="left")
 
@@ -695,12 +716,14 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
     def run_generation_thread(self):
         try:
-            python_exe = sys.executable
-            gpu_python = r"C:\Users\win10\AppData\Local\Programs\Python\Python312\python.exe"
-            if os.path.exists(gpu_python):
-                python_exe = gpu_python
-
-            cmd = [python_exe, "main.py"]
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable, "--run-main-pipeline"]
+            else:
+                python_exe = sys.executable
+                gpu_python = r"C:\Users\win10\AppData\Local\Programs\Python\Python312\python.exe"
+                if os.path.exists(gpu_python):
+                    python_exe = gpu_python
+                cmd = [python_exe, "main.py"]
 
             source = self.source_entry.get().strip()
             batch = self.batch_entry.get().strip()
@@ -735,20 +758,27 @@ class ModernShortsGeneratorUI(ctk.CTk):
             setting = self.setting_entry.get().strip()
             if setting: cmd.extend(["--setting", setting])
 
+            # Unlimited Target Duration (Applies to ALL modes, including EXPLAINER)
+            target_dur = ""
+            if hasattr(self, "modes_dur_entry") and self.modes_dur_entry.get().strip():
+                target_dur = self.modes_dur_entry.get().strip()
+            elif hasattr(self, "dur_entry") and self.dur_entry.get().strip():
+                target_dur = self.dur_entry.get().strip()
+            
+            if target_dur:
+                cmd.extend(["--target_duration", target_dur])
+
+            # Extract Format (shorts vs long) - Applies to all modes
+            if not source and hasattr(self, "modes_extract_dropdown"):
+                ext_fmt = self.modes_extract_dropdown.get().split()[0]
+            else:
+                ext_fmt = self.extract_mode_dropdown.get().split()[0]
+            cmd.extend(["--extract_mode", ext_fmt])
+
             # Mode vs Extraction determination
             if source:
                 cmd.extend(["--source_video", source])
-                
-                # Extract Format (shorts vs long)
-                ext_fmt = self.extract_mode_dropdown.get().split()[0]
-                cmd.extend(["--extract_mode", ext_fmt])
-
                 cmd.extend(["--clip_count", str(int(self.clip_slider.get()))])
-
-                # Unlimited Target Duration
-                target_dur = self.dur_entry.get().strip()
-                if target_dur:
-                    cmd.extend(["--target_duration", target_dur])
 
                 if self.smart_crop_switch.get(): cmd.append("--smart_crop")
                 if self.tighten_switch.get(): cmd.append("--tighten")
