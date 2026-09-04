@@ -299,7 +299,7 @@ def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
     # Ensure we use a granular sub-topic if the topic is just a generic category (like in AUTO mode)
     known_cats = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "facts", "wyr", "trivia", "quotes", "sound_challenge", "kids", "children", "bedtime"]
     if topic.lower() in known_cats or len(topic.split()) == 1:
-        granular_topic = get_sub_topic(topic)
+        granular_topic = get_sub_topic(topic, is_explainer=True)
         if granular_topic:
             topic = granular_topic
             print(f"[Log] EXPLAINER: Selected granular sub-topic: {topic}")
@@ -538,10 +538,27 @@ def robust_json_parse(output):
 
     return None
 
-def get_sub_topic(category):
+def get_sub_topic(category, is_explainer=False):
     """
     Returns a granular sub-topic for a given category to ensure LLM variety.
+    If is_explainer is True, returns topics specifically suited for Manim visual animations (Math, Physics, CS).
     """
+    if is_explainer:
+        explainer_topics = {
+            "science": ["How neural networks learn", "The double-slit experiment", "How batteries work", "The physics of a pendulum", "What is DNA replication"],
+            "space": ["How orbits work", "The geometry of black holes", "Calculating the speed of light", "The expansion of the universe", "How eclipses happen"],
+            "math": ["The Pythagorean theorem", "Visualizing Pi", "The Fibonacci sequence", "What is a derivative?", "Understanding exponents"],
+            "tech": ["How binary code works", "Sorting algorithms visualized", "How encryption works", "What is an API?", "How GPS calculates location"],
+            "general": ["How gears work", "The golden ratio in nature", "How sound waves travel", "The mechanics of flight", "How lenses bend light"]
+        }
+        
+        if category.lower() in explainer_topics:
+            return random.choice(explainer_topics[category.lower()])
+        
+        # Fallback to random explainer topic if category doesn't match
+        all_explainers = [item for sublist in explainer_topics.values() for item in sublist]
+        return random.choice(all_explainers)
+
     sub_topics = {
         "science": ["deep sea biology", "quantum mechanics", "forgotten inventors", "human body anomalies", "microscopic life", "unexpected chemistry", "bizarre psychology experiments"],
         "space": ["exoplanets", "black holes", "moon landing secrets", "stellar phenomena", "alien life theories", "the edge of the universe", "rogue planets"],
