@@ -1,5 +1,12 @@
 import os
 import sys
+
+# PyInstaller Subprocess Hook: If running as compiled executable and given our flag, run backend.
+if getattr(sys, 'frozen', False) and len(sys.argv) > 1 and sys.argv[1] == "--run-main-pipeline":
+    sys.argv.pop(1) # Remove the flag so argparse doesn't break
+    import main
+    sys.exit(0)
+
 import threading
 import subprocess
 import json
@@ -21,8 +28,8 @@ class ModernShortsGeneratorUI(ctk.CTk):
         super().__init__()
 
         self.title("⚡ ShortsFlow AI Studio - Complete AI & Master Engine")
-        self.geometry("1040x840")
-        self.minsize(940, 740)
+        self.geometry("1200x900")
+        self.minsize(1000, 800)
 
         # Header Frame
         self.create_header()
@@ -695,12 +702,14 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
     def run_generation_thread(self):
         try:
-            python_exe = sys.executable
-            gpu_python = r"C:\Users\win10\AppData\Local\Programs\Python\Python312\python.exe"
-            if os.path.exists(gpu_python):
-                python_exe = gpu_python
-
-            cmd = [python_exe, "main.py"]
+            if getattr(sys, 'frozen', False):
+                cmd = [sys.executable, "--run-main-pipeline"]
+            else:
+                python_exe = sys.executable
+                gpu_python = r"C:\Users\win10\AppData\Local\Programs\Python\Python312\python.exe"
+                if os.path.exists(gpu_python):
+                    python_exe = gpu_python
+                cmd = [python_exe, "main.py"]
 
             source = self.source_entry.get().strip()
             batch = self.batch_entry.get().strip()
