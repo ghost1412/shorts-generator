@@ -193,14 +193,16 @@ def print_clip_score_table(highlights):
     print(f"{'Rank':<5} | {'Start':<8} | {'End':<8} | {'Score':<10} | {'Reason'}")
     print("-" * 85)
     for i, h in enumerate(highlights):
-        score = float(h.get('score', 0))
-        # Check if LLM score exists
+        # Look for the best available score (supports our hybrid engine output)
+        score = float(h.get('final_score', h.get('viral_score', h.get('score', 0))))
+        
+        # Check if LLM score specifically exists for display suffix
         if 'llm_score' in h and h['llm_score'] is not None:
             score_str = f"{score:.1f} (LLM)"
-            reason = h.get('llm_reason', h.get('reason', ''))
         else:
             score_str = f"{score:.1f}"
-            reason = h.get('reason', '')
+            
+        reason = str(h.get('reason', h.get('llm_reason', h.get('hook_text', 'Viral Moment'))))
         print(f"#{i+1:<4} | {h['start']:<7.1f}s | {h['end']:<7.1f}s | {score_str:<10} | {reason[:40]}")
     print("="*85 + "\n")
 
