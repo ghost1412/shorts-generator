@@ -136,7 +136,6 @@ Rename `.env.example` to `.env` and configure your preferences:
 
 ## ⚖️ License
 License
-License
 
 This project is licensed under the MIT License.
 

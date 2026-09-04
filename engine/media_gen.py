@@ -38,11 +38,26 @@ def extract_keywords(text):
     keywords = [w for w in words if w not in stopwords and len(w) > 3]
     return keywords[:3] # Return top 3 keywords
 
-def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4", orientation="portrait"):
+def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4", orientation="portrait", custom_bg=None):
     """
-    downloads a background video based on keywords from the fact.
-    Higher priority given to high-retention gameplay/satisfying clips to boost AVD.
+    downloads a background video based on keywords from the fact or custom background media.
     """
+    if custom_bg and os.path.exists(custom_bg):
+        print(f"[Log] Using CUSTOM background media: {custom_bg}")
+        ext = os.path.splitext(custom_bg)[1].lower()
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        if ext in [".png", ".jpg", ".jpeg", ".webp"]:
+            try:
+                from moviepy.editor import ImageClip
+                clip = ImageClip(custom_bg).set_duration(60)
+                clip.write_videofile(output_path, fps=30, codec="libx264")
+                clip.close()
+                return output_path
+            except Exception as e:
+                print(f"[Warning] Failed to render image background: {e}")
+        import shutil
+        shutil.copy(custom_bg, output_path)
+        return output_path
     # 50% chance to force a high-retention background instead of a literal one
     if random.random() > 0.5:
         query = random.choice(HIGH_RETENTION_QUERIES)

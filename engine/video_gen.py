@@ -1817,6 +1817,78 @@ def create_riddle_video(audio_path, riddle_data, video_paths, output_path="riddl
     
     return output_path
 
+def render_manim_scene(code_str, output_dir="assets/temp_manim", extract_mode="shorts"):
+    """
+    Writes the Python script code_str to a temporary file and executes Manim CE CLI to render it.
+    Returns the path to the generated MP4 file.
+    """
+    import tempfile, sys
+    os.makedirs(output_dir, exist_ok=True)
+    script_path = os.path.join(output_dir, "scene.py")
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(code_str)
+        
+    print(f"[Log] Rendering Manim animation from script: {script_path}...")
+    res_args = ["-r", "1080,1920"] if extract_mode == "shorts" else ["-r", "1920,1080"]
+    
+    cmd = [
+        sys.executable, "-m", "manim", 
+        "-ql", "--media_dir", output_dir
+    ] + res_args + [script_path, "ExplainerScene"]
+    
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    if res.returncode != 0:
+        print(f"[Warning] Manim CLI stderr: {res.stderr}")
+        raise RuntimeError(f"Manim render failed: {res.stderr}")
+        
+    rendered_file = None
+    for root, dirs, files in os.walk(output_dir):
+        for file in files:
+            if file.endswith(".mp4"):
+                rendered_file = os.path.join(root, file)
+                break
+        if rendered_file: break
+        
+    if not rendered_file or not os.path.exists(rendered_file):
+        raise RuntimeError("Manim render completed but output MP4 was not found.")
+        
+    return rendered_file
+
+def create_explainer_video(audio_path, manim_video_path, output_path="explainer_short.mp4", music_path=None, bitrate="8000k", preset="medium"):
+    """
+    Combines rendered Manim animation with TTS audio track and background music.
+    """
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+        
+    try:
+        video_clip = VideoFileClip(manim_video_path)
+    except Exception as e:
+        raise RuntimeError(f"Manim video file is unreadable: {manim_video_path}")
+        
+    duration = max(audio_clip.duration, video_clip.duration)
+    
+    if video_clip.duration < duration:
+        n_loops = int(np.ceil(duration / video_clip.duration)) if video_clip.duration > 0 else 1
+        video_clip = video_clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(duration)
+    else:
+        video_clip = video_clip.with_duration(duration)
+        
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+    else:
+        final_audio = audio_clip.with_duration(duration)
+        
+    final_video = video_clip.with_audio(final_audio).with_duration(duration)
+    
+    print(f"[Log] Exporting EXPLAINER video: {output_path}")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
+    return output_path
+
+
 
 # --- AI EXTRACTION ENGINE (Long-Form Support) ---
 # Parallel extraction and highlight reel generation logic from commit 1eeef17.

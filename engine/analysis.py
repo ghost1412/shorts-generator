@@ -1087,22 +1087,66 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                         "reason": "High-Signal Moment (Heuristic Fallback)"
                     })
             
-            # Sort chronologically for playback reliability
             valid_highlights.sort(key=lambda x: x['start'])
+            valid_highlights = deduplicate_highlights(valid_highlights)
 
         if not valid_highlights:
             # 🟢 ABSOLUTE FAILSAFE: Simple duration-based slice
             fallback_start = min(45.0, total_duration * 0.1)
             fallback_duration = 35.0 if mode == "shorts" else (target_duration or 180.0)
-            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 85, "reason": "Draft Extraction (Failsafe)"}]
+            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 85, "hook_text": "Check this out!", "reason": "Draft Extraction (Failsafe)"}]
         
-        print(f"[Log] Curation complete: Selected {len(valid_highlights)} high-viral segments.")
+        # Final deduplication check
+        valid_highlights = deduplicate_highlights(valid_highlights)
+        print(f"[Log] Curation complete: Selected {len(valid_highlights)} high-viral deduplicated segments.")
         return valid_highlights
     except Exception as e:
         print(f"[Error] Highlight identification failed: {e}")
         import traceback
         traceback.print_exc()
-        return [{"start": 10.0, "end": 40.0, "reason": "Epic Highlight"}]
+        return [{"start": 10.0, "end": 40.0, "viral_score": 80, "hook_text": "Epic Moment", "reason": "Epic Highlight"}]
+
+def deduplicate_highlights(highlights, min_overlap_sec=5.0):
+    """
+    Deduplicates overlapping highlight clips by comparing time ranges.
+    When two clips overlap significantly (>= min_overlap_sec),
+    keeps the candidate with the higher viral_score / final_score.
+    """
+    if not highlights or len(highlights) <= 1:
+        return highlights
+
+    # Sort by score descending so higher-rated clips take priority
+    sorted_highlights = sorted(
+        highlights, 
+        key=lambda x: float(x.get('viral_score', x.get('final_score', 80)) or 80), 
+        reverse=True
+    )
+    
+    kept = []
+    for candidate in sorted_highlights:
+        cand_start = float(candidate['start'])
+        cand_end = float(candidate['end'])
+        
+        is_overlapping = False
+        for existing in kept:
+            ex_start = float(existing['start'])
+            ex_end = float(existing['end'])
+            
+            # Calculate overlap duration
+            overlap_start = max(cand_start, ex_start)
+            overlap_end = min(cand_end, ex_end)
+            overlap_duration = max(0.0, overlap_end - overlap_start)
+            
+            if overlap_duration >= min_overlap_sec:
+                is_overlapping = True
+                break
+                
+        if not is_overlapping:
+            kept.append(candidate)
+            
+    # Re-sort chronologically by start time for natural playback order
+    kept.sort(key=lambda x: float(x['start']))
+    return kept
 
 def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False):
     if not os.path.exists(video_path):
