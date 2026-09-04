@@ -310,7 +310,7 @@ REQUIREMENTS:
 2. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
 3. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
 4. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")`).
-5. CRITICAL SCREEN BOUNDS: If you write a long sentence in `Text()`, YOU MUST insert `\\n` every 4-5 words so it wraps properly and does not run off the edges of the screen!
+5. CRITICAL SCREEN BOUNDS: Do not use long sentences in a single `Text()`. Break long sentences into multiple small `Text()` objects stacked on top of each other using `.next_to(..., DOWN, buff=0.2)` so they don't run off the edges of the screen.
 6. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures and labels.
 7. GEOMETRIC ACCURACY FOR TOPICS:
    - If the topic is 'Pythagorean Theorem' or related to right triangles:
