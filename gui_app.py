@@ -558,6 +558,15 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.modes_dur_entry = ctk.CTkEntry(grid, placeholder_text="e.g. 45 or 60", width=120)
         self.modes_dur_entry.grid(row=4, column=1, sticky="w", pady=5)
 
+        # Video Format (Shorts vs Long)
+        ctk.CTkLabel(grid, text="Video Format:").grid(row=5, column=0, sticky="w", padx=(0, 10), pady=5)
+        self.modes_extract_dropdown = ctk.CTkOptionMenu(
+            grid,
+            values=["shorts (Vertical 9:16)", "long (Horizontal 16:9)"],
+            width=180
+        )
+        self.modes_extract_dropdown.grid(row=5, column=1, sticky="w", pady=5)
+
         browse_bg_btn = ctk.CTkButton(bg_frame, text="📁 Browse Media", width=100, command=self.browse_bg_media)
         browse_bg_btn.pack(side="left")
 
@@ -759,14 +768,16 @@ class ModernShortsGeneratorUI(ctk.CTk):
             if target_dur:
                 cmd.extend(["--target_duration", target_dur])
 
+            # Extract Format (shorts vs long) - Applies to all modes
+            if not source and hasattr(self, "modes_extract_dropdown"):
+                ext_fmt = self.modes_extract_dropdown.get().split()[0]
+            else:
+                ext_fmt = self.extract_mode_dropdown.get().split()[0]
+            cmd.extend(["--extract_mode", ext_fmt])
+
             # Mode vs Extraction determination
             if source:
                 cmd.extend(["--source_video", source])
-                
-                # Extract Format (shorts vs long)
-                ext_fmt = self.extract_mode_dropdown.get().split()[0]
-                cmd.extend(["--extract_mode", ext_fmt])
-
                 cmd.extend(["--clip_count", str(int(self.clip_slider.get()))])
 
                 if self.smart_crop_switch.get(): cmd.append("--smart_crop")
