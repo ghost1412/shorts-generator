@@ -138,10 +138,17 @@ def parse_args():
     parser.add_argument("--tighten_mode", choices=["cut", "speed"], default="cut", help="How to handle silences: 'cut' them or 'speed' them up.")
     parser.add_argument("--smart_crop", action="store_true", help="Enabled AI-powered face/interest tracking for vertical cropping.")
     
+    # 🟢 Gap Closure Flags
+    parser.add_argument("--srt", action="store_true", help="Export SRT subtitle file alongside each video.")
+    parser.add_argument("--use_chapters", action="store_true", help="Boost scores for segments overlapping YouTube chapters.")
+    parser.add_argument("--broll", action="store_true", help="Automatically download and insert B-roll cutaways during silences.")
+    parser.add_argument("--preview", action="store_true", help="Render a low-res 3fps proxy video for quick preview.")
+    
     # Cartoon/Persona Flags
     parser.add_argument("--cartoon", action="store_true", help="Enable cartoon-style news persona.")
     parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
+    parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI).")
     
     # Provider & Media Overrides
     parser.add_argument("--use_ollama", action="store_true", help="Force local Ollama LLM execution.")
@@ -157,6 +164,45 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
+def export_srt(transcript_data, output_path):
+    """Exports transcript segments to a standard .srt file."""
+    segments = transcript_data.get('segments', [])
+    if not segments: return
+    
+    def format_time(seconds):
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        s = int(seconds % 60)
+        ms = int((seconds % 1) * 1000)
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+        
+    with open(output_path, 'w', encoding='utf-8') as f:
+        for i, seg in enumerate(segments, 1):
+            start = format_time(seg.get('start', 0))
+            end = format_time(seg.get('end', 0))
+            text = seg.get('text', '').strip()
+            f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
+
+def print_clip_score_table(highlights):
+    """Prints a formatted table of clip scores to the console."""
+    if not highlights: return
+    print("\n" + "="*85)
+    print(f"{'CLIP SCORE RANKING':^85}")
+    print("="*85)
+    print(f"{'Rank':<5} | {'Start':<8} | {'End':<8} | {'Score':<10} | {'Reason'}")
+    print("-" * 85)
+    for i, h in enumerate(highlights):
+        score = float(h.get('score', 0))
+        # Check if LLM score exists
+        if 'llm_score' in h and h['llm_score'] is not None:
+            score_str = f"{score:.1f} (LLM)"
+            reason = h.get('llm_reason', h.get('reason', ''))
+        else:
+            score_str = f"{score:.1f}"
+            reason = h.get('reason', '')
+        print(f"#{i+1:<4} | {h['start']:<7.1f}s | {h['end']:<7.1f}s | {score_str:<10} | {reason[:40]}")
+    print("="*85 + "\n")
 
 args = parse_args()
 
@@ -476,14 +522,47 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
         print(f"[Warning] Target duration {args.target_duration}s exceeds YouTube Shorts limit (60s).")
         print(f"[Log] Capping short duration at 60s. For longer highlights, use --extract_mode long.")
         args.target_duration = 60
+        
+    # Get chapters if requested
+    chapters_path = None
+    if args.use_chapters:
+        from engine.media_gen import get_chapters_json_path
+        chapters_path = get_chapters_json_path(args.source_video, session_dir)
 
     highlights, transcript_path, interest_points, silence_intervals = process_source_video(
         args.source_video, session_dir, mode=args.extract_mode, 
         clip_count=args.clip_count, target_duration=args.target_duration,
         use_audio_detect=args.use_audio_detect, style=args.style,
         user_context=args.user_context, style_context=args.style_context,
-        smart_crop=args.smart_crop, tighten=args.tighten, use_cache=args.use_cache
+        smart_crop=args.smart_crop, tighten=args.tighten, use_cache=args.use_cache,
+        chapters_path=chapters_path, use_llm_scoring=True
     )
+    
+    # 🟢 Print the beautiful new score table
+    print_clip_score_table(highlights)
+    
+    # 🟢 Download B-roll if requested
+    if args.broll:
+        from engine.media_gen import download_broll_clips
+        download_broll_clips()
+        
+    # 🟢 Handle Preview Mode
+    if args.preview:
+        print("\n[Log] 🔍 PREVIEW MODE ENABLED: Rendering fast 3fps proxy instead of full extraction...")
+        import subprocess
+        for i, h in enumerate(highlights):
+            out_preview = os.path.join(session_dir, f"preview_clip_{i+1}.mp4")
+            cmd = [
+                "ffmpeg", "-y", "-ss", str(h['start']), "-i", args.source_video,
+                "-t", str(h['end'] - h['start']),
+                "-vf", "scale=-2:360", "-r", "3", "-c:v", "libx264", "-preset", "ultrafast",
+                "-c:a", "aac", out_preview
+            ]
+            subprocess.run(cmd, capture_output=True)
+            print(f"  -> Generated {out_preview}")
+        print("\n[Log] Preview renders complete. Check session folder.")
+        sys.exit(0)
+    
     
     # Filter signals based on user flags
     final_interest = interest_points if args.smart_crop else None
@@ -494,6 +573,12 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
         sys.exit(1)
         
     print(f"[Log] Extracting {len(highlights)} segments in parallel via FFmpeg...")
+    
+    # Check orientation and letterbox
+    from engine.analysis import detect_letterbox, detect_orientation
+    letterbox_crop = detect_letterbox(args.source_video) if args.smart_crop else None
+    orientation = detect_orientation(args.source_video) if args.smart_crop else "landscape"
+    
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, session_dir, 
         mode=args.extract_mode, bitrate=target_bitrate, preset=target_preset, codec="libx264",
@@ -501,9 +586,27 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
         editing_style=args.style, gif_dir=args.gif_dir,
         interest_points=final_interest, silence_intervals=final_silence,
         tighten_mode=args.tighten_mode, use_remotion=args.use_remotion, use_cache=args.use_cache,
-        mashup=args.mashup,
-        mashup_mode=args.mashup_mode
+        mashup=args.mashup, mashup_mode=args.mashup_mode,
+        orientation=orientation, letterbox_crop=letterbox_crop
     )
+    
+    # Export SRT for each extracted file
+    if args.srt and os.path.exists(transcript_path):
+        print(f"[Log] Exporting SRT files for {len(extracted_files)} clips...")
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            t_data = json.load(f)
+        for i, clip_file in enumerate(extracted_files):
+            # Try to map the global transcript to the specific clip bounds
+            hi = highlights[i]
+            clip_segs = [s for s in t_data.get('segments', []) if s['start'] >= hi['start'] and s['end'] <= hi['end']]
+            # Offset times relative to clip start
+            for s in clip_segs:
+                s['start'] = max(0, s['start'] - hi['start'])
+                s['end'] = max(0, s['end'] - hi['start'])
+            srt_path = clip_file.rsplit('.', 1)[0] + ".srt"
+            export_srt({'segments': clip_segs}, srt_path)
+            
+
     
     if not extracted_files:
         print("[Error] No videos were generated. Check the logs for FFmpeg failures.")
@@ -1177,7 +1280,8 @@ if args.use_remotion and mode in remotion_supported_modes:
         bg_music_path=bg_music,
         title_text=args.recap_title or args.category or "ShortsFlow",
         background_paths=bg_video_paths,
-        this_or_that=this_or_that_data
+        this_or_that=this_or_that_data,
+        caption_style=getattr(args, "caption_style", "HORMOZI")
     )
 else:
     if mode == "FIND_IT" or mode == "FIND_CAT":

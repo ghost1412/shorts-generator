@@ -37,12 +37,13 @@ def render_with_remotion(
     rank_it=None,       # dict: {"items": list of str, "paths": list of str}
     caption_this=None,  # dict: {"image_path": str, "prompt_text": str}
     duration=None,
-    start_offset=0.0
+    start_offset=0.0,
+    caption_style="HORMOZI"
 ):
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
     """
-    print(f"\n[RemotionRenderer] Initiating modern render pipeline for mode: {mode}...")
+    print(f"\n[RemotionRenderer] Initiating modern render pipeline for mode: {mode} (Caption Preset: {caption_style})...")
     
     # 1. Establish directory paths
     current_dir = os.path.abspath(os.path.dirname(__file__))
@@ -167,6 +168,7 @@ def render_with_remotion(
           "category": "general",
           "titleText": title_text,
           "subtitleYPos": 1600,
+          "captionStyle": caption_style,
           "backgrounds": remotion_bg
         }
         

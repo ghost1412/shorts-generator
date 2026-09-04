@@ -31,6 +31,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.tabview = ctk.CTkTabview(self, width=1000, height=640)
         self.tabview.pack(fill="both", expand=True, padx=20, pady=(10, 10))
 
+        self.tab_quickstart = self.tabview.add("⚡ Quick Start (1-Click)")
         self.tab_clipping = self.tabview.add("✂️ Video Extraction")
         self.tab_context = self.tabview.add("🧠 AI Context & Styles")
         self.tab_llms = self.tabview.add("🤖 Integrated LLMs & Models")
@@ -40,6 +41,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.tab_advanced = self.tabview.add("⚙️ Advanced & Batch")
         self.tab_logs = self.tabview.add("📋 Execution Logs")
 
+        self.build_quickstart_tab()
         self.build_clipping_tab()
         self.build_context_tab()
         self.build_llms_tab()
@@ -51,6 +53,109 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
         # Footer Action Bar
         self.create_footer()
+
+    def build_quickstart_tab(self):
+        card = ctk.CTkFrame(self.tab_quickstart, fg_color="#1E293B", corner_radius=10)
+        card.pack(fill="both", expand=True, padx=15, pady=10)
+
+        ctk.CTkLabel(card, text="⚡ 1-Click Viral Short Generator", font=ctk.CTkFont(size=18, weight="bold"), text_color="#38BDF8").pack(anchor="w", padx=20, pady=(15, 2))
+        ctk.CTkLabel(card, text="Select a preset or paste a video URL / local file to generate high-retention 9:16 Shorts automatically.", font=ctk.CTkFont(size=12), text_color="#94A3B8").pack(anchor="w", padx=20, pady=(0, 15))
+
+        # Input source card
+        input_frame = ctk.CTkFrame(card, fg_color="#0F172A", corner_radius=8)
+        input_frame.pack(fill="x", padx=20, pady=10)
+
+        ctk.CTkLabel(input_frame, text="🎬 Source Video (YouTube URL or Local MP4 file):", font=ctk.CTkFont(size=12, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 5))
+
+        entry_subframe = ctk.CTkFrame(input_frame, fg_color="transparent")
+        entry_subframe.pack(fill="x", padx=15, pady=(0, 12))
+
+        self.qs_source_entry = ctk.CTkEntry(entry_subframe, placeholder_text="Paste YouTube URL or browse local MP4 video file...", width=620)
+        self.qs_source_entry.pack(side="left", padx=(0, 10))
+
+        browse_qs_btn = ctk.CTkButton(entry_subframe, text="📁 Browse", width=100, fg_color="#334155", hover_color="#475569", command=self.browse_qs_file)
+        browse_qs_btn.pack(side="left")
+
+        # Preset selection frame
+        preset_frame = ctk.CTkFrame(card, fg_color="#0F172A", corner_radius=8)
+        preset_frame.pack(fill="x", padx=20, pady=10)
+
+        ctk.CTkLabel(preset_frame, text="🎨 Styling & Subtitle Engine Presets:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 8))
+
+        grid = ctk.CTkFrame(preset_frame, fg_color="transparent")
+        grid.pack(fill="x", padx=15, pady=(0, 15))
+
+        # Subtitle Preset
+        ctk.CTkLabel(grid, text="Subtitle Preset:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=0, sticky="w", padx=(0, 10))
+        self.qs_caption_style = ctk.CTkOptionMenu(grid, values=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], width=170)
+        self.qs_caption_style.grid(row=0, column=1, sticky="w", padx=(0, 25))
+
+        # Mode Preset
+        ctk.CTkLabel(grid, text="Generation Mode:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=2, sticky="w", padx=(0, 10))
+        self.qs_mode_preset = ctk.CTkOptionMenu(grid, values=["✂️ Auto Clipping (Long -> Short)", "📖 AI Story Mode", "💡 AI Facts Mode", "🧮 Math Explainer"], width=230)
+        self.qs_mode_preset.grid(row=0, column=3, sticky="w")
+
+        # Big 1-Click Launch Button
+        btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=(25, 10))
+
+        launch_qs_btn = ctk.CTkButton(
+            btn_frame,
+            text="🚀 GENERATE VIRAL SHORT NOW (1-CLICK)",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color="#10B981",
+            hover_color="#059669",
+            height=52,
+            command=self.run_qs_generation
+        )
+        launch_qs_btn.pack(fill="x")
+
+        # Open Output Folder Button
+        link_frame = ctk.CTkFrame(card, fg_color="transparent")
+        link_frame.pack(fill="x", padx=20, pady=(10, 15))
+
+        open_folder_btn = ctk.CTkButton(
+            link_frame,
+            text="📁 Open Rendered Videos Folder (sessions/)",
+            fg_color="#0284C7",
+            hover_color="#0369A1",
+            command=self.open_output_dir
+        )
+        open_folder_btn.pack(side="left")
+
+    def browse_qs_file(self):
+        filename = filedialog.askopenfilename(title="Select Source Video File", filetypes=[("Video Files", "*.mp4 *.mov *.avi *.mkv")])
+        if filename:
+            self.qs_source_entry.delete(0, "end")
+            self.qs_source_entry.insert(0, filename)
+
+    def open_output_dir(self):
+        sessions_dir = os.path.abspath("sessions")
+        os.makedirs(sessions_dir, exist_ok=True)
+        os.startfile(sessions_dir)
+
+    def run_qs_generation(self):
+        source = self.qs_source_entry.get().strip()
+        mode_val = self.qs_mode_preset.get()
+        caption_style = self.qs_caption_style.get()
+
+        # Carry the Quick Start caption style into start_generation via temp attribute
+        self._qs_caption_override = caption_style
+
+        if "Auto Clipping" in mode_val:
+            if not source:
+                messagebox.showwarning("Input Required", "Please enter a YouTube URL or select a local video file for Auto Clipping.")
+                return
+            self.source_entry.delete(0, "end")
+            self.source_entry.insert(0, source)
+            # Enable Remotion so the caption preset is actually used
+            if hasattr(self, "remotion_switch"):
+                self.remotion_switch.select()
+            self.tabview.set("✂️ Video Extraction")
+        else:
+            self.tabview.set("🎬 Standalone Modes & Manim")
+
+        self.start_generation()
 
     def create_header(self):
         header = ctk.CTkFrame(self, fg_color="#0F172A", height=70, corner_radius=10)
@@ -277,6 +382,16 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.cache_switch = ctk.CTkSwitch(toggles_frame, text="Reuse Cached Transcripts & Videos")
         self.cache_switch.select()
         self.cache_switch.grid(row=1, column=1, pady=5, sticky="w")
+        
+        self.chapters_switch = ctk.CTkSwitch(toggles_frame, text="Use YouTube Chapters for Scoring")
+        self.chapters_switch.select()
+        self.chapters_switch.grid(row=2, column=0, padx=(0, 20), pady=5, sticky="w")
+        
+        self.broll_switch = ctk.CTkSwitch(toggles_frame, text="Auto B-Roll Cutaways (During Silence)")
+        self.broll_switch.grid(row=2, column=1, padx=(0, 20), pady=5, sticky="w")
+        
+        self.preview_switch = ctk.CTkSwitch(toggles_frame, text="Fast Preview Mode (Proxy Render)")
+        self.preview_switch.grid(row=2, column=2, pady=5, sticky="w")
 
     def update_clip_lbl(self, val):
         self.clip_count_lbl.configure(text=f"{int(val)} clips")
@@ -373,6 +488,11 @@ class ModernShortsGeneratorUI(ctk.CTk):
             width=220
         )
         self.preset_dropdown.grid(row=3, column=1, sticky="w", pady=8)
+        
+        # Gap Closure: SRT Export
+        self.srt_switch = ctk.CTkSwitch(grid, text="Export Subtitles as standard .SRT file")
+        self.srt_switch.select()
+        self.srt_switch.grid(row=4, column=0, columnspan=2, sticky="w", padx=(0, 10), pady=8)
 
     def build_modes_tab(self):
         card = ctk.CTkFrame(self.tab_modes, fg_color="#1E293B", corner_radius=10)
@@ -636,6 +756,12 @@ class ModernShortsGeneratorUI(ctk.CTk):
                 if self.audio_detect_switch.get(): cmd.append("--use_audio_detect")
                 if self.cache_switch.get(): cmd.append("--use_cache")
                 
+                # Gap Closure Flags
+                if hasattr(self, 'chapters_switch') and self.chapters_switch.get(): cmd.append("--use_chapters")
+                if hasattr(self, 'broll_switch') and self.broll_switch.get(): cmd.append("--broll")
+                if hasattr(self, 'preview_switch') and self.preview_switch.get(): cmd.append("--preview")
+                if hasattr(self, 'srt_switch') and self.srt_switch.get(): cmd.append("--srt")
+                
                 # Multiple Style Presets Flags
                 if self.style_meme_var.get(): cmd.extend(["--style", "meme"])
                 if self.style_funny_var.get(): cmd.extend(["--style", "funny"])
@@ -675,6 +801,14 @@ class ModernShortsGeneratorUI(ctk.CTk):
             if self.comfy_switch.get(): cmd.append("--use_comfy")
             if self.skip_upload_switch.get(): cmd.append("--skip-upload")
             if hasattr(self, "ollama_switch") and self.ollama_switch.get(): cmd.append("--use_ollama")
+
+            # Caption style: prefer Quick Start selection if coming from there, else default HORMOZI
+            caption_style_val = getattr(self, "_qs_caption_override", None)
+            if caption_style_val:
+                cmd.extend(["--caption_style", caption_style_val])
+                self._qs_caption_override = None  # consume it
+            else:
+                cmd.extend(["--caption_style", "HORMOZI"])  # safe default
 
             bg_media = self.bg_media_entry.get().strip() if hasattr(self, "bg_media_entry") else ""
             if bg_media: cmd.extend(["--bg_media", bg_media])
