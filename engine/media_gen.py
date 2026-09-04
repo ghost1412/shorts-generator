@@ -451,6 +451,7 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4")
             'quiet': False,
             'no_warnings': True,
             'nocheckcertificate': True,
+            'writeinfojson': True,  # Save chapters + metadata alongside video
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -493,6 +494,93 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4")
         return target_path
     except Exception as e2:
         raise RuntimeError(f"Failed to download video from URL '{url}': {e2}")
+
+
+def get_chapters_json_path(url, output_dir=None):
+    """
+    Returns the path to the info.json saved by yt-dlp for a given URL, or None.
+    This file contains chapter markers, description, and full metadata.
+    """
+    import hashlib
+    url_hash = hashlib.md5(url.strip().encode('utf-8')).hexdigest()
+    cache_dir = os.path.join("sessions", "url_cache")
+    info_path = os.path.join(cache_dir, f"{url_hash}.info.json")
+    if os.path.exists(info_path):
+        return info_path
+    if output_dir:
+        alt = os.path.join(output_dir, "video_info.json")
+        if os.path.exists(alt):
+            return alt
+    return None
+
+
+BROLL_QUERIES = [
+    "minecraft parkour",
+    "satisfying sand cutting",
+    "soap cutting asmr",
+    "kinetic sand",
+    "hydraulic press satisfying",
+    "gta 5 stunt",
+    "subway surfers gameplay",
+    "paint mixing asmr",
+    "slime satisfying",
+    "deep sea creatures",
+]
+
+def download_broll_clips(output_dir="assets/broll", count=8, force_refresh=False):
+    """
+    Downloads a curated set of high-retention B-roll clips from Pexels.
+    Clips are cached permanently in assets/broll/ and reused across runs.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    existing = [f for f in os.listdir(output_dir) if f.endswith('.mp4')]
+
+    if len(existing) >= count and not force_refresh:
+        print(f"[Log] B-roll library ready: {len(existing)} clips in {output_dir}")
+        return [os.path.join(output_dir, f) for f in existing[:count]]
+
+    if not PEXELS_API_KEY:
+        print("[Warning] PEXELS_API_KEY not set — B-roll download skipped.")
+        return []
+
+    print(f"[Log] Downloading {count} B-roll clips for cutaway library...")
+    downloaded = []
+    queries = (BROLL_QUERIES * 3)[:count]  # Repeat list if fewer queries than count
+
+    for i, query in enumerate(queries):
+        safe_q = re.sub(r'[^a-zA-Z0-9]', '_', query).lower()
+        out_path = os.path.join(output_dir, f"broll_{safe_q}.mp4")
+        if os.path.exists(out_path):
+            downloaded.append(out_path)
+            continue
+
+        try:
+            url = f"https://api.pexels.com/videos/search?query={query}&per_page=5&orientation=portrait"
+            headers = {"Authorization": PEXELS_API_KEY}
+            r = requests.get(url, headers=headers, timeout=15)
+            r.raise_for_status()
+            videos = r.json().get("videos", [])
+            if not videos:
+                continue
+            video_data = videos[0]
+            video_files = video_data.get("video_files", [])
+            best_link = next(
+                (vf["link"] for vf in video_files if vf.get("quality") == "hd" and vf.get("height", 0) >= 720),
+                video_files[0].get("link") if video_files else None
+            )
+            if not best_link:
+                continue
+            content = requests.get(best_link, timeout=30).content
+            with open(out_path, "wb") as f:
+                f.write(content)
+            downloaded.append(out_path)
+            print(f"  [{i+1}/{count}] Downloaded B-roll: {query}")
+        except Exception as e:
+            print(f"  [Warning] B-roll download failed for '{query}': {e}")
+
+    print(f"[Log] B-roll library: {len(downloaded)} clips ready in {output_dir}")
+    return downloaded
+
 
 
 if __name__ == "__main__":

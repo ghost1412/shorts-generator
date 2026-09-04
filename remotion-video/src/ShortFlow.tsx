@@ -59,6 +59,7 @@ export const shortFlowSchema = z.object({
   category: z.string().default("general"),
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1600), // in pixels (out of 1920)
+  captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]).default("HORMOZI"),
   avatarUrl: z.string().optional(),
   backgrounds: z.array(backgroundSchema).default([]),
   thisOrThat: thisOrThatSchema.optional(),
@@ -74,13 +75,14 @@ const isVideoAsset = (src: string) => {
   return s.endsWith(".mp4") || s.endsWith(".mov") || s.endsWith(".webm");
 };
 
-// --- HELPER FOR INFLUENCER/STYLISH SUBTITLES ---
+// --- HELPER FOR INFLUENCER & PRESET SUBTITLES ---
 const Subtitles: React.FC<{
   words: z.infer<typeof wordSchema>[];
   currentTime: number;
   yPos: number;
   fps: number;
-}> = ({ words, currentTime, yPos, fps }) => {
+  captionStyle?: "HORMOZI" | "GLOW_BOX" | "BOUNCE" | "MINIMAL";
+}> = ({ words, currentTime, yPos, fps, captionStyle = "HORMOZI" }) => {
   const frame = useCurrentFrame();
   
   // Find current word index
@@ -99,17 +101,20 @@ const Subtitles: React.FC<{
         break;
       }
     }
-    // Only keep it if it ended recently (within 1.5 seconds)
-    if (lastSpokenIdx !== -1 && currentTime - words[lastSpokenIdx].end < 1.5) {
+    // Keep visible for a brief moment after speaking stops
+    if (lastSpokenIdx !== -1 && currentTime - words[lastSpokenIdx].end < 1.2) {
       displayWordIdx = lastSpokenIdx;
     }
   }
 
   if (displayWordIdx === -1) return null;
 
-  // Smarter burst grouping (Group by 3 words around the active/display word)
-  const startIdx = Math.max(0, displayWordIdx - 1);
-  const endIdx = Math.min(words.length - 1, displayWordIdx + 1);
+  // Grouping strategy based on style:
+  // HORMOZI & BOUNCE: show only the active word centred (punch-word style)
+  // GLOW_BOX & MINIMAL: show ±1 word window for context
+  const isSingleWordMode = captionStyle === "HORMOZI" || captionStyle === "BOUNCE";
+  const startIdx = isSingleWordMode ? displayWordIdx : Math.max(0, displayWordIdx - 1);
+  const endIdx   = isSingleWordMode ? displayWordIdx : Math.min(words.length - 1, displayWordIdx + 1);
   const burstWords = words.slice(startIdx, endIdx + 1);
 
   return (
@@ -122,48 +127,149 @@ const Subtitles: React.FC<{
         justifyContent: "center",
         alignItems: "center",
         flexWrap: "wrap",
-        gap: "15px",
+        gap: captionStyle === "GLOW_BOX" ? "20px" : "16px",
         padding: "0 40px",
         zIndex: 50,
       }}
     >
       {burstWords.map((w, index) => {
         const isActive = currentWordIdx !== -1 && w.start === words[currentWordIdx].start;
-        
-        // Organic spring pop animation on active word
-        const scale = isActive
-          ? interpolate(
-              currentTime - w.start,
-              [0, 0.08, 0.15, 0.25],
-              [0.85, 1.25, 0.95, 1.0],
-              { extrapolateRight: "clamp" }
-            )
-          : 1.0;
+        const timeSinceStart = Math.max(0, currentTime - w.start);
 
-        const getActiveColor = (word: string) => {
-          const clean = word.toLowerCase().replace(/[^a-z0-9]/g, "");
-          if (/\d/.test(clean) || clean.length > 6) {
-            return "#39FF14"; // Neon Green for long words/numbers
-          }
-          return "#FFEA00"; // Neon Yellow for standard words
-        };
+        // 1. HORMOZI STYLING
+        if (captionStyle === "HORMOZI") {
+          const scale = isActive
+            ? interpolate(
+                timeSinceStart,
+                [0, 0.07, 0.15, 0.28],
+                [0.8, 1.3, 0.95, 1.05],
+                { extrapolateRight: "clamp" }
+              )
+            : 1.0;
 
-        const rotation = isActive ? (index % 2 === 0 ? -4 : 4) : 0;
+          const getHormoziColor = (word: string) => {
+            const clean = word.toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (/\d/.test(clean) || ["super", "crazy", "insane", "billion", "secret", "never", "always", "top"].includes(clean)) {
+              return "#39FF14"; // Neon Green for numbers & power words
+            }
+            if (clean.length > 6) return "#00E5FF"; // Vivid Cyan for longer words
+            return "#FFEA00"; // Neon Yellow default active
+          };
 
+          const rotation = isActive ? (index % 2 === 0 ? -4 : 4) : 0;
+
+          return (
+            <span
+              key={index}
+              style={{
+                fontFamily: "Impact, Arial Black, sans-serif",
+                fontSize: "96px",
+                color: isActive ? getHormoziColor(w.word) : "#FFFFFF",
+                opacity: isActive ? 1.0 : 0.60,
+                textTransform: "uppercase",
+                transform: `scale(${scale}) rotate(${rotation}deg)`,
+                display: "inline-block",
+                textShadow: "0px 10px 25px rgba(0,0,0,0.9), 5px 5px 0px #000000",
+                WebkitTextStroke: "5px #000000",
+                transition: "transform 0.06s ease-out, opacity 0.08s ease",
+              }}
+            >
+              {w.word}
+            </span>
+          );
+        }
+
+        // 2. GLOW_BOX STYLING (Glassmorphic pill box)
+        if (captionStyle === "GLOW_BOX") {
+          const scale = isActive
+            ? interpolate(
+                timeSinceStart,
+                [0, 0.1, 0.2],
+                [0.9, 1.1, 1.0],
+                { extrapolateRight: "clamp" }
+              )
+            : 0.95;
+
+          return (
+            <span
+              key={index}
+              style={{
+                fontFamily: "Impact, Arial Black, sans-serif",
+                fontSize: "82px",
+                color: isActive ? "#FFFFFF" : "#CBD5E1",
+                background: isActive
+                  ? "linear-gradient(135deg, #FF007F, #7928CA)"
+                  : "rgba(15, 23, 42, 0.75)",
+                padding: "10px 28px",
+                borderRadius: "20px",
+                border: isActive ? "3px solid #FF007F" : "2px solid rgba(255,255,255,0.15)",
+                boxShadow: isActive ? "0 10px 30px rgba(255, 0, 127, 0.6)" : "0 5px 15px rgba(0,0,0,0.3)",
+                textTransform: "uppercase",
+                transform: `scale(${scale})`,
+                display: "inline-block",
+                textShadow: isActive ? "2px 2px 0px #000000" : "none",
+                transition: "transform 0.08s ease, background 0.1s ease",
+              }}
+            >
+              {w.word}
+            </span>
+          );
+        }
+
+        // 3. BOUNCE STYLING (Upward spring jump with intense drop shadow glow)
+        if (captionStyle === "BOUNCE") {
+          const translateY = isActive
+            ? interpolate(
+                timeSinceStart,
+                [0, 0.08, 0.18, 0.3],
+                [0, -25, 5, 0],
+                { extrapolateRight: "clamp" }
+              )
+            : 0;
+
+          const scale = isActive ? 1.15 : 0.95;
+
+          return (
+            <span
+              key={index}
+              style={{
+                fontFamily: "Impact, Arial Black, sans-serif",
+                fontSize: "92px",
+                color: isActive ? "#FFD700" : "#FFFFFF",
+                opacity: isActive ? 1.0 : 0.7,
+                textTransform: "uppercase",
+                transform: `translateY(${translateY}px) scale(${scale})`,
+                display: "inline-block",
+                textShadow: isActive
+                  ? "0 0 20px #FFD700, 0 0 40px #FF4500, 4px 4px 0px #000000"
+                  : "3px 3px 0px #000000",
+                WebkitTextStroke: "4px #000000",
+                transition: "transform 0.08s ease-out, color 0.08s ease",
+              }}
+            >
+              {w.word}
+            </span>
+          );
+        }
+
+        // 4. MINIMAL STYLING (Clean dark box with crisp modern text)
+        const scale = isActive ? 1.05 : 1.0;
         return (
           <span
             key={index}
             style={{
-              fontFamily: "Impact, Arial Black, sans-serif",
-              fontSize: "95px",
-              color: isActive ? getActiveColor(w.word) : "#FFFFFF",
-              opacity: isActive ? 1.0 : 0.65,
+              fontFamily: "Arial Black, sans-serif",
+              fontSize: "78px",
+              color: isActive ? "#38BDF8" : "#F1F5F9",
+              background: "rgba(0, 0, 0, 0.85)",
+              padding: "8px 22px",
+              borderRadius: "12px",
+              borderLeft: isActive ? "6px solid #38BDF8" : "none",
               textTransform: "uppercase",
-              transform: `scale(${scale}) rotate(${rotation}deg)`,
+              transform: `scale(${scale})`,
               display: "inline-block",
-              textShadow: "0px 10px 20px rgba(0,0,0,0.8), 4px 4px 0px #000000",
-              WebkitTextStroke: "4px #000000",
-              transition: "transform 0.08s ease, opacity 0.1s ease",
+              boxShadow: "0 8px 20px rgba(0,0,0,0.5)",
+              transition: "transform 0.08s ease",
             }}
           >
             {w.word}
@@ -218,6 +324,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   category,
   titleText,
   subtitleYPos,
+  captionStyle = "HORMOZI",
   avatarUrl,
   backgrounds,
   thisOrThat,
@@ -539,6 +646,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         currentTime={currentTime}
         yPos={subtitleYPos}
         fps={fps}
+        captionStyle={captionStyle}
       />
 
       {/* 6. PROGRESS BAR (Snappy sliding bottom bar) */}
