@@ -58,7 +58,7 @@ export const shortFlowSchema = z.object({
   mode: z.enum(["FACTS", "STORY", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS", "NEWS", "NEWS_SERIOUS", "RIDDLE"]),
   category: z.string().default("general"),
   titleText: z.string().optional(),
-  subtitleYPos: z.number().default(1600), // in pixels (out of 1920)
+  subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
   captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]).default("HORMOZI"),
   avatarUrl: z.string().optional(),
   backgrounds: z.array(backgroundSchema).default([]),
@@ -163,15 +163,18 @@ const Subtitles: React.FC<{
               key={index}
               style={{
                 fontFamily: "Impact, Arial Black, sans-serif",
-                fontSize: "96px",
+                fontSize: "100px",
                 color: isActive ? getHormoziColor(w.word) : "#FFFFFF",
                 opacity: isActive ? 1.0 : 0.60,
                 textTransform: "uppercase",
                 transform: `scale(${scale}) rotate(${rotation}deg)`,
                 display: "inline-block",
-                textShadow: "0px 10px 25px rgba(0,0,0,0.9), 5px 5px 0px #000000",
-                WebkitTextStroke: "5px #000000",
-                transition: "transform 0.06s ease-out, opacity 0.08s ease",
+                letterSpacing: "-4px",
+                textShadow: isActive 
+                  ? "0px 20px 45px rgba(0,0,0,1.0), 8px 8px 0px #000000" 
+                  : "0px 10px 25px rgba(0,0,0,0.9), 5px 5px 0px #000000",
+                WebkitTextStroke: "6px #000000",
+                transition: "transform 0.04s cubic-bezier(0.17, 0.67, 0.83, 0.67), opacity 0.05s ease",
               }}
             >
               {w.word}
@@ -285,19 +288,39 @@ const BackgroundSegment: React.FC<{
   bg: z.infer<typeof backgroundSchema>;
   fps: number;
   durationInFrames: number;
-}> = ({ bg, fps, durationInFrames }) => {
+  isFirst: boolean;
+}> = ({ bg, fps, durationInFrames, isFirst }) => {
   const frame = useCurrentFrame();
   
   // Smooth continuous camera zoom (Ken Burns)
   const scale = interpolate(
     frame,
     [0, durationInFrames],
-    [1.04, 1.14],
+    [1.04, 1.12],
     { extrapolateRight: "clamp" }
   );
 
+  // Crossfade opacity (0.4s fade out at end, fade in at start)
+  const fadeFrames = 12; // 0.4s at 30fps
+  const safeEndFade = Math.max(fadeFrames + 1, durationInFrames - fadeFrames);
+  
+  // Opacity calculation for Crossfade
+  const opacity = isFirst
+    ? interpolate(
+        frame,
+        [safeEndFade, durationInFrames],
+        [1, 0],
+        { extrapolateRight: "clamp" }
+      )
+    : interpolate(
+        frame,
+        [0, fadeFrames, safeEndFade, durationInFrames],
+        [0, 1, 1, 0],
+        { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
+      );
+
   return (
-    <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center" }}>
+    <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center", opacity }}>
       {bg.type === "video" ? (
         <OffthreadVideo
           src={staticFile(bg.path)}
@@ -336,6 +359,14 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   const currentTime = frame / fps;
   const durationInSeconds = durationInFrames / fps;
 
+  // Dynamic Audio Ducking Logic
+  let currentVolume = bgMusicVolume;
+  // If we have words, check if someone is speaking near the current time
+  if (words && words.length > 0) {
+    const isSpeaking = words.some(w => currentTime >= w.start - 0.1 && currentTime <= w.end + 0.3);
+    currentVolume = isSpeaking ? 0.08 : bgMusicVolume; // specifically request 0.08 when speaking
+  }
+
   // Snap progression for progress bar
   const progressPercent = Math.min(100, (currentTime / durationInSeconds) * 100);
 
@@ -346,7 +377,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
 
       {/* 2. OPTIONAL BACKGROUND MUSIC */}
       {bgMusicUrl && (
-        <Audio src={staticFile(bgMusicUrl)} volume={bgMusicVolume} loop />
+        <Audio src={staticFile(bgMusicUrl)} volume={currentVolume} loop />
       )}
 
       {/* 3. DYNAMIC BACKGROUND LAYOUTS */}
@@ -595,6 +626,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   bg={bg}
                   fps={fps}
                   durationInFrames={durationInFrames}
+                  isFirst={idx === 0}
                 />
               </Sequence>
             );

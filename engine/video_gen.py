@@ -38,7 +38,7 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
     prev_t, prev_x = raw_pts[0][0], raw_pts[0][1]
     pts.append((prev_t, prev_x))
 
-    max_vel_per_sec = 0.30  # Max 30% width shift per second to guarantee smooth cinematic panning
+    max_vel_per_sec = 0.15  # Max 15% width shift per second for buttery smooth panning
     deadband = 0.04         # 4% movement threshold (hysteresis) to prevent micro-jittering
 
     for t, x in raw_pts[1:]:
@@ -55,8 +55,8 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
         if abs(dx) > max_dist:
             x_target = prev_x + np.sign(dx) * max_dist
 
-        # EMA blend (alpha=0.35)
-        x_smooth = round(0.35 * x_target + 0.65 * prev_x, 4)
+        # EMA blend (alpha=0.20 for highly smoothed tracking)
+        x_smooth = round(0.20 * x_target + 0.80 * prev_x, 4)
         pts.append((t, x_smooth))
         prev_t, prev_x = t, x_smooth
 
@@ -2065,7 +2065,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2223,7 +2223,9 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                         title_text=None,
                         background_paths=[task_path],
                         duration=hi['end'] - hi['start'],
-                        start_offset=hi['start']
+                        start_offset=hi['start'],
+                        caption_style=caption_style,
+                        subtitle_y_pos=subtitle_y_pos
                     )
                     extracted_files.append(out)
                 except Exception as e:

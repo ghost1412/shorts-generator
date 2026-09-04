@@ -577,6 +577,15 @@ def score_segment(text, mode="shorts", start=None, end=None, target_duration=Non
         keywords = ["no way", "wait", "what", "crazy", "insane", "oh my god", "unbelievable", "shocking", "finally"]
         for k in keywords:
             if k in text_lower: score += 12
+
+        # Hook Boosting (First 3 Seconds / First few words)
+        first_few_words = text_lower.split()[:8]
+        hook_words = ["what", "why", "how", "imagine", "did you know", "secret", "never", "always"]
+        if any(h in " ".join(first_few_words) for h in hook_words):
+            score += 20
+        if "?" in text[:30]:
+            score += 15
+
         # Pacing
         if 5 < word_count < 25: score += 10 
         
@@ -754,7 +763,7 @@ def merge_segments(segments, min_gap=6.0, max_dur=95.0, score_sensitive=False):
     merged.append(curr)
     return merged
 
-def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None):
+def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None):
     from engine.script_gen import robust_json_parse, get_llm_response
     
     with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -1229,7 +1238,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             valid_highlights.sort(key=lambda x: x['start'])
             
             # Final filter by floor
-            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= min_floor]
+            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= min_duration]
         
         if not valid_highlights:
             print("[Warning] LLM analysis failed. Using Heuristic Signal Fallback (Top Peaks)...")
@@ -1321,7 +1330,7 @@ def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     kept.sort(key=lambda x: float(x['start']))
     return kept
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1345,7 +1354,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
     if highlights is None:
         highlights = identify_highlights(
             transcript_path, video_path=video_path, clip_count=clip_count,
-            mode=mode, target_duration=target_duration, use_audio_detect=use_audio_detect,
+            mode=mode, target_duration=target_duration, min_duration=min_duration, use_audio_detect=use_audio_detect,
             style=style, user_context=user_context, style_context=style_context
         )
 
