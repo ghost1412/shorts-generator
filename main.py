@@ -452,14 +452,17 @@ if getattr(args, "mode", None) == "EXPLAINER":
                 
             v_dur = get_dur(manim_output_path)
             a_dur = get_dur(audio_path)
-            speed_factor = a_dur / v_dur if v_dur > 0 else 1.0
-            print(f"[Log] Synchronizing Explainer Timing... Video: {v_dur:.2f}s, Audio: {a_dur:.2f}s (Stretch: {speed_factor:.2f}x)")
+            # Cap speed factor to prevent insane warping (0.6x to 1.5x)
+            raw_speed = a_dur / v_dur if v_dur > 0 else 1.0
+            speed_factor = max(0.6, min(1.5, raw_speed))
+            print(f"[Log] Synchronizing Explainer Timing... Video: {v_dur:.2f}s, Audio: {a_dur:.2f}s (Raw Stretch: {raw_speed:.2f}x, Capped: {speed_factor:.2f}x)")
 
             ffmpeg_cmd = [
                 "ffmpeg", "-y",
                 "-i", manim_output_path,
                 "-i", audio_path,
-                "-vf", f"setpts={speed_factor}*PTS,tpad=stop_mode=clone:stop_duration=2",
+                # stop_duration=60 ensures an indefinite freeze frame so -shortest can cleanly cut at audio length
+                "-vf", f"setpts={speed_factor}*PTS,tpad=stop_mode=clone:stop_duration=60",
                 "-c:v", "libx264",
                 "-c:a", "aac", "-b:a", "192k",
                 "-shortest", merged_path
@@ -734,8 +737,8 @@ else:
     else:
         # 🟢 WINNER-HEAVY SELECTION: Facts (Spot the Lie) and News are 2x more likely than others
         mode = random.choices(
-            ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE"],
-            weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20]
+            ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "EXPLAINER"],
+            weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20, 30]
         )[0]
     if args.recap_title and not args.mode: mode = "MOVIE_RECAP"
     
