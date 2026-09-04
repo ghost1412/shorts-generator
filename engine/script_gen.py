@@ -27,9 +27,10 @@ def get_llm_response(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    # 0. Try Gemini API
-    if GEMINI_API_KEY:
-        gemini_models = ["gemini-3.5-flash", "gemini-3.6-flash"]
+    # 0. Try Gemini API (unless FORCE_OLLAMA is set)
+    force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"]
+    if not force_ollama and GEMINI_API_KEY:
+        gemini_models = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
         for g_model in gemini_models:
             try:
                 print(f"[Log] Attempting Gemini API ({g_model})...")
@@ -381,8 +382,9 @@ def generate_story(category="general", hero=None, hero_name=None, companion=None
     if hero:
         prompt = f"Write a charming, magical, and educational children's bedtime story about a hero named {hero_name or 'Buddy'} who is a {hero}. The hero's companion is a {companion or 'friend'}. Their adventure is to {quest or 'explore'} in the setting of {setting or 'a magical land'}. Focus on a fun, gentle, and heartwarming adventure with a positive moral. Keep it simple, sweet, and under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
     else:
-        selected_sub = get_sub_topic(category)
-        print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
+        known_cats = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "facts", "wyr", "trivia", "quotes", "sound_challenge", "kids", "children", "bedtime"]
+        selected_sub = category if (len(category.split()) > 1 or category.lower() not in known_cats) else get_sub_topic(category)
+        print(f"[Log] STORY: Selected sub-topic/prompt: {selected_sub}")
         
         is_kids = category.lower() in ["kids", "children", "bedtime", "children_story"]
         if is_kids:

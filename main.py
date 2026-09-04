@@ -124,6 +124,9 @@ def parse_args():
     parser.add_argument("--mashup", action="store_true", help="Create a single mashup/remix video of all highlights instead of separate clips.")
     parser.add_argument("--mashup_mode", choices=["attach", "edit"], default="edit", help="Assembly style for mashup: 'attach' for simple concatenation, 'edit' for premium transition effects and background music.")
     
+    parser.add_argument("--output_json", help="Path to write structured JSON results (transcript, clips, scores, hooks).")
+    parser.add_argument("--batch_file", help="Path to text file containing list of video URLs or local files to process in batch.")
+    
     parser.add_argument("--use_comfy", action="store_true", help="Use local ComfyUI for premium AI backgrounds.")
     parser.add_argument("--use_ai_audio", action="store_true", help="Use local ComfyUI for premium AI music & SFX.")
     parser.add_argument("--bitrate", type=str, help="Manual bitrate override (e.g. 12000k)")
@@ -140,6 +143,10 @@ def parse_args():
     parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
     
+    # Provider & Media Overrides
+    parser.add_argument("--use_ollama", action="store_true", help="Force local Ollama LLM execution.")
+    parser.add_argument("--bg_media", help="Path to custom local background image (.jpg, .png) or video (.mp4, .mov).")
+    
     # Interactive Kids Story Creator Flags
     parser.add_argument("--interactive", action="store_true", help="Launch interactive CLI prompt to create kids characters.")
     parser.add_argument("--hero", help="Type of hero (e.g. teddy bear, friendly dragon).")
@@ -152,6 +159,10 @@ def parse_args():
     return args
 
 args = parse_args()
+
+if getattr(args, "use_ollama", False):
+    os.environ["FORCE_OLLAMA"] = "true"
+    print("[Log] 🦙 FORCING Local Ollama LLM execution.")
 
 # Quality Mapping (Overridden by manual flags if present)
 bitrate_map = {"low": "4M", "medium": "12M", "high": "25M", "ultra": "50M"}
@@ -347,7 +358,7 @@ if getattr(args, "mode", None) == "EXPLAINER":
     
     extract_mode = getattr(args, "extract_mode", "shorts") or "shorts"
     print(f"--- Starting Standalone EXPLAINER Animation Generation (Extract Mode: {extract_mode}) ---")
-    topic = args.category if args.category else (args.prompt if args.prompt else "Pythagorean Theorem")
+    topic = args.prompt if args.prompt else (args.category if args.category else "Pythagorean Theorem")
     print(f"[Log] Explaining topic: '{topic}'")
     
     if args.video_id and args.user_id:
@@ -409,6 +420,39 @@ if getattr(args, "mode", None) == "EXPLAINER":
         sys.exit(1)
 
 # 🟢 PHASE 13: AI Extraction (High-Speed FFmpeg path)
+# 🟢 Batch Video File/URL Processing
+if getattr(args, "batch_file", None):
+    if not os.path.exists(args.batch_file):
+        print(f"[Error] Batch file not found: {args.batch_file}")
+        sys.exit(1)
+        
+    print(f"--- Starting Batch Video Processing from: {args.batch_file} ---")
+    with open(args.batch_file, "r", encoding="utf-8") as bf:
+        urls = [line.strip() for line in bf if line.strip() and not line.strip().startswith("#")]
+        
+    print(f"[Log] Found {len(urls)} video items to process in batch.")
+    import subprocess
+    for idx, item in enumerate(urls, start=1):
+        print(f"\n==========================================")
+        print(f"[Batch {idx}/{len(urls)}] Processing: {item}")
+        print(f"==========================================")
+        cmd = [sys.executable, "main.py", "--source_video", item]
+        if args.extract_mode: cmd.extend(["--extract_mode", args.extract_mode])
+        if args.clip_count: cmd.extend(["--clip_count", str(args.clip_count)])
+        if args.target_duration: cmd.extend(["--target_duration", str(args.target_duration)])
+        if args.smart_crop: cmd.append("--smart_crop")
+        if args.tighten: cmd.append("--tighten")
+        if args.style:
+            styles = args.style if isinstance(args.style, list) else [args.style]
+            for s in styles: cmd.extend(["--style", s])
+        if args.output_json: cmd.extend(["--output_json", f"batch_out_{idx}.json"])
+        
+        res = subprocess.run(cmd)
+        if res.returncode != 0:
+            print(f"[Warning] Batch item {idx} failed with return code {res.returncode}. Continuing...")
+    print("\n[Log] Batch processing completed for all items.")
+    sys.exit(0)
+
 if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     import time
     from engine.video_gen import extract_segments
@@ -521,6 +565,32 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     with open(os.path.join(session_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(highlights_meta, f, indent=4)
         
+    if getattr(args, "output_json", None):
+        output_json_data = {
+            "source_video": args.source_video,
+            "session_dir": session_dir,
+            "total_clips": len(highlights),
+            "clips": []
+        }
+        for i, h in enumerate(highlights):
+            clip_path = extracted_files[i] if i < len(extracted_files) else ""
+            meta_item = highlights_meta[i] if i < len(highlights_meta) else {}
+            output_json_data["clips"].append({
+                "clip_index": i + 1,
+                "video_path": clip_path,
+                "start": h.get("start"),
+                "end": h.get("end"),
+                "duration": round(h.get("end", 0) - h.get("start", 0), 2),
+                "viral_score": h.get("viral_score", 85),
+                "hook": h.get("hook_text", meta_item.get("title", "")),
+                "reason": h.get("reason", "High-engagement segment"),
+                "title": meta_item.get("title", f"Clip #{i+1}"),
+                "tags": meta_item.get("tags", [])
+            })
+        with open(args.output_json, "w", encoding="utf-8") as f_out:
+            json.dump(output_json_data, f_out, indent=4)
+        print(f"[Log] Exported structured JSON results to: {args.output_json}")
+
     print(f"[Log] SUCCESS! Extracted videos to {session_dir}")
     sys.exit(0)
 
@@ -561,12 +631,19 @@ else:
     # 2. Choose Category
     categories = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports", "kids", "children", "bedtime"]
     category = args.category if args.category and args.category in categories else random.choice(categories)
+    topic = args.prompt if args.prompt else category
     if args.hero or args.interactive:
         category = "kids"
-    print(f"[Log] Generating content for category: {category}...", flush=True)
+    print(f"[Log] Generating content for category/topic: '{topic}' (Category: {category})...", flush=True)
     
     try:
-        if mode == "FACTS":
+        if mode == "EXPLAINER":
+            from engine.script_gen import generate_manim_script
+            manim_data = generate_manim_script(topic, extract_mode=args.extract_mode)
+            full_script = manim_data["voiceover_text"]
+            facts_data = []
+            print(f"[Log] EXPLAINER Script generated for topic '{topic}': Title='{manim_data['title']}'")
+        elif mode == "FACTS":
             facts_res = generate_mixed_facts(category)
             hook = facts_res["hook"]
             facts_data = facts_res["facts"]
@@ -694,7 +771,7 @@ else:
                     setting=setting
                 )
             else:
-                story_data = generate_story(category)
+                story_data = generate_story(topic if topic else category)
 
             if not story_data: sys.exit(0)
             
@@ -878,6 +955,11 @@ def get_video_duration(path):
         return 10.0 # Fallback
 
 def get_bg_path(query, out_path, target_duration=15.0):
+    if getattr(args, "bg_media", None) and os.path.exists(args.bg_media):
+        from engine.media_gen import download_background_video
+        path = download_background_video(query, output_path=out_path, custom_bg=args.bg_media)
+        return [path] if path else []
+
     if is_local_experiment and local_bg_pool:
         # Pick one or more random videos from the local pool until target_duration is covered
         selected_paths = []
@@ -1000,6 +1082,11 @@ elif mode == "JWST":
         print("[Warning] No JWST images found, falling back to Pexels space video.")
         bg_filename = os.path.join(session_dir, "bg_jwst_fallback.mp4")
         bg_video_paths = get_bg_path("outer space james webb telescope", bg_filename)
+elif mode == "EXPLAINER":
+    print("[Log] Rendering Manim animation code...")
+    from engine.video_gen import render_manim_scene
+    manim_mp4 = render_manim_scene(manim_data["code"], output_dir=session_dir, extract_mode=args.extract_mode)
+    bg_video_paths = [manim_mp4]
 elif mode == "TRAILER_MISSED":
     if not getattr(args, "source_video", None):
         print("[Error] --source_video is required for TRAILER_MISSED mode.")
@@ -1183,6 +1270,16 @@ else:
             sfx_path,
             obj_path,
             bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "EXPLAINER":
+        from engine.video_gen import create_explainer_video
+        final_video = create_explainer_video(
+            audio_path,
+            manim_mp4,
             output_filename,
             music_path=bg_music,
             bitrate=target_bitrate,
