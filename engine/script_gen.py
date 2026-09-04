@@ -298,7 +298,7 @@ def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
 
     # Ensure we use a granular sub-topic if the topic is just a generic category (like in AUTO mode)
     known_cats = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "facts", "wyr", "trivia", "quotes", "sound_challenge", "kids", "children", "bedtime"]
-    if topic.lower() in known_cats or len(topic.split()) == 1:
+    if topic.lower() in known_cats:
         granular_topic = get_sub_topic(topic, is_explainer=True)
         if granular_topic:
             topic = granular_topic
