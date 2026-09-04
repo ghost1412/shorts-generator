@@ -30,7 +30,7 @@ def get_llm_response(
     # 0. Try Gemini API (unless FORCE_OLLAMA is set)
     force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"]
     if not force_ollama and GEMINI_API_KEY:
-        gemini_models = ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
+        gemini_models = ["gemini-3.8-flash","gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
         for g_model in gemini_models:
             try:
                 print(f"[Log] Attempting Gemini API ({g_model})...")
@@ -295,6 +295,14 @@ def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
     - Keep text lines short and font sizes modest (e.g., font_size=24-32 for descriptions, font_size=34-40 for main titles) so nothing gets clipped on mobile screens on the left or right edges.""" if is_shorts else """11. HORIZONTAL WIDESCREEN LAYOUT (16:9 ASPECT RATIO):
     - This video is formatted for traditional 16:9 widescreen display.
     - Screen bounds: x [-6.5, 6.5], y [-3.8, 3.8]. Utilize horizontal space cleanly."""
+
+    # Ensure we use a granular sub-topic if the topic is just a generic category (like in AUTO mode)
+    known_cats = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "facts", "wyr", "trivia", "quotes", "sound_challenge", "kids", "children", "bedtime"]
+    if topic.lower() in known_cats or len(topic.split()) == 1:
+        granular_topic = get_sub_topic(topic)
+        if granular_topic:
+            topic = granular_topic
+            print(f"[Log] EXPLAINER: Selected granular sub-topic: {topic}")
 
     prompt = f"""Generate a Manim Community Edition (manim) Python script explaining {topic}.
 REQUIREMENTS:
