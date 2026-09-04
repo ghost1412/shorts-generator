@@ -36,3 +36,5 @@ dist/
 
 assets*
 sessions*
+test_manim_output/
+PROMOTION_GUIDE.md
