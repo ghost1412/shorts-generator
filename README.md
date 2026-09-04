@@ -4,9 +4,9 @@
 > Turn Long Videos, YouTube Links, or AI Concepts into High-Retention 9:16 Shorts on Autopilot.
 
 <div align="center">
-  <video src="demos/demo_short.mp4" width="250" autoplay loop muted playsinline></video>
-  <video src="demos/demo_facts.mp4" width="250" autoplay loop muted playsinline></video>
-  <video src="demos/demo_wyr.mp4" width="250" autoplay loop muted playsinline></video>
+  <img src="demos/demo_short.gif" width="250" />
+  <img src="demos/demo_facts.gif" width="250" />
+  <img src="demos/demo_explainer.gif" width="250" />
 </div>
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python)](https://python.org)
