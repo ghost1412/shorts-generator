@@ -12,29 +12,62 @@ SAFE_TOP = 220
 SAFE_MID = 750
 SAFE_BOTTOM = 1600
 
-def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=1080, target_h=1920):
+def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=1080, target_h=1920, orientation='landscape', letterbox_crop=None):
     """
     Generates an FFmpeg crop filter string for dynamic focal point tracking.
-    Uses piecewise linear interpolation with optimized sampling and smoothing.
+    Includes EMA smoothing, velocity caps, and deadband hysteresis to prevent camera flickering/jittering.
     """
+    if orientation == 'portrait':
+        return None  # No crop needed for portrait, it will just scale
+
+    base_filter = ""
+    if letterbox_crop:
+        base_filter = f"{letterbox_crop},"
+
     if not interest_points:
-        return f"crop=ih*9/16:ih:(iw-ow)/2:0"
+        return f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
     
     # Filter and sort interest points for this segment
-    pts = sorted([(t, x) for t, x in interest_points.items() if start_time <= t <= end_time])
-    if not pts:
-        return f"crop=ih*9/16:ih:(iw-ow)/2:0"
+    raw_pts = sorted([(t, x) for t, x in interest_points.items() if start_time <= t <= end_time])
+    if not raw_pts:
+        return f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
         
-    # 🟢 ADAPTIVE SAMPLING: Use more points for longer segments (up to 40)
-    # This prevents jerkiness while staying within Windows command line limits
+    # --- ANTI-BLINKING / SMOOTHING PASS ---
+    # Apply Exponential Moving Average (EMA) and velocity clamping to raw focal points
+    pts = []
+    prev_t, prev_x = raw_pts[0][0], raw_pts[0][1]
+    pts.append((prev_t, prev_x))
+
+    max_vel_per_sec = 0.30  # Max 30% width shift per second to guarantee smooth cinematic panning
+    deadband = 0.04         # 4% movement threshold (hysteresis) to prevent micro-jittering
+
+    for t, x in raw_pts[1:]:
+        dt = max(0.01, t - prev_t)
+        # Apply deadband: ignore tiny position noise
+        if abs(x - prev_x) < deadband:
+            x_target = prev_x
+        else:
+            x_target = x
+
+        # Velocity cap
+        max_dist = max_vel_per_sec * dt
+        dx = x_target - prev_x
+        if abs(dx) > max_dist:
+            x_target = prev_x + np.sign(dx) * max_dist
+
+        # EMA blend (alpha=0.35)
+        x_smooth = round(0.35 * x_target + 0.65 * prev_x, 4)
+        pts.append((t, x_smooth))
+        prev_t, prev_x = t, x_smooth
+
+    # Adaptive sampling to keep FFmpeg expression within CLI length limits
     duration = end_time - start_time
-    max_pts = min(40, int(duration * 2) + 5) # ~2 points per second
+    max_pts = min(40, int(duration * 2) + 5)
     if len(pts) > max_pts:
         step = len(pts) // max_pts
         pts = pts[::step][:max_pts]
     
     def get_focal_x_expr():
-        # Compact piecewise linear construction with smoothing
         expr = f"{pts[-1][1]}"
         for i in range(len(pts) - 2, -1, -1):
             t1, x1 = round(pts[i][0] - start_time, 2), pts[i][1]
@@ -43,44 +76,132 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
             t_diff = round(t2 - t1, 3)
             if t_diff <= 0.01: t_diff = 0.01
             
-            # Linear interpolation: x1 + (x2-x1)*(t-t1)/(t2-t1)
-            # 🟢 SMOOTHING: Using 'staircase' if too close, else linear
             seg = f"if(lt(t,{t2}),{x1}+({round(x2-x1,4)})*(t-{t1})/{t_diff},{expr})"
             expr = seg
         return expr
 
     focal_x_pct = get_focal_x_expr()
     crop_w = "ih*9/16"
-    # Ensure crop focal position is constrained within video bounds
     x_expr = f"min(max(0,({focal_x_pct}*iw)-({crop_w}/2)),iw-{crop_w})"
     
-    return f"crop={crop_w}:ih:'{x_expr}':0"
+    return f"{base_filter}crop={crop_w}:ih:'{x_expr}':0"
+
+def generate_thumbnail(video_path, output_path, at_time=None):
+    """Generates a high-quality JPEG thumbnail from the video using FFmpeg."""
+    import imageio_ffmpeg, subprocess
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    try:
+        t = at_time if at_time is not None else 3.0
+        subprocess.run([
+            ffmpeg_exe, '-y', '-ss', str(t), '-i', video_path, 
+            '-vframes', '1', '-q:v', '2', output_path
+        ], capture_output=True, check=True)
+    except Exception as e:
+        print(f"[Warning] Thumbnail generation failed: {e}")
+
+def insert_broll_cutaways(clip, silence_intervals, broll_dir, fps=30):
+    """
+    Inserts B-roll video over long silence gaps to maintain visual engagement.
+    Replaces the video track but keeps the original audio.
+    """
+    if not os.path.exists(broll_dir) or not silence_intervals: return clip
+    brolls = [os.path.join(broll_dir, f) for f in os.listdir(broll_dir) if f.endswith('.mp4')]
+    if not brolls: return clip
+    
+    import random
+    from moviepy import CompositeVideoClip, VideoFileClip
+    
+    final_clips = [clip]
+    broll_idx = 0
+    
+    for start, end in silence_intervals:
+        gap = end - start
+        if gap > 1.5:  # Only insert broll for gaps > 1.5s
+            try:
+                b_path = brolls[broll_idx % len(brolls)]
+                broll_idx += 1
+                b_clip = VideoFileClip(b_path)
+                
+                # Trim and loop broll if needed
+                if b_clip.duration < gap:
+                    from moviepy import vfx
+                    b_clip = b_clip.fx(vfx.loop, duration=gap)
+                else:
+                    b_clip = b_clip.subclip(0, gap)
+                    
+                # Resize and crop to match main clip
+                b_clip = b_clip.resize(height=clip.h)
+                if b_clip.w != clip.w:
+                    b_clip = b_clip.crop(x_center=b_clip.w/2, width=clip.w)
+                
+                # Position over time
+                b_clip = b_clip.with_start(start).with_position(("center", "center"))
+                # Add crossfade
+                b_clip = b_clip.crossfadein(0.15).crossfadeout(0.15)
+                
+                final_clips.append(b_clip)
+            except Exception as e:
+                print(f"[Warning] Failed to insert B-roll {b_path}: {e}")
+                
+    if len(final_clips) > 1:
+        print(f"[Log] Inserted {len(final_clips)-1} B-roll cutaways for visual retention.")
+        return CompositeVideoClip(final_clips, size=clip.size)
+        
+    return clip
 
 def tighten_clip(clip, keep_intervals, mode="cut", speed=None):
     """
     Tightens a clip by removing non-keep intervals (Auto-Editor style).
-    mode: "cut" to remove skipped parts, "speed" to speed them up.
+    Includes interval merging, safety padding, and micro-cut filtering to prevent flickering/blinking artifacts.
     """
     if not keep_intervals: return clip
+
+    # 1. Sort intervals by start time
+    sorted_intervals = sorted(keep_intervals, key=lambda x: x[0])
     
-    # Adjust for clip start in global timeline if needed
-    # (Assuming keep_intervals are relative to the video file)
-    
+    # 2. Add safety padding (80ms buffer) and merge close gaps (< 250ms)
+    padding = 0.08
+    min_gap = 0.25
+    min_clip_duration = 0.25
+
+    padded_intervals = []
+    for s, e in sorted_intervals:
+        ps = max(0.0, s - padding)
+        pe = min(clip.duration, e + padding)
+        if pe - ps >= min_clip_duration:
+            padded_intervals.append((ps, pe))
+
+    if not padded_intervals:
+        return clip
+
+    # Merge overlapping or closely adjacent intervals
+    merged_intervals = []
+    curr_s, curr_e = padded_intervals[0]
+
+    for next_s, next_e in padded_intervals[1:]:
+        if next_s - curr_e <= min_gap:
+            curr_e = max(curr_e, next_e)
+        else:
+            merged_intervals.append((curr_s, curr_e))
+            curr_s, curr_e = next_s, next_e
+    merged_intervals.append((curr_s, curr_e))
+
+    # 3. Build subclips
     parts = []
     last_end = 0
-    
-    for start, end in keep_intervals:
-        # Segment and keep
+
+    for start, end in merged_intervals:
         if start > last_end and mode == "speed" and speed:
-            # Speed up the 'skipped' part instead of cutting
             skipped = clip.subclipped(last_end, start).with_effects([vfx.MultiplySpeed(speed)])
             parts.append(skipped)
-        
-        parts.append(clip.subclipped(start, end))
+
+        if end - start >= min_clip_duration:
+            parts.append(clip.subclipped(start, end))
         last_end = end
-        
-    if not parts: return clip
-    
+
+    if not parts:
+        return clip
+
     from moviepy import concatenate_videoclips
     return concatenate_videoclips(parts)
 
@@ -1944,7 +2065,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit"):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -1992,10 +2113,11 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
         if mode == "shorts":
             if interest_points:
-                crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h)
+                crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)
             else:
-                crop_filter = "crop=ih*9/16:ih:(iw-ow)/2:0"
-            vf_filter = f"{crop_filter},scale={w}:{h}:flags={scaling_alg},format=yuv420p"
+                base_filter = f"{letterbox_crop}," if letterbox_crop else ""
+                crop_filter = None if orientation == 'portrait' else f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
+            vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
             vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
             
@@ -2036,7 +2158,14 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             for proc in processes: proc.wait()
             processes = []
 
-    for proc in processes: proc.communicate()
+    for proc in processes: proc.wait()
+
+    # Generate thumbnails for all extracted segments
+    for i, hi in enumerate(highlights):
+        target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
+        thumb_path = os.path.join(output_dir, "temp_segments", f"thumb_{i}.jpg")
+        if os.path.exists(target) and not os.path.exists(thumb_path):
+            generate_thumbnail(target, thumb_path)
 
     extracted_files = []
     from moviepy import concatenate_videoclips # Lazy import
@@ -2119,6 +2248,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 if local_silence:
                     print(f"[Log] Tightening Short {i+1} (Removing silences)")
                     sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None)
+                    # 🟢 NEW: Insert B-roll over silences for visual retention
+                    sub = insert_broll_cutaways(sub, local_silence, broll_dir="assets/broll")
             
             sub = sub.with_position("center")
             loop_clips.append(sub)
