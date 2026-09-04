@@ -1957,7 +1957,7 @@ def render_manim_scene(code_str, output_dir="assets/temp_manim", extract_mode="s
         "-ql", "--media_dir", output_dir
     ] + res_args + [script_path, "ExplainerScene"]
     
-    res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
     if res.returncode != 0:
         print(f"[Warning] Manim CLI stderr: {res.stderr}")
         raise RuntimeError(f"Manim render failed: {res.stderr}")
