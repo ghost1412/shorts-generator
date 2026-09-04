@@ -735,7 +735,7 @@ else:
         # 🟢 WINNER-HEAVY SELECTION: Facts (Spot the Lie) and News are 2x more likely than others
         mode = random.choices(
             ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "EXPLAINER"],
-            weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20, 15]
+            weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20, 30]
         )[0]
     if args.recap_title and not args.mode: mode = "MOVIE_RECAP"
     
