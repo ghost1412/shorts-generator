@@ -36,3 +36,4 @@ dist/
 
 assets*
 sessions*
+test_manim_output/
