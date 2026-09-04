@@ -281,7 +281,7 @@ def validate_manim(data):
 
 # --- Generation Functions ---
 
-def generate_manim_script(topic, extract_mode="shorts"):
+def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
     """
     Generates a Manim CE Python script for an educational explainer.
     Supports extract_mode='shorts' (vertical 9:16 format) or 'long' (horizontal 16:9 format).
@@ -309,10 +309,11 @@ REQUIREMENTS:
      * Optionally add squares attached to the sides a, b, and c to visually illustrate a² + b² = c², or highlight the sides and show the formula `Text("a² + b² = c²")`.
    - For all geometry topics, ensure the shapes accurately represent the math principles being taught.
 6. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
-7. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
-8. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
-9. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
-10. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
+7. CRITICAL TIMING: The voiceover script MUST take exactly {target_duration} seconds to read aloud at a normal speaking pace (approximately {int(target_duration * 2.5)} words). Count your words!
+8. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
+9. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
+10. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
+11. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
 {layout_instructions}
 
 Format as JSON ONLY:
