@@ -147,52 +147,69 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     model = "meta-llama/Llama-3.1-8B-Instruct"
     
     if mode == "FACTS":
-        input_text = "\n".join([f"- {f['fact']}" for f in content_info])
+        input_text = "\n".join([f"- {f['fact']}" for f in content_info]) if isinstance(content_info, list) else str(content_info)
         task_desc = f"a '2 Truths and 1 Lie' challenge about {category}."
     elif mode == "FIND_IT":
-        input_text = f"Target: {content_info['target_name']}"
-        task_desc = f"a 'Find the {content_info['target_name']}' extreme challenge game."
+        target = content_info.get('target_name', 'target') if isinstance(content_info, dict) else 'target'
+        input_text = f"Target: {target}"
+        task_desc = f"a 'Find the {target}' visual challenge game about {category}."
+    elif mode == "RIDDLE":
+        input_text = str(content_info)
+        task_desc = f"a brain-teasing lateral-thinking riddle about {category}."
+    elif mode == "EXPLAINER":
+        input_text = str(content_info)
+        task_desc = f"an educational visualization and explainer about {category}."
+    elif mode == "TRIVIA":
+        input_text = str(content_info)
+        task_desc = f"a trivia quiz challenge about {category}."
+    elif mode == "QUOTE":
+        input_text = str(content_info)
+        task_desc = f"a deep motivational quote about {category}."
+    elif mode == "WYR":
+        input_text = str(content_info)
+        task_desc = f"a 'Would You Rather' dilemma about {category}."
     elif mode.startswith("NEWS"):
         input_text = str(content_info)
-        task_desc = "a serious news report."
+        task_desc = f"a news report about {category}."
     elif mode == "JWST":
         input_text = str(content_info)
-        task_desc = "a mind-blowing space exploration video featuring new James Webb Telescope images."
+        task_desc = "a space exploration video featuring James Webb Telescope images."
     elif mode == "MUSIC":
         input_text = str(content_info)
-        task_desc = "a viral AI generated music track video showcase."
+        task_desc = "a viral AI generated music video showcase."
     elif category == "gaming":
         if isinstance(content_info, dict):
-            game_name = content_info.get("game_name", "GTA 6")
+            game_name = content_info.get("game_name", "Game")
             scene = content_info.get("scene_description", "")
-            styles = content_info.get("styles", [])
-            style_str = f" with {', '.join(styles)} style" if styles else ""
-            input_text = f"Game: {game_name}\nScene/Highlight Content: {scene}\nStyle Context: {style_str}"
-            task_desc = f"a viral gaming highlight clip of {game_name}{style_str}."
+            input_text = f"Game: {game_name}\nHighlight: {scene}"
+            task_desc = f"a gaming highlight clip of {game_name}."
         else:
             input_text = str(content_info)
             task_desc = "a gaming highlight clip."
     else:
         input_text = str(content_info)
-        task_desc = "a story."
+        task_desc = f"a video about {category}."
 
     prompt = f"""You are a top-tier YouTube Shorts Growth Expert and Channel Manager. 
 Generate a VIRAL title, high-retention description, and trending SEO tags for {task_desc}:
-{input_text}
+Content Summary: {input_text}
 
 CRITICAL SEO RULES:
-1. Title: Must be "Pattern-Interrupting" and highly relevant to the actual scene.
-   - For FACTS/CHALLENGE: Use "99% MISS THIS! 🛑" or "99.9% FAIL! 😱" or "Can You Spot the Lie? 🤯" as the primary hook.
-   - For NEWS: Start with "BREAKING: [Headline] 🚨" or "DEVELOPING: [Headline] 🚨".
-   - For MUSIC: Use catchy music hooks like "Rate this AI track 1-10! 🎧", "This beat goes way too hard! 🔥", "POV: Listening to this AI track... 🤯", or "This AI music is out of this world! 🚀".
-   - For GAMING/STORY/EXTRACT: DO NOT use generic "99% fail" or "Spot the lie" or music tags. Instead, use specific emotional hooks about the actual action in the scene, for example: "Lucia and Jason ALMOST got busted! 🚔", "POV: GTA 6 Gas Station Shootout 💥", "This GTA 6 detail changes everything... 🤯", or "Lucia's grenade escape was insane! 💀". Include the game name (e.g. 'GTA 6' or 'GTA VI') and key characters/events in the title.
-   - Keep it under 60 chars. Use extreme emotional hooks.
+1. Title: Must be pattern-interrupting, under 60 chars, and strictly relevant to the actual content:
+   - For RIDDLE: Use brain-teaser hooks like "99% FAIL THIS RIDDLE! 🧠", "CAN YOU SOLVE THIS? 💡", or "ONLY A GENIUS GETS THIS! 🤯".
+   - For EXPLAINER / SCIENCE / MATH: Use curiosity hooks like "How [Topic] ACTUALLY Works! 🤯" or "The Secret of [Topic] ⚡".
+   - For FACTS / CHALLENGE: Use "99% MISS THIS! 🛑" or "Can You Spot the Lie? 🤯".
+   - For NEWS: Start with "BREAKING: [Topic] 🚨" or "DEVELOPING: [Topic] 🚨".
+   - For MUSIC: Use "Rate this track 1-10! 🎧" or "This beat goes hard! 🔥".
+   - For GAMING: Include the specific game name and highlight moment (e.g., "[Game Name] Final Boss Fight! ⚔️").
+
 2. Description: 
-   - First line must be an engaging, high-retention CTA (e.g., "This AI track is an absolute masterpiece! 😱 Comment your thoughts or you owe me a sub!" for music mode, or gaming specific hooks for gaming mode).
-   - Include 3 short paragraphs: The Hook (why they should watch), The Details (what happened), The Community Call (ask them to subscribe/comment). 
-   - Use emojis liberally but strategically.
-   - Include EXPLICIT tags in description: #shorts #trending #viral + 3 specific to the video category (e.g., #aimusic #music #beats for music mode, #gta6 #gta #gaming for gaming mode).
-3. Tags: 15-20 highly relevant, high-volume SEO keywords suitable for the content.
+   - First line must be a high-retention CTA asking viewers a relevant question about the video (e.g. for RIDDLE: "Can you guess the answer before the timer ends? Comment your answer below! 👇").
+   - Include 2-3 short paragraphs: The Hook, The Details, and a Call to Action (like/subscribe/comment).
+   - Use emojis strategically.
+   - Include relevant hashtags at the bottom: #shorts #trending #viral + 3 specific to the category (e.g., #{category} #riddle #brainteaser for RIDDLES, or #{category} #science #education for EXPLAINER).
+
+3. Tags: 15-20 highly relevant SEO keywords matching the category and content topic.
 
 Format as JSON ONLY:
 {{
@@ -201,6 +218,7 @@ Format as JSON ONLY:
   "tags": ["tag1", "tag2", ...]
 }}
 """
+
 
     def clean_json_string(s):
         # Remove control characters that break JSON
