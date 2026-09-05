@@ -120,7 +120,8 @@ def parse_args():
     parser.add_argument("--user_context", help="Extra context to guide AI extraction (specific scenes/styles).")
     parser.add_argument("--style_context", help="Context for editing style and pacing (e.g. 'fast cuts', 'cinematic').")
     parser.add_argument("--gif_dir", help="Path to external GIF library (e.g. animated-gifs repo).")
-    parser.add_argument("--hq", action="store_true", help="Enable High-Quality (Premium) enhancements (sharpening, denoising).")
+    parser.add_argument("--hq", action="store_true", help="Enable High-Quality (Premium) enhancements (sharpening, color enhancement).")
+    parser.add_argument("--superres", action="store_true", help="Enable Super-Resolution & Deinterlacing filter pipeline for legacy/VCD/VHS videos.")
     parser.add_argument("--use_cache", action="store_true", help="Reuse cached highlights and skip existing segments/rendered clips.")
     parser.add_argument("--mashup", action="store_true", help="Create a single mashup/remix video of all highlights instead of separate clips.")
     parser.add_argument("--mashup_mode", choices=["attach", "edit"], default="edit", help="Assembly style for mashup: 'attach' for simple concatenation, 'edit' for premium transition effects and background music.")
@@ -508,6 +509,13 @@ if getattr(args, "batch_file", None):
         if args.target_duration: cmd.extend(["--target_duration", str(args.target_duration)])
         if args.smart_crop: cmd.append("--smart_crop")
         if args.tighten: cmd.append("--tighten")
+        if args.use_audio_detect: cmd.append("--use_audio_detect")
+        if args.hq: cmd.append("--hq")
+        if args.superres: cmd.append("--superres")
+        if args.mashup: cmd.append("--mashup")
+        if args.mashup_mode: cmd.extend(["--mashup_mode", args.mashup_mode])
+        if args.user_context: cmd.extend(["--user_context", args.user_context])
+        if args.style_context: cmd.extend(["--style_context", args.style_context])
         if args.style:
             styles = args.style if isinstance(args.style, list) else [args.style]
             for s in styles: cmd.extend(["--style", s])
@@ -603,7 +611,7 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, session_dir, 
         mode=args.extract_mode, bitrate=target_bitrate, preset=target_preset, codec="libx264",
-        is_challenge=(args.mode == "CHALLENGE"), use_hq=args.hq, 
+        is_challenge=(args.mode == "CHALLENGE"), use_hq=args.hq, use_superres=getattr(args, 'superres', False),
         editing_style=args.style, gif_dir=args.gif_dir,
         interest_points=final_interest, silence_intervals=final_silence,
         tighten_mode=args.tighten_mode, use_remotion=args.use_remotion, use_cache=args.use_cache,
@@ -1235,7 +1243,7 @@ elif mode == "TRAILER_MISSED":
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, temp_trailer_dir, 
         mode="shorts", bitrate=target_bitrate, preset=target_preset, codec="libx264",
-        is_challenge=False, use_hq=args.hq, 
+        is_challenge=False, use_hq=args.hq, use_superres=getattr(args, 'superres', False),
         editing_style=args.style, gif_dir=args.gif_dir,
         interest_points=interest_points, silence_intervals=None,
         use_remotion=args.use_remotion,
