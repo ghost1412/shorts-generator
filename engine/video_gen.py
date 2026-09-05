@@ -2034,11 +2034,17 @@ POOL_SIZE = 8
 
 def get_hq_vf():
     """Returns an FFmpeg filter chain for 'Premium' enhancement."""
-    # 1. hqdn3d: High Quality Denoise (Slightly reduced temporal for less ghosting)
-    # 2. cas: Contrast Adaptive Sharpen (0.4 strength for natural look)
-    # 3. unsharp: Standard luma sharpening
-    # 4. eq: Subtle contrast/vibrance boost
-    return "hqdn3d=1.2:1.2:4:4,cas=0.4,unsharp=5:5:0.4:5:5:0.0,eq=contrast=1.02:saturation=1.04"
+    # 🟢 Clean HQ: Light contrast-adaptive sharpening + subtle color enhancement
+    # (Avoid hqdn3d denoise as it causes severe motion ghosting/smudging on dance/crowd scenes)
+    return "cas=0.2,eq=contrast=1.03:saturation=1.05"
+
+def get_superres_vf():
+    """FFmpeg filter chain specifically tailored for restoring low-res / legacy videos (VCD, VHS, SD 480p)."""
+    # 1. yadif=1: Double-rate deinterlacing (removes comb lines, smooths motion to 50/60fps)
+    # 2. deblock: MPEG-1/2 deblocking (eliminates VCD macroblock squares)
+    # 3. cas=0.35: Adaptive edge reconstruction
+    # 4. eq: Restores faded analog tape / early digital color palettes
+    return "yadif=mode=1:parity=auto:deint=0,deblock=filter=weak:block=4,cas=0.35,eq=contrast=1.05:saturation=1.10:brightness=0.01"
 
 def _check_nvenc():
     """Checks if NVIDIA hardware acceleration is available."""
@@ -2081,7 +2087,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2097,7 +2103,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     target_res = (1920, 1080) if mode == "long" else (1080, 1920)
     w, h = target_res
     
-    scaling_alg = "lanczos"
+    scaling_alg = "lanczos+accurate_rnd+full_chroma_int" if use_superres else "lanczos"
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     os.makedirs(os.path.join(output_dir, "temp_segments"), exist_ok=True)
     
@@ -2116,15 +2122,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         print(f"[Log] Queueing extraction for clip {i+1}/{len(highlights)}: {hi['start']:.2f}s - {hi['end']:.2f}s")
         duration = hi['end'] - hi['start']
         
-        # Text burn for Landscape mode (Highlight Reels)
-        # Font path needs to be robust for Windows
-        font_file = "C\\:/Windows/Fonts/impact.ttf"
-        reason_text = hi.get('reason', '').replace("'", "").replace(":", "").replace('"', "")
-        
+        # Clean output without internal debug text burn-in
         text_filter = ""
-        if mode == "long" and reason_text:
-            draw_text = f"drawtext=fontfile='{font_file}':text='{reason_text}':fontcolor=cyan:fontsize=45:x=(w-text_w)/2:y=100:enable='between(t,0,3.5)':box=1:boxcolor=black@0.5:boxborderw=5"
-            text_filter = f",{draw_text}"
 
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
         if mode == "shorts":
@@ -2137,8 +2136,9 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         else:
             vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
             
-        if use_hq:
-            # 🟢 NEW: Apply Premium filters before scaling
+        if use_superres:
+            vf_filter = f"{get_superres_vf()},{vf_filter}"
+        elif use_hq:
             vf_filter = f"{get_hq_vf()},{vf_filter}"
             
         vf_filter += text_filter
