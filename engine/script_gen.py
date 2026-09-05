@@ -296,22 +296,23 @@ def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
     - This video is formatted for traditional 16:9 widescreen display.
     - Screen bounds: x [-6.5, 6.5], y [-3.8, 3.8]. Utilize horizontal space cleanly."""
 
-    # Ensure we use a granular sub-topic if the topic is just a generic category (like in AUTO mode)
-    known_cats = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "facts", "wyr", "trivia", "quotes", "sound_challenge", "kids", "children", "bedtime"]
-    if topic.lower() in known_cats:
-        granular_topic = get_sub_topic(topic, is_explainer=True)
-        if granular_topic:
-            topic = granular_topic
-            print(f"[Log] EXPLAINER: Selected granular sub-topic: {topic}")
+    # Scoped to Science, Math, Aptitude & Physics (e.g. Theory of Relativity, Calculus, Speed-Distance, etc.)
+    scope_directive = """SCOPE & TOPIC DIVERSITY:
+- You MUST dynamically select a specific, singular, and mind-blowing concept strictly within SCIENCE (Physics, Theory of Relativity, Quantum Mechanics, Astrophysics), MATHEMATICS (Calculus, Geometry, Probability, Linear Algebra), or APTITUDE & LOGIC (Relative Speed, Work & Time, Permutations, Logic Puzzles).
+- Examples of topics you can choose from dynamically include: Einstein's Theory of Relativity, Time Dilation, Quantum Tunneling, Pythagorean Theorem, Derivatives in Calculus, Relative Speed Aptitude, Monty Hall Paradox, etc.
+- Pick a NEW, unique topic dynamically every single time. DO NOT pick a generic top-level category name."""
 
-    prompt = f"""Generate a Manim Community Edition (manim) Python script explaining a HIGHLY SPECIFIC, obscure, and random concept related to: {topic}. 
+    prompt = f"""Generate a Manim Community Edition (manim) Python script explaining a HIGHLY SPECIFIC, mind-blowing concept related to: {topic}. 
+
+{scope_directive}
+
 REQUIREMENTS:
-1. DO NOT explain the broad category. You must pick a very specific, singular mathematical/scientific concept, algorithm, or paradox within "{topic}" to ensure unique videos every time.
+1. DO NOT explain a broad category. Pick one very specific, singular mathematical, physical, or aptitude concept/equation/paradox within Science, Maths, or Aptitude.
 2. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
 3. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
-4. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")`).
+4. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")` or `Text("E = mc²")`).
 5. CRITICAL SCREEN BOUNDS: Do not use long sentences in a single `Text()`. Break long sentences into multiple small `Text()` objects stacked on top of each other using `.next_to(..., DOWN, buff=0.2)` so they don't run off the edges of the screen.
-6. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures and labels.
+6. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures, equations, and labels.
 7. GEOMETRIC ACCURACY FOR TOPICS:
    - If the topic is 'Pythagorean Theorem' or related to right triangles:
      * You MUST draw a clear right-angled triangle first using `Polygon` (e.g. `Polygon([-2, -1, 0], [1, -1, 0], [1, 1.25, 0], color=BLUE)` where the legs meet at a 90-degree right angle).
@@ -334,8 +335,9 @@ Format as JSON ONLY:
 }}
 """
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.3, max_tokens=8192)
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=8192)
         return robust_json_parse(response_text)
+
     
     return with_best_of_n(llm_call, validate_manim, n=3)
 
@@ -546,21 +548,11 @@ def get_sub_topic(category, is_explainer=False):
     If is_explainer is True, returns topics specifically suited for Manim visual animations (Math, Physics, CS).
     """
     if is_explainer:
-        explainer_topics = {
-            "science": ["advanced physics concepts", "chemical reactions visualized", "how complex machines work", "biological processes", "quantum mechanics principles", "thermodynamics"],
-            "space": ["orbital mechanics", "astrophysics equations", "scale of the universe", "relativity concepts", "celestial geometry", "physics of black holes"],
-            "math": ["geometric proofs", "calculus concepts visualized", "number theory phenomena", "probability and statistics", "fractals and chaos theory", "famous math paradoxes"],
-            "tech": ["computer science algorithms", "cryptography methods", "data structures visualized", "network topology", "hardware logic gates", "machine learning math"],
-            "puzzle": ["visual logic puzzles (without revealing the answer)", "lateral thinking riddles visualized", "math aptitude questions (cliffhanger ending)", "geometry brain teasers"],
-            "general": ["mechanical engineering concepts", "architectural geometry", "fluid dynamics", "optics and light", "sound wave physics", "geometry in nature"]
-        }
-        
-        if category.lower() in explainer_topics:
-            return random.choice(explainer_topics[category.lower()])
-        
-        # Fallback to random explainer topic if category doesn't match
-        all_explainers = [item for sublist in explainer_topics.values() for item in sublist]
-        return random.choice(all_explainers)
+        # Do not hardcode lists of topics to prevent repetition.
+        # Returning the category allows the LLM to dynamically choose a unique subtopic on every run.
+        return category
+
+
 
     sub_topics = {
         "science": ["deep sea biology", "quantum mechanics", "forgotten inventors", "human body anomalies", "microscopic life", "unexpected chemistry", "bizarre psychology experiments"],
