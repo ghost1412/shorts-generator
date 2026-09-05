@@ -266,6 +266,12 @@ def validate_manim(data):
         print("[Log] Validation failed: code contains Tex or MathTex (LaTeX not supported).")
         return False
 
+    # Check for LaTeX macro backslashes inside Text() strings (e.g., \Psi, \theta, \rangle)
+    import re
+    if re.search(r'\\(Psi|psi|theta|Theta|alpha|beta|gamma|lambda|sigma|omega|rangle|langle|sqrt|frac|int|sum)', code):
+        print("[Log] Validation failed: code contains raw LaTeX backslash commands inside Text().")
+        return False
+
     if "ExplainerScene" not in code:
         print("[Log] Validation failed: code missing ExplainerScene class.")
         return False
@@ -291,8 +297,9 @@ def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
     layout_instructions = """11. VERTICAL SHORTS LAYOUT (9:16 ASPECT RATIO):
     - This video is formatted for YouTube Shorts / Reels / TikTok (9:16 vertical screen).
     - Visible screen coordinate bounds: x is narrow [-3.8, 3.8], y is tall [-6.5, 6.5].
-    - Stack all titles, diagrams, text, and labels VERTICALLY from top to bottom (e.g. `VGroup(...).arrange(DOWN, buff=0.4)` or `.next_to(..., DOWN)`).
-    - Keep text lines short and font sizes modest (e.g., font_size=24-32 for descriptions, font_size=34-40 for main titles) so nothing gets clipped on mobile screens on the left or right edges.""" if is_shorts else """11. HORIZONTAL WIDESCREEN LAYOUT (16:9 ASPECT RATIO):
+    - Title MUST be pinned at top: `title.to_edge(UP, buff=0.6)`. All other elements MUST be placed BELOW the title (`next_to(title, DOWN, buff=0.8)` or `y <= 3.5`) so NOTHING collides with the title!
+    - Stack all titles, diagrams, text, and labels VERTICALLY from top to bottom (e.g. `VGroup(...).arrange(DOWN, buff=0.5)`).
+    - Keep text font sizes modest (e.g., font_size=24-28 for descriptions, font_size=32-38 for main titles) so text never clips or overlaps container boxes.""" if is_shorts else """11. HORIZONTAL WIDESCREEN LAYOUT (16:9 ASPECT RATIO):
     - This video is formatted for traditional 16:9 widescreen display.
     - Screen bounds: x [-6.5, 6.5], y [-3.8, 3.8]. Utilize horizontal space cleanly."""
 
@@ -310,8 +317,15 @@ REQUIREMENTS:
 1. DO NOT explain a broad category. Pick one very specific, singular mathematical, physical, or aptitude concept/equation/paradox within Science, Maths, or Aptitude.
 2. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
 3. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
-4. CRITICAL: DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed. You MUST use `Text("your text")` or `MarkupText("your text")` for all text, numbers, and equations (e.g., `Text("a² + b² = c²")` or `Text("E = mc²")`).
-5. CRITICAL SCREEN BOUNDS: Do not use long sentences in a single `Text()`. Break long sentences into multiple small `Text()` objects stacked on top of each other using `.next_to(..., DOWN, buff=0.2)` so they don't run off the edges of the screen.
+4. CRITICAL PLAIN TEXT ONLY (NO LATEX/GREEK MACROS):
+   - DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed.
+   - You MUST use standard `Text("your text")` for all text, labels, numbers, and equations.
+   - DO NOT use LaTeX backslash macros or special math symbols (e.g. DO NOT write `\\Psi`, `\\theta`, `\\rangle`, `\\langle`). Write plain English words instead, such as `Text("Psi")`, `Text("State Psi")`, `Text("Theta")`, `Text("E = mc^2")`, or `Text("a^2 + b^2 = c^2")`.
+5. CRITICAL LAYOUT & OVERLAP PREVENTION:
+   - Always pin the main Title to the top: `title.to_edge(UP, buff=0.6)`.
+   - Place all boxes, labels, and diagrams cleanly BELOW the title (`buff >= 0.8`). Never overlap title text!
+   - When surrounding text with rectangles or boxes, use `SurroundingRectangle(..., buff=0.25)` or place labels above/below boxes (`.next_to(box, UP, buff=0.3)`) so text strings NEVER intersect box borders!
+   - Break long sentences into multiple small `Text()` lines stacked vertically (`.next_to(..., DOWN, buff=0.2)`).
 6. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures, equations, and labels.
 7. GEOMETRIC ACCURACY FOR TOPICS:
    - If the topic is 'Pythagorean Theorem' or related to right triangles:
@@ -324,7 +338,7 @@ REQUIREMENTS:
 10. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
 11. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
 12. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
-13. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`).
+13. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`). DO NOT use `CYAN` (use `TEAL` or `"#00FFFF"`) or `MAGENTA` (use `PINK` or `"#FF00FF"`).
 {layout_instructions}
 
 Format as JSON ONLY:
@@ -334,6 +348,7 @@ Format as JSON ONLY:
   "voiceover_text": "The complete voiceover script to be spoken during this animation."
 }}
 """
+
     def llm_call(attempt):
         response_text = get_llm_response(prompt, temperature=0.7, max_tokens=8192)
         return robust_json_parse(response_text)
