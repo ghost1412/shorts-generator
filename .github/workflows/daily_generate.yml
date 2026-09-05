@@ -87,7 +87,7 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg
+        sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config
         # Install MS Core Fonts (Impact, Arial, etc.) non-interactively
         echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
         sudo apt-get install -y ttf-mscorefonts-installer
