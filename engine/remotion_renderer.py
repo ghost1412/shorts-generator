@@ -217,8 +217,10 @@ def render_with_remotion(
             f"--frames=0-{duration_frames - 1}",
             "--codec=h264",
             "--hardware-acceleration=if-possible",
-            "--concurrency=4"
+            "--timeout=120000",
+            "--concurrency=2"
         ]
+
         
         # Run process
         result = subprocess.run(
