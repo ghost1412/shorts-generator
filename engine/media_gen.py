@@ -445,7 +445,7 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4")
         import yt_dlp
         
         ydl_opts = {
-            'format': 'bestvideo[ext=mp4][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'format': 'bestvideo+bestaudio/best',
             'outtmpl': os.path.join(global_cache_dir, f'{url_hash}.%(ext)s'),
             'merge_output_format': 'mp4',
             'quiet': False,
