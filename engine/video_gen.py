@@ -2397,9 +2397,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 except: pass
 
         # 🟢 OPTIMIZED: Consumer NVIDIA cards have a 3-5 NVENC session limit.
-        # Parallelizing too many GPU renders can cause hangs or session failures.
-        render_workers = min(2 if use_gpu else 4, len(highlights))
+        # Remotion uses Puppeteer tabs; limit to 1 worker for Remotion to avoid Chrome socket contention.
+        render_workers = 1 if use_remotion else min(2 if use_gpu else 4, len(highlights))
         with ThreadPoolExecutor(max_workers=render_workers) as executor:
+
             list(executor.map(render_short_item, enumerate(highlights)))
             
         if mashup:
