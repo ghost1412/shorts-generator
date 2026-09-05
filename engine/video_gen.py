@@ -1945,9 +1945,25 @@ def render_manim_scene(code_str, output_dir="assets/temp_manim", extract_mode="s
     """
     import tempfile, sys
     os.makedirs(output_dir, exist_ok=True)
+
+    # Auto-inject safety color aliases so LLM generated code using CYAN/MAGENTA never crashes
+    color_aliases = """from manim import *
+CYAN = TEAL
+MAGENTA = PINK
+LIGHT_BLUE = BLUE_A
+DARK_BLUE = BLUE_E
+LIGHT_GREEN = GREEN_A
+DARK_GREEN = GREEN_E
+"""
+    if "from manim import *" in code_str:
+        code_str = code_str.replace("from manim import *", color_aliases, 1)
+    else:
+        code_str = color_aliases + "\n" + code_str
+
     script_path = os.path.join(output_dir, "scene.py")
     with open(script_path, "w", encoding="utf-8") as f:
         f.write(code_str)
+
         
     print(f"[Log] Rendering Manim animation from script: {script_path}...")
     res_args = ["-r", "1080,1920"] if extract_mode == "shorts" else ["-r", "1920,1080"]
