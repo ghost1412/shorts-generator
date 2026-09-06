@@ -4,6 +4,170 @@ import time
 import subprocess
 import numpy as np
 
+# ─────────────────────────────────────────────────────────────────────────────
+# VIDEO SOURCE INTELLIGENCE UTILITIES
+# ─────────────────────────────────────────────────────────────────────────────
+
+def detect_letterbox(video_path):
+    """
+    Detects letterbox/pillarbox black bars using FFmpeg cropdetect.
+    Returns an FFmpeg crop filter string (e.g. 'crop=1920:800:0:140') or None.
+    """
+    import imageio_ffmpeg
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    try:
+        # Sample 5 frames evenly across the video for cropdetect
+        cmd = [
+            ffmpeg_exe, '-skip_frame', 'noref', '-i', video_path,
+            '-vf', 'cropdetect=24:16:0', '-frames:v', '30',
+            '-f', 'null', '-'
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        # Parse crop= lines from stderr
+        crop_values = []
+        for line in result.stderr.split('\n'):
+            if 'crop=' in line:
+                part = [p for p in line.split() if p.startswith('crop=')]
+                if part:
+                    crop_values.append(part[-1])
+        if not crop_values:
+            return None
+        # Use the most common value (mode)
+        from collections import Counter
+        most_common = Counter(crop_values).most_common(1)[0][0]
+        # Check if this actually removes bars (skip if it's the full frame)
+        try:
+            parts = most_common.replace('crop=', '').split(':')
+            cw, ch = int(parts[0]), int(parts[1])
+            # Probe original dimensions
+            probe = subprocess.run(
+                [ffmpeg_exe, '-i', video_path], capture_output=True, text=True, timeout=10
+            )
+            for pline in probe.stderr.split('\n'):
+                if 'Video:' in pline and 'x' in pline:
+                    import re
+                    m = re.search(r'(\d{3,})x(\d{3,})', pline)
+                    if m:
+                        ow, oh = int(m.group(1)), int(m.group(2))
+                        if cw >= ow * 0.98 and ch >= oh * 0.98:
+                            return None  # No meaningful crop needed
+                        break
+        except Exception:
+            pass
+        print(f"[Log] Letterbox detected — applying auto-strip: {most_common}")
+        return most_common
+    except Exception as e:
+        print(f"[Warning] Letterbox detection failed: {e}")
+        return None
+
+
+def detect_orientation(video_path):
+    """
+    Returns 'portrait' if h > w (already 9:16), else 'landscape'.
+    Skips the 9:16 crop filter for portrait sources to avoid quality loss.
+    """
+    import imageio_ffmpeg, re
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    try:
+        result = subprocess.run(
+            [ffmpeg_exe, '-i', video_path], capture_output=True, text=True, timeout=10
+        )
+        for line in result.stderr.split('\n'):
+            if 'Video:' in line:
+                m = re.search(r'(\d{3,})x(\d{3,})', line)
+                if m:
+                    w, h = int(m.group(1)), int(m.group(2))
+                    orientation = 'portrait' if h > w else 'landscape'
+                    print(f"[Log] Source orientation detected: {orientation} ({w}x{h})")
+                    return orientation
+    except Exception as e:
+        print(f"[Warning] Orientation detection failed: {e}")
+    return 'landscape'
+
+
+def extract_youtube_chapters(info_json_path):
+    """
+    Reads YouTube chapter markers from a yt-dlp info.json file.
+    Returns list of {title, start, end} dicts, or empty list.
+    """
+    if not info_json_path or not os.path.exists(info_json_path):
+        return []
+    try:
+        with open(info_json_path, 'r', encoding='utf-8') as f:
+            info = json.load(f)
+        chapters_raw = info.get('chapters', [])
+        if not chapters_raw:
+            return []
+        chapters = []
+        for ch in chapters_raw:
+            chapters.append({
+                'title': ch.get('title', 'Chapter'),
+                'start': float(ch.get('start_time', 0)),
+                'end': float(ch.get('end_time', ch.get('start_time', 0) + 60))
+            })
+        print(f"[Log] Loaded {len(chapters)} YouTube chapters from info.json")
+        return chapters
+    except Exception as e:
+        print(f"[Warning] Failed to load chapters: {e}")
+        return []
+
+
+def llm_score_highlights(highlights, transcript_data, top_n=5):
+    """
+    Uses Gemini to rate the top N highlight candidates for viral potential (1-10).
+    Merges LLM score (60%) with existing heuristic score (40%) for final ranking.
+    """
+    if not highlights:
+        return highlights
+    try:
+        from engine.script_gen import get_llm_response, robust_json_parse
+    except ImportError:
+        return highlights
+
+    # Only score the top candidates to save API quota
+    sorted_h = sorted(highlights, key=lambda x: float(x.get('score', 0)), reverse=True)
+    to_score = sorted_h[:top_n]
+
+    # Build segment text map from transcript
+    seg_texts = {}
+    for seg in transcript_data.get('segments', []):
+        seg_texts[seg['start']] = seg.get('text', '')
+
+    def get_segment_text(h):
+        s, e = float(h['start']), float(h['end'])
+        parts = [v for k, v in seg_texts.items() if s - 1 <= k <= e + 1]
+        return ' '.join(parts).strip() or h.get('reason', 'No transcript')
+
+    print(f"[Log] LLM Virality Scoring: rating top {len(to_score)} candidate clips...")
+    for h in to_score:
+        text_snippet = get_segment_text(h)[:500]
+        prompt = (
+            f"You are a viral YouTube Shorts editor. Rate this video segment's viral potential on a scale of 1-10 "
+            f"(10 = guaranteed viral, 1 = boring). Consider hook strength, emotional intensity, pacing, and re-watchability.\n\n"
+            f"Segment transcript ({h['start']:.1f}s - {h['end']:.1f}s):\n{text_snippet}\n\n"
+            f"Reply ONLY with valid JSON: {{\"score\": <integer 1-10>, \"reason\": \"<one sentence why>\"}}"
+        )
+        try:
+            raw = get_llm_response(prompt, "You are a viral video scoring expert.", max_tokens=120)
+            parsed = robust_json_parse(raw)
+            if parsed and isinstance(parsed, dict) and 'score' in parsed:
+                llm_score = float(parsed['score'])
+                heuristic_score = float(h.get('score', 5))
+                # Weighted blend: 60% LLM + 40% heuristic (normalised to 0-100 range)
+                h['llm_score'] = round(llm_score, 1)
+                h['llm_reason'] = parsed.get('reason', '')
+                h['score'] = round((llm_score / 10.0 * 100) * 0.6 + heuristic_score * 0.4, 1)
+                print(f"  Clip {h['start']:.1f}s-{h['end']:.1f}s → LLM:{llm_score}/10 — {h['llm_reason']}")
+        except Exception as e:
+            print(f"  [Warning] LLM scoring failed for clip {h['start']:.1f}s: {e}")
+            h['llm_score'] = None
+            h['llm_reason'] = 'LLM unavailable'
+
+    # Re-sort by updated combined score
+    highlights = sorted(highlights, key=lambda x: float(x.get('score', 0)), reverse=True)
+    return highlights
+
+
 def extract_audio_mono(video_path, output_dir):
     """
     Extracts mono 16kHz audio from video using FFmpeg.
@@ -170,86 +334,95 @@ def detect_motion_intervals(video_path, threshold=0.03, skip_frames=15, candidat
 
 def detect_interest_points(video_path, skip_frames=10, segments=None):
     """
-    Detects the 'center of interest' (e.g., face) using OpenCV Haar Cascades.
-    Optimized: Only processes specific segments if provided.
-    🟢 UPGRADE: Reduced skip_frames for higher resolution tracking and improved EMA smoothing.
+    Detects the 'center of interest' (e.g., face position) using OpenCV Haar Cascades.
+    Uses IoU-based speaker identity lock so the camera doesn't jump between multiple faces.
+    Returns dict of {timestamp: x_center_percentage}.
     """
     import cv2
-    
-    # Load pre-trained Haar Cascade for face detection
+
     face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
     face_cascade = cv2.CascadeClassifier(face_cascade_path)
-    
+
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS)
     interest_points = {}
-    
+
     frame_idx = 0
-    last_x = 0.5 # Default to center
-    
-    # Adaptive EMA alpha based on skip_frames/fps
-    # We want a half-life of about 0.5s for smoothing
-    # skip_frames=10 at 30fps means 3 pts/sec.
-    # alpha=0.15 gives decent smoothing across ~6-7 points (2 seconds)
-    ema_alpha = 0.15 
+    last_x = 0.5
+    ema_alpha = 0.15
+
+    # IoU speaker lock — track the primary speaker's bounding box between frames
+    locked_face = None  # (x, y, w, h) in small_frame coordinates
+    iou_reset_threshold = 0.10  # Below this, assume new scene and pick largest face
+
+    def compute_iou(a, b):
+        ax1, ay1, ax2, ay2 = a[0], a[1], a[0]+a[2], a[1]+a[3]
+        bx1, by1, bx2, by2 = b[0], b[1], b[0]+b[2], b[1]+b[3]
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        inter = max(0, ix2-ix1) * max(0, iy2-iy1)
+        union = a[2]*a[3] + b[2]*b[3] - inter
+        return inter / union if union > 0 else 0.0
+
+    def pick_primary_face(faces, locked):
+        if len(faces) == 0:
+            return None
+        if locked is None:
+            return max(faces, key=lambda f: f[2] * f[3])
+        best, best_iou = None, 0.0
+        for face in faces:
+            iou = compute_iou(locked, tuple(face))
+            if iou > best_iou:
+                best_iou = iou
+                best = face
+        # If match is too poor, reset to largest face (new scene or cut)
+        if best_iou < iou_reset_threshold:
+            return max(faces, key=lambda f: f[2] * f[3])
+        return best
+
+    def process_frame(frame):
+        nonlocal last_x, locked_face
+        small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
+        gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+        if len(faces) > 0:
+            primary = pick_primary_face(list(faces), locked_face)
+            if primary is not None:
+                locked_face = tuple(primary)
+                x_center = (primary[0] + primary[2] / 2) / small_frame.shape[1]
+                last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
+        else:
+            last_x = last_x * (1 - ema_alpha) + 0.5 * ema_alpha
 
     if segments:
         for start, end in segments:
             cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
             frame_idx = int(start * fps)
-            
+            locked_face = None  # Reset lock at each new segment
             while frame_idx / fps < end:
-                # Optimized skipping
-                for _ in range(skip_frames): 
+                for _ in range(skip_frames):
                     cap.grab()
                     frame_idx += 1
-                
                 ret, frame = cap.read()
                 frame_idx += 1
                 if not ret: break
-                
-                # Downscale for faster detection
-                small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
-                gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
-                faces = face_cascade.detectMultiScale(gray, 1.1, 5)
-                
-                if len(faces) > 0:
-                    # Pick largest face
-                    (x, y, w, h) = max(faces, key=lambda f: f[2] * f[3])
-                    x_center = (x + w / 2) / small_frame.shape[1]
-                    # Heavy weight on new detection if it's a solid hit
-                    last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
-                else:
-                    # Slow drift back to center if lost
-                    last_x = last_x * (1 - ema_alpha) + 0.5 * ema_alpha
-                    
+                process_frame(frame)
                 interest_points[round(frame_idx / fps, 2)] = round(last_x, 3)
     else:
-        # Fallback to whole video (slower)
         while True:
-            for _ in range(skip_frames): 
+            for _ in range(skip_frames):
                 cap.grab()
                 frame_idx += 1
-                
             ret, frame = cap.read()
             frame_idx += 1
             if not ret: break
-            
-            small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
-            gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
-            faces = face_cascade.detectMultiScale(gray, 1.1, 5)
-            
-            if len(faces) > 0:
-                (x, y, w, h) = max(faces, key=lambda f: f[2] * f[3])
-                x_center = (x + w / 2) / small_frame.shape[1]
-                last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
-            else:
-                last_x = last_x * (1 - ema_alpha) + 0.5 * ema_alpha
-                
+            process_frame(frame)
             interest_points[round(frame_idx / fps, 2)] = round(last_x, 3)
-        
+
     cap.release()
     return interest_points
+
+
 
 def extract_video_outline(transcript_path):
     """
@@ -404,6 +577,15 @@ def score_segment(text, mode="shorts", start=None, end=None, target_duration=Non
         keywords = ["no way", "wait", "what", "crazy", "insane", "oh my god", "unbelievable", "shocking", "finally"]
         for k in keywords:
             if k in text_lower: score += 12
+
+        # Hook Boosting (First 3 Seconds / First few words)
+        first_few_words = text_lower.split()[:8]
+        hook_words = ["what", "why", "how", "imagine", "did you know", "secret", "never", "always"]
+        if any(h in " ".join(first_few_words) for h in hook_words):
+            score += 20
+        if "?" in text[:30]:
+            score += 15
+
         # Pacing
         if 5 < word_count < 25: score += 10 
         
@@ -581,7 +763,7 @@ def merge_segments(segments, min_gap=6.0, max_dur=95.0, score_sensitive=False):
     merged.append(curr)
     return merged
 
-def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None):
+def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None):
     from engine.script_gen import robust_json_parse, get_llm_response
     
     with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -603,6 +785,15 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             "end": start_pt + (target_duration or 60), 
             "viral_score": 100, 
             "reason": "Challenge Backdrop"
+        }]
+
+    if mode == "EXPLAINER":
+        print("[Log] Mode: EXPLAINER. Extracting topic segment for Manim animation.")
+        return [{
+            "start": 0.0, 
+            "end": min(total_duration, target_duration or 60), 
+            "viral_score": 100, 
+            "reason": "Explainer Animation Block"
         }]
 
     # 🟢 EXPERT REFINEMENT: transcript compression logic
@@ -843,7 +1034,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
 
     if mode == "shorts":
         system_prompt = f"You are a professional social media manager. Identify high-impact viral moments. {style_instructions} {context_injection} {style_injection} {outline_injection} YOU MUST PROVIDE TIMESTAMPS FOR EVERY CLIP."
-        prompt = f"""Objective: Identify viral moments for YouTube Shorts.
+        prompt = f"""Objective: Identify up to {clip_count} distinct viral moments for YouTube Shorts.
         
         {context_injection}
         {style_injection}
@@ -855,13 +1046,15 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         3. Audio Spikes (a_signal): Emotional peaks even if text is neutral.
         
         CRITICAL RULES FOR WATCHABILITY:
+        - **CLIP COUNT**: You MUST identify and extract exactly {clip_count} distinct viral clips (or as close to {clip_count} as possible, aiming for at least 12-15) covering different parts of the video. If the USER EXTRA CONTEXT mentions multiple scenes, timestamps, or parts, you MUST extract multiple separate, distinct clips for EACH requested scene/timestamp to meet the requested count. Do not be overly selective; include all moments of action, humor, or banter.
         - **HOOK FIRST**: The first 2 seconds of each clip MUST have a visual or audio 'hook'. Look for segments where 'ad' (audio delta) or 'd' (text delta) is high right at the 'start' timestamp.
         - **VIRALITY**: Prioritize high-energy, funny, or shocking moments. {style_instructions}
         - **ENGAGEMENT**: Each moment MUST be between {max(5, (target_duration or 15)-15)} and {min(59, (target_duration or 45)+15)} seconds long.
         - **TARGET**: Specifically aim for moments around {min(58, target_duration or 30)}s each for maximum flow. NEVER exceed 60 seconds.
-        - **MANDATORY**: 'start' and 'end' timestamps MUST be provided.
+        - **MANDATORY**: 'start' and 'end' timestamps MUST be provided as numbers (float/seconds).
         - **MANDATORY**: For each clip, provide a 'hook_text' (under 10 words).
         - **MANDATORY**: For each clip, identify the 'tone' (one of: action_peak, funny, fail, tense, educational, neutral).
+        - **MANDATORY**: For each clip, provide a 'viral_score' (integer between 1 and 100, representing virality/engagement potential).
         - REJECT: slow setups, generic intros, filler conversation.
         - Wrap JSON array in START_JSON and END_JSON markers.
         
@@ -924,10 +1117,11 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         print(f"[Log] Sending {len(compressed_segments)} logic-filtered segments to LLM for viral curation...")
         print(f"[Log] This may take up to 2-3 minutes for large 60+ min videos. Please wait...")
         
-        # 🟢 PERFORMANCE: Adjusted dynamic_max to be more token-efficient
-        dynamic_max = min(4096, max(1024, len(compressed_segments) * 20))
+        # 🟢 PERFORMANCE: Set dynamic_max to 8192 to prevent Gemini token truncation
+        dynamic_max = 8192
         
         response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
+        print(f"[DEBUG] Raw LLM Response: {response_text}")
         print(f"[Log] LLM analysis received ({len(response_text)} chars). Processing results...")
         res_data = robust_json_parse(response_text)
         
@@ -953,6 +1147,11 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         if isinstance(highlights, list) and highlights:
             for h in highlights:
                 if isinstance(h, dict) and 'start' in h and 'end' in h:
+                    try:
+                        h['start'] = float(h['start'])
+                        h['end'] = float(h['end'])
+                    except (ValueError, TypeError):
+                        continue
                     v_score = h.get('viral_score', 0)
                     if isinstance(v_score, str): v_score = int(''.join(filter(str.isdigit, v_score)) or 0)
                     h['viral_score'] = v_score
@@ -1039,60 +1238,293 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             valid_highlights.sort(key=lambda x: x['start'])
             
             # Final filter by floor
-            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= min_floor]
+            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= min_duration]
         
         if not valid_highlights:
             print("[Warning] LLM analysis failed. Using Heuristic Signal Fallback (Top Peaks)...")
             # 🟢 DYNAMIC RECOVERY: Use top heuristic signal peaks (Text + Audio)
             fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0), reverse=True)
             
-            for f in fallback_candidates[:clip_count]:
-                valid_highlights.append({
-                    "start": f['start'],
-                    "end": f['end'],
-                    "viral_score": int(f['norm_score'] * 100),
-                    "final_score": int(f['norm_score'] * 100),
-                    "reason": "High-Signal Moment (Heuristic Fallback)"
-                })
+            if mode == "long" and target_duration:
+                accumulated_duration = 0
+                for f in fallback_candidates:
+                    seg_dur = f['end'] - f['start']
+                    if accumulated_duration >= target_duration:
+                        break
+                    valid_highlights.append({
+                        "start": f['start'],
+                        "end": f['end'],
+                        "viral_score": int(f['norm_score'] * 100),
+                        "final_score": int(f['norm_score'] * 100),
+                        "reason": "High-Signal Moment (Heuristic Fallback)"
+                    })
+                    accumulated_duration += seg_dur
+            else:
+                for f in fallback_candidates[:clip_count]:
+                    valid_highlights.append({
+                        "start": f['start'],
+                        "end": f['end'],
+                        "viral_score": int(f['norm_score'] * 100),
+                        "final_score": int(f['norm_score'] * 100),
+                        "reason": "High-Signal Moment (Heuristic Fallback)"
+                    })
             
-            # Sort chronologically for playback reliability
             valid_highlights.sort(key=lambda x: x['start'])
+            valid_highlights = deduplicate_highlights(valid_highlights)
 
         if not valid_highlights:
             # 🟢 ABSOLUTE FAILSAFE: Simple duration-based slice
             fallback_start = min(45.0, total_duration * 0.1)
             fallback_duration = 35.0 if mode == "shorts" else (target_duration or 180.0)
-            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 85, "reason": "Draft Extraction (Failsafe)"}]
+            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 85, "hook_text": "Check this out!", "reason": "Draft Extraction (Failsafe)"}]
         
-        print(f"[Log] Curation complete: Selected {len(valid_highlights)} high-viral segments.")
+        # Final deduplication check
+        valid_highlights = deduplicate_highlights(valid_highlights)
+        print(f"[Log] Curation complete: Selected {len(valid_highlights)} high-viral deduplicated segments.")
         return valid_highlights
     except Exception as e:
         print(f"[Error] Highlight identification failed: {e}")
         import traceback
         traceback.print_exc()
-        return [{"start": 10.0, "end": 40.0, "reason": "Epic Highlight"}]
+        return [{"start": 10.0, "end": 40.0, "viral_score": 80, "hook_text": "Epic Moment", "reason": "Epic Highlight"}]
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, use_audio_detect=False, style=None, user_context=None, style_context=None):
+def deduplicate_highlights(highlights, min_overlap_sec=5.0):
+    """
+    Deduplicates overlapping highlight clips by comparing time ranges.
+    When two clips overlap significantly (>= min_overlap_sec),
+    keeps the candidate with the higher viral_score / final_score.
+    """
+    if not highlights or len(highlights) <= 1:
+        return highlights
+
+    # Sort by score descending so higher-rated clips take priority
+    sorted_highlights = sorted(
+        highlights, 
+        key=lambda x: float(x.get('viral_score', x.get('final_score', 80)) or 80), 
+        reverse=True
+    )
+    
+    kept = []
+    for candidate in sorted_highlights:
+        cand_start = float(candidate['start'])
+        cand_end = float(candidate['end'])
+        
+        is_overlapping = False
+        for existing in kept:
+            ex_start = float(existing['start'])
+            ex_end = float(existing['end'])
+            
+            # Calculate overlap duration
+            overlap_start = max(cand_start, ex_start)
+            overlap_end = min(cand_end, ex_end)
+            overlap_duration = max(0.0, overlap_end - overlap_start)
+            
+            if overlap_duration >= min_overlap_sec:
+                is_overlapping = True
+                break
+                
+        if not is_overlapping:
+            kept.append(candidate)
+            
+    # Re-sort chronologically by start time for natural playback order
+    kept.sort(key=lambda x: float(x['start']))
+    return kept
+
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True):
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(f"Source video Not Found: {video_path}")
+
+    transcript_path = transcribe_video(video_path, output_dir)
+
+    # Load YouTube chapters if available
+    chapters = []
+    if chapters_path:
+        chapters = extract_youtube_chapters(chapters_path)
+
+    highlights_cache_path = os.path.join(output_dir, "highlights.json")
+    highlights = None
+    if use_cache and os.path.exists(highlights_cache_path):
+        try:
+            with open(highlights_cache_path, "r", encoding="utf-8") as f:
+                highlights = json.load(f)
+            print(f"[Log] Loaded cached highlights from {highlights_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached highlights: {e}")
+
+    if highlights is None:
+        highlights = identify_highlights(
+            transcript_path, video_path=video_path, clip_count=clip_count,
+            mode=mode, target_duration=target_duration, min_duration=min_duration, use_audio_detect=use_audio_detect,
+            style=style, user_context=user_context, style_context=style_context
+        )
+
+        # Boost chapter-overlapping segments
+        if chapters:
+            print(f"[Log] Applying chapter-based score boosting to {len(highlights)} candidates...")
+            for h in highlights:
+                hs, he = float(h['start']), float(h['end'])
+                for ch in chapters:
+                    cs, ce = ch['start'], ch['end']
+                    overlap = max(0, min(he, ce) - max(hs, cs))
+                    if overlap > 2.0:  # At least 2s overlap with a chapter
+                        h['score'] = float(h.get('score', 0)) + 25
+                        h['reason'] = h.get('reason', '') + f" [Chapter: {ch['title']}]"
+                        break
+            highlights.sort(key=lambda x: float(x.get('score', 0)), reverse=True)
+
+        # LLM virality scoring
+        if use_llm_scoring:
+            try:
+                with open(transcript_path, 'r', encoding='utf-8') as f:
+                    transcript_data = json.load(f)
+                highlights = llm_score_highlights(highlights, transcript_data)
+            except Exception as e:
+                print(f"[Warning] LLM scoring skipped: {e}")
+
+        try:
+            with open(highlights_cache_path, "w", encoding="utf-8") as f:
+                json.dump(highlights, f, indent=4)
+            print(f"[Log] Saved highlights to cache: {highlights_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache highlights: {e}")
+
+    interest_points_cache_path = os.path.join(output_dir, "interest_points.json")
+    interest_points = {}
+    interest_points_loaded = False
+    if use_cache and smart_crop and os.path.exists(interest_points_cache_path):
+        try:
+            with open(interest_points_cache_path, "r", encoding="utf-8") as f:
+                raw_pts = json.load(f)
+                interest_points = {float(k): v for k, v in raw_pts.items()}
+            interest_points_loaded = True
+            print(f"[Log] Loaded cached interest points from {interest_points_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached interest points: {e}")
+
+    if smart_crop and not interest_points_loaded:
+        highlight_intervals = [(h['start'], h['end']) for h in highlights]
+        print(f"[Log] Extracting interest points for {len(highlights)} segments (Auto-Crop with IoU Speaker Lock)...")
+        interest_points = detect_interest_points(video_path, segments=highlight_intervals)
+        try:
+            with open(interest_points_cache_path, "w", encoding="utf-8") as f:
+                json.dump(interest_points, f, indent=4)
+            print(f"[Log] Saved interest points to cache: {interest_points_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache interest points: {e}")
+    elif not smart_crop:
+        print("[Log] Smart crop disabled. Skipping interest point detection to speed up extraction.")
+
+    silence_intervals_cache_path = os.path.join(output_dir, "silence_intervals.json")
+    silence_intervals = []
+    silence_intervals_loaded = False
+    if use_cache and tighten and os.path.exists(silence_intervals_cache_path):
+        try:
+            with open(silence_intervals_cache_path, "r", encoding="utf-8") as f:
+                raw_silence = json.load(f)
+                silence_intervals = [tuple(item) for item in raw_silence]
+            silence_intervals_loaded = True
+            print(f"[Log] Loaded cached silence intervals from {silence_intervals_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached silence intervals: {e}")
+
+    if tighten and not silence_intervals_loaded:
+        print("[Log] Extracting silence intervals for Auto-Edit...")
+        audio_path = os.path.join(output_dir, "audio_mono.wav")
+        if not os.path.exists(audio_path):
+            audio_path = extract_audio_mono(video_path, output_dir)
+        silence_intervals = detect_silence_intervals(audio_path)
+        try:
+            with open(silence_intervals_cache_path, "w", encoding="utf-8") as f:
+                json.dump(silence_intervals, f, indent=4)
+            print(f"[Log] Saved silence intervals to cache: {silence_intervals_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache silence intervals: {e}")
+    elif not tighten:
+        print("[Log] Tighten (silence removal) disabled. Skipping silence interval detection to speed up extraction.")
+
+    return highlights, transcript_path, interest_points, silence_intervals
+
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
     
     transcript_path = transcribe_video(video_path, output_dir)
-    highlights = identify_highlights(
-        transcript_path, video_path=video_path, clip_count=clip_count, 
-        mode=mode, target_duration=target_duration, use_audio_detect=use_audio_detect,
-        style=style, user_context=user_context, style_context=style_context
-    )
+    
+    highlights_cache_path = os.path.join(output_dir, "highlights.json")
+    highlights = None
+    if use_cache and os.path.exists(highlights_cache_path):
+        try:
+            with open(highlights_cache_path, "r", encoding="utf-8") as f:
+                highlights = json.load(f)
+            print(f"[Log] Loaded cached highlights from {highlights_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached highlights: {e}")
+            
+    if highlights is None:
+        highlights = identify_highlights(
+            transcript_path, video_path=video_path, clip_count=clip_count, 
+            mode=mode, target_duration=target_duration, use_audio_detect=use_audio_detect,
+            style=style, user_context=user_context, style_context=style_context
+        )
+        try:
+            with open(highlights_cache_path, "w", encoding="utf-8") as f:
+                json.dump(highlights, f, indent=4)
+            print(f"[Log] Saved highlights to cache: {highlights_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache highlights: {e}")
     
     # 🟢 UPGRADE: Extra AI Signals for Auto-Edit & Auto-Crop (Optimized)
-    highlight_intervals = [(h['start'], h['end']) for h in highlights]
+    interest_points_cache_path = os.path.join(output_dir, "interest_points.json")
+    interest_points = {}
+    interest_points_loaded = False
+    if use_cache and smart_crop and os.path.exists(interest_points_cache_path):
+        try:
+            with open(interest_points_cache_path, "r", encoding="utf-8") as f:
+                raw_pts = json.load(f)
+                interest_points = {float(k): v for k, v in raw_pts.items()}
+            interest_points_loaded = True
+            print(f"[Log] Loaded cached interest points from {interest_points_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached interest points: {e}")
+            
+    if smart_crop and not interest_points_loaded:
+        highlight_intervals = [(h['start'], h['end']) for h in highlights]
+        print(f"[Log] Extracting interest points for {len(highlights)} segments (Auto-Crop)...")
+        interest_points = detect_interest_points(video_path, segments=highlight_intervals)
+        try:
+            with open(interest_points_cache_path, "w", encoding="utf-8") as f:
+                json.dump(interest_points, f, indent=4)
+            print(f"[Log] Saved interest points to cache: {interest_points_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache interest points: {e}")
+    elif not smart_crop:
+        print("[Log] Smart crop disabled. Skipping interest point detection to speed up extraction.")
     
-    print(f"[Log] Extracting interest points for {len(highlights)} segments (Auto-Crop)...")
-    interest_points = detect_interest_points(video_path, segments=highlight_intervals)
-    
-    print("[Log] Extracting silence intervals for Auto-Edit...")
-    audio_path = os.path.join(output_dir, "audio_mono.wav")
-    if not os.path.exists(audio_path): 
-        audio_path = extract_audio_mono(video_path, output_dir)
-    silence_intervals = detect_silence_intervals(audio_path)
+    silence_intervals_cache_path = os.path.join(output_dir, "silence_intervals.json")
+    silence_intervals = []
+    silence_intervals_loaded = False
+    if use_cache and tighten and os.path.exists(silence_intervals_cache_path):
+        try:
+            with open(silence_intervals_cache_path, "r", encoding="utf-8") as f:
+                raw_silence = json.load(f)
+                silence_intervals = [tuple(item) for item in raw_silence]
+            silence_intervals_loaded = True
+            print(f"[Log] Loaded cached silence intervals from {silence_intervals_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to load cached silence intervals: {e}")
+            
+    if tighten and not silence_intervals_loaded:
+        print("[Log] Extracting silence intervals for Auto-Edit...")
+        audio_path = os.path.join(output_dir, "audio_mono.wav")
+        if not os.path.exists(audio_path): 
+            audio_path = extract_audio_mono(video_path, output_dir)
+        silence_intervals = detect_silence_intervals(audio_path)
+        try:
+            with open(silence_intervals_cache_path, "w", encoding="utf-8") as f:
+                json.dump(silence_intervals, f, indent=4)
+            print(f"[Log] Saved silence intervals to cache: {silence_intervals_cache_path}")
+        except Exception as e:
+            print(f"[Warning] Failed to cache silence intervals: {e}")
+    elif not tighten:
+        print("[Log] Tighten (silence removal) disabled. Skipping silence interval detection to speed up extraction.")
     
     return highlights, transcript_path, interest_points, silence_intervals

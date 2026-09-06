@@ -8,7 +8,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 HF_API_KEY = os.getenv("HF_API_KEY")
-LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL") # Default Ollama #, "http://localhost:11434/api/chat"
+LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/api/chat")
+LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen3:8b")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
 def get_llm_response(
     prompt,
     system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
@@ -24,13 +27,58 @@ def get_llm_response(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
+    # 0. Try Gemini API (unless FORCE_OLLAMA is set)
+    force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"]
+    if not force_ollama and GEMINI_API_KEY:
+        gemini_models = ["gemini-3.8-flash","gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
+        for g_model in gemini_models:
+            try:
+                print(f"[Log] Attempting Gemini API ({g_model})...")
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={GEMINI_API_KEY}"
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [
+                                {"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}
+                            ]
+                        }
+                    ],
+                    "generationConfig": {
+                        "temperature": temperature,
+                        "maxOutputTokens": max_tokens,
+                        "responseMimeType": "application/json"
+                    }
+                }
+                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                response.raise_for_status()
+                res_json = response.json()
+                print(f"[DEBUG] Gemini candidates ({g_model}): {json.dumps(res_json.get('candidates', []), indent=2)}")
+                content = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                print(f"[Log] Gemini API success with {g_model}!")
+                return content
+            except Exception as e:
+                try:
+                    if 'response' in locals() and response is not None:
+                        print(f"[Warning] Gemini API ({g_model}) failed: {e}. Response: {response.text}")
+                    else:
+                        print(f"[Warning] Gemini API ({g_model}) failed: {e}")
+                except:
+                    print(f"[Warning] Gemini API ({g_model}) failed: {e}")
+                print("Trying next Gemini model...")
+
+        print("[Warning] All Gemini API models failed. Falling back to other providers...")
+
     # 1. Try Local LLM (Ollama)
     if LOCAL_LLM_URL:
         try:
             print(f"[Log] Attempting local LLM at {LOCAL_LLM_URL}...")
 
             payload = {
-                "model": "llama3.2:3b",  # 🔥 better model
+                "model": LOCAL_LLM_MODEL,  # 🔥 better model
                 "messages": messages,
                 "stream": True,
                 "options": {
@@ -156,13 +204,25 @@ def validate_mixed_facts(data):
     return isinstance(data, dict) and ("hook" in data or "facts" in data)
 
 def validate_story(data):
-    return isinstance(data, dict) and "title" in data and len(data.get("story", "").split()) > 20
+    if not isinstance(data, dict): return False
+    story = data.get("story", "")
+    if isinstance(story, list):
+        story = " ".join(story)
+    elif not isinstance(story, str):
+        story = str(story)
+    return "title" in data and len(story.split()) > 20
 
 def validate_wyr(data):
     return isinstance(data, dict) and "option_a" in data and "option_b" in data
 
 def validate_reddit(data):
-    return isinstance(data, dict) and "title" in data and len(data.get("story", "").split()) > 20
+    if not isinstance(data, dict): return False
+    story = data.get("story", "")
+    if isinstance(story, list):
+        story = " ".join(story)
+    elif not isinstance(story, str):
+        story = str(story)
+    return "title" in data and len(story.split()) > 20
 
 def validate_trivia(data):
     return isinstance(data, dict) and "question" in data and "answer" in data
@@ -185,7 +245,116 @@ def validate_odd_one_out(data):
 def validate_riddle(data):
     return isinstance(data, dict) and "question" in data and "answer" in data and "search_term" in data
 
+def validate_manim(data):
+    if not isinstance(data, dict):
+        return False
+    if "code" not in data or "title" not in data or "voiceover_text" not in data:
+        return False
+    
+    code = data.get("code", "")
+    voiceover = data.get("voiceover_text", "")
+    
+    if not isinstance(code, str) or not isinstance(voiceover, str):
+        return False
+        
+    cleaned_voiceover = voiceover.strip()
+    if len(cleaned_voiceover) < 15 or not (cleaned_voiceover.endswith('.') or cleaned_voiceover.endswith('!') or cleaned_voiceover.endswith('?')):
+        print("[Log] Validation failed: voiceover_text is incomplete or missing sentence-ending punctuation.")
+        return False
+
+    if "Tex(" in code or "MathTex(" in code:
+        print("[Log] Validation failed: code contains Tex or MathTex (LaTeX not supported).")
+        return False
+
+    # Check for LaTeX macro backslashes inside Text() strings (e.g., \Psi, \theta, \rangle)
+    import re
+    if re.search(r'\\(Psi|psi|theta|Theta|alpha|beta|gamma|lambda|sigma|omega|rangle|langle|sqrt|frac|int|sum)', code):
+        print("[Log] Validation failed: code contains raw LaTeX backslash commands inside Text().")
+        return False
+
+    if "ExplainerScene" not in code:
+        print("[Log] Validation failed: code missing ExplainerScene class.")
+        return False
+
+    import ast
+    try:
+        ast.parse(code)
+    except SyntaxError as e:
+        print(f"[Log] Validation failed: Python SyntaxError in code ({e}).")
+        return False
+
+    return True
+
 # --- Generation Functions ---
+
+def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
+    """
+    Generates a Manim CE Python script for an educational explainer.
+    Supports extract_mode='shorts' (vertical 9:16 format) or 'long' (horizontal 16:9 format).
+    Returns: {"title": str, "code": str, "voiceover_text": str}
+    """
+    is_shorts = (extract_mode == "shorts")
+    layout_instructions = """11. VERTICAL SHORTS LAYOUT (9:16 ASPECT RATIO):
+    - This video is formatted for YouTube Shorts / Reels / TikTok (9:16 vertical screen).
+    - Visible screen coordinate bounds: x is narrow [-3.8, 3.8], y is tall [-6.5, 6.5].
+    - Title MUST be pinned at top: `title.to_edge(UP, buff=0.6)`. All other elements MUST be placed BELOW the title (`next_to(title, DOWN, buff=0.8)` or `y <= 3.5`) so NOTHING collides with the title!
+    - Stack all titles, diagrams, text, and labels VERTICALLY from top to bottom (e.g. `VGroup(...).arrange(DOWN, buff=0.5)`).
+    - Keep text font sizes modest (e.g., font_size=24-28 for descriptions, font_size=32-38 for main titles) so text never clips or overlaps container boxes.""" if is_shorts else """11. HORIZONTAL WIDESCREEN LAYOUT (16:9 ASPECT RATIO):
+    - This video is formatted for traditional 16:9 widescreen display.
+    - Screen bounds: x [-6.5, 6.5], y [-3.8, 3.8]. Utilize horizontal space cleanly."""
+
+    # Scoped to Science, Math, Aptitude & Physics (e.g. Theory of Relativity, Calculus, Speed-Distance, etc.)
+    scope_directive = """SCOPE & TOPIC DIVERSITY:
+- You MUST dynamically select a specific, singular, and mind-blowing concept strictly within SCIENCE (Physics, Theory of Relativity, Quantum Mechanics, Astrophysics), MATHEMATICS (Calculus, Geometry, Probability, Linear Algebra), or APTITUDE & LOGIC (Relative Speed, Work & Time, Permutations, Logic Puzzles).
+- Examples of topics you can choose from dynamically include: Einstein's Theory of Relativity, Time Dilation, Quantum Tunneling, Pythagorean Theorem, Derivatives in Calculus, Relative Speed Aptitude, Monty Hall Paradox, etc.
+- Pick a NEW, unique topic dynamically every single time. DO NOT pick a generic top-level category name."""
+
+    prompt = f"""Generate a Manim Community Edition (manim) Python script explaining a HIGHLY SPECIFIC, mind-blowing concept related to: {topic}. 
+
+{scope_directive}
+
+REQUIREMENTS:
+1. DO NOT explain a broad category. Pick one very specific, singular mathematical, physical, or aptitude concept/equation/paradox within Science, Maths, or Aptitude.
+2. The script MUST contain a single class inheriting from Scene named ExplainerScene (e.g. `class ExplainerScene(Scene):`).
+3. Use Manim CE syntax (e.g., `self.play(Create(...))`, `self.play(Write(...))`, `self.play(Transform(...))`).
+4. CRITICAL PLAIN TEXT ONLY (NO LATEX/GREEK MACROS):
+   - DO NOT use `Tex()` or `MathTex()`. The system does NOT have LaTeX installed.
+   - You MUST use standard `Text("your text")` for all text, labels, numbers, and equations.
+   - DO NOT use LaTeX backslash macros or special math symbols (e.g. DO NOT write `\\Psi`, `\\theta`, `\\rangle`, `\\langle`). Write plain English words instead, such as `Text("Psi")`, `Text("State Psi")`, `Text("Theta")`, `Text("E = mc^2")`, or `Text("a^2 + b^2 = c^2")`.
+5. CRITICAL LAYOUT & OVERLAP PREVENTION:
+   - Always pin the main Title to the top: `title.to_edge(UP, buff=0.6)`.
+   - Place all boxes, labels, and diagrams cleanly BELOW the title (`buff >= 0.8`). Never overlap title text!
+   - When surrounding text with rectangles or boxes, use `SurroundingRectangle(..., buff=0.25)` or place labels above/below boxes (`.next_to(box, UP, buff=0.3)`) so text strings NEVER intersect box borders!
+   - Break long sentences into multiple small `Text()` lines stacked vertically (`.next_to(..., DOWN, buff=0.2)`).
+6. Keep the animation clean, professional, and visually engaging (20-30 seconds). Focus on clear geometric figures, equations, and labels.
+7. GEOMETRIC ACCURACY FOR TOPICS:
+   - If the topic is 'Pythagorean Theorem' or related to right triangles:
+     * You MUST draw a clear right-angled triangle first using `Polygon` (e.g. `Polygon([-2, -1, 0], [1, -1, 0], [1, 1.25, 0], color=BLUE)` where the legs meet at a 90-degree right angle).
+     * DO NOT draw just a square or rectangle as the primary subject. The right-angled triangle with legs 'a', 'b' and hypotenuse 'c' MUST be the central visual element.
+     * Optionally add squares attached to the sides a, b, and c to visually illustrate a² + b² = c², or highlight the sides and show the formula `Text("a² + b² = c²")`.
+   - For all geometry topics, ensure the shapes accurately represent the math principles being taught.
+8. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
+9. CRITICAL TIMING: The voiceover script MUST take exactly {target_duration} seconds to read aloud at a normal speaking pace (approximately {int(target_duration * 2.5)} words). Count your words!
+10. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
+11. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
+12. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
+13. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`). DO NOT use `CYAN` (use `TEAL` or `"#00FFFF"`) or `MAGENTA` (use `PINK` or `"#FF00FF"`).
+{layout_instructions}
+
+Format as JSON ONLY:
+{{
+  "title": "Title of the explainer",
+  "code": "from manim import *\\n\\nclass ExplainerScene(Scene):\\n    def construct(self):\\n        ...",
+  "voiceover_text": "The complete voiceover script to be spoken during this animation."
+}}
+"""
+
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=8192)
+        return robust_json_parse(response_text)
+
+    
+    return with_best_of_n(llm_call, validate_manim, n=3)
 
 def generate_mixed_facts(category="science"):
     """
@@ -232,14 +401,24 @@ def generate_mixed_facts(category="science"):
 
     return with_best_of_n(llm_call, validate_mixed_facts, n=3)
 
-def generate_story(category="general"):
+def generate_story(category="general", hero=None, hero_name=None, companion=None, quest=None, setting=None):
     """
     Generates a dramatic or emotional viral story.
+    Supports interactive/kids mode story customization.
     Returns: {"title": str, "story": str}
     """
-    selected_sub = get_sub_topic(category)
-    print(f"[Log] STORY: Selected sub-topic: {selected_sub}")
-    prompt = f"Write a SHOCKING, high-drama 1st-person story about {selected_sub}. Focus on a bizarre personal experience. Keep it under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
+    if hero:
+        prompt = f"Write a charming, magical, and educational children's bedtime story about a hero named {hero_name or 'Buddy'} who is a {hero}. The hero's companion is a {companion or 'friend'}. Their adventure is to {quest or 'explore'} in the setting of {setting or 'a magical land'}. Focus on a fun, gentle, and heartwarming adventure with a positive moral. Keep it simple, sweet, and under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
+    else:
+        known_cats = ["science", "space", "animals", "history", "anime_lore", "intimacy_facts", "facts", "wyr", "trivia", "quotes", "sound_challenge", "kids", "children", "bedtime"]
+        selected_sub = category if (len(category.split()) > 1 or category.lower() not in known_cats) else get_sub_topic(category)
+        print(f"[Log] STORY: Selected sub-topic/prompt: {selected_sub}")
+        
+        is_kids = category.lower() in ["kids", "children", "bedtime", "children_story"]
+        if is_kids:
+            prompt = f"Write a charming, magical, and educational children's bedtime story about {selected_sub}. Focus on a fun, gentle, and heartwarming adventure with a positive moral. Keep it simple, sweet, and under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
+        else:
+            prompt = f"Write a SHOCKING, high-drama 1st-person story about {selected_sub}. Focus on a bizarre personal experience. Keep it under 100 words. Respond in JSON ONLY: {{'title': '...', 'story': '...', 'loop_lead': 'And that is why...'}}"
     
     def llm_call(attempt):
         response_text = get_llm_response(prompt, temperature=0.7, max_tokens=600)
@@ -378,10 +557,18 @@ def robust_json_parse(output):
 
     return None
 
-def get_sub_topic(category):
+def get_sub_topic(category, is_explainer=False):
     """
     Returns a granular sub-topic for a given category to ensure LLM variety.
+    If is_explainer is True, returns topics specifically suited for Manim visual animations (Math, Physics, CS).
     """
+    if is_explainer:
+        # Do not hardcode lists of topics to prevent repetition.
+        # Returning the category allows the LLM to dynamically choose a unique subtopic on every run.
+        return category
+
+
+
     sub_topics = {
         "science": ["deep sea biology", "quantum mechanics", "forgotten inventors", "human body anomalies", "microscopic life", "unexpected chemistry", "bizarre psychology experiments"],
         "space": ["exoplanets", "black holes", "moon landing secrets", "stellar phenomena", "alien life theories", "the edge of the universe", "rogue planets"],
@@ -393,7 +580,10 @@ def get_sub_topic(category):
         "wyr": ["awkward social dilemmas", "impossible survival choices", "weird superpower trade-offs", "historical alternate realities", "bizarre sensory swaps"],
         "trivia": ["unbelievable geography", "forgotten inventions", "extreme nature", "pop culture butterfly effects", "obscure mythology"],
         "quotes": ["stoic wisdom for chaos", "cinematic metaphors", "minimalist life philosophy", "forgotten ancient scrolls", "poetic nihilism"],
-        "sound_challenge": ["rare animals", "vintage machinery", "unknown instruments", "nature's whispers", "mechanical failures"]
+        "sound_challenge": ["rare animals", "vintage machinery", "unknown instruments", "nature's whispers", "mechanical failures"],
+        "kids": ["a magical forest adventure", "a friendly dragon who lost his fire", "the puppy who learned to share", "a curious squirrel and the magical acorn", "the sleepy teddy bear's adventure", "the star that forgot how to shine", "the little boat that crossed the pond", "a baby elephant learning to swim"],
+        "children": ["a magical forest adventure", "a friendly dragon who lost his fire", "the puppy who learned to share", "a curious squirrel and the magical acorn", "the sleepy teddy bear's adventure", "the star that forgot how to shine", "the little boat that crossed the pond", "a baby elephant learning to swim"],
+        "bedtime": ["a magical forest adventure", "a friendly dragon who lost his fire", "the puppy who learned to share", "a curious squirrel and the magical acorn", "the sleepy teddy bear's adventure", "the star that forgot how to shine", "the little boat that crossed the pond", "a baby elephant learning to swim"]
     }
     
     # Try direct mapping first
@@ -446,9 +636,9 @@ Format as JSON ONLY:
 """
 
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
+        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=1500)
         wyr = robust_json_parse(response_text)
-        if vyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
+        if wyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
             wyr["percent_b"] = 100 - wyr.get("percent_a", 50)
         return wyr
 
@@ -1024,6 +1214,46 @@ def generate_jwst_script():
         return robust_json_parse(response_text)
 
     return with_best_of_n(llm_call, validate_jwst_script, n=3)
+
+
+def generate_trailer_missed_script(title):
+    """
+    Generates a viral script about hidden details/easter eggs missed in a trailer.
+    """
+    prompt = f"""Write a viral, high-energy YouTube Shorts script about 3 hidden details, secrets, or easter eggs people missed in the trailer for "{title}".
+    
+    STRUCTURE:
+    1. THE HOOK: A shocking opening statement (e.g., "GTA 6 just changed everything, and you missed this massive detail...").
+    2. THE DETAILS: Mention 2-3 specific, mind-blowing easter eggs or hidden frames.
+    3. THE LOOP: A seamless transition loop back to the first word of the hook.
+    
+    RULES:
+    - Tone: Enthusiastic, shocking, fast-paced.
+    - Word count: Under 90 words.
+    - Format as JSON ONLY:
+    
+    {{
+      "title": "Secrets in the {title} Trailer",
+      "story": "The full voiceover script text here...",
+      "search_term": "action cinematic",
+      "loop_lead": "Go back and check for yourself..."
+    }}
+    """
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, max_tokens=600)
+        data = robust_json_parse(response_text)
+        if isinstance(data, dict) and "story" in data:
+            story = data["story"]
+            if isinstance(story, list):
+                data["story"] = " ".join(story)
+            elif not isinstance(story, str):
+                data["story"] = str(story)
+        return data
+
+    return with_best_of_n(llm_call, validate_story, n=3)
+
+
+
 
 
 if __name__ == "__main__":

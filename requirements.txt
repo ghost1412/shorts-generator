@@ -10,3 +10,5 @@ google-auth-httplib2
 nest_asyncio
 cryptography
 supabase
+yt-dlp
+manim

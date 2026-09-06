@@ -68,6 +68,7 @@ export default function Dashboard() {
     { id: 'NEWS_SERIOUS', label: '📰 Serious News', icon: <TrendingUp size={16} />, color: 'text-blue-400', category: 'News' },
     { id: 'TREND', label: '📈 Viral Trends', icon: <TrendingUp size={16} />, color: 'text-yellow-300', category: 'Templates' },
     { id: 'CHALLENGE', label: '🫁 Breathing Game', icon: <Sparkles size={16} />, color: 'text-rose-400', category: 'Games' },
+    { id: 'MUSIC', label: '🎵 AI Music Gen', icon: <Sparkles size={16} />, color: 'text-purple-400', category: 'Templates' },
   ];
   const supabase = createClient();
 
@@ -176,6 +177,7 @@ export default function Dashboard() {
           useAudioDetect,
           cartoon,
           persona,
+          sourceVideoUrl: sourceVideoUrl || undefined,
           userContext,
           styleContext,
           pinterest,
@@ -445,11 +447,45 @@ export default function Dashboard() {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Video URL (YouTube, Twitter, TikTok, Direct Link)</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="url" 
+                        value={sourceVideoUrl}
+                        onChange={(e) => setSourceVideoUrl(e.target.value)}
+                        placeholder="https://www.youtube.com/watch?v=..."
+                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs font-medium focus:outline-none focus:border-[#00e5ff]/50 transition-colors"
+                      />
+                      {sourceVideoUrl && !isExtracting && (
+                        <button 
+                          onClick={() => {
+                            if (!sourceVideoUrl.trim()) return;
+                            setIsExtracting(true);
+                            setUploadProgress(0);
+                            const interval = setInterval(() => {
+                              setUploadProgress(prev => {
+                                if (prev >= 100) {
+                                  clearInterval(interval);
+                                  return 100;
+                                }
+                                return prev + 4;
+                              });
+                            }, 50);
+                          }}
+                          className="px-4 py-2 bg-[#00e5ff] text-black text-[10px] font-black uppercase rounded-lg shadow-lg shadow-[#00e5ff]/20 hover:scale-[1.02] transition-transform"
+                        >
+                          Fetch Link
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   {!isExtracting ? (
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-white/10 rounded-2xl cursor-pointer hover:border-[#00e5ff]/30 hover:bg-[#00e5ff]/5 transition-all group">
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <PlusCircle className="w-8 h-8 text-zinc-500 group-hover:text-[#00e5ff] mb-2 transition-colors" />
-                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-white">Drop Source Video</p>
+                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-white/10 rounded-2xl cursor-pointer hover:border-[#00e5ff]/30 hover:bg-[#00e5ff]/5 transition-all group">
+                      <div className="flex flex-col items-center justify-center pt-3 pb-3">
+                        <PlusCircle className="w-6 h-6 text-zinc-500 group-hover:text-[#00e5ff] mb-1 transition-colors" />
+                        <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-white">Or Drop Local Video File</p>
                       </div>
                       <input 
                         type="file" 
@@ -460,7 +496,6 @@ export default function Dashboard() {
                           if (!file) return;
                           setIsExtracting(true);
                           setUploadProgress(0);
-                          // Mock upload simulation with VFX trigger
                           const interval = setInterval(() => {
                             setUploadProgress(prev => {
                               if (prev >= 100) {

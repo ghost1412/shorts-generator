@@ -113,7 +113,9 @@ export async function POST(request: Request) {
           sourceVideoUrl,
           useAudioDetect,
           userContext,
-          styleContext
+          styleContext,
+          prompt: body.prompt || customScript,
+          ckptName: body.ckpt_name || body.ckptName || 'ace_step_v1_3.5b.safetensors'
         })
       });
 
