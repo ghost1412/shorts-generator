@@ -12,29 +12,62 @@ SAFE_TOP = 220
 SAFE_MID = 750
 SAFE_BOTTOM = 1600
 
-def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=1080, target_h=1920):
+def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=1080, target_h=1920, orientation='landscape', letterbox_crop=None):
     """
     Generates an FFmpeg crop filter string for dynamic focal point tracking.
-    Uses piecewise linear interpolation with optimized sampling and smoothing.
+    Includes EMA smoothing, velocity caps, and deadband hysteresis to prevent camera flickering/jittering.
     """
+    if orientation == 'portrait':
+        return None  # No crop needed for portrait, it will just scale
+
+    base_filter = ""
+    if letterbox_crop:
+        base_filter = f"{letterbox_crop},"
+
     if not interest_points:
-        return f"crop=ih*9/16:ih:(iw-ow)/2:0"
+        return f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
     
     # Filter and sort interest points for this segment
-    pts = sorted([(t, x) for t, x in interest_points.items() if start_time <= t <= end_time])
-    if not pts:
-        return f"crop=ih*9/16:ih:(iw-ow)/2:0"
+    raw_pts = sorted([(t, x) for t, x in interest_points.items() if start_time <= t <= end_time])
+    if not raw_pts:
+        return f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
         
-    # 🟢 ADAPTIVE SAMPLING: Use more points for longer segments (up to 40)
-    # This prevents jerkiness while staying within Windows command line limits
+    # --- ANTI-BLINKING / SMOOTHING PASS ---
+    # Apply Exponential Moving Average (EMA) and velocity clamping to raw focal points
+    pts = []
+    prev_t, prev_x = raw_pts[0][0], raw_pts[0][1]
+    pts.append((prev_t, prev_x))
+
+    max_vel_per_sec = 0.15  # Max 15% width shift per second for buttery smooth panning
+    deadband = 0.04         # 4% movement threshold (hysteresis) to prevent micro-jittering
+
+    for t, x in raw_pts[1:]:
+        dt = max(0.01, t - prev_t)
+        # Apply deadband: ignore tiny position noise
+        if abs(x - prev_x) < deadband:
+            x_target = prev_x
+        else:
+            x_target = x
+
+        # Velocity cap
+        max_dist = max_vel_per_sec * dt
+        dx = x_target - prev_x
+        if abs(dx) > max_dist:
+            x_target = prev_x + np.sign(dx) * max_dist
+
+        # EMA blend (alpha=0.20 for highly smoothed tracking)
+        x_smooth = round(0.20 * x_target + 0.80 * prev_x, 4)
+        pts.append((t, x_smooth))
+        prev_t, prev_x = t, x_smooth
+
+    # Adaptive sampling to keep FFmpeg expression within CLI length limits
     duration = end_time - start_time
-    max_pts = min(40, int(duration * 2) + 5) # ~2 points per second
+    max_pts = min(40, int(duration * 2) + 5)
     if len(pts) > max_pts:
         step = len(pts) // max_pts
         pts = pts[::step][:max_pts]
     
     def get_focal_x_expr():
-        # Compact piecewise linear construction with smoothing
         expr = f"{pts[-1][1]}"
         for i in range(len(pts) - 2, -1, -1):
             t1, x1 = round(pts[i][0] - start_time, 2), pts[i][1]
@@ -43,44 +76,132 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
             t_diff = round(t2 - t1, 3)
             if t_diff <= 0.01: t_diff = 0.01
             
-            # Linear interpolation: x1 + (x2-x1)*(t-t1)/(t2-t1)
-            # 🟢 SMOOTHING: Using 'staircase' if too close, else linear
             seg = f"if(lt(t,{t2}),{x1}+({round(x2-x1,4)})*(t-{t1})/{t_diff},{expr})"
             expr = seg
         return expr
 
     focal_x_pct = get_focal_x_expr()
     crop_w = "ih*9/16"
-    # Ensure crop focal position is constrained within video bounds
     x_expr = f"min(max(0,({focal_x_pct}*iw)-({crop_w}/2)),iw-{crop_w})"
     
-    return f"crop={crop_w}:ih:'{x_expr}':0"
+    return f"{base_filter}crop={crop_w}:ih:'{x_expr}':0"
+
+def generate_thumbnail(video_path, output_path, at_time=None):
+    """Generates a high-quality JPEG thumbnail from the video using FFmpeg."""
+    import imageio_ffmpeg, subprocess
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    try:
+        t = at_time if at_time is not None else 3.0
+        subprocess.run([
+            ffmpeg_exe, '-y', '-ss', str(t), '-i', video_path, 
+            '-vframes', '1', '-q:v', '2', output_path
+        ], capture_output=True, check=True)
+    except Exception as e:
+        print(f"[Warning] Thumbnail generation failed: {e}")
+
+def insert_broll_cutaways(clip, silence_intervals, broll_dir, fps=30):
+    """
+    Inserts B-roll video over long silence gaps to maintain visual engagement.
+    Replaces the video track but keeps the original audio.
+    """
+    if not os.path.exists(broll_dir) or not silence_intervals: return clip
+    brolls = [os.path.join(broll_dir, f) for f in os.listdir(broll_dir) if f.endswith('.mp4')]
+    if not brolls: return clip
+    
+    import random
+    from moviepy import CompositeVideoClip, VideoFileClip
+    
+    final_clips = [clip]
+    broll_idx = 0
+    
+    for start, end in silence_intervals:
+        gap = end - start
+        if gap > 1.5:  # Only insert broll for gaps > 1.5s
+            try:
+                b_path = brolls[broll_idx % len(brolls)]
+                broll_idx += 1
+                b_clip = VideoFileClip(b_path)
+                
+                # Trim and loop broll if needed
+                if b_clip.duration < gap:
+                    from moviepy import vfx
+                    b_clip = b_clip.fx(vfx.loop, duration=gap)
+                else:
+                    b_clip = b_clip.subclip(0, gap)
+                    
+                # Resize and crop to match main clip
+                b_clip = b_clip.resize(height=clip.h)
+                if b_clip.w != clip.w:
+                    b_clip = b_clip.crop(x_center=b_clip.w/2, width=clip.w)
+                
+                # Position over time
+                b_clip = b_clip.with_start(start).with_position(("center", "center"))
+                # Add crossfade
+                b_clip = b_clip.crossfadein(0.15).crossfadeout(0.15)
+                
+                final_clips.append(b_clip)
+            except Exception as e:
+                print(f"[Warning] Failed to insert B-roll {b_path}: {e}")
+                
+    if len(final_clips) > 1:
+        print(f"[Log] Inserted {len(final_clips)-1} B-roll cutaways for visual retention.")
+        return CompositeVideoClip(final_clips, size=clip.size)
+        
+    return clip
 
 def tighten_clip(clip, keep_intervals, mode="cut", speed=None):
     """
     Tightens a clip by removing non-keep intervals (Auto-Editor style).
-    mode: "cut" to remove skipped parts, "speed" to speed them up.
+    Includes interval merging, safety padding, and micro-cut filtering to prevent flickering/blinking artifacts.
     """
     if not keep_intervals: return clip
+
+    # 1. Sort intervals by start time
+    sorted_intervals = sorted(keep_intervals, key=lambda x: x[0])
     
-    # Adjust for clip start in global timeline if needed
-    # (Assuming keep_intervals are relative to the video file)
-    
+    # 2. Add safety padding (80ms buffer) and merge close gaps (< 250ms)
+    padding = 0.08
+    min_gap = 0.25
+    min_clip_duration = 0.25
+
+    padded_intervals = []
+    for s, e in sorted_intervals:
+        ps = max(0.0, s - padding)
+        pe = min(clip.duration, e + padding)
+        if pe - ps >= min_clip_duration:
+            padded_intervals.append((ps, pe))
+
+    if not padded_intervals:
+        return clip
+
+    # Merge overlapping or closely adjacent intervals
+    merged_intervals = []
+    curr_s, curr_e = padded_intervals[0]
+
+    for next_s, next_e in padded_intervals[1:]:
+        if next_s - curr_e <= min_gap:
+            curr_e = max(curr_e, next_e)
+        else:
+            merged_intervals.append((curr_s, curr_e))
+            curr_s, curr_e = next_s, next_e
+    merged_intervals.append((curr_s, curr_e))
+
+    # 3. Build subclips
     parts = []
     last_end = 0
-    
-    for start, end in keep_intervals:
-        # Segment and keep
+
+    for start, end in merged_intervals:
         if start > last_end and mode == "speed" and speed:
-            # Speed up the 'skipped' part instead of cutting
             skipped = clip.subclipped(last_end, start).with_effects([vfx.MultiplySpeed(speed)])
             parts.append(skipped)
-        
-        parts.append(clip.subclipped(start, end))
+
+        if end - start >= min_clip_duration:
+            parts.append(clip.subclipped(start, end))
         last_end = end
-        
-    if not parts: return clip
-    
+
+    if not parts:
+        return clip
+
     from moviepy import concatenate_videoclips
     return concatenate_videoclips(parts)
 
@@ -561,6 +682,99 @@ def apply_ken_burns(clip, duration):
     cropped = zoomed.cropped(x_center=w/2, y_center=h/2, width=1080, height=1920)
     return cropped.image_transform(np.ascontiguousarray)
 
+def render_manim_scene(script_content, output_dir, extract_mode="shorts"):
+    """
+    Renders a Manim scene from a python script content.
+    Supports extract_mode='shorts' (vertical 9:16) or 'long' (horizontal 16:9).
+    Returns the path to the generated video.
+    """
+    import subprocess
+    import shutil
+    
+    os.makedirs(output_dir, exist_ok=True)
+    script_path = os.path.join(output_dir, "temp_explainer.py")
+
+    # Inject color & rate_func aliases for Manim CE compatibility to prevent NameErrors (e.g. CYAN, ease_in_out_sine, ORANGE_E)
+    color_header = """
+# Compatibility color & rate_func aliases
+CYAN = "#00FFFF"
+MAGENTA = "#FF00FF"
+LIME = "#00FF00"
+NAVY = "#000080"
+INDIGO = "#4B0082"
+VIOLET = "#EE82EE"
+BROWN = "#8B4513"
+CORAL = "#FF7F50"
+CRIMSON = "#DC143C"
+TURQUOISE = "#40E0D0"
+OLIVE = "#808000"
+
+ORANGE_E = "#C85A00"
+ORANGE_A = "#FFA500"
+ORANGE_B = "#FF8C00"
+ORANGE_C = "#FF7F00"
+ORANGE_D = "#E65100"
+PINK_E = "#C71585"
+GOLD_E = "#996515"
+
+for _c_base in ["ORANGE", "PINK", "GOLD", "YELLOW", "RED", "BLUE", "GREEN", "PURPLE", "TEAL"]:
+    for _suffix in ["_A", "_B", "_C", "_D", "_E"]:
+        _c_name = _c_base + _suffix
+        if _c_name not in globals():
+            globals()[_c_name] = globals()[_c_base] if _c_base in globals() else "#FF8C00"
+
+try:
+    from manim.utils.rate_functions import *
+except Exception:
+    pass
+
+for _rf in ["ease_in_out_sine", "ease_in_sine", "ease_out_sine", "ease_in_out_quad", "ease_in_quad", "ease_out_quad", "ease_in_out_cubic", "ease_in_cubic", "ease_out_cubic"]:
+    if _rf not in globals():
+        globals()[_rf] = smooth
+"""
+    if "from manim import *" in script_content:
+        script_content = script_content.replace("from manim import *", "from manim import *" + color_header)
+    else:
+        script_content = color_header + script_content
+
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(script_content)
+        
+    print(f"[Log] Rendering Manim scene from {script_path} (Mode: {extract_mode})...")
+    
+    # Run Manim: for shorts mode, pass -r 720,1280 for vertical 9:16 ratio
+    if extract_mode == "shorts":
+        cmd = ["manim", "-qm", "-r", "720,1280", "--media_dir", output_dir, script_path, "ExplainerScene"]
+    else:
+        cmd = ["manim", "-qm", "--media_dir", output_dir, script_path, "ExplainerScene"]
+    
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        final_path = os.path.join(output_dir, "manim_output.mp4")
+        
+        # Search output directory for rendered MP4
+        videos_dir = os.path.join(output_dir, "videos")
+        if os.path.exists(videos_dir):
+            for root, dirs, files in os.walk(videos_dir):
+                for file in files:
+                    if file.endswith(".mp4"):
+                        found_file = os.path.join(root, file)
+                        shutil.copy(found_file, final_path)
+                        return final_path
+
+        # Fallback check
+        expected_output_dir = os.path.join(output_dir, "videos", "temp_explainer", "720p30")
+        expected_file = os.path.join(expected_output_dir, "ExplainerScene.mp4")
+        if os.path.exists(expected_file):
+            shutil.copy(expected_file, final_path)
+            return final_path
+        else:
+            print(f"[Error] Manim output not found under {videos_dir}")
+            return None
+    except subprocess.CalledProcessError as e:
+        print(f"[Error] Manim failed: {e.stderr}")
+        return None
+
 def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_short.mp4", music_path=None, mode="FACTS", use_ai_audio=False, bitrate="8000k", preset="medium", avatar_path=None, category="general", interest_points=None, silence_intervals=None, tighten_mode="cut"):
     """
     Composes the final video with dynamic multi-backgrounds and word-by-word animations.
@@ -583,7 +797,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
     current_time = 0
     # If we have many clips (likely from local concat experiment), use natural durations
     # Otherwise, split equally for standard staggered layouts (FACTS, STORY)
-    use_natural_stitch = len(video_paths) > 5 or mode in ["REDDIT", "TRIVIA", "QUOTE", "NEWS", "GUESS_SOUND"]
+    use_natural_stitch = len(video_paths) > 5 or mode in ["REDDIT", "TRIVIA", "QUOTE", "NEWS", "GUESS_SOUND", "TRAILER_MISSED"]
     
     for i, path in enumerate(video_paths):
         try:
@@ -1724,6 +1938,94 @@ def create_riddle_video(audio_path, riddle_data, video_paths, output_path="riddl
     
     return output_path
 
+def render_manim_scene(code_str, output_dir="assets/temp_manim", extract_mode="shorts"):
+    """
+    Writes the Python script code_str to a temporary file and executes Manim CE CLI to render it.
+    Returns the path to the generated MP4 file.
+    """
+    import tempfile, sys
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Auto-inject safety color aliases so LLM generated code using CYAN/MAGENTA never crashes
+    color_aliases = """from manim import *
+CYAN = TEAL
+MAGENTA = PINK
+LIGHT_BLUE = BLUE_A
+DARK_BLUE = BLUE_E
+LIGHT_GREEN = GREEN_A
+DARK_GREEN = GREEN_E
+"""
+    if "from manim import *" in code_str:
+        code_str = code_str.replace("from manim import *", color_aliases, 1)
+    else:
+        code_str = color_aliases + "\n" + code_str
+
+    script_path = os.path.join(output_dir, "scene.py")
+    with open(script_path, "w", encoding="utf-8") as f:
+        f.write(code_str)
+
+        
+    print(f"[Log] Rendering Manim animation from script: {script_path}...")
+    res_args = ["-r", "1080,1920"] if extract_mode == "shorts" else ["-r", "1920,1080"]
+    
+    cmd = [
+        sys.executable, "-m", "manim", 
+        "-ql", "--media_dir", output_dir
+    ] + res_args + [script_path, "ExplainerScene"]
+    
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
+    if res.returncode != 0:
+        print(f"[Warning] Manim CLI stderr: {res.stderr}")
+        raise RuntimeError(f"Manim render failed: {res.stderr}")
+        
+    rendered_file = None
+    for root, dirs, files in os.walk(output_dir):
+        for file in files:
+            if file.endswith(".mp4"):
+                rendered_file = os.path.join(root, file)
+                break
+        if rendered_file: break
+        
+    if not rendered_file or not os.path.exists(rendered_file):
+        raise RuntimeError("Manim render completed but output MP4 was not found.")
+        
+    return rendered_file
+
+def create_explainer_video(audio_path, manim_video_path, output_path="explainer_short.mp4", music_path=None, bitrate="8000k", preset="medium"):
+    """
+    Combines rendered Manim animation with TTS audio track and background music.
+    """
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+        
+    try:
+        video_clip = VideoFileClip(manim_video_path)
+    except Exception as e:
+        raise RuntimeError(f"Manim video file is unreadable: {manim_video_path}")
+        
+    duration = max(audio_clip.duration, video_clip.duration)
+    
+    if video_clip.duration < duration:
+        n_loops = int(np.ceil(duration / video_clip.duration)) if video_clip.duration > 0 else 1
+        video_clip = video_clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(duration)
+    else:
+        video_clip = video_clip.with_duration(duration)
+        
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+    else:
+        final_audio = audio_clip.with_duration(duration)
+        
+    final_video = video_clip.with_audio(final_audio).with_duration(duration)
+    
+    print(f"[Log] Exporting EXPLAINER video: {output_path}")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
+    return output_path
+
+
 
 # --- AI EXTRACTION ENGINE (Long-Form Support) ---
 # Parallel extraction and highlight reel generation logic from commit 1eeef17.
@@ -1732,11 +2034,17 @@ POOL_SIZE = 8
 
 def get_hq_vf():
     """Returns an FFmpeg filter chain for 'Premium' enhancement."""
-    # 1. hqdn3d: High Quality Denoise (Slightly reduced temporal for less ghosting)
-    # 2. cas: Contrast Adaptive Sharpen (0.4 strength for natural look)
-    # 3. unsharp: Standard luma sharpening
-    # 4. eq: Subtle contrast/vibrance boost
-    return "hqdn3d=1.2:1.2:4:4,cas=0.4,unsharp=5:5:0.4:5:5:0.0,eq=contrast=1.02:saturation=1.04"
+    # 🟢 Clean HQ: Light contrast-adaptive sharpening + subtle color enhancement
+    # (Avoid hqdn3d denoise as it causes severe motion ghosting/smudging on dance/crowd scenes)
+    return "cas=0.2,eq=contrast=1.03:saturation=1.05"
+
+def get_superres_vf():
+    """FFmpeg filter chain specifically tailored for restoring low-res / legacy videos (VCD, VHS, SD 480p)."""
+    # 1. yadif=1: Double-rate deinterlacing (removes comb lines, smooths motion to 50/60fps)
+    # 2. deblock: MPEG-1/2 deblocking (eliminates VCD macroblock squares)
+    # 3. cas=0.35: Adaptive edge reconstruction
+    # 4. eq: Restores faded analog tape / early digital color palettes
+    return "yadif=mode=1:parity=auto:deint=0,deblock=filter=weak:block=4,cas=0.35,eq=contrast=1.05:saturation=1.10:brightness=0.01"
 
 def _check_nvenc():
     """Checks if NVIDIA hardware acceleration is available."""
@@ -1779,7 +2087,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut"):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -1795,42 +2103,42 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     target_res = (1920, 1080) if mode == "long" else (1080, 1920)
     w, h = target_res
     
-    scaling_alg = "lanczos"
+    scaling_alg = "lanczos+accurate_rnd+full_chroma_int" if use_superres else "lanczos"
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     os.makedirs(os.path.join(output_dir, "temp_segments"), exist_ok=True)
     
     _has_nvenc = _check_nvenc()
+    use_gpu = _has_nvenc and codec == 'libx264'
     if _has_nvenc: print("[Log] NVIDIA GPU Detected: Using NVENC for ultra-fast encoding 🚀")
     
     processes = []
     
     for i, hi in enumerate(highlights):
-        print(f"[Log] Queueing extraction for clip {i+1}/{len(highlights)}: {hi['start']:.2f}s - {hi['end']:.2f}s")
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
+        if use_cache and os.path.exists(target) and os.path.getsize(target) > 1000:
+            print(f"[Log] Segment {i} already exists at {target}. Skipping extraction.")
+            continue
+            
+        print(f"[Log] Queueing extraction for clip {i+1}/{len(highlights)}: {hi['start']:.2f}s - {hi['end']:.2f}s")
         duration = hi['end'] - hi['start']
         
-        # Text burn for Landscape mode (Highlight Reels)
-        # Font path needs to be robust for Windows
-        font_file = "C\\:/Windows/Fonts/impact.ttf"
-        reason_text = hi.get('reason', '').replace("'", "").replace(":", "").replace('"', "")
-        
+        # Clean output without internal debug text burn-in
         text_filter = ""
-        if mode == "long" and reason_text:
-            draw_text = f"drawtext=fontfile='{font_file}':text='{reason_text}':fontcolor=cyan:fontsize=45:x=(w-text_w)/2:y=100:enable='between(t,0,3.5)':box=1:boxcolor=black@0.5:boxborderw=5"
-            text_filter = f",{draw_text}"
 
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
         if mode == "shorts":
             if interest_points:
-                crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h)
+                crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)
             else:
-                crop_filter = "crop=ih*9/16:ih:(iw-ow)/2:0"
-            vf_filter = f"{crop_filter},scale={w}:{h}:flags={scaling_alg},format=yuv420p"
+                base_filter = f"{letterbox_crop}," if letterbox_crop else ""
+                crop_filter = None if orientation == 'portrait' else f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
+            vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
             vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
             
-        if use_hq:
-            # 🟢 NEW: Apply Premium filters before scaling
+        if use_superres:
+            vf_filter = f"{get_superres_vf()},{vf_filter}"
+        elif use_hq:
             vf_filter = f"{get_hq_vf()},{vf_filter}"
             
         vf_filter += text_filter
@@ -1840,15 +2148,15 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         target_codec = 'h264_nvenc' if use_gpu else codec
         # 🟢 UPGRADE: Intermediate quality should be higher than 'ultrafast' to prevent generation loss
         target_preset = 'p6' if use_gpu else 'veryfast'
-        # 🟢 UPGRADE: Ensure intermediate segments have high bitrate (50M for HQ) to survive re-encoding
-        intermediate_bitrate = "50M" if use_hq else "25M"
+        # 🟢 UPGRADE: Ensure intermediate segments have high quality (constant quality / low crf)
+        quality_flags = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
         
         cmd = [
             ffmpeg_exe, '-y', '-ss', str(hi['start']), '-i', source_path,
             '-t', str(duration), '-vf', vf_filter,
-            '-r', '24', # 🟢 FORCE 24FPS: Standardize extraction to prevent stuttering in MoviePy
+            '-r', '30', # 🟢 FORCE 30FPS: Standardize extraction to prevent stuttering in MoviePy & match Remotion
             '-c:v', target_codec, '-preset', target_preset,
-            '-b:v', intermediate_bitrate,
+        ] + quality_flags + [
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '192k',
             target
@@ -1866,12 +2174,24 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             for proc in processes: proc.wait()
             processes = []
 
-    for proc in processes: proc.communicate()
+    for proc in processes: proc.wait()
+
+    # Generate thumbnails for all extracted segments
+    for i, hi in enumerate(highlights):
+        target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
+        thumb_path = os.path.join(output_dir, "temp_segments", f"thumb_{i}.jpg")
+        if os.path.exists(target) and not os.path.exists(thumb_path):
+            generate_thumbnail(target, thumb_path)
 
     extracted_files = []
     from moviepy import concatenate_videoclips # Lazy import
     
     if mode == "long":
+        out = os.path.join(output_dir, "highlight_reel.mp4")
+        if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000:
+            print(f"[Log] Highlight Reel already exists at {out}. Skipping rendering.")
+            extracted_files.append(out)
+            return extracted_files
         print(f"[Log] Merging {len(highlights)} clips into Highlight Reel...")
         clips = []
         for i, hi in enumerate(highlights):
@@ -1886,7 +2206,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             
         final_reel = concatenate_videoclips(clips, method="chain")
         out = os.path.join(output_dir, "highlight_reel.mp4")
-        final_reel.write_videofile(out, fps=24, bitrate=bitrate, preset=preset, threads=8)
+        encode_codec = 'h264_nvenc' if use_gpu else codec
+        final_threads = 1 if use_gpu else 8
+        quality_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
+        final_reel.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params)
         extracted_files.append(out)
         for clip in clips: clip.close()
     else:
@@ -1897,6 +2220,34 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             task_path = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
             if not os.path.exists(task_path) or os.path.getsize(task_path) < 1000: return
             
+            out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
+            if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000:
+                print(f"[Log] Final clip {i+1} already exists at {out}. Skipping rendering.")
+                extracted_files.append(out)
+                return
+            
+            if use_remotion:
+                out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
+                print(f"[Log] Rendering Final Short {i+1} via Remotion...")
+                try:
+                    from engine.remotion_renderer import render_with_remotion
+                    render_with_remotion(
+                        audio_path=task_path,
+                        subs_path=transcript_path,
+                        output_path=out,
+                        mode="FACTS",
+                        title_text=None,
+                        background_paths=[task_path],
+                        duration=hi['end'] - hi['start'],
+                        start_offset=hi['start'],
+                        caption_style=caption_style,
+                        subtitle_y_pos=subtitle_y_pos
+                    )
+                    extracted_files.append(out)
+                except Exception as e:
+                    print(f"[Error] Remotion render failed for segment {i+1}: {e}")
+                return
+
             # Track all clips for explicit cleanup to prevent WinError 6 on Windows
             loop_clips = []
             sub = VideoFileClip(task_path)
@@ -1915,6 +2266,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 if local_silence:
                     print(f"[Log] Tightening Short {i+1} (Removing silences)")
                     sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None)
+                    # 🟢 NEW: Insert B-roll over silences for visual retention
+                    sub = insert_broll_cutaways(sub, local_silence, broll_dir="assets/broll")
             
             sub = sub.with_position("center")
             loop_clips.append(sub)
@@ -2009,12 +2362,25 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             # GPU OPTIMIZATION: Final render should also use h264_nvenc if available
             encode_codec = 'h264_nvenc' if use_gpu else codec
             print(f"[Log] Rendering Final Short {i+1} ({encode_codec})...")
+            
+            orig_remove = os.remove
+            def safe_remove(path):
+                try:
+                    orig_remove(path)
+                except PermissionError:
+                    print(f"[Warning] PermissionError: Ignored failed delete of temp file: {path}")
+                except Exception as e:
+                    orig_remove(path)
+            
+            os.remove = safe_remove
             try:
                 # 🟢 STABILITY FIX: Use threads=1 for final compositing when on GPU to avoid deadlocks
                 final_threads = 1 if use_gpu else 8
-                final.write_videofile(out, fps=24, bitrate=bitrate, preset=preset, threads=final_threads, codec=encode_codec, logger=None)
+                quality_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
+                final.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params, logger=None)
                 extracted_files.append(out)
             finally:
+                os.remove = orig_remove
                 # 🟢 ROBUST CLEANUP: Explicitly close everything to avoid [WinError 6]
                 for c in overlays:
                     try: c.close()
@@ -2031,10 +2397,99 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 except: pass
 
         # 🟢 OPTIMIZED: Consumer NVIDIA cards have a 3-5 NVENC session limit.
-        # Parallelizing too many GPU renders can cause hangs or session failures.
-        render_workers = min(2 if use_gpu else 4, len(highlights))
+        # Remotion uses Puppeteer tabs; limit to 1 worker for Remotion to avoid Chrome socket contention.
+        render_workers = 1 if use_remotion else min(2 if use_gpu else 4, len(highlights))
         with ThreadPoolExecutor(max_workers=render_workers) as executor:
+
             list(executor.map(render_short_item, enumerate(highlights)))
+            
+        if mashup:
+            out = os.path.join(output_dir, "mashup_reel.mp4")
+            if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000:
+                print(f"[Log] Mashup Reel already exists at {out}. Skipping rendering.")
+                return [out]
+                
+            print(f"[Log] Concatenating {len(highlights)} clips into Mashup Reel ({mashup_mode} mode)...")
+            clips = []
+            for i in range(len(highlights)):
+                clip_path = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
+                if not os.path.exists(clip_path) or os.path.getsize(clip_path) < 1000: continue
+                try:
+                    clip = VideoFileClip(clip_path)
+                    clips.append(clip)
+                except Exception as e:
+                    print(f"[Warning] Failed to load clip {clip_path} for mashup: {e}")
+                    continue
+            
+            if not clips:
+                print("[Error] No clips found to create mashup.")
+                return []
+            
+            if mashup_mode == "edit":
+                print("[Log] Applying premium mashup edit transitions and soundtrack...")
+                # 1. White Flash visual transitions (fade to white and from white) using high-performance effects
+                flash_clips = []
+                for idx, c in enumerate(clips):
+                    edited_clip = c
+                    # Fade out to white at the end of the clip (except the last clip)
+                    if idx < len(clips) - 1:
+                        try:
+                            edited_clip = edited_clip.with_effects([vfx.FadeOut(0.12, final_color=[255, 255, 255])])
+                        except Exception as e:
+                            print(f"[Warning] Failed to apply FadeOut to clip {idx+1}: {e}")
+                    # Fade in from white at the start of the clip (except the first clip)
+                    if idx > 0:
+                        try:
+                            edited_clip = edited_clip.with_effects([vfx.FadeIn(0.12, initial_color=[255, 255, 255])])
+                        except Exception as e:
+                            print(f"[Warning] Failed to apply FadeIn to clip {idx+1}: {e}")
+                    flash_clips.append(edited_clip)
+                
+                final_reel = concatenate_videoclips(flash_clips, method="chain")
+                
+                # 2. Whoosh SFX at boundaries
+                whoosh_audio_clips = [final_reel.audio]
+                current_time = 0
+                whoosh_path = "assets/synth_whoosh.mp3"
+                has_whoosh = os.path.exists(whoosh_path)
+                
+                for clip in clips[:-1]:
+                    current_time += clip.duration
+                    if has_whoosh:
+                        try:
+                            whoosh_clip = AudioFileClip(whoosh_path).with_start(max(0, current_time - 0.25))
+                            whoosh_audio_clips.append(whoosh_clip)
+                        except Exception as e:
+                            print(f"[Warning] Failed to add whoosh SFX at {current_time}: {e}")
+                
+                # 3. Continuous Background Music
+                music_path = "music/bg_music.mp3"
+                if os.path.exists(music_path):
+                    try:
+                        music_clip = apply_audio_ducking(None, music_path, final_reel.duration, duck_vol=0.08)
+                        if music_clip:
+                            whoosh_audio_clips.append(music_clip)
+                    except Exception as e:
+                        print(f"[Warning] Failed to add background music to mashup: {e}")
+                
+                final_audio = CompositeAudioClip(whoosh_audio_clips).with_duration(final_reel.duration)
+                final_reel = final_reel.with_audio(final_audio)
+            else:
+                final_reel = concatenate_videoclips(clips, method="chain")
+                
+            encode_codec = 'h264_nvenc' if use_gpu else codec
+            final_threads = 1 if use_gpu else 8
+            quality_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
+            
+            print(f"[Log] Rendering Mashup Reel to {out}...")
+            final_reel.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params)
+            
+            # Close all clips
+            final_reel.close()
+            for clip in clips:
+                clip.close()
+                
+            return [out]
             
     return extracted_files
 

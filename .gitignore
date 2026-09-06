@@ -24,6 +24,17 @@ token*.json
 .env
 .env.*
 
+# PyInstaller & Build Temp Files
+build/
+dist/
+*.spec
+*.log
+
 # IDE
 .vscode/
 .idea/
+
+assets*
+sessions*
+test_manim_output/
+PROMOTION_GUIDE.md
