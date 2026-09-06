@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  shortsflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shortsflow-ai-studio
+    ports:
+      - "3000:3000"
+      - "5000:5000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+    volumes:
+      - ./assets:/app/assets
+      - ./music:/app/music
+      - ./sessions:/app/sessions
+    restart: unless-stopped
