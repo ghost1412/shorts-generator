@@ -20,8 +20,6 @@
 
 ### 1-Click Automated Setup (Windows)
 
-We've built a zero-friction setup script that handles all dependencies (Python, Node.js, FFmpeg) automatically.
-
 ```bash
 # Clone the repository
 git clone https://github.com/ghost1412/shorts-generator.git
@@ -29,13 +27,28 @@ cd shorts-generator
 
 # Run 1-Click Setup 
 setup.bat
+
+# Launch Desktop GUI Studio
+launch.bat
 ```
 
-### Launch the Desktop GUI Studio
+### 🐧 Linux & macOS Setup
+
 ```bash
-# Launch 1-Click Desktop GUI
-launch.bat
-# (Or just double click launch.bat and press Enter!)
+git clone https://github.com/ghost1412/shorts-generator.git
+cd shorts-generator
+
+chmod +x setup.sh
+./setup.sh
+
+# Launch Desktop GUI or CLI
+python3 gui_app.py
+```
+
+### 🐳 Docker Quickstart (Self-Hosted)
+
+```bash
+docker compose up -d
 ```
 
 ---
