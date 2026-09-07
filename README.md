@@ -12,7 +12,23 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python)](https://python.org)
 [![Remotion](https://img.shields.io/badge/Remotion-Video_Engine-61DAFB?style=flat&logo=react)](https://remotion.dev)
 [![CUDA](https://img.shields.io/badge/CUDA-GPU_Accelerated-76B900?style=flat&logo=nvidia)](https://nvidia.com)
+[![Fast Clone](https://img.shields.io/badge/Clone_Size-16.5_MB-brightgreen?style=flat&logo=git)](https://github.com/ghost1412/shorts-generator)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
+
+---
+
+## ⚡ ShortsFlow vs Paid SaaS Tools
+
+| Feature | ⚡ ShortsFlow AI Studio (Open Source) | 💳 Opus Clip / Paid SaaS ($20–$50/mo) |
+|---|---|---|
+| **Monthly Cost** | **$0 / 100% Free Forever** | $19 – $49 / month |
+| **Data Privacy** | **100% Local GPU / Private** | Your videos uploaded to 3rd party cloud |
+| **Creation Modes** | **AI Clipping + Manim Explainers + Facts + Riddles + WYR** | Video clipping only |
+| **Subtitle Quality** | **Remotion React Spring Physics (Hormozi, Glow Box, Bounce)** | Basic cloud subtitles |
+| **Limits & Watermarks** | **Unlimited Exports & Zero Watermarks** | Monthly credit caps & paid watermark removals |
+| **AI LLM Flexibility** | **Google Gemini, Local Ollama (Qwen/Llama), HuggingFace** | Locked cloud AI models |
+
+> ⭐ **If ShortsFlow saves you $240+/year on video clipping subscriptions, drop a star on the repo to support independent open-source AI!**
 
 ---
 
