@@ -141,5 +141,11 @@ PEXELS_API_KEY=your_pexels_key_here
 
 ---
 
+## 🤖 AI Agent Prompt & Onboarding Instructions
+
+If you are an AI Coding Agent (Cursor, Antigravity, Claude Code, Copilot, AutoGPT) onboarding into this codebase, check out **[AGENTS.md](AGENTS.md)** for structured architectural context, module maps, CLI skills, and execution rules.
+
+---
+
 ## 📄 License
 ShortsFlow AI Studio is open-source software licensed under the MIT License.
