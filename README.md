@@ -21,8 +21,8 @@
 ### 1-Click Automated Setup (Windows)
 
 ```bash
-# Clone the repository
-git clone https://github.com/ghost1412/shorts-generator.git
+# ⚡ 1-Click Fast Clone (~16.5 MB)
+git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
 cd shorts-generator
 
 # Run 1-Click Setup 
@@ -35,7 +35,8 @@ launch.bat
 ### 🐧 Linux & macOS Setup
 
 ```bash
-git clone https://github.com/ghost1412/shorts-generator.git
+# ⚡ 1-Click Fast Clone (~16.5 MB)
+git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
 cd shorts-generator
 
 chmod +x setup.sh
