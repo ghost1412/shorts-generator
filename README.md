@@ -73,7 +73,12 @@ docker compose up -d
 ## 🔥 Key Features
 
 - **🚀 AI Video Extraction & URL Ingestion**: Paste any YouTube link, Podcast URL, or local file. ShortsFlow detects viral hooks, energy shifts, and key moments using multimodal AI analysis.
-- **🎨 Modern Remotion Animation Engine**: Dynamic word-by-word spring captions, glassmorphic badges, progress bars, and high-retention 9:16 vertical layouts.
+- **🎨 Visual Filters & Color Grading**: Apply 12 custom aesthetic color grades (`kurosawa`, `teal_orange`, `cyberpunk`, `cinematic_warm`, `vibrant_action`, `vintage_vhs`, `moody_dark`, `anime_vivid`, `matrix_green`, `sepia_western`, `cold_thriller`, `hdr_pop`) or use `--video_filter auto` / `--video_filter dynamic` to let AI automatically grade video scenes.
+  
+  ![AI Dynamic Filter Showcase](demos/demo_filters_opt.gif)
+
+- **🧠 AI Dynamic Scene Filtering (`--video_filter dynamic`)**: AI analyzes video timestamps and transitions between different visual filters across scene phases in a single pass.
+- **🎞️ Standalone Filter Mode (`--mode FILTER`)**: Apply color grading filters directly to any video file without cutting or reframing.
 - **💬 4 Subtitle Style Presets**:
   - `HORMOZI`: Dynamic word spring pop, black strokes, multi-color neon highlights (`#39FF14`, `#FFEA00`, `#00E5FF`).
   - `GLOW_BOX`: Glassmorphic gradient pill box around active phrases with neon glow.
@@ -85,6 +90,7 @@ docker compose up -d
 - **🧮 Standalone Creation Modes**:
   - `EXPLAINER`: Automated educational math & coding animations powered by Manim.
   - `FACTS` & `STORY`: AI-scripted facts and narratives with automated background video stitching.
+  - `FILTER`: Direct visual color grading & style application.
   - `THIS_OR_THAT` / `WYR`: Split-screen comparison challenges.
   - `RANK_IT`: Tier-list rank reveals.
 
@@ -109,17 +115,29 @@ graph TD
 
 ## 💻 CLI Usage Examples
 
-### 1. Extract Viral Shorts from a YouTube Link
+### 1. Extract Viral Shorts with Visual Filter (e.g. Kurosawa or AI Auto)
 ```bash
-python main.py --source_video "https://www.youtube.com/watch?v=..." --extract_mode shorts --clip_count 3 --smart_crop --tighten --use_remotion --caption_style HORMOZI
+python main.py --source_video "gameplay.mp4" --extract_mode shorts --clip_count 3 --smart_crop --use_remotion --caption_style HORMOZI --video_filter kurosawa
 ```
 
-### 2. Generate an AI Facts Short with Custom Captions
+### 2. Standalone Filter Mode (Color Grade Any Video Directly)
+```bash
+# Apply specific color grade preset:
+python main.py --mode FILTER --source_video "video.mp4" --video_filter cyberpunk
+
+# AI Dynamic Scene-Level Filtering (AI switches filters per scene phase):
+python main.py --mode FILTER --source_video "video.mp4" --video_filter dynamic --user_context "Samurai duel and wind vista"
+
+# AI Auto-Selected Single Filter:
+python main.py --mode FILTER --source_video "video.mp4" --video_filter auto --user_context "Night racing pursuit"
+```
+
+### 3. Generate an AI Facts Short with Custom Captions
 ```bash
 python main.py --mode FACTS --category "space mysteries" --vibe "suspense" --use_remotion --caption_style GLOW_BOX
 ```
 
-### 3. Generate a Manim Educational Math Explainer Short
+### 4. Generate a Manim Educational Math Explainer Short
 ```bash
 python main.py --mode EXPLAINER --prompt "Explain the Pythagorean theorem visually" --extract_mode shorts
 ```

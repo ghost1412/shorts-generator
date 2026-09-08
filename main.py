@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import time
 import random
 import argparse
 import json
@@ -93,8 +94,8 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
         traceback.print_exc()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE or ODD_ONE_OUT shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "AUTO"], help="Force a specific mode.")
+    parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE, ODD_ONE_OUT, or FILTER shorts.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--prompt", help="Prompt for AI Music/Image generation.")
     parser.add_argument("--ckpt_name", default="stable_audio_3_medium_base.safetensors", help="Checkpoint name for ComfyUI audio model.")
     parser.add_argument("--category", help="Specify content category.")
@@ -122,6 +123,7 @@ def parse_args():
     parser.add_argument("--gif_dir", help="Path to external GIF library (e.g. animated-gifs repo).")
     parser.add_argument("--hq", action="store_true", help="Enable High-Quality (Premium) enhancements (sharpening, color enhancement).")
     parser.add_argument("--superres", action="store_true", help="Enable Super-Resolution & Deinterlacing filter pipeline for legacy/VCD/VHS videos.")
+    parser.add_argument("--video_filter", choices=["auto", "none", "dynamic", "kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"], default="none", help="Visual color grade filter preset to apply (or 'auto' / 'dynamic' for AI auto-selection).")
     parser.add_argument("--use_cache", action="store_true", help="Reuse cached highlights and skip existing segments/rendered clips.")
     parser.add_argument("--mashup", action="store_true", help="Create a single mashup/remix video of all highlights instead of separate clips.")
     parser.add_argument("--mashup_mode", choices=["attach", "edit"], default="edit", help="Assembly style for mashup: 'attach' for simple concatenation, 'edit' for premium transition effects and background music.")
@@ -524,7 +526,45 @@ if getattr(args, "batch_file", None):
         res = subprocess.run(cmd)
         if res.returncode != 0:
             print(f"[Warning] Batch item {idx} failed with return code {res.returncode}. Continuing...")
-    print("\n[Log] Batch processing completed for all items.")
+    print("\n[Log] Batch processing completed.")
+    sys.exit(0)
+
+# 🟢 Standalone Video Filter Mode
+if getattr(args, "mode", None) == "FILTER":
+    from engine.video_gen import apply_standalone_video_filter
+    from engine.script_gen import auto_detect_video_filter, generate_dynamic_filter_timeline
+    
+    if not getattr(args, "source_video", None):
+        print("[Error] Standalone FILTER mode requires --source_video parameter.")
+        sys.exit(1)
+        
+    session_dir = args.session_dir if args.session_dir else f"sessions/filtered_{int(time.time())}"
+    os.makedirs(session_dir, exist_ok=True)
+    
+    if is_url(args.source_video):
+        print(f"[Log] Detected Video URL: '{args.source_video}'. Downloading stream...")
+        args.source_video = download_source_video_from_url(args.source_video, session_dir)
+        
+    target_filter = getattr(args, "video_filter", "none")
+    timeline_cuts = None
+    if target_filter == "auto":
+        target_filter = auto_detect_video_filter(user_context=args.user_context, style_context=args.style_context, category=args.category, prompt=args.prompt)
+        print(f"[Log] 🎨 Auto-detected visual filter: '{target_filter}'")
+    elif target_filter == "dynamic":
+        from moviepy import VideoFileClip
+        try:
+            with VideoFileClip(args.source_video) as clip:
+                dur = clip.duration
+        except Exception:
+            dur = 30.0
+        timeline_cuts = generate_dynamic_filter_timeline(dur, user_context=args.user_context)
+        
+    out_filename = os.path.basename(args.source_video).rsplit('.', 1)[0] + f"_{target_filter}.mp4"
+    output_video = os.path.join(session_dir, out_filename)
+    
+    print(f"--- Starting Standalone Filter Application ---")
+    apply_standalone_video_filter(args.source_video, output_video, filter_name=target_filter, use_hq=args.hq, timeline_cuts=timeline_cuts)
+    print(f"[Success] 🎨 Filtered video ready at: {output_video}")
     sys.exit(0)
 
 if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
@@ -608,6 +648,13 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
     letterbox_crop = detect_letterbox(args.source_video) if args.smart_crop else None
     orientation = detect_orientation(args.source_video) if args.smart_crop else "landscape"
     
+    # Resolve visual filter (Auto vs Manual)
+    active_video_filter = getattr(args, 'video_filter', 'none')
+    if active_video_filter == "auto":
+        from engine.script_gen import auto_detect_video_filter
+        active_video_filter = auto_detect_video_filter(user_context=args.user_context, style_context=args.style_context, category=args.category, prompt=args.prompt)
+        print(f"[Log] 🎨 Auto-detected video filter: '{active_video_filter}'")
+
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, session_dir, 
         mode=args.extract_mode, bitrate=target_bitrate, preset=target_preset, codec="libx264",
@@ -617,7 +664,8 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
         tighten_mode=args.tighten_mode, use_remotion=args.use_remotion, use_cache=args.use_cache,
         mashup=args.mashup, mashup_mode=args.mashup_mode,
         orientation=orientation, letterbox_crop=letterbox_crop,
-        caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos
+        caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos,
+        video_filter=active_video_filter
     )
     
     # Export SRT for each extracted file

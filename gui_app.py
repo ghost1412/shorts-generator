@@ -94,13 +94,18 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
         # Subtitle Preset
         ctk.CTkLabel(grid, text="Subtitle Preset:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=0, sticky="w", padx=(0, 10))
-        self.qs_caption_style = ctk.CTkOptionMenu(grid, values=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], width=170)
-        self.qs_caption_style.grid(row=0, column=1, sticky="w", padx=(0, 25))
+        self.qs_caption_style = ctk.CTkOptionMenu(grid, values=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], width=130)
+        self.qs_caption_style.grid(row=0, column=1, sticky="w", padx=(0, 15))
+
+        # Visual Filter Preset
+        ctk.CTkLabel(grid, text="Color Grade Filter:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=2, sticky="w", padx=(0, 10))
+        self.qs_video_filter = ctk.CTkOptionMenu(grid, values=["auto", "dynamic", "none", "kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"], width=140)
+        self.qs_video_filter.grid(row=0, column=3, sticky="w", padx=(0, 15))
 
         # Mode Preset
-        ctk.CTkLabel(grid, text="Generation Mode:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=2, sticky="w", padx=(0, 10))
-        self.qs_mode_preset = ctk.CTkOptionMenu(grid, values=["✂️ Auto Clipping (Long -> Short)", "📖 AI Story Mode", "💡 AI Facts Mode", "🧮 Math Explainer"], width=230)
-        self.qs_mode_preset.grid(row=0, column=3, sticky="w")
+        ctk.CTkLabel(grid, text="Generation Mode:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=4, sticky="w", padx=(0, 10))
+        self.qs_mode_preset = ctk.CTkOptionMenu(grid, values=["✂️ Auto Clipping (Long -> Short)", "📖 AI Story Mode", "💡 AI Facts Mode", "🎨 Filter Only (Color Grade)", "🧮 Math Explainer"], width=210)
+        self.qs_mode_preset.grid(row=0, column=5, sticky="w")
 
         # Big 1-Click Launch Button
         btn_frame = ctk.CTkFrame(card, fg_color="transparent")

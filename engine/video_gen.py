@@ -2046,6 +2046,103 @@ def get_superres_vf():
     # 4. eq: Restores faded analog tape / early digital color palettes
     return "yadif=mode=1:parity=auto:deint=0,deblock=filter=weak:block=4,cas=0.35,eq=contrast=1.05:saturation=1.10:brightness=0.01"
 
+# 🟢 Visual Filter Presets (12 Iconic Styles)
+FILTER_PRESETS = {
+    "kurosawa": "colorchannelmixer=.3:.4:.3:0:.3:.4:.3:0:.3:.4:.3,eq=contrast=1.30:brightness=-0.02,noise=alls=8:allf=t+u",
+    "teal_orange": "eq=contrast=1.08:saturation=1.15,colorbalance=rs=-0.05:gs=0.02:bs=0.1:rh=0.08:gh=0.02:bh=-0.08",
+    "cyberpunk": "cas=0.3,eq=saturation=1.4:contrast=1.12,colorbalance=rs=0.08:bs=0.2:rh=0.1:bh=0.15",
+    "cinematic_warm": "eq=contrast=1.05:saturation=1.1,colorbalance=rh=0.08:gh=0.03:bh=-0.07",
+    "vibrant_action": "cas=0.35,eq=contrast=1.15:saturation=1.25:gamma=0.98",
+    "vintage_vhs": "eq=saturation=0.85:contrast=1.05,noise=alls=12:allf=t+u",
+    "moody_dark": "eq=contrast=1.2:brightness=-0.05:saturation=0.9",
+    "anime_vivid": "eq=saturation=1.45:brightness=0.03:contrast=1.05",
+    "matrix_green": "colorbalance=gs=0.2:gh=0.15,eq=contrast=1.15",
+    "sepia_western": "colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131",
+    "cold_thriller": "colorbalance=bs=0.15:bh=0.1,eq=saturation=0.75:contrast=1.12",
+    "hdr_pop": "cas=0.4,eq=contrast=1.2:saturation=1.22:gamma=0.95"
+}
+
+def get_video_filter_vf(filter_name):
+    """Returns FFmpeg filter chain string for specified color grade filter name."""
+    if not filter_name or filter_name.lower() in ["none", "auto", "false", "dynamic"]:
+        return ""
+    name = filter_name.lower().strip()
+    return FILTER_PRESETS.get(name, "")
+
+def generate_dynamic_ffmpeg_filter(timeline_cuts):
+    """Constructs a single-pass FFmpeg filter chain with timestamp-enabled filter transitions."""
+    if not timeline_cuts:
+        return ""
+    
+    vf_parts = []
+    for cut in timeline_cuts:
+        f_name = cut.get("filter", "").lower().strip()
+        start = float(cut.get("start", 0.0))
+        end = float(cut.get("end", 0.0))
+        if end <= start:
+            continue
+            
+        f_expr = FILTER_PRESETS.get(f_name, "")
+        if not f_expr:
+            continue
+            
+        nodes = f_expr.split(',')
+        enabled_nodes = []
+        for n in nodes:
+            if '=' in n:
+                enabled_nodes.append(f"{n}:enable='between(t,{start:.2f},{end:.2f})'")
+            else:
+                enabled_nodes.append(f"{n}=enable='between(t,{start:.2f},{end:.2f})'")
+        vf_parts.append(",".join(enabled_nodes))
+        
+    return ",".join(vf_parts) if vf_parts else ""
+
+def apply_standalone_video_filter(source_video, output_video, filter_name="kurosawa", use_hq=False, timeline_cuts=None):
+    """Applies FFmpeg color grade filter directly to an entire source video without slicing or cropping."""
+    if not os.path.exists(source_video):
+        raise FileNotFoundError(f"Source video not found at {source_video}")
+        
+    if filter_name.lower() == "dynamic" and timeline_cuts:
+        filter_vf = generate_dynamic_ffmpeg_filter(timeline_cuts)
+        print(f"[Log] 🧠 AI Dynamic Timeline Filter generated ({len(timeline_cuts)} cuts)")
+    else:
+        filter_vf = get_video_filter_vf(filter_name)
+        if not filter_vf:
+            print(f"[Warning] Filter '{filter_name}' not found in presets. Using HQ default if enabled.")
+            filter_vf = get_hq_vf() if use_hq else ""
+
+    vf_chain = []
+    if use_hq:
+        vf_chain.append(get_hq_vf())
+    if filter_vf:
+        vf_chain.append(filter_vf)
+    if not vf_chain:
+        vf_chain.append("null")
+    vf_chain.append("format=yuv420p")
+    
+    vf_str = ",".join(vf_chain)
+    
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    _has_nvenc = _check_nvenc()
+    codec = 'h264_nvenc' if _has_nvenc else 'libx264'
+    preset = 'p6' if _has_nvenc else 'medium'
+    
+    cmd = [
+        ffmpeg_exe, '-y', '-i', source_video,
+        '-vf', vf_str,
+        '-c:v', codec, '-preset', preset,
+        '-c:a', 'copy',
+        output_video
+    ]
+    
+    print(f"[Log] Applying filter '{filter_name}' -> {output_video}")
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"[Error] Standalone filter failed: {res.stderr}")
+        raise RuntimeError(f"FFmpeg filter error: {res.stderr}")
+    print(f"[Success] Standalone filter applied successfully: {output_video}")
+    return output_video
+
 def _check_nvenc():
     """Checks if NVIDIA hardware acceleration is available."""
     try:
@@ -2063,31 +2160,35 @@ def apply_influencer_subtitles(clip, transcript_data, start_offset, end_offset, 
     # Heuristic transcript parsing
     segments = transcript_data.get('segments', [])
     for segment in segments:
-        if segment['end'] < start_offset or segment['start'] > end_offset: continue
-        for word in segment.get('words', []):
-            if word['start'] >= start_offset and word['end'] <= end_offset:
+        text = segment.get('text', '')
+        start = segment.get('start', 0)
+        end = segment.get('end', 0)
+        if start >= end_offset or end <= start_offset:
+            continue
+        words = text.split()
+        if not words: continue
+        seg_dur = max(0.1, end - start)
+        w_dur = seg_dur / len(words)
+        for idx, w in enumerate(words):
+            w_start = start + (idx * w_dur)
+            w_end = w_start + w_dur
+            if w_start >= start_offset and w_end <= end_offset:
                 relevant_words.append({
-                    "word": word['word'].strip(), 
-                    "start": word['start'] - start_offset, 
-                    "end": word['end'] - start_offset, 
-                    "duration": word['end'] - word['start']
+                    'word': w,
+                    'start': w_start - start_offset,
+                    'end': w_end - start_offset
                 })
-    
-    for j, word in enumerate(relevant_words):
-        color = viral_colors[j % len(viral_colors)] if j % 4 == 0 else "white"
-        img = create_text_image(word["word"].upper(), size=size, font_size=115, color=color, y_pos=y_pos)
-        c = ImageClip(img).with_start(word["start"]).with_duration(max(0.1, word["duration"])).with_position("center")
-        word_clips.append(c)
-    return word_clips
+    return clip
 
 def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
-    """Adds a dynamic filling progress bar (Challenge style)."""
+    """Adds a dynamic animated progress bar to the bottom of the video."""
+    from moviepy.video.VideoClip import ColorClip
     bg_bar = ColorClip(size=(int(clip.w * 0.8), height), color=(50, 50, 50)).with_duration(duration).with_position(("center", clip.h - 250)).with_opacity(0.6)
     fill_bar = ColorClip(size=(int(clip.w * 0.8), height), color=color).with_duration(duration)
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2140,6 +2241,11 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             vf_filter = f"{get_superres_vf()},{vf_filter}"
         elif use_hq:
             vf_filter = f"{get_hq_vf()},{vf_filter}"
+            
+        # 🟢 Apply Visual Color Grade Filter if requested
+        if video_filter and get_video_filter_vf(video_filter):
+            filter_chain = get_video_filter_vf(video_filter)
+            vf_filter = f"{filter_chain},{vf_filter}"
             
         vf_filter += text_filter
         

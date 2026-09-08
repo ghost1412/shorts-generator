@@ -12,6 +12,125 @@ LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/api/chat")
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen3:8b")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+def auto_detect_video_filter(user_context=None, style_context=None, category=None, prompt=None):
+    """Analyzes context text and determines the optimal visual color grade filter preset."""
+    text_corpus = f"{user_context or ''} {style_context or ''} {category or ''} {prompt or ''}".lower()
+    
+    # 1. Fast Keyword Heuristics (Generic Visual & Genre Terms)
+    if any(k in text_corpus for k in ["samurai", "katana", "kurosawa", "bushido", "feudal", "black and white", "monochrome", "sword duel"]):
+        return "kurosawa"
+    if any(k in text_corpus for k in ["cyberpunk", "neon", "synthwave", "night race", "high speed drift", "futuristic", "sci-fi"]):
+        return "cyberpunk"
+    if any(k in text_corpus for k in ["action", "pursuit", "crash", "combat", "emp", "explosion", "strike", "rally", "fast cuts", "chase"]):
+        return "vibrant_action"
+    if any(k in text_corpus for k in ["scenery", "landscape", "vista", "golden hour", "sunset", "nature", "peaceful", "serene", "scenic"]):
+        return "cinematic_warm"
+    if any(k in text_corpus for k in ["vhs", "retro", "90s", "80s", "analog", "nostalgic", "camcorder", "scanlines"]):
+        return "vintage_vhs"
+    if any(k in text_corpus for k in ["horror", "spooky", "scary", "dark fantasy", "shadow", "thriller", "creepy"]):
+        return "moody_dark"
+    if any(k in text_corpus for k in ["movie recap", "cinematic film", "blockbuster", "trailer", "dramatic story"]):
+        return "teal_orange"
+
+    # 2. LLM Fallback Classifier
+    try:
+        llm_prompt = f"""
+Given the following video description:
+"{text_corpus}"
+
+Choose the SINGLE BEST visual color grade filter from this list:
+- kurosawa (High-contrast B&W samurai style)
+- teal_orange (Blockbuster cinematic movie style)
+- cyberpunk (Neon boosted contrast for night/sci-fi/racing)
+- cinematic_warm (Golden hour warmth for scenery and story)
+- vibrant_action (Sharp high-contrast for combat and sports)
+- vintage_vhs (Analog retro tape aesthetic)
+- moody_dark (Low-key contrast for dark/horror)
+
+Respond with raw JSON: {{"filter": "<preset_name>"}}
+"""
+        response = get_llm_response(llm_prompt, system_prompt="You are a color grading expert. Return raw JSON only.")
+        parsed = json.loads(response)
+        selected = parsed.get("filter", "").lower().strip()
+        valid_presets = ["none", "kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"]
+        if selected in valid_presets:
+            print(f"[Log] 🤖 AI Auto Filter selected: '{selected}'")
+            return selected
+    except Exception as e:
+        print(f"[Warning] AI Auto Filter fallback: {e}")
+        
+    return "none"
+
+def generate_dynamic_filter_timeline(total_duration, user_context=None, transcript_data=None):
+    """Generates timestamped filter cuts for dynamic AI scene filtering."""
+    if total_duration <= 0:
+        return []
+        
+    text_corpus = f"{user_context or ''}".lower()
+    
+    # Check theme anchors
+    is_samurai = any(k in text_corpus for k in ["samurai", "katana", "kurosawa", "bushido", "feudal", "duel"])
+    is_cyber = any(k in text_corpus for k in ["cyberpunk", "neon", "synthwave", "night race", "drift", "sci-fi"])
+    is_horror = any(k in text_corpus for k in ["horror", "spooky", "scary", "dark", "shadow", "thriller"])
+    is_action = any(k in text_corpus for k in ["action", "pursuit", "crash", "combat", "explosion", "chase"])
+    
+    cuts = []
+    if total_duration <= 10.0:
+        mid = round(total_duration / 2, 2)
+        if is_samurai:
+            cuts = [
+                {"start": 0.0, "end": mid, "filter": "none"},
+                {"start": mid, "end": total_duration, "filter": "kurosawa"}
+            ]
+        elif is_cyber:
+            cuts = [
+                {"start": 0.0, "end": mid, "filter": "cyberpunk"},
+                {"start": mid, "end": total_duration, "filter": "none"}
+            ]
+        elif is_action:
+            cuts = [
+                {"start": 0.0, "end": mid, "filter": "vibrant_action"},
+                {"start": mid, "end": total_duration, "filter": "none"}
+            ]
+        else:
+            cuts = [
+                {"start": 0.0, "end": total_duration, "filter": "none"}
+            ]
+    else:
+        p1 = round(total_duration * 0.3, 2)
+        p2 = round(total_duration * 0.7, 2)
+        if is_samurai:
+            cuts = [
+                {"start": 0.0, "end": p1, "filter": "none"},
+                {"start": p1, "end": p2, "filter": "kurosawa"},
+                {"start": p2, "end": total_duration, "filter": "cinematic_warm"}
+            ]
+        elif is_cyber:
+            cuts = [
+                {"start": 0.0, "end": p1, "filter": "none"},
+                {"start": p1, "end": p2, "filter": "cyberpunk"},
+                {"start": p2, "end": total_duration, "filter": "hdr_pop"}
+            ]
+        elif is_horror:
+            cuts = [
+                {"start": 0.0, "end": p1, "filter": "moody_dark"},
+                {"start": p1, "end": p2, "filter": "cold_thriller"},
+                {"start": p2, "end": total_duration, "filter": "none"}
+            ]
+        elif is_action:
+            cuts = [
+                {"start": 0.0, "end": p1, "filter": "vibrant_action"},
+                {"start": p1, "end": p2, "filter": "teal_orange"},
+                {"start": p2, "end": total_duration, "filter": "none"}
+            ]
+        else:
+            cuts = [
+                {"start": 0.0, "end": total_duration, "filter": "none"}
+            ]
+            
+    print(f"[Log] 🧠 AI Dynamic Timeline generated ({len(cuts)} phases over {total_duration:.1f}s): {cuts}")
+    return cuts
+
 def get_llm_response(
     prompt,
     system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
