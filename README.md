@@ -73,11 +73,7 @@ docker compose up -d
 ## 🔥 Key Features
 
 - **🚀 AI Video Extraction & URL Ingestion**: Paste any YouTube link, Podcast URL, or local file. ShortsFlow detects viral hooks, energy shifts, and key moments using multimodal AI analysis.
-- **🎨 Visual Filters & Color Grading**: Apply 12 custom aesthetic color grades (`kurosawa`, `teal_orange`, `cyberpunk`, `cinematic_warm`, `vibrant_action`, `vintage_vhs`, `moody_dark`, `anime_vivid`, `matrix_green`, `sepia_western`, `cold_thriller`, `hdr_pop`) or use `--video_filter auto` / `--video_filter dynamic` to let AI automatically grade video scenes.
-  
-  ![AI Dynamic Filter Showcase](demos/demo_filters_opt.gif)
-
-- **🧠 AI Dynamic Scene Filtering (`--video_filter dynamic`)**: AI analyzes video timestamps and transitions between different visual filters across scene phases in a single pass.
+- **🎨 Visual Filters & Color Grading**: 12 custom color grades + AI Auto & AI Dynamic multi-scene timeline filtering.
 - **🎞️ Standalone Filter Mode (`--mode FILTER`)**: Apply color grading filters directly to any video file without cutting or reframing.
 - **💬 4 Subtitle Style Presets**:
   - `HORMOZI`: Dynamic word spring pop, black strokes, multi-color neon highlights (`#39FF14`, `#FFEA00`, `#00E5FF`).
@@ -93,6 +89,31 @@ docker compose up -d
   - `FILTER`: Direct visual color grading & style application.
   - `THIS_OR_THAT` / `WYR`: Split-screen comparison challenges.
   - `RANK_IT`: Tier-list rank reveals.
+
+---
+
+## 🎨 Visual Color Grading & AI Filter Modes (`--video_filter`)
+
+ShortsFlow AI Studio includes an AI-driven color grading engine with 3 modes:
+
+| Filter Mode | CLI Flag | How It Works | Best Used For |
+| :--- | :--- | :--- | :--- |
+| 🧠 **AI Dynamic** | `--video_filter dynamic` | AI analyzes video timeline & **switches filters automatically per scene phase** in a single pass. | High-retention edits (Combat ➔ B&W Duel ➔ Sunset Finish) |
+| 🤖 **AI Auto** | `--video_filter auto` | AI inspects video context & picks the **1 best overall filter** (or `none` if natural colors are best). | Quick 1-click optimization without guessing filter names |
+| 🎨 **Manual Preset** | `--video_filter <name>` | Force 1 of **12 iconic visual color grades** (`kurosawa`, `cyberpunk`, `teal_orange`, etc.). | Specific aesthetic themes & game styles |
+
+![AI Dynamic Filter Showcase](demos/demo_filters_opt.gif)
+
+### 🎨 12 Curated Visual Presets
+
+| Preset Name | Visual Atmosphere | Preset Name | Visual Atmosphere |
+| :--- | :--- | :--- | :--- |
+| **`kurosawa`** | Black & White high-contrast samurai + grain | **`anime_vivid`** | Bright pastel saturation for anime/cartoons |
+| **`cyberpunk`** | Neon boosted purples/blues for night racing | **`matrix_green`** | Cyberpunk green tint / hacker aesthetic |
+| **`teal_orange`** | Blockbuster movie cinematic color balance | **`sepia_western`** | Vintage brown sepia tone for historical clips |
+| **`cinematic_warm`** | Golden hour warmth for scenery & drama | **`cold_thriller`** | Icy blue desaturated shadows for suspense |
+| **`vibrant_action`** | Sharp contrast & saturation boost for combat/sports | **`hdr_pop`** | High dynamic range pop with deep contrast |
+| **`vintage_vhs`** | Analog retro tape scanlines & color shift | **`moody_dark`** | Dark fantasy / horror shadow contrast |
 
 ---
 
@@ -115,21 +136,19 @@ graph TD
 
 ## 💻 CLI Usage Examples
 
-### 1. Extract Viral Shorts with Visual Filter (e.g. Kurosawa or AI Auto)
+### 1. AI Dynamic Scene-Level Filter (Switches Filters Per Scene Phase)
 ```bash
-python main.py --source_video "gameplay.mp4" --extract_mode shorts --clip_count 3 --smart_crop --use_remotion --caption_style HORMOZI --video_filter kurosawa
+python main.py --source_video "gameplay.mp4" --extract_mode shorts --smart_crop --use_remotion --video_filter dynamic --user_context "Samurai katana duel and sunset field"
 ```
 
-### 2. Standalone Filter Mode (Color Grade Any Video Directly)
+### 2. AI Auto-Selected Filter (AI Picks 1 Best Filter)
 ```bash
-# Apply specific color grade preset:
-python main.py --mode FILTER --source_video "video.mp4" --video_filter cyberpunk
+python main.py --mode FILTER --source_video "night_race.mp4" --video_filter auto
+```
 
-# AI Dynamic Scene-Level Filtering (AI switches filters per scene phase):
-python main.py --mode FILTER --source_video "video.mp4" --video_filter dynamic --user_context "Samurai duel and wind vista"
-
-# AI Auto-Selected Single Filter:
-python main.py --mode FILTER --source_video "video.mp4" --video_filter auto --user_context "Night racing pursuit"
+### 3. Manual Filter Override (e.g. Kurosawa / Cyberpunk)
+```bash
+python main.py --mode FILTER --source_video "clip.mp4" --video_filter kurosawa
 ```
 
 ### 3. Generate an AI Facts Short with Custom Captions
