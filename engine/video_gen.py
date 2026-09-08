@@ -2188,7 +2188,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2242,10 +2242,27 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         elif use_hq:
             vf_filter = f"{get_hq_vf()},{vf_filter}"
             
-        # 🟢 Apply Visual Color Grade Filter if requested
-        if video_filter and get_video_filter_vf(video_filter):
-            filter_chain = get_video_filter_vf(video_filter)
-            vf_filter = f"{filter_chain},{vf_filter}"
+        # 🟢 Apply Visual Color Grade Filter if requested (Static, Auto, or Dynamic)
+        if video_filter:
+            v_name = video_filter.lower().strip()
+            if v_name == "dynamic":
+                from engine.script_gen import generate_dynamic_filter_timeline
+                clip_segs = [s for s in transcript_data.get('segments', []) if isinstance(s, dict) and s.get('start', 0) >= hi['start'] and s.get('end', 0) <= hi['end']]
+                clip_transcript = {'segments': clip_segs}
+                clip_scene_desc = hi.get('context') or hi.get('reason') or f"Clip {i+1} ({hi['start']:.1f}s - {hi['end']:.1f}s)"
+                
+                timeline_cuts = generate_dynamic_filter_timeline(
+                    duration, 
+                    user_context=user_context, 
+                    transcript_data=clip_transcript, 
+                    scene_description=clip_scene_desc
+                )
+                filter_chain = generate_dynamic_ffmpeg_filter(timeline_cuts)
+                if filter_chain:
+                    vf_filter = f"{filter_chain},{vf_filter}"
+            elif get_video_filter_vf(video_filter):
+                filter_chain = get_video_filter_vf(video_filter)
+                vf_filter = f"{filter_chain},{vf_filter}"
             
         vf_filter += text_filter
         

@@ -61,74 +61,96 @@ Respond with raw JSON: {{"filter": "<preset_name>"}}
         
     return "none"
 
-def generate_dynamic_filter_timeline(total_duration, user_context=None, transcript_data=None):
-    """Generates timestamped filter cuts for dynamic AI scene filtering."""
+def generate_dynamic_filter_timeline(total_duration, user_context=None, transcript_data=None, scene_description=None):
+    """Generates clip-specific timestamped filter cuts based on LLM transcript & scene analysis."""
     if total_duration <= 0:
         return []
-        
-    text_corpus = f"{user_context or ''}".lower()
+
+    # 1. Try Gemini LLM for clip-specific dynamic scene grading
+    try:
+        context_text = f"User Context: {user_context or 'General'}\nScene Description: {scene_description or 'Video clip'}"
+        if transcript_data and isinstance(transcript_data, dict):
+            segs = transcript_data.get('segments', [])
+            words_preview = " ".join([s.get('text', '') for s in segs if isinstance(s, dict) and s.get('text')])
+            if words_preview:
+                context_text += f"\nClip Transcript: {words_preview[:300]}"
+
+        prompt = f"""You are an expert film colorist. Analyze this specific video clip (Duration: {total_duration:.1f}s):
+{context_text}
+
+Choose dynamic visual filters from these presets for different timestamp intervals of this specific clip:
+Available Presets: ["none", "kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"]
+
+Divide the {total_duration:.1f}s clip into 2 to 4 timestamp ranges and assign a filter to each range based on the specific action/mood of that moment.
+Use "none" for natural lighting or standard moments that do not require heavy grading.
+
+Respond strictly with raw JSON:
+[
+  {{"start": 0.0, "end": 12.0, "filter": "preset1"}},
+  {{"start": 12.0, "end": {total_duration:.1f}, "filter": "preset2"}}
+]
+"""
+        response = get_llm_response(prompt, system_prompt="You are a video colorist. Output raw JSON array only.")
+        parsed = json.loads(response)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            valid_cuts = []
+            for item in parsed:
+                f_name = str(item.get("filter", "none")).lower().strip()
+                st = float(item.get("start", 0.0))
+                et = float(item.get("end", total_duration))
+                if et > st:
+                    valid_cuts.append({"start": st, "end": et, "filter": f_name})
+            if valid_cuts:
+                print(f"[Log] 🧠 Gemini AI Dynamic Timeline generated ({len(valid_cuts)} cuts): {valid_cuts}")
+                return valid_cuts
+    except Exception as e:
+        print(f"[Warning] LLM Dynamic filter call failed: {e}. Falling back to context heuristic.")
+
+    # 2. Dynamic Fallback: Clip-specific heuristic variations using hashing for uniqueness
+    text_corpus = f"{user_context or ''} {scene_description or ''}".lower()
     
-    # Check theme anchors
-    is_samurai = any(k in text_corpus for k in ["samurai", "katana", "kurosawa", "bushido", "feudal", "duel"])
+    is_samurai = any(k in text_corpus for k in ["samurai", "katana", "kurosawa", "bushido", "feudal", "duel", "tsushima"])
     is_cyber = any(k in text_corpus for k in ["cyberpunk", "neon", "synthwave", "night race", "drift", "sci-fi"])
     is_horror = any(k in text_corpus for k in ["horror", "spooky", "scary", "dark", "shadow", "thriller"])
-    is_action = any(k in text_corpus for k in ["action", "pursuit", "crash", "combat", "explosion", "chase"])
+    is_action = any(k in text_corpus for k in ["action", "pursuit", "crash", "combat", "explosion", "chase", "standoff", "fight"])
     
+    # Generate unique seed per clip based on text hash & duration
+    import hashlib
+    hash_val = int(hashlib.md5(f"{text_corpus}_{total_duration}".encode('utf-8')).hexdigest(), 16)
+    offset1 = 0.20 + (hash_val % 15) * 0.01
+    offset2 = 0.60 + (hash_val % 20) * 0.01
+
+    p1 = round(total_duration * offset1, 2)
+    p2 = round(total_duration * offset2, 2)
+
+    presets_pool = ["kurosawa", "vibrant_action", "cinematic_warm", "teal_orange", "hdr_pop", "moody_dark", "sepia_western"]
+    f1 = presets_pool[hash_val % len(presets_pool)]
+    f2 = presets_pool[(hash_val + 2) % len(presets_pool)]
+
     cuts = []
     if total_duration <= 10.0:
         mid = round(total_duration / 2, 2)
         if is_samurai:
-            cuts = [
-                {"start": 0.0, "end": mid, "filter": "none"},
-                {"start": mid, "end": total_duration, "filter": "kurosawa"}
-            ]
+            cuts = [{"start": 0.0, "end": mid, "filter": "none"}, {"start": mid, "end": total_duration, "filter": "kurosawa"}]
         elif is_cyber:
-            cuts = [
-                {"start": 0.0, "end": mid, "filter": "cyberpunk"},
-                {"start": mid, "end": total_duration, "filter": "none"}
-            ]
+            cuts = [{"start": 0.0, "end": mid, "filter": "cyberpunk"}, {"start": mid, "end": total_duration, "filter": "none"}]
         elif is_action:
-            cuts = [
-                {"start": 0.0, "end": mid, "filter": "vibrant_action"},
-                {"start": mid, "end": total_duration, "filter": "none"}
-            ]
+            cuts = [{"start": 0.0, "end": mid, "filter": "vibrant_action"}, {"start": mid, "end": total_duration, "filter": "none"}]
         else:
-            cuts = [
-                {"start": 0.0, "end": total_duration, "filter": "none"}
-            ]
+            cuts = [{"start": 0.0, "end": mid, "filter": "none"}, {"start": mid, "end": total_duration, "filter": f1}]
     else:
-        p1 = round(total_duration * 0.3, 2)
-        p2 = round(total_duration * 0.7, 2)
         if is_samurai:
-            cuts = [
-                {"start": 0.0, "end": p1, "filter": "none"},
-                {"start": p1, "end": p2, "filter": "kurosawa"},
-                {"start": p2, "end": total_duration, "filter": "cinematic_warm"}
-            ]
+            cuts = [{"start": 0.0, "end": p1, "filter": "none"}, {"start": p1, "end": p2, "filter": "kurosawa"}, {"start": p2, "end": total_duration, "filter": "cinematic_warm"}]
         elif is_cyber:
-            cuts = [
-                {"start": 0.0, "end": p1, "filter": "none"},
-                {"start": p1, "end": p2, "filter": "cyberpunk"},
-                {"start": p2, "end": total_duration, "filter": "hdr_pop"}
-            ]
+            cuts = [{"start": 0.0, "end": p1, "filter": "none"}, {"start": p1, "end": p2, "filter": "cyberpunk"}, {"start": p2, "end": total_duration, "filter": "hdr_pop"}]
         elif is_horror:
-            cuts = [
-                {"start": 0.0, "end": p1, "filter": "moody_dark"},
-                {"start": p1, "end": p2, "filter": "cold_thriller"},
-                {"start": p2, "end": total_duration, "filter": "none"}
-            ]
+            cuts = [{"start": 0.0, "end": p1, "filter": "moody_dark"}, {"start": p1, "end": p2, "filter": "cold_thriller"}, {"start": p2, "end": total_duration, "filter": "none"}]
         elif is_action:
-            cuts = [
-                {"start": 0.0, "end": p1, "filter": "vibrant_action"},
-                {"start": p1, "end": p2, "filter": "teal_orange"},
-                {"start": p2, "end": total_duration, "filter": "none"}
-            ]
+            cuts = [{"start": 0.0, "end": p1, "filter": "vibrant_action"}, {"start": p1, "end": p2, "filter": "teal_orange"}, {"start": p2, "end": total_duration, "filter": "none"}]
         else:
-            cuts = [
-                {"start": 0.0, "end": total_duration, "filter": "none"}
-            ]
+            cuts = [{"start": 0.0, "end": p1, "filter": "none"}, {"start": p1, "end": p2, "filter": f1}, {"start": p2, "end": total_duration, "filter": f2}]
             
-    print(f"[Log] 🧠 AI Dynamic Timeline generated ({len(cuts)} phases over {total_duration:.1f}s): {cuts}")
+    print(f"[Log] 🧠 Dynamic Timeline generated ({len(cuts)} phases over {total_duration:.1f}s): {cuts}")
     return cuts
 
 def get_llm_response(
@@ -149,7 +171,7 @@ def get_llm_response(
     # 0. Try Gemini API (unless FORCE_OLLAMA is set)
     force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"]
     if not force_ollama and GEMINI_API_KEY:
-        gemini_models = ["gemini-3.8-flash","gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.0-flash"]
+        gemini_models = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
         for g_model in gemini_models:
             try:
                 print(f"[Log] Attempting Gemini API ({g_model})...")

@@ -134,9 +134,9 @@ Examples:
         print(f"[Warning] Prompt expansion failed: {e}. Using original user prompt.")
         return user_prompt
 
-def generate_viral_metadata(content_info, mode="FACTS", category="science"):
+def generate_viral_metadata(content_info, mode="FACTS", category="science", user_context=None):
     """
-    Generates viral, humorous metadata for YouTube Shorts as a "Channel Manager".
+    Generates viral, content-accurate metadata for YouTube Shorts as a "Channel Manager".
     """
     url = "https://router.huggingface.co/v1/chat/completions"
     headers = {
@@ -146,70 +146,71 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science"):
     
     model = "meta-llama/Llama-3.1-8B-Instruct"
     
+    context_str = f" Context: {user_context}" if user_context else ""
+    
     if mode == "FACTS":
         input_text = "\n".join([f"- {f['fact']}" for f in content_info]) if isinstance(content_info, list) else str(content_info)
-        task_desc = f"a '2 Truths and 1 Lie' challenge about {category}."
+        task_desc = f"a '2 Truths and 1 Lie' challenge about {category}.{context_str}"
     elif mode == "FIND_IT":
         target = content_info.get('target_name', 'target') if isinstance(content_info, dict) else 'target'
         input_text = f"Target: {target}"
-        task_desc = f"a 'Find the {target}' visual challenge game about {category}."
+        task_desc = f"a 'Find the {target}' visual challenge game about {category}.{context_str}"
     elif mode == "RIDDLE":
         input_text = str(content_info)
-        task_desc = f"a brain-teasing lateral-thinking riddle about {category}."
+        task_desc = f"a brain-teasing lateral-thinking riddle about {category}.{context_str}"
     elif mode == "EXPLAINER":
         input_text = str(content_info)
-        task_desc = f"an educational visualization and explainer about {category}."
+        task_desc = f"an educational visualization and explainer about {category}.{context_str}"
     elif mode == "TRIVIA":
         input_text = str(content_info)
-        task_desc = f"a trivia quiz challenge about {category}."
+        task_desc = f"a trivia quiz challenge about {category}.{context_str}"
     elif mode == "QUOTE":
         input_text = str(content_info)
-        task_desc = f"a deep motivational quote about {category}."
+        task_desc = f"a deep motivational quote about {category}.{context_str}"
     elif mode == "WYR":
         input_text = str(content_info)
-        task_desc = f"a 'Would You Rather' dilemma about {category}."
+        task_desc = f"a 'Would You Rather' dilemma about {category}.{context_str}"
     elif mode.startswith("NEWS"):
         input_text = str(content_info)
-        task_desc = f"a news report about {category}."
+        task_desc = f"a news report about {category}.{context_str}"
     elif mode == "JWST":
         input_text = str(content_info)
         task_desc = "a space exploration video featuring James Webb Telescope images."
     elif mode == "MUSIC":
         input_text = str(content_info)
         task_desc = "a viral AI generated music video showcase."
-    elif category == "gaming":
+    elif category == "gaming" or (isinstance(content_info, dict) and "game_name" in content_info):
         if isinstance(content_info, dict):
-            game_name = content_info.get("game_name", "Game")
+            game_name = content_info.get("game_name", "Gaming")
             scene = content_info.get("scene_description", "")
-            input_text = f"Game: {game_name}\nHighlight: {scene}"
-            task_desc = f"a gaming highlight clip of {game_name}."
+            ctx = content_info.get("user_context", user_context or "")
+            input_text = f"Game/Topic: {game_name}\nScene/Highlight: {scene}\nExtra Context: {ctx}"
+            task_desc = f"a video highlight of {game_name}."
         else:
-            input_text = str(content_info)
-            task_desc = "a gaming highlight clip."
+            input_text = f"{str(content_info)}{context_str}"
+            task_desc = "a gaming/action highlight video."
     else:
-        input_text = str(content_info)
+        input_text = f"{str(content_info)}{context_str}"
         task_desc = f"a video about {category}."
 
     prompt = f"""You are a top-tier YouTube Shorts Growth Expert and Channel Manager. 
 Generate a VIRAL title, high-retention description, and trending SEO tags for {task_desc}:
-Content Summary: {input_text}
+Content Details:
+{input_text}
 
-CRITICAL SEO RULES:
-1. Title: Must be pattern-interrupting, under 60 chars, and strictly relevant to the actual content:
-   - For RIDDLE: Use brain-teaser hooks like "99% FAIL THIS RIDDLE! 🧠", "CAN YOU SOLVE THIS? 💡", or "ONLY A GENIUS GETS THIS! 🤯".
-   - For EXPLAINER / SCIENCE / MATH: Use curiosity hooks like "How [Topic] ACTUALLY Works! 🤯" or "The Secret of [Topic] ⚡".
-   - For FACTS / CHALLENGE: Use "99% MISS THIS! 🛑" or "Can You Spot the Lie? 🤯".
-   - For NEWS: Start with "BREAKING: [Topic] 🚨" or "DEVELOPING: [Topic] 🚨".
-   - For MUSIC: Use "Rate this track 1-10! 🎧" or "This beat goes hard! 🔥".
-   - For GAMING: Include the specific game name and highlight moment (e.g., "[Game Name] Final Boss Fight! ⚔️").
+CRITICAL ACCURACY & SEO RULES:
+1. Title: Must be pattern-interrupting, under 60 chars, and STRICTLY match the game/topic specified in Content Details.
+   - For GAMING / ACTION: Mention the exact game or topic name (e.g. "Ghost of Tsushima Insane Katana Duel! ⚔️" or "Need for Speed Drift Master! 🏎️"). DO NOT hallucinate generic "1v4 clutch" titles unless it is an FPS shooter.
+   - For RIDDLE: Use hooks like "99% FAIL THIS RIDDLE! 🧠" or "ONLY A GENIUS GETS THIS! 🤯".
+   - For EXPLAINER / SCIENCE: Use hooks like "How [Topic] ACTUALLY Works! 🤯".
+   - For NEWS: Start with "BREAKING: [Topic] 🚨".
 
 2. Description: 
-   - First line must be a high-retention CTA asking viewers a relevant question about the video (e.g. for RIDDLE: "Can you guess the answer before the timer ends? Comment your answer below! 👇").
+   - First line must be a high-retention CTA asking viewers a relevant question about the specific scene.
    - Include 2-3 short paragraphs: The Hook, The Details, and a Call to Action (like/subscribe/comment).
-   - Use emojis strategically.
-   - Include relevant hashtags at the bottom: #shorts #trending #viral + 3 specific to the category (e.g., #{category} #riddle #brainteaser for RIDDLES, or #{category} #science #education for EXPLAINER).
+   - Include relevant hashtags at bottom matching the topic (e.g., #ghostoftsushima #samurai #gameplay #shorts).
 
-3. Tags: 15-20 highly relevant SEO keywords matching the category and content topic.
+3. Tags: 15-20 highly relevant SEO keywords matching the specific game/topic name and scene.
 
 Format as JSON ONLY:
 {{

@@ -557,7 +557,39 @@ if getattr(args, "mode", None) == "FILTER":
                 dur = clip.duration
         except Exception:
             dur = 30.0
-        timeline_cuts = generate_dynamic_filter_timeline(dur, user_context=args.user_context)
+            
+        scene_desc = f"Video clip: {os.path.basename(args.source_video)}"
+        transcript_data = None
+        
+        src_dir = os.path.dirname(os.path.abspath(args.source_video))
+        meta_file = os.path.join(src_dir, "metadata.json")
+        if os.path.exists(meta_file):
+            try:
+                with open(meta_file, 'r', encoding='utf-8') as mf:
+                    meta_list = json.load(mf)
+                    if isinstance(meta_list, list):
+                        fn = os.path.basename(args.source_video)
+                        for m in meta_list:
+                            if m.get("file") == fn:
+                                scene_desc = f"Title: {m.get('title', '')} | Desc: {m.get('description', '')}"
+                                break
+            except Exception:
+                pass
+                
+        trans_file = os.path.join(src_dir, "transcript.json")
+        if os.path.exists(trans_file):
+            try:
+                with open(trans_file, 'r', encoding='utf-8') as tf:
+                    transcript_data = json.load(tf)
+            except Exception:
+                pass
+                
+        timeline_cuts = generate_dynamic_filter_timeline(
+            dur, 
+            user_context=args.user_context, 
+            transcript_data=transcript_data,
+            scene_description=scene_desc
+        )
         
     out_filename = os.path.basename(args.source_video).rsplit('.', 1)[0] + f"_{target_filter}.mp4"
     output_video = os.path.join(session_dir, out_filename)
@@ -665,7 +697,7 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
         mashup=args.mashup, mashup_mode=args.mashup_mode,
         orientation=orientation, letterbox_crop=letterbox_crop,
         caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos,
-        video_filter=active_video_filter
+        video_filter=active_video_filter, user_context=args.user_context
     )
     
     # Export SRT for each extracted file
@@ -714,24 +746,31 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
             if "Recovered" in raw_context or "Regex" in raw_context:
                 raw_context = "Epic Gaming Moment"
             
-            # Auto-detect game name from session dir or source video name
+            # Auto-detect game / topic name from user_context, session_dir, or source_video name
             lower_session = args.session_dir.lower() if args.session_dir else ""
             lower_source = args.source_video.lower() if args.source_video else ""
+            lower_ctx = args.user_context.lower() if args.user_context else ""
+            lower_combo = f"{lower_session} {lower_source} {lower_ctx}"
+            
             game_name = "Gaming"
-            if "gta" in lower_session or "gta" in lower_source:
-                game_name = "GTA 6"
-            elif "rdr" in lower_session or "rdr" in lower_source:
-                game_name = "Red Dead Redemption 2"
-            elif "witcher" in lower_session or "witcher" in lower_source:
-                game_name = "The Witcher 3"
+            if "ghost" in lower_combo or "tsushima" in lower_combo: game_name = "Ghost of Tsushima"
+            elif "nfs" in lower_combo or "rivals" in lower_combo or "speed" in lower_combo: game_name = "Need for Speed Rivals"
+            elif "gta" in lower_combo: game_name = "GTA 6"
+            elif "rdr" in lower_combo or "red dead" in lower_combo: game_name = "Red Dead Redemption 2"
+            elif "witcher" in lower_combo: game_name = "The Witcher 3"
+            elif "spider" in lower_combo: game_name = "Spider-Man"
+            elif "elden" in lower_combo: game_name = "Elden Ring"
+            elif args.user_context:
+                game_name = " ".join(args.user_context.split()[:4])
                 
             content_info = {
                 "game_name": game_name,
                 "scene_description": raw_context,
+                "user_context": args.user_context,
                 "styles": args.style if isinstance(args.style, list) else ([args.style] if args.style else [])
             }
             
-            meta = generate_viral_metadata(content_info, mode="STORY", category="gaming")
+            meta = generate_viral_metadata(content_info, mode="STORY", category="gaming", user_context=args.user_context)
             return {
                 "file": os.path.basename(extracted_files[i]),
                 "title": meta.get('title', 'Viral Moment'),
