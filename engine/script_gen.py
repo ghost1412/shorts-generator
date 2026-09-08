@@ -78,16 +78,22 @@ def generate_dynamic_filter_timeline(total_duration, user_context=None, transcri
         prompt = f"""You are an expert film colorist. Analyze this specific video clip (Duration: {total_duration:.1f}s):
 {context_text}
 
-Choose dynamic visual filters from these presets for different timestamp intervals of this specific clip:
+Choose visual color grade filters for this clip from these available presets:
 Available Presets: ["none", "kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"]
 
-Divide the {total_duration:.1f}s clip into 2 to 4 timestamp ranges and assign a filter to each range based on the specific action/mood of that moment.
-Use "none" for natural lighting or standard moments that do not require heavy grading.
+CREATIVE DIRECTIVE & FREEDOM:
+1. UNIFORM MOOD / SINGLE GRADE: If the clip maintains a single consistent mood, aesthetic, or visual style throughout, assign 1 SINGLE filter across the ENTIRE duration (from 0.0 to {total_duration:.1f}s).
+2. DYNAMIC TRANSITIONS: If the clip undergoes clear narrative shifts, action escalations, or dramatic mood transitions, divide it into 2 to 3 timestamp ranges with appropriate filter presets.
+3. Use "none" for natural lighting or scenes that do not require heavy grading.
 
 Respond strictly with raw JSON:
 [
-  {{"start": 0.0, "end": 12.0, "filter": "preset1"}},
-  {{"start": 12.0, "end": {total_duration:.1f}, "filter": "preset2"}}
+  {{"start": 0.0, "end": {total_duration:.1f}, "filter": "preset_name"}}
+]
+or for dynamic shifts:
+[
+  {{"start": 0.0, "end": 12.5, "filter": "preset1"}},
+  {{"start": 12.5, "end": {total_duration:.1f}, "filter": "preset2"}}
 ]
 """
         response = get_llm_response(prompt, system_prompt="You are a video colorist. Output raw JSON array only.")
@@ -117,38 +123,31 @@ Respond strictly with raw JSON:
     # Generate unique seed per clip based on text hash & duration
     import hashlib
     hash_val = int(hashlib.md5(f"{text_corpus}_{total_duration}".encode('utf-8')).hexdigest(), 16)
-    offset1 = 0.20 + (hash_val % 15) * 0.01
-    offset2 = 0.60 + (hash_val % 20) * 0.01
-
-    p1 = round(total_duration * offset1, 2)
-    p2 = round(total_duration * offset2, 2)
+    
+    # Decide whether this clip is best served by 1 consistent filter or multi-phase transitions
+    prefer_single_filter = (hash_val % 2 == 0) or total_duration <= 12.0
 
     presets_pool = ["kurosawa", "vibrant_action", "cinematic_warm", "teal_orange", "hdr_pop", "moody_dark", "sepia_western"]
     f1 = presets_pool[hash_val % len(presets_pool)]
     f2 = presets_pool[(hash_val + 2) % len(presets_pool)]
 
     cuts = []
-    if total_duration <= 10.0:
-        mid = round(total_duration / 2, 2)
-        if is_samurai:
-            cuts = [{"start": 0.0, "end": mid, "filter": "none"}, {"start": mid, "end": total_duration, "filter": "kurosawa"}]
-        elif is_cyber:
-            cuts = [{"start": 0.0, "end": mid, "filter": "cyberpunk"}, {"start": mid, "end": total_duration, "filter": "none"}]
-        elif is_action:
-            cuts = [{"start": 0.0, "end": mid, "filter": "vibrant_action"}, {"start": mid, "end": total_duration, "filter": "none"}]
-        else:
-            cuts = [{"start": 0.0, "end": mid, "filter": "none"}, {"start": mid, "end": total_duration, "filter": f1}]
+    if prefer_single_filter:
+        target_f = "kurosawa" if is_samurai else ("cyberpunk" if is_cyber else ("moody_dark" if is_horror else ("vibrant_action" if is_action else f1)))
+        cuts = [{"start": 0.0, "end": round(total_duration, 2), "filter": target_f}]
     else:
+        offset1 = 0.25 + (hash_val % 15) * 0.01
+        p1 = round(total_duration * offset1, 2)
         if is_samurai:
-            cuts = [{"start": 0.0, "end": p1, "filter": "none"}, {"start": p1, "end": p2, "filter": "kurosawa"}, {"start": p2, "end": total_duration, "filter": "cinematic_warm"}]
+            cuts = [{"start": 0.0, "end": p1, "filter": "kurosawa"}, {"start": p1, "end": round(total_duration, 2), "filter": "cinematic_warm"}]
         elif is_cyber:
-            cuts = [{"start": 0.0, "end": p1, "filter": "none"}, {"start": p1, "end": p2, "filter": "cyberpunk"}, {"start": p2, "end": total_duration, "filter": "hdr_pop"}]
+            cuts = [{"start": 0.0, "end": p1, "filter": "cyberpunk"}, {"start": p1, "end": round(total_duration, 2), "filter": "hdr_pop"}]
         elif is_horror:
-            cuts = [{"start": 0.0, "end": p1, "filter": "moody_dark"}, {"start": p1, "end": p2, "filter": "cold_thriller"}, {"start": p2, "end": total_duration, "filter": "none"}]
+            cuts = [{"start": 0.0, "end": p1, "filter": "moody_dark"}, {"start": p1, "end": round(total_duration, 2), "filter": "cold_thriller"}]
         elif is_action:
-            cuts = [{"start": 0.0, "end": p1, "filter": "vibrant_action"}, {"start": p1, "end": p2, "filter": "teal_orange"}, {"start": p2, "end": total_duration, "filter": "none"}]
+            cuts = [{"start": 0.0, "end": p1, "filter": "vibrant_action"}, {"start": p1, "end": round(total_duration, 2), "filter": "teal_orange"}]
         else:
-            cuts = [{"start": 0.0, "end": p1, "filter": "none"}, {"start": p1, "end": p2, "filter": f1}, {"start": p2, "end": total_duration, "filter": f2}]
+            cuts = [{"start": 0.0, "end": p1, "filter": f1}, {"start": p1, "end": round(total_duration, 2), "filter": f2}]
             
     print(f"[Log] 🧠 Dynamic Timeline generated ({len(cuts)} phases over {total_duration:.1f}s): {cuts}")
     return cuts

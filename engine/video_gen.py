@@ -2070,13 +2070,28 @@ def get_video_filter_vf(filter_name):
     return FILTER_PRESETS.get(name, "")
 
 def generate_dynamic_ffmpeg_filter(timeline_cuts):
-    """Constructs a single-pass FFmpeg filter chain with timestamp-enabled filter transitions."""
+    """Constructs an FFmpeg filter chain for dynamic timeline cuts, optimizing single-filter selections."""
     if not timeline_cuts:
         return ""
     
+    valid_cuts = [c for c in timeline_cuts if c.get("end", 0.0) > c.get("start", 0.0)]
+    if not valid_cuts:
+        return ""
+        
+    unique_filters = set(c.get("filter", "none").lower().strip() for c in valid_cuts)
+    if len(unique_filters) == 1:
+        single_f = list(unique_filters)[0]
+        if single_f in ["none", "false", ""]:
+            return ""
+        print(f"[Log] 🎨 Applying uniform visual color grade: '{single_f}' across entire video")
+        return FILTER_PRESETS.get(single_f, "")
+        
     vf_parts = []
-    for cut in timeline_cuts:
+    for cut in valid_cuts:
         f_name = cut.get("filter", "").lower().strip()
+        if f_name in ["none", "false", ""]:
+            continue
+            
         start = float(cut.get("start", 0.0))
         end = float(cut.get("end", 0.0))
         if end <= start:
