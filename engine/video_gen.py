@@ -320,7 +320,7 @@ def apply_sticker_with_mask(path, width=250, start=0, duration=2.0, pos="center"
         sticker = ImageClip(path).resized(width=width).with_start(start).with_duration(duration)
         # 🟢 UPGRADE: Professional Masking - Removes common 'fake transparency' white/grey backgrounds
         # We use a slight threshold to catch slightly off-white checkerboards
-        sticker = sticker.with_effects([vfx.MaskColor(color=[255, 255, 255], thr=30, s=5)])
+        sticker = sticker.with_effects([vfx.MaskColor(color=[255, 255, 255], threshold=30, stiffness=5)])
         return sticker.with_position(pos)
     except:
         return None
