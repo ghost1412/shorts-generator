@@ -38,6 +38,7 @@ def render_with_remotion(
     rank_it=None,       # dict: {"items": list of str, "paths": list of str}
     caption_this=None,  # dict: {"image_path": str, "prompt_text": str}
     emoji_guess=None,   # dict: {"emojis": str, "answer": str, "hint": str}
+    avatar_path=None,   # str: local image path for cartoon avatar
     duration=None,
     start_offset=0.0,
     caption_style="HORMOZI",
@@ -91,6 +92,7 @@ def render_with_remotion(
             
         # Copy background music
         rel_music_path = copy_to_public(bg_music_path, run_assets_dir) if bg_music_path else None
+        rel_avatar_path = copy_to_public(avatar_path, run_assets_dir) if avatar_path else None
         
         # 3. Parse words from subtitles file
         words = []
@@ -197,6 +199,7 @@ def render_with_remotion(
           "titleText": title_text,
           "subtitleYPos": subtitle_y_pos,
           "captionStyle": caption_style,
+          "avatarUrl": rel_avatar_path if rel_avatar_path else None,
           "backgrounds": remotion_bg
         }
         

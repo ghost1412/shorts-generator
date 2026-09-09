@@ -538,13 +538,11 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   const currentTime = frame / fps;
   const durationInSeconds = durationInFrames / fps;
 
-  // Dynamic Audio Ducking Logic
-  let currentVolume = bgMusicVolume;
-  // If we have words, check if someone is speaking near the current time
-  if (words && words.length > 0) {
-    const isSpeaking = words.some(w => currentTime >= w.start - 0.1 && currentTime <= w.end + 0.3);
-    currentVolume = isSpeaking ? 0.08 : bgMusicVolume; // specifically request 0.08 when speaking
-  }
+  // Dynamic Audio Ducking & Avatar Bounce Logic
+  const isSpeaking = words && words.length > 0
+    ? words.some(w => currentTime >= w.start - 0.1 && currentTime <= w.end + 0.3)
+    : false;
+  const currentVolume = isSpeaking ? 0.08 : bgMusicVolume;
 
   // Snap progression for progress bar
   const progressPercent = Math.min(100, (currentTime / durationInSeconds) * 100);
@@ -889,7 +887,31 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         captionStyle={captionStyle}
       />
 
-      {/* 6. PROGRESS BAR (Snappy sliding bottom bar) */}
+      {/* 6. CARTOON AVATAR OVERLAY (Animated talking avatar) */}
+      {avatarUrl && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "80px",
+            left: "40px",
+            zIndex: 45,
+            transform: `scale(${isSpeaking ? 1.06 + Math.sin(frame * 0.4) * 0.04 : 1.0})`,
+            transition: "transform 0.05s ease-out",
+          }}
+        >
+          <Img
+            src={getAssetUrl(avatarUrl)}
+            style={{
+              width: "250px",
+              height: "250px",
+              objectFit: "contain",
+              filter: "drop-shadow(0 15px 25px rgba(0,0,0,0.7))",
+            }}
+          />
+        </div>
+      )}
+
+      {/* 7. PROGRESS BAR (Snappy sliding bottom bar) */}
       <div
         style={{
           position: "absolute",

@@ -1400,6 +1400,16 @@ if args.use_ai_audio:
     else:
         print("[Warning] AI Music generation failed, falling back to stock music.")
 
+# Resolve cartoon avatar path if active
+avatar_path = None
+selected_persona = args.persona if args.persona else ("mafia_cat" if (args.cartoon or mode in ("NEWS", "NEWS_SERIOUS")) else None)
+if selected_persona:
+    for ext in [".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov"]:
+        p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
+        if os.path.exists(p_path):
+            avatar_path = p_path
+            break
+
 remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS"]
 if args.use_remotion and mode in remotion_supported_modes:
     from engine.remotion_renderer import render_with_remotion
@@ -1435,6 +1445,7 @@ if args.use_remotion and mode in remotion_supported_modes:
         background_paths=bg_video_paths,
         this_or_that=this_or_that_data,
         emoji_guess=emoji_guess_data,
+        avatar_path=avatar_path,
         caption_style=getattr(args, "caption_style", "HORMOZI")
     )
 else:
@@ -1556,17 +1567,6 @@ else:
             preset=target_preset
         )
     else:
-        # Check for avatar if persona is active
-        avatar_path = None
-        # 🟢 UPGRADE: Mafia Cat is now the default persona for Cartoon News
-        selected_persona = args.persona if args.persona else ("mafia_cat" if args.cartoon else None)
-        if selected_persona:
-            for ext in [".mp4", ".mov", ".png"]:
-                p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
-                if os.path.exists(p_path):
-                    avatar_path = p_path
-                    break
-
         final_video = create_shorts_video(
             audio_path, 
             subs_path, 
@@ -1637,10 +1637,16 @@ else:
     story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"
     metadata = ensure_dict(generate_viral_metadata(story_content, mode=mode, category=category))
 
-# Ensure title is never empty or too long
+# Ensure metadata fields are always populated defensively
 if not metadata.get("title"):
     metadata["title"] = f"Shocking {category} reveal! 😱"
 metadata["title"] = (metadata["title"] or "Viral Short")[:95]
+
+if not metadata.get("description"):
+    metadata["description"] = f"Watch this amazing {category} short!"
+
+if not isinstance(metadata.get("tags"), list):
+    metadata["tags"] = [category, "shorts", "viral", mode.lower()]
 
 print(f"[Log] Viral Title: {metadata['title']}")
 
@@ -1773,9 +1779,11 @@ if args.video_id and args.user_id:
     )
 
 with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
-    f.write(f"Title: {metadata['title']}\n")
-    f.write(f"Description: {metadata['description']}\n")
-    f.write(f"Tags: {', '.join(metadata['tags'])}\n")
+    f.write(f"Title: {metadata.get('title', 'Viral Short')}\n")
+    f.write(f"Description: {metadata.get('description', '')}\n")
+    tags_list = metadata.get('tags', [])
+    tags_str = ", ".join(tags_list) if isinstance(tags_list, list) else str(tags_list)
+    f.write(f"Tags: {tags_str}\n")
 
 if __name__ == "__main__":
     pass # Script runs globally

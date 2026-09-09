@@ -1279,17 +1279,6 @@ def generate_funny_news(category="general", tone="funny", persona=None):
     print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     
     # --- STEP 2: Use LLM to rewrite based on tone/persona ---
-    url = "https://router.huggingface.co/v1/chat/completions"
-    api_headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    if not HF_API_KEY:
-        raise RuntimeError("HF_API_KEY is missing. Cannot rewrite news.")
-    
-    model = "meta-llama/Llama-3.1-8B-Instruct"
-    
     if persona:
         tone_instruction = f"""PERSONA: You are a {persona}. 
         Use characteristic slang, sounds, and interjections (e.g., if Rabbit, use "Boing! What's up docs?"; if Robot, use "Beep Boop - Processing...").
