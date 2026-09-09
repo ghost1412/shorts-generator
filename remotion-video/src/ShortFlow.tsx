@@ -390,7 +390,7 @@ const EmojiGuessOverlay: React.FC<{
         <div
           style={{
             position: "absolute",
-            top: "220px",
+            top: "250px",
             background: "linear-gradient(135deg, #ff007f, #7928ca)",
             border: "4px solid #ffffff",
             borderRadius: "50px",
