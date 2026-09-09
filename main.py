@@ -154,9 +154,12 @@ def parse_args():
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
     parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI).")
     parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for subtitles in Remotion (default: 1150).")
+    parser.add_argument("--max_workers", type=int, default=None, help="Force number of parallel rendering worker threads (e.g. 2 or 4 for Remotion/FFmpeg).")
     
     # Provider & Media Overrides
     parser.add_argument("--use_ollama", action="store_true", help="Force local Ollama LLM execution.")
+    parser.add_argument("--llm_provider", choices=["auto", "gemini", "ollama", "openai", "anthropic", "deepseek", "groq", "openrouter", "custom"], default="auto", help="Specify LLM provider (gemini, ollama, openai, anthropic, deepseek, groq, openrouter, custom).")
+    parser.add_argument("--llm_model", help="Specify exact model name for the LLM provider (e.g., gpt-4o-mini, deepseek-chat, llama-3.3-70b-versatile, qwen3:8b).")
     parser.add_argument("--bg_media", help="Path to custom local background image (.jpg, .png) or video (.mp4, .mov).")
     
     # Interactive Kids Story Creator Flags
@@ -215,7 +218,16 @@ args = parse_args()
 
 if getattr(args, "use_ollama", False):
     os.environ["FORCE_OLLAMA"] = "true"
+    os.environ["LLM_PROVIDER"] = "ollama"
     print("[Log] 🦙 FORCING Local Ollama LLM execution.")
+
+if getattr(args, "llm_provider", None) and args.llm_provider != "auto":
+    os.environ["LLM_PROVIDER"] = args.llm_provider
+    print(f"[Log] 🤖 Requested LLM Provider: {args.llm_provider}")
+
+if getattr(args, "llm_model", None):
+    os.environ["LLM_MODEL"] = args.llm_model
+    print(f"[Log] 🤖 Requested LLM Model: {args.llm_model}")
 
 # Quality Mapping (Overridden by manual flags if present)
 bitrate_map = {"low": "4M", "medium": "12M", "high": "25M", "ultra": "50M"}
@@ -697,7 +709,8 @@ if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
         mashup=args.mashup, mashup_mode=args.mashup_mode,
         orientation=orientation, letterbox_crop=letterbox_crop,
         caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos,
-        video_filter=active_video_filter, user_context=args.user_context
+        video_filter=active_video_filter, user_context=args.user_context,
+        max_workers=getattr(args, 'max_workers', None)
     )
     
     # Export SRT for each extracted file
@@ -1334,7 +1347,8 @@ elif mode == "TRAILER_MISSED":
         editing_style=args.style, gif_dir=args.gif_dir,
         interest_points=interest_points, silence_intervals=None,
         use_remotion=args.use_remotion,
-        caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos
+        caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos,
+        max_workers=getattr(args, 'max_workers', None)
     )
     
     bg_video_paths = extracted_files

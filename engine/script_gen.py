@@ -11,6 +11,14 @@ HF_API_KEY = os.getenv("HF_API_KEY")
 LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/api/chat")
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "qwen3:8b")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+LLM_PROVIDER_ENV = os.getenv("LLM_PROVIDER", "auto").lower()
+LLM_MODEL_ENV = os.getenv("LLM_MODEL")
+LLM_BASE_URL_ENV = os.getenv("LLM_BASE_URL")
 
 def auto_detect_video_filter(user_context=None, style_context=None, category=None, prompt=None):
     """Analyzes context text and determines the optimal visual color grade filter preset."""
@@ -152,96 +160,206 @@ or for dynamic shifts:
     print(f"[Log] 🧠 Dynamic Timeline generated ({len(cuts)} phases over {total_duration:.1f}s): {cuts}")
     return cuts
 
-def get_llm_response(
-    prompt,
-    system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
-    max_tokens=12000, 
-    temperature=0.3,
-    model="meta-llama/Llama-3.1-8B-Instruct",
-    timeout=300
-):
+def _call_openai_compatible(api_key, base_url, model, prompt, system_prompt, max_tokens=4096, temperature=0.3, timeout=120, extra_headers=None):
     import requests
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    if extra_headers:
+        headers.update(extra_headers)
 
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    # 0. Try Gemini API (unless FORCE_OLLAMA is set)
-    force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"]
-    if not force_ollama and GEMINI_API_KEY:
-        gemini_models = ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+
+    resp = requests.post(base_url, headers=headers, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    return data["choices"][0]["message"]["content"]
+
+def _call_anthropic(api_key, model, prompt, system_prompt, max_tokens=4096, temperature=0.3, timeout=120):
+    import requests
+    url = "https://api.anthropic.com/v1/messages"
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01"
+    }
+    payload = {
+        "model": model or "claude-3-5-haiku-20241022",
+        "max_tokens": max_tokens,
+        "system": system_prompt or "",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature
+    }
+    resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json()
+    return data["content"][0]["text"]
+
+def get_llm_response(
+    prompt,
+    system_prompt="You are a viral YouTube shorts creator. ALWAYS respond with raw JSON only. No conversational text.",
+    max_tokens=12000, 
+    temperature=0.3,
+    model=None,
+    provider=None,
+    base_url=None,
+    timeout=300
+):
+    import requests
+
+    target_provider = (provider or os.getenv("LLM_PROVIDER") or "auto").lower().strip()
+    target_model = model or os.getenv("LLM_MODEL")
+
+    # 1. Explicit Provider Execution (if specified)
+    if target_provider == "openai" and (OPENAI_API_KEY or os.getenv("OPENAI_API_KEY")):
+        m = target_model or "gpt-4o-mini"
+        print(f"[Log] 🤖 Executing requested OpenAI LLM ({m})...")
+        try:
+            return _call_openai_compatible(
+                api_key=OPENAI_API_KEY or os.getenv("OPENAI_API_KEY"),
+                base_url=(base_url or os.getenv("LLM_BASE_URL") or "https://api.openai.com/v1/chat/completions"),
+                model=m, prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+            )
+        except Exception as e:
+            print(f"[Warning] OpenAI LLM failed: {e}. Proceeding to fallbacks...")
+
+    if target_provider in ["anthropic", "claude"] and (ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY")):
+        m = target_model or "claude-3-5-haiku-20241022"
+        print(f"[Log] 🤖 Executing requested Anthropic Claude LLM ({m})...")
+        try:
+            return _call_anthropic(
+                api_key=ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY"),
+                model=m, prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+            )
+        except Exception as e:
+            print(f"[Warning] Anthropic LLM failed: {e}. Proceeding to fallbacks...")
+
+    if target_provider == "deepseek" and (DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY")):
+        m = target_model or "deepseek-chat"
+        print(f"[Log] 🤖 Executing requested DeepSeek LLM ({m})...")
+        try:
+            return _call_openai_compatible(
+                api_key=DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY"),
+                base_url="https://api.deepseek.com/chat/completions",
+                model=m, prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+            )
+        except Exception as e:
+            print(f"[Warning] DeepSeek LLM failed: {e}. Proceeding to fallbacks...")
+
+    if target_provider == "groq" and (GROQ_API_KEY or os.getenv("GROQ_API_KEY")):
+        m = target_model or "llama-3.3-70b-versatile"
+        print(f"[Log] 🤖 Executing requested Groq LLM ({m})...")
+        try:
+            return _call_openai_compatible(
+                api_key=GROQ_API_KEY or os.getenv("GROQ_API_KEY"),
+                base_url="https://api.groq.com/openai/v1/chat/completions",
+                model=m, prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+            )
+        except Exception as e:
+            print(f"[Warning] Groq LLM failed: {e}. Proceeding to fallbacks...")
+
+    if target_provider in ["openrouter", "custom"]:
+        m = target_model or "meta-llama/llama-3.3-70b-instruct"
+        b_url = base_url or os.getenv("LLM_BASE_URL") or "https://openrouter.ai/api/v1/chat/completions"
+        key = os.getenv("LLM_API_KEY") or OPENROUTER_API_KEY or os.getenv("OPENROUTER_API_KEY") or "sk-dummy"
+        print(f"[Log] 🤖 Executing Custom/OpenRouter API ({m})...")
+        try:
+            return _call_openai_compatible(
+                api_key=key, base_url=b_url, model=m, prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+            )
+        except Exception as e:
+            print(f"[Warning] Custom/OpenRouter LLM failed: {e}. Proceeding to fallbacks...")
+
+    # 2. Gemini API Fallback Chain
+    force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"] or target_provider == "ollama"
+    if not force_ollama and (GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")):
+        g_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+        gemini_models = [target_model] if (target_provider == "gemini" and target_model) else ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
         for g_model in gemini_models:
             try:
                 print(f"[Log] Attempting Gemini API ({g_model})...")
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={GEMINI_API_KEY}"
-                headers = {
-                    "Content-Type": "application/json"
-                }
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={g_key}"
+                headers = {"Content-Type": "application/json"}
                 payload = {
-                    "contents": [
-                        {
-                            "role": "user",
-                            "parts": [
-                                {"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}
-                            ]
-                        }
-                    ],
-                    "generationConfig": {
-                        "temperature": temperature,
-                        "maxOutputTokens": max_tokens,
-                        "responseMimeType": "application/json"
-                    }
+                    "contents": [{"role": "user", "parts": [{"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}]}],
+                    "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens, "responseMimeType": "application/json"}
                 }
                 response = requests.post(url, headers=headers, json=payload, timeout=timeout)
                 response.raise_for_status()
                 res_json = response.json()
-                print(f"[DEBUG] Gemini candidates ({g_model}): {json.dumps(res_json.get('candidates', []), indent=2)}")
                 content = res_json["candidates"][0]["content"]["parts"][0]["text"]
                 print(f"[Log] Gemini API success with {g_model}!")
                 return content
             except Exception as e:
-                try:
-                    if 'response' in locals() and response is not None:
-                        print(f"[Warning] Gemini API ({g_model}) failed: {e}. Response: {response.text}")
-                    else:
-                        print(f"[Warning] Gemini API ({g_model}) failed: {e}")
-                except:
-                    print(f"[Warning] Gemini API ({g_model}) failed: {e}")
-                print("Trying next Gemini model...")
+                print(f"[Warning] Gemini API ({g_model}) failed: {e}")
 
-        print("[Warning] All Gemini API models failed. Falling back to other providers...")
+    # 3. DeepSeek Fallback
+    if (DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY")) and target_provider == "auto":
+        try:
+            print(f"[Log] Fallback: Attempting DeepSeek LLM (deepseek-chat)...")
+            return _call_openai_compatible(
+                api_key=DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY"),
+                base_url="https://api.deepseek.com/chat/completions",
+                model=target_model or "deepseek-chat",
+                prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+            )
+        except Exception as e:
+            print(f"[Warning] DeepSeek fallback failed: {e}")
 
-    # 1. Try Local LLM (Ollama)
+    # 4. OpenAI Fallback
+    if (OPENAI_API_KEY or os.getenv("OPENAI_API_KEY")) and target_provider == "auto":
+        try:
+            print(f"[Log] Fallback: Attempting OpenAI LLM (gpt-4o-mini)...")
+            return _call_openai_compatible(
+                api_key=OPENAI_API_KEY or os.getenv("OPENAI_API_KEY"),
+                base_url="https://api.openai.com/v1/chat/completions",
+                model=target_model or "gpt-4o-mini",
+                prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
+            )
+        except Exception as e:
+            print(f"[Warning] OpenAI fallback failed: {e}")
+
+    # 5. Local LLM (Ollama) Fallback
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
     if LOCAL_LLM_URL:
         try:
             print(f"[Log] Attempting local LLM at {LOCAL_LLM_URL}...")
-
+            ollama_model = target_model if target_provider == "ollama" and target_model else LOCAL_LLM_MODEL
             payload = {
-                "model": LOCAL_LLM_MODEL,  # 🔥 better model
+                "model": ollama_model,
                 "messages": messages,
                 "stream": True,
                 "options": {
                     "temperature": temperature,
-                    "num_predict": min(max_tokens, 32768), # Allow longer responses for complex extractions
-                    "num_ctx": 32768  # 🔥 Massive context for 100k+ char transcripts
+                    "num_predict": min(max_tokens, 32768),
+                    "num_ctx": 32768
                 }
             }
 
-            response = requests.post(
-                LOCAL_LLM_URL,
-                json=payload,
-                timeout=timeout
-            )
+            response = requests.post(LOCAL_LLM_URL, json=payload, timeout=timeout)
             response.raise_for_status()
 
             try:
                 data = response.json()
                 content = data.get("message", {}).get("content", "")
                 if not content:
-                    raise json.JSONDecodeError("Empty content in main object", "", 0)
-            except json.JSONDecodeError as e:
-                # 🟢 PHASE 13: Robust NDJSON/Extra Data Stitching
+                    raise json.JSONDecodeError("Empty content", "", 0)
+            except json.JSONDecodeError:
                 lines = response.text.strip().split('\n')
                 all_content = []
                 for line in lines:
@@ -255,72 +373,29 @@ def get_llm_response(
                     content = "".join(all_content)
                     data = {"message": {"content": content}}
                 else:
-                    raise e
+                    raise
 
-            content = data["message"]["content"]  # ✅ guaranteed non-empty
-            print("[Log] Local LLM success!")
+            content = data["message"]["content"]
+            print(f"[Log] Local LLM ({ollama_model}) success!")
             return content
-
-        except requests.exceptions.Timeout:
-            print("[Warn] Local LLM timeout, retrying with extra time...")
-            try:
-                response = requests.post(
-                    LOCAL_LLM_URL,
-                    json=payload,
-                    timeout=300 # 5 minutes for massive transcripts
-                )
-                response.raise_for_status()
-                
-                try:
-                    data = response.json()
-                    content = data.get("message", {}).get("content", "")
-                    if not content:
-                        raise json.JSONDecodeError("Empty content in main object (retry)", "", 0)
-                except json.JSONDecodeError as e:
-                    # 🟢 PHASE 13: Robust NDJSON/Extra Data Stitching (Retry)
-                    lines = response.text.strip().split('\n')
-                    all_content = []
-                    for line in lines:
-                        try:
-                            temp = json.loads(line)
-                            c = temp.get("message", {}).get("content", "")
-                            if c: all_content.append(c)
-                        except:
-                            continue
-                    if all_content:
-                        content = "".join(all_content)
-                        data = {"message": {"content": content}}
-                    else:
-                        raise e
-                        
-                return data["message"]["content"]
-            except Exception as e:
-                print(f"[Info] Retry failed: {e}")
 
         except Exception as e:
             print(f"[Info] Local LLM failed: {e}")
-            # Ensure we don't leave connection hanging
-            if 'response' in locals() and hasattr(response, 'close'):
-                response.close()
 
-    # 2. HuggingFace fallback
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    # 6. HuggingFace fallback
+    if HF_API_KEY:
+        try:
+            print(f"[Log] Fallback: Attempting HuggingFace API...")
+            url = "https://router.huggingface.co/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {HF_API_KEY}", "Content-Type": "application/json"}
+            payload = {"model": target_model or "meta-llama/Llama-3.1-8B-Instruct", "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+            response = requests.post(url, headers=headers, json=payload, timeout=min(timeout, 30))
+            response.raise_for_status()
+            return response.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            print(f"[Warning] HuggingFace API failed: {e}")
 
-    payload = {
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature
-    }
-
-    hf_timeout = min(timeout, 30)
-    response = requests.post(url, headers=headers, json=payload, timeout=hf_timeout)
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
+    raise RuntimeError("All configured LLM providers failed. Check API keys or local Ollama service status.")
 
 def with_best_of_n(func, validator, n=3):
     """Retries a generation function up to n times until the validator passes."""

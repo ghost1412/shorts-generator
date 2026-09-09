@@ -80,13 +80,14 @@ docker compose up -d
   - `GLOW_BOX`: Glassmorphic gradient pill box around active phrases with neon glow.
   - `BOUNCE`: Upward jump animation with intense drop-shadow text glow.
   - `MINIMAL`: Crisp dark translucent box with accent border.
+- **⚡ Parallel Remotion Video Engine**: High-performance React subtitle rendering with custom multi-worker thread pools (`--max_workers 2` or `4`).
+- **🤖 Multi-LLM Orchestration**: Native support for **Google Gemini**, **OpenAI** (`gpt-4o-mini`), **DeepSeek** (`deepseek-chat`), **Groq** (`llama-3.3-70b`), **Anthropic Claude**, **OpenRouter**, **Local Ollama** (`qwen3:8b`), and custom OpenAI-compatible endpoints with automatic failover (`--llm_provider` & `--llm_model`).
 - **🎯 Smart Crop & Anti-Blinking Face Tracking**: Intelligent face detection with Exponential Moving Average (EMA) smoothing and velocity clamping to prevent camera jitter.
 - **✂️ Padded Silence Removal**: Auto-tighten audio gaps with an 80ms safety buffer to ensure zero word truncation or sub-frame flickering.
-- **🤖 Multi-LLM Fallback Architecture**: Seamlessly switches between **Google Gemini API**, **Local Ollama (Qwen/Llama)**, and **HuggingFace** for 100% uptime and $0 local cost option.
 - **🧮 Standalone Creation Modes**:
   - `EXPLAINER`: Automated educational math & coding animations powered by Manim.
   - `FACTS` & `STORY`: AI-scripted facts and narratives with automated background video stitching.
-  - `FILTER`: Direct visual color grading & style application.
+  - `FILTER`: Direct visual color grading & style application for full long-form videos or shorts.
   - `THIS_OR_THAT` / `WYR`: Split-screen comparison challenges.
   - `RANK_IT`: Tier-list rank reveals.
 
@@ -136,22 +137,30 @@ graph TD
 
 ## 💻 CLI Usage Examples
 
-### 1. AI Dynamic Scene-Level Filter (Switches Filters Per Scene Phase)
+### 1. AI Dynamic Scene-Level Filter + Parallel Remotion Render
 ```bash
-python main.py --source_video "gameplay.mp4" --extract_mode shorts --smart_crop --use_remotion --video_filter dynamic --user_context "Samurai katana duel and sunset field"
+python main.py --source_video "gameplay.mp4" --extract_mode shorts --smart_crop --use_remotion --max_workers 2 --video_filter dynamic --user_context "Samurai katana duel and sunset field"
 ```
 
-### 2. AI Auto-Selected Filter (AI Picks 1 Best Filter)
+### 2. Multi-Provider LLM Override (DeepSeek, OpenAI, Groq, or Local Ollama)
 ```bash
+# Use DeepSeek LLM for analysis & scripting
+python main.py --source_video "gameplay.mp4" --llm_provider deepseek --llm_model deepseek-chat
+
+# Use Groq for ultra-fast Llama 3.3 70B inference
+python main.py --source_video "gameplay.mp4" --llm_provider groq --llm_model llama-3.3-70b-versatile
+```
+
+### 3. Full Long-Form Video Color Grading Mode (`--mode FILTER`)
+```bash
+# AI auto-selects visual grade for a long-form video
 python main.py --mode FILTER --source_video "night_race.mp4" --video_filter auto
-```
 
-### 3. Manual Filter Override (e.g. Kurosawa / Cyberpunk)
-```bash
+# Manual visual filter preset (e.g. Kurosawa / Cyberpunk / Teal-Orange)
 python main.py --mode FILTER --source_video "clip.mp4" --video_filter kurosawa
 ```
 
-### 3. Generate an AI Facts Short with Custom Captions
+### 4. Generate AI Facts Short with Custom Remotion Captions
 ```bash
 python main.py --mode FACTS --category "space mysteries" --vibe "suspense" --use_remotion --caption_style GLOW_BOX
 ```

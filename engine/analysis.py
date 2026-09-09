@@ -688,9 +688,6 @@ def transcribe_video(video_path, output_dir):
     Lazy-loads Whisper and transcribes the video.
     Returns path to transcript.json.
     """
-    import stable_whisper as whisper
-    import torch
-    
     os.makedirs(output_dir, exist_ok=True)
     transcript_path = os.path.join(output_dir, "transcript.json")
     
@@ -707,6 +704,9 @@ def transcribe_video(video_path, output_dir):
                     print(f"[Warning] Session Cache Mismatch: Old={cached_source}, New={os.path.abspath(video_path)}. Re-transcribing...")
         except:
             pass
+
+    import stable_whisper as whisper
+    import torch
         
     print(f"[Log] Starting AI Transcription (GPU Optimized - MEDIUM Model)...")
     start_time = time.time()

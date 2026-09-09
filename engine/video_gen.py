@@ -2203,7 +2203,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2534,9 +2534,11 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 try: sub.close()
                 except: pass
 
-        # 🟢 OPTIMIZED: Consumer NVIDIA cards have a 3-5 NVENC session limit.
-        # Remotion uses Puppeteer tabs; limit to 1 worker for Remotion to avoid Chrome socket contention.
-        render_workers = 1 if use_remotion else min(2 if use_gpu else 4, len(highlights))
+        # 🟢 OPTIMIZED: Allow explicit max_workers override, default Remotion to 1 worker unless user requests more.
+        if max_workers is not None and max_workers > 0:
+            render_workers = min(max_workers, len(highlights))
+        else:
+            render_workers = 1 if use_remotion else min(2 if use_gpu else 4, len(highlights))
         with ThreadPoolExecutor(max_workers=render_workers) as executor:
 
             list(executor.map(render_short_item, enumerate(highlights)))
