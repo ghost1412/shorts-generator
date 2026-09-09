@@ -1419,10 +1419,22 @@ def create_emoji_guess_video(audio_path, subs_path, emoji_data, bg_video_paths, 
     if bg_clip.duration < duration:
         bg_clip = vfx.loop(bg_clip, duration=duration)
     else:
-        bg_clip = bg_clip.subclip(0, duration)
-    bg_clip = bg_clip.resize(height=1920)
+        if hasattr(bg_clip, 'subclipped'):
+            bg_clip = bg_clip.subclipped(0, duration)
+        else:
+            bg_clip = bg_clip.subclip(0, duration)
+
+    if hasattr(bg_clip, 'resized'):
+        bg_clip = bg_clip.resized(height=1920)
+    elif hasattr(bg_clip, 'resize'):
+        bg_clip = bg_clip.resize(height=1920)
+
     if bg_clip.w > 1080:
-        bg_clip = bg_clip.crop(x_center=bg_clip.w/2, width=1080)
+        if hasattr(bg_clip, 'cropped'):
+            bg_clip = bg_clip.cropped(x_center=bg_clip.w/2, width=1080)
+        elif hasattr(bg_clip, 'crop'):
+            bg_clip = bg_clip.crop(x_center=bg_clip.w/2, width=1080)
+
     bg_clip = bg_clip.fl_image(lambda img: (img * 0.45).astype('uint8'))
 
     sub_clips = generate_word_subtitles(subs_path, duration) if os.path.exists(subs_path) else []

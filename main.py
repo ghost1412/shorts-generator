@@ -1315,6 +1315,13 @@ elif mode == "RIDDLE":
     paths = get_bg_path(category + " background", bg_filename, target_duration=total_bg_duration)
     bg_video_paths.extend(paths)
     clue_path = None
+elif mode == "EMOJI_GUESS":
+    bg_filename = os.path.join(session_dir, "bg_emoji_guess.mp4")
+    query = category if category and category != "random" else "satisfying"
+    paths = get_bg_path(query, bg_filename, target_duration=total_bg_duration)
+    if not paths:
+        paths = get_bg_path("minecraft parkour", os.path.join(session_dir, "bg_emoji_fallback.mp4"), target_duration=total_bg_duration)
+    bg_video_paths.extend(paths)
 elif mode == "JWST":
     print("[Log] Fetching James Webb Telescope images...")
     bg_video_paths = fetch_jwst_images(num_images=random.randint(1, 4))
