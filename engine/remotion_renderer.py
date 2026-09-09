@@ -237,15 +237,18 @@ def render_with_remotion(
         ]
 
         
-        # Run process
+        # Run process cross-platform (shell=True on Windows requires string command; shell=False on Linux requires list)
+        is_win = sys.platform == "win32"
+        exec_cmd = " ".join(cmd) if is_win else cmd
+
         result = subprocess.run(
-            cmd,
+            exec_cmd,
             cwd=remotion_dir,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            shell=True # Required on Windows to locate npx globally
+            shell=is_win
         )
         
         if result.returncode != 0:

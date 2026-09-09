@@ -356,24 +356,33 @@ def get_llm_response(
 
             try:
                 data = response.json()
-                content = data.get("message", {}).get("content", "")
+                msg = data.get("message", {})
+                content = msg.get("content") or msg.get("thinking") or ""
                 if not content:
-                    raise json.JSONDecodeError("Empty content", "", 0)
-            except json.JSONDecodeError:
+                    raise ValueError("Empty content in response json")
+            except Exception as json_err:
                 lines = response.text.strip().split('\n')
-                all_content = []
+                content_parts = []
+                thinking_parts = []
                 for line in lines:
                     try:
                         temp = json.loads(line)
-                        c = temp.get("message", {}).get("content", "")
-                        if c: all_content.append(c)
-                    except:
+                        msg = temp.get("message", {})
+                        c = msg.get("content", "")
+                        th = msg.get("thinking", "")
+                        if c: content_parts.append(c)
+                        if th: thinking_parts.append(th)
+                    except Exception:
                         continue
-                if all_content:
-                    content = "".join(all_content)
-                    data = {"message": {"content": content}}
+                
+                final_text = "".join(content_parts).strip()
+                if not final_text:
+                    final_text = "".join(thinking_parts).strip()
+
+                if final_text:
+                    data = {"message": {"content": final_text}}
                 else:
-                    raise
+                    raise RuntimeError(f"Ollama returned empty response. Output: {response.text[:200]}") from json_err
 
             content = data["message"]["content"]
             print(f"[Log] Local LLM ({ollama_model}) success!")
@@ -661,6 +670,10 @@ def robust_json_parse(output):
     """Extreme multi-strategy JSON extraction for unreliable LLM outputs."""
     import re, json
     if not output: return None
+
+    # Strip reasoning <think>...</think> blocks from models like Qwen3 / DeepSeek-R1
+    output = re.sub(r'<think>.*?</think>', '', output, flags=re.DOTALL).strip()
+    if not output: return None
     
     def get_balanced(text):
         start_idx = -1
@@ -721,42 +734,57 @@ def robust_json_parse(output):
     
     if collected_objects:
         print(f"[Log] Recovered {len(collected_objects)} valid objects via greedy extraction.")
-        return collected_objects
+        return collected_objects[0] if len(collected_objects) == 1 else collected_objects
 
-    # strategy 3: Regex Timestamp/Segment Recovery (Last Resort)
-    print("[Log] JSON parsing failed all strategies, attempting Regex segment recovery...")
-    patterns = [
-        r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
-        r"(\d{1,2}:\d{2}:?\d{0,2})\s*[\-\–\—to,]+\s*(\d{1,2}:\d{2}:?\d{0,2})", # 01:23 - 01:45
-        r'''\"?start\"?[\"':\s]+[\"']?(\d+\.?\d*m?s?)[\"']?[\s,]*\"?end\"?[\"':\s]+[\"']?(\d+\.?\d*m?s?)[\"']?''', # Quote-resilient
-    ]
-    
-    def time_to_sec(ts):
-        ts = str(ts).lower().replace("s", "").replace("m", "").strip()
-        if ":" not in ts: return float(ts)
-        parts = ts.split(":")
-        if len(parts) == 3: return int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
-        return int(parts[0])*60 + float(parts[1])
+    # strategy 3: Key-Value Regex Extractor (for JSON objects with minor syntax flaws)
+    extracted_kv = {}
+    known_keys = ["emojis", "answer", "hint", "script", "title", "story", "hook", "loop_lead", "question", "options", "quote", "author"]
+    for key in known_keys:
+        m = re.search(r'"' + key + r'"\s*:\s*"([^"]*)"', output)
+        if not m:
+            m = re.search(r'"' + key + r'"\s*:\s*"(.*?)"(?=[,\s\}])', output, re.DOTALL)
+        if m:
+            extracted_kv[key] = m.group(1).replace('\\"', '"').strip()
 
-    segments = []
-    for p in patterns:
-        matches = re.findall(p, output, re.IGNORECASE)
-        for m in matches:
-            try:
-                s_str = m[0] if isinstance(m, tuple) else m
-                e_str = m[1] if isinstance(m, tuple) else ""
-                if not e_str: continue 
-                s_val = time_to_sec(s_str)
-                e_val = time_to_sec(e_str)
-                if e_val > s_val:
-                    if not any(s['start'] == s_val and s['end'] == e_val for s in segments):
-                        segments.append({"start": s_val, "end": e_val, "viral_score": 75, "reason": "High-Impact Sequence"})
-            except: continue
+    if extracted_kv and len(extracted_kv) >= 2:
+        print(f"[Log] Extracted {len(extracted_kv)} key-value fields via Regex.")
+        return extracted_kv
+
+    # strategy 4: Regex Timestamp/Segment Recovery (Only for Video Clipping Outputs)
+    if any(k in output.lower() for k in ["start", "end", "timestamp", "segment", "highlight", "viral"]):
+        print("[Log] Attempting Regex timestamp segment recovery...")
+        patterns = [
+            r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
+            r"(\d{1,2}:\d{2}:?\d{0,2})\s*[\-\–\—to,]+\s*(\d{1,2}:\d{2}:?\d{0,2})", # 01:23 - 01:45
+            r'''\"?start\"?[\"':\s]+[\"']?(\d+\.?\d*m?s?)[\"']?[\s,]*\"?end\"?[\"':\s]+[\"']?(\d+\.?\d*m?s?)[\"']?''', # Quote-resilient
+        ]
+        
+        def time_to_sec(ts):
+            ts = str(ts).lower().replace("s", "").replace("m", "").strip()
+            if ":" not in ts: return float(ts)
+            parts = ts.split(":")
+            if len(parts) == 3: return int(parts[0])*3600 + int(parts[1])*60 + float(parts[2])
+            return int(parts[0])*60 + float(parts[1])
+
+        segments = []
+        for p in patterns:
+            matches = re.findall(p, output, re.IGNORECASE)
+            for m in matches:
+                try:
+                    s_str = m[0] if isinstance(m, tuple) else m
+                    e_str = m[1] if isinstance(m, tuple) else ""
+                    if not e_str: continue 
+                    s_val = time_to_sec(s_str)
+                    e_val = time_to_sec(e_str)
+                    if e_val > s_val:
+                        if not any(s['start'] == s_val and s['end'] == e_val for s in segments):
+                            segments.append({"start": s_val, "end": e_val, "viral_score": 75, "reason": "High-Impact Sequence"})
+                except: continue
+        
+        if segments: 
+            return {"highlights": segments, "segments": segments}
     
-    if segments: 
-        return {"highlights": segments, "segments": segments}
-    
-    # strategy 4: Emergency Plaintext Fallback
+    # strategy 5: Emergency Plaintext Fallback
     clean_output = output.strip()
     if len(clean_output) > 20 and "error" not in clean_output.lower():
         print("[Log] JSON/Regex failed. Returning raw text as emergency fallback.")
@@ -1002,6 +1030,11 @@ JSON Structure:
 
     return with_best_of_n(llm_call, validate_quote, n=3)
 
+def validate_emoji_guess(data):
+    if not isinstance(data, dict): return False
+    return bool(data.get("emojis") and data.get("answer") and data.get("script"))
+
+
 def generate_emoji_guess(category="movies"):
     """
     Generates an Emoji Guess puzzle (Movie, Character, Song, or Pop Culture item).
@@ -1024,18 +1057,23 @@ JSON Structure ONLY:
   "script": "Can you guess this movie from these emojis? You have 5 seconds on the clock! Write your answer in the comments right now! No cheating!"
 }}
 """
-    try:
+    def llm_call(attempt):
         response_text = get_llm_response(prompt, temperature=0.7, max_tokens=600)
         data = robust_json_parse(response_text)
-    except Exception as e:
-        raise RuntimeError(f"LLM generation for EMOJI_GUESS failed: {e}")
+        if isinstance(data, list) and len(data) > 0:
+            for item in data:
+                if isinstance(item, dict) and item.get("emojis") and item.get("answer"):
+                    return item
+            return data[0]
+        return data
 
-    if not data or not data.get("emojis") or not data.get("answer") or not data.get("script"):
-        raise RuntimeError(f"Invalid EMOJI_GUESS payload generated by LLM (missing emojis, answer, or script): {data}")
+    res = with_best_of_n(llm_call, validate_emoji_guess, n=3)
+    if not res or not validate_emoji_guess(res):
+        raise RuntimeError(f"Invalid EMOJI_GUESS payload generated by LLM (missing emojis, answer, or script): {res}")
 
-    ans_safe = str(data.get('answer')).encode('ascii', 'ignore').decode('ascii')
+    ans_safe = str(res.get('answer')).encode('ascii', 'ignore').decode('ascii')
     print(f"[Log] EMOJI_GUESS generated answer (hidden in audio): {ans_safe}")
-    return data
+    return res
 
 
 def generate_funny_news(category="general", tone="funny", persona=None):
