@@ -655,10 +655,10 @@ def _clean_json_string(s):
     import re
     # 1. Remove control characters
     s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', s)
-    # 2. Fix unescaped newlines/tabs inside strings (heuristic)
+    # 2. Fix unescaped newlines/tabs inside strings (properly skipping escaped quotes \")
     def fix_whitespace(m):
         return m.group(0).replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
-    s = re.sub(r'"[^"]*?"', fix_whitespace, s, flags=re.DOTALL)
+    s = re.sub(r'"(?:[^"\\]|\\.)*?"', fix_whitespace, s, flags=re.DOTALL)
     # 3. Strip comments
     s = re.sub(r'//.*?\n', '', s)
     s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
@@ -674,7 +674,19 @@ def robust_json_parse(output):
     # Strip reasoning <think>...</think> blocks from models like Qwen3 / DeepSeek-R1
     output = re.sub(r'<think>.*?</think>', '', output, flags=re.DOTALL).strip()
     if not output: return None
-    
+
+    def try_parse(candidate):
+        if not candidate: return None
+        try:
+            return json.loads(candidate)
+        except Exception:
+            pass
+        try:
+            return json.loads(_clean_json_string(candidate))
+        except Exception:
+            pass
+        return None
+
     def get_balanced(text):
         start_idx = -1
         for i, char in enumerate(text):
@@ -717,20 +729,16 @@ def robust_json_parse(output):
         if output[i] == '{':
             candidate = get_balanced(output[i:])
             if candidate:
-                try:
-                    obj = json.loads(_clean_json_string(candidate))
-                    if isinstance(obj, dict) and any(k in obj for k in known_keys):
-                        return obj
-                except Exception:
-                    continue
+                obj = try_parse(candidate)
+                if isinstance(obj, dict) and any(k in obj for k in known_keys):
+                    return obj
 
     # strategy 2: Direct Balanced Clean & Parse Fallback
     json_candidate = get_balanced(output)
     if json_candidate:
-        try:
-            return json.loads(_clean_json_string(json_candidate))
-        except:
-            pass
+        obj = try_parse(json_candidate)
+        if obj is not None:
+            return obj
             
     # strategy 3: Greedy Recovery (for Fragmented or Large Lists)
     collected_objects = []
