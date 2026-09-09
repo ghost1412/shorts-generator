@@ -1079,7 +1079,7 @@ def validate_emoji_guess(data):
     return normalize_emoji_guess(data) is not None
 
 
-def generate_emoji_guess(category="movies"):
+def generate_emoji_guess(category="movies", max_tokens=600):
     """
     Generates an Emoji Guess puzzle (Movie, Character, Song, or Pop Culture item).
     Returns: {"emojis": str, "answer": str, "hint": str, "script": str}
@@ -1102,7 +1102,7 @@ JSON Structure ONLY:
 }}
 """
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=600)
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=max_tokens)
         data = robust_json_parse(response_text)
         if isinstance(data, list) and len(data) > 0:
             for item in data:
