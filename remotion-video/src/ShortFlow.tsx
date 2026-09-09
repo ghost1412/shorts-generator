@@ -12,7 +12,15 @@ import {
 import React from "react";
 import { z } from "zod";
 
-// --- SCHEMAS ---
+// --- HELPER FOR SAFE ASSET URLS ---
+const getAssetUrl = (url: string | undefined | null) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+  return staticFile(url);
+};
+
 export const wordSchema = z.object({
   word: z.string(),
   start: z.number(), // in seconds
@@ -330,14 +338,14 @@ const BackgroundSegment: React.FC<{
     <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center", opacity }}>
       {bg.type === "video" ? (
         <OffthreadVideo
-          src={staticFile(bg.path)}
+          src={getAssetUrl(bg.path)}
           muted
           loop
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (
         <Img
-          src={staticFile(bg.path)}
+          src={getAssetUrl(bg.path)}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       )}
@@ -547,11 +555,11 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   return (
     <AbsoluteFill style={{ backgroundColor: "#0b0c10", overflow: "hidden" }}>
       {/* 1. PRIMARY VOICE AUDIO */}
-      <Audio src={staticFile(audioUrl)} />
+      <Audio src={getAssetUrl(audioUrl)} />
 
       {/* 2. OPTIONAL BACKGROUND MUSIC */}
       {bgMusicUrl && (
-        <Audio src={staticFile(bgMusicUrl)} volume={currentVolume} loop />
+        <Audio src={getAssetUrl(bgMusicUrl)} volume={currentVolume} loop />
       )}
 
       {/* 3. DYNAMIC BACKGROUND LAYOUTS */}
@@ -562,14 +570,14 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           <div style={{ flex: 1, position: "relative", overflow: "hidden", borderBottom: "8px solid #ff007f" }}>
             {isVideoAsset(thisOrThat.imageA) ? (
               <OffthreadVideo
-                src={staticFile(thisOrThat.imageA)}
+                src={getAssetUrl(thisOrThat.imageA)}
                 muted
                 loop
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
               <Img
-                src={staticFile(thisOrThat.imageA)}
+                src={getAssetUrl(thisOrThat.imageA)}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             )}
@@ -606,14 +614,14 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
             {isVideoAsset(thisOrThat.imageB) ? (
               <OffthreadVideo
-                src={staticFile(thisOrThat.imageB)}
+                src={getAssetUrl(thisOrThat.imageB)}
                 muted
                 loop
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
               <Img
-                src={staticFile(thisOrThat.imageB)}
+                src={getAssetUrl(thisOrThat.imageB)}
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             )}
@@ -691,7 +699,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   {/* Large Central Image */}
                   <div style={{ width: "900px", height: "900px", borderRadius: "30px", overflow: "hidden", boxShadow: "0 25px 50px rgba(0,0,0,0.6)", border: "6px solid #ffd700" }}>
                     <Img
-                      src={staticFile(item.image)}
+                      src={getAssetUrl(item.image)}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   </div>
@@ -752,7 +760,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           {/* Main Weird Image */}
           <div style={{ width: "950px", height: "950px", borderRadius: "40px", overflow: "hidden", border: "8px solid #ff007f", boxShadow: "0 30px 60px rgba(0,0,0,0.7)" }}>
             <Img
-              src={staticFile(captionThis.image)}
+              src={getAssetUrl(captionThis.image)}
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           </div>

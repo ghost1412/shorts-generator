@@ -66,6 +66,19 @@ def render_with_remotion(
     remotion_dir = os.path.join(project_root, "remotion-video")
     public_dir = os.path.join(remotion_dir, "public")
     
+    # Clean up stale temp asset folders older than 30 mins to keep public directory small
+    temp_assets_parent = os.path.join(public_dir, "temp_assets")
+    if os.path.exists(temp_assets_parent):
+        now_ts = time.time()
+        for item in os.listdir(temp_assets_parent):
+            item_path = os.path.join(temp_assets_parent, item)
+            if os.path.isdir(item_path) and item.startswith("run_"):
+                try:
+                    if now_ts - os.path.getmtime(item_path) > 1800:
+                        shutil.rmtree(item_path, ignore_errors=True)
+                except Exception:
+                    pass
+
     run_id = f"run_{int(time.time())}_{uuid.uuid4().hex[:6]}"
     run_assets_dir = os.path.join(public_dir, "temp_assets", run_id)
     os.makedirs(run_assets_dir, exist_ok=True)
@@ -238,25 +251,36 @@ def render_with_remotion(
         ]
 
         
-        # Run process cross-platform (shell=True on Windows requires string command; shell=False on Linux requires list)
+        # Run process cross-platform with real-time pipe streaming to prevent EPIPE buffer exhaustion
         is_win = sys.platform == "win32"
         exec_cmd = " ".join(cmd) if is_win else cmd
 
-        result = subprocess.run(
+        process = subprocess.Popen(
             exec_cmd,
             cwd=remotion_dir,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            shell=is_win
+            shell=is_win,
+            bufsize=1
         )
         
-        if result.returncode != 0:
+        output_lines = []
+        if process.stdout:
+            for line in process.stdout:
+                output_lines.append(line)
+                sys.stdout.write(line)
+                sys.stdout.flush()
+
+        process.wait()
+        returncode = process.returncode
+        full_output = "".join(output_lines)
+        
+        if returncode != 0:
             print("[RemotionRenderer] Remotion CLI Error Output:")
-            print(result.stderr)
-            print(result.stdout)
-            raise RuntimeError(f"Remotion render failed with code {result.returncode}: {result.stderr[:300]}")
+            print(full_output)
+            raise RuntimeError(f"Remotion render failed with code {returncode}: {full_output[-300:]}")
             
         # 7. Move output to final location
         if os.path.exists(render_output):
@@ -264,11 +288,9 @@ def render_with_remotion(
             print(f"[RemotionRenderer] SUCCESS! Rendered video saved to: {output_path}")
             return output_path
         else:
-            print("[RemotionRenderer] Remotion CLI Stdout Output:")
-            print(result.stdout)
-            print("[RemotionRenderer] Remotion CLI Stderr Output:")
-            print(result.stderr)
-            raise FileNotFoundError(f"Render output {out_filename} was not found at {render_output}. Remotion stdout: {result.stdout[:300]}")
+            print("[RemotionRenderer] Remotion CLI Output:")
+            print(full_output)
+            raise FileNotFoundError(f"Render output {out_filename} was not found at {render_output}. Output: {full_output[-300:]}")
             
     finally:
         # Clean up temporary public assets directory to save disk space
