@@ -11,6 +11,8 @@ assets/voice.mp3
 assets/subs.json
 *.png
 *.mp4
+!assets/avatars/*.mp4
+!assets/avatars/*.png
 *.mp4.txt
 *.json
 !package.json
@@ -42,7 +44,9 @@ dist/
 .vscode/
 .idea/
 
-assets*
+assets/temp_*
+!assets/avatars/
+!assets/avatars/*
 sessions*
 test_manim_output/
 PROMOTION_GUIDE.md

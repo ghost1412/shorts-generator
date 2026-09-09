@@ -1404,7 +1404,7 @@ if args.use_ai_audio:
 avatar_path = None
 selected_persona = args.persona if args.persona else ("mafia_cat" if (args.cartoon or mode in ("NEWS", "NEWS_SERIOUS")) else None)
 if selected_persona:
-    for ext in [".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov"]:
+    for ext in [".mp4", ".mov", ".webm", ".png", ".jpg", ".jpeg", ".webp"]:
         p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
         if os.path.exists(p_path):
             avatar_path = p_path

@@ -887,27 +887,40 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         captionStyle={captionStyle}
       />
 
-      {/* 6. CARTOON AVATAR OVERLAY (Animated talking avatar) */}
+      {/* 6. CARTOON AVATAR OVERLAY (Centered Bottom TV / News Anchor) */}
       {avatarUrl && (
         <div
           style={{
             position: "absolute",
             bottom: "80px",
-            left: "40px",
+            left: "50%",
             zIndex: 45,
-            transform: `scale(${isSpeaking ? 1.06 + Math.sin(frame * 0.4) * 0.04 : 1.0})`,
+            width: "360px",
+            height: "240px",
+            borderRadius: "24px",
+            overflow: "hidden",
+            border: "5px solid #ffffff",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.8)",
+            transform: `translateX(-50%) scale(${isSpeaking ? 1.04 + Math.sin(frame * 0.4) * 0.03 : 1.0})`,
             transition: "transform 0.05s ease-out",
           }}
         >
-          <Img
-            src={getAssetUrl(avatarUrl)}
-            style={{
-              width: "250px",
-              height: "250px",
-              objectFit: "contain",
-              filter: "drop-shadow(0 15px 25px rgba(0,0,0,0.7))",
-            }}
-          />
+          {isVideoAsset(avatarUrl) ? (
+            <OffthreadVideo
+              src={getAssetUrl(avatarUrl)}
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <Img
+              src={getAssetUrl(avatarUrl)}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+          )}
         </div>
       )}
 
