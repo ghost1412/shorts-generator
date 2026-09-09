@@ -1435,7 +1435,12 @@ def create_emoji_guess_video(audio_path, subs_path, emoji_data, bg_video_paths, 
         elif hasattr(bg_clip, 'crop'):
             bg_clip = bg_clip.crop(x_center=bg_clip.w/2, width=1080)
 
-    bg_clip = bg_clip.fl_image(lambda img: (img * 0.45).astype('uint8'))
+    if hasattr(bg_clip, 'fl_image'):
+        bg_clip = bg_clip.fl_image(lambda img: (img * 0.45).astype('uint8'))
+    elif hasattr(bg_clip, 'image_transform'):
+        bg_clip = bg_clip.image_transform(lambda img: (img * 0.45).astype('uint8'))
+    elif hasattr(bg_clip, 'transform'):
+        bg_clip = bg_clip.transform(lambda img: (img * 0.45).astype('uint8'))
 
     sub_clips = generate_word_subtitles(subs_path, duration) if os.path.exists(subs_path) else []
 
