@@ -202,7 +202,7 @@ def render_with_remotion(
         
         # 6. Execute Remotion render with thread-safe output filename
         out_filename = f"out_{run_id}.mp4"
-        render_output = os.path.join(remotion_dir, out_filename)
+        render_output = os.path.abspath(os.path.join(remotion_dir, out_filename))
         if os.path.exists(render_output):
             os.remove(render_output)
             
@@ -227,7 +227,7 @@ def render_with_remotion(
         cmd = [
             "npx", "remotion", "render",
             "ShortFlow",
-            out_filename,
+            render_output,
             f"--props={props_filename}",
             f"--frames=0-{duration_frames - 1}",
             "--codec=h264",
@@ -254,7 +254,8 @@ def render_with_remotion(
         if result.returncode != 0:
             print("[RemotionRenderer] Remotion CLI Error Output:")
             print(result.stderr)
-            raise RuntimeError(f"Remotion render failed with code {result.returncode}")
+            print(result.stdout)
+            raise RuntimeError(f"Remotion render failed with code {result.returncode}: {result.stderr[:300]}")
             
         # 7. Move output to final location
         if os.path.exists(render_output):
@@ -262,7 +263,11 @@ def render_with_remotion(
             print(f"[RemotionRenderer] SUCCESS! Rendered video saved to: {output_path}")
             return output_path
         else:
-            raise FileNotFoundError(f"Render succeeded but output {out_filename} was not found.")
+            print("[RemotionRenderer] Remotion CLI Stdout Output:")
+            print(result.stdout)
+            print("[RemotionRenderer] Remotion CLI Stderr Output:")
+            print(result.stderr)
+            raise FileNotFoundError(f"Render output {out_filename} was not found at {render_output}. Remotion stdout: {result.stdout[:300]}")
             
     finally:
         # Clean up temporary public assets directory to save disk space

@@ -710,7 +710,21 @@ def robust_json_parse(output):
             return recovered
         return None
 
-    # strategy 1: Direct Balanced Clean & Parse
+    known_keys = ["emojis", "answer", "script", "title", "story", "facts", "question", "options", "quote", "author", "highlights", "segments", "hint", "hook", "loop_lead"]
+
+    # strategy 1: Prioritized Key-Matching (Find balanced JSON object containing valid schema keys)
+    for i in range(len(output)):
+        if output[i] == '{':
+            candidate = get_balanced(output[i:])
+            if candidate:
+                try:
+                    obj = json.loads(_clean_json_string(candidate))
+                    if isinstance(obj, dict) and any(k in obj for k in known_keys):
+                        return obj
+                except Exception:
+                    continue
+
+    # strategy 2: Direct Balanced Clean & Parse Fallback
     json_candidate = get_balanced(output)
     if json_candidate:
         try:
@@ -718,7 +732,7 @@ def robust_json_parse(output):
         except:
             pass
             
-    # strategy 2: Greedy Recovery (for Fragmented or Large Lists)
+    # strategy 3: Greedy Recovery (for Fragmented or Large Lists)
     collected_objects = []
     # Find every starting '{' and try to extract a balanced object
     for i in range(len(output)):
@@ -750,8 +764,8 @@ def robust_json_parse(output):
         print(f"[Log] Extracted {len(extracted_kv)} key-value fields via Regex.")
         return extracted_kv
 
-    # strategy 4: Regex Timestamp/Segment Recovery (Only for Video Clipping Outputs)
-    if any(k in output.lower() for k in ['"start"', '"end"', '"timestamp"', '"segment"', '"highlight"', '"viral_score"', '00:', '01:']):
+    # strategy 4: Regex Timestamp/Segment Recovery (Only for Video Clipping / Slicer Outputs)
+    if any(k in output.lower() for k in ['"highlights"', '"segments"', '"viral_score"', '"start"', '"end"', 'timestamp']):
         print("[Log] Attempting Regex timestamp segment recovery...")
         patterns = [
             r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
