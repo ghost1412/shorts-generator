@@ -751,7 +751,7 @@ def robust_json_parse(output):
         return extracted_kv
 
     # strategy 4: Regex Timestamp/Segment Recovery (Only for Video Clipping Outputs)
-    if any(k in output.lower() for k in ["start", "end", "timestamp", "segment", "highlight", "viral"]):
+    if any(k in output.lower() for k in ['"start"', '"end"', '"timestamp"', '"segment"', '"highlight"', '"viral_score"', '00:', '01:']):
         print("[Log] Attempting Regex timestamp segment recovery...")
         patterns = [
             r"(\d+\.?\d*)\s*s?\s*[\-\–\—to,:]+\s*(\d+\.?\d*)\s*s?", # 10.5s - 20.1s
