@@ -186,12 +186,13 @@ def render_with_remotion(
         # Calculate duration in frames (30fps)
         duration_frames = int(duration * 30)
         
-        # 6. Execute Remotion render
-        render_output = os.path.join(remotion_dir, "out.mp4")
+        # 6. Execute Remotion render with thread-safe output filename
+        out_filename = f"out_{run_id}.mp4"
+        render_output = os.path.join(remotion_dir, out_filename)
         if os.path.exists(render_output):
             os.remove(render_output)
             
-        print(f"[RemotionRenderer] Rendering {duration:.2f}s ({duration_frames} frames) to out.mp4...")
+        print(f"[RemotionRenderer] Rendering {duration:.2f}s ({duration_frames} frames) to {out_filename}...")
         
         # Check if GPU encoding (h264-nvenc) is available
         import imageio_ffmpeg
@@ -212,7 +213,7 @@ def render_with_remotion(
         cmd = [
             "npx", "remotion", "render",
             "ShortFlow",
-            "out.mp4",
+            out_filename,
             f"--props={props_filename}",
             f"--frames=0-{duration_frames - 1}",
             "--codec=h264",
@@ -244,7 +245,7 @@ def render_with_remotion(
             print(f"[RemotionRenderer] SUCCESS! Rendered video saved to: {output_path}")
             return output_path
         else:
-            raise FileNotFoundError("Render succeeded but output out.mp4 was not found.")
+            raise FileNotFoundError(f"Render succeeded but output {out_filename} was not found.")
             
     finally:
         # Clean up temporary public assets directory to save disk space
