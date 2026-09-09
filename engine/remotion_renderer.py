@@ -238,8 +238,17 @@ def render_with_remotion(
             print("[RemotionRenderer] No NVIDIA GPU detected: Using standard CPU-based encoding.")
 
         # Trigger npx remotion render
-        gl_flag = "--hardware-acceleration=if-possible" if use_nvenc else "--gl=angle"
-        concurrency_flag = "--concurrency=2" if use_nvenc else "--concurrency=1"
+        is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+        
+        if use_nvenc:
+            gl_flag = "--hardware-acceleration=if-possible"
+            concurrency_flag = "--concurrency=2"
+        elif is_ci:
+            gl_flag = "--gl=angle"
+            concurrency_flag = "--concurrency=1"
+        else:
+            gl_flag = "--gl=angle"
+            concurrency_flag = "--concurrency=50%"
 
         cmd = [
             "npx", "remotion", "render",
