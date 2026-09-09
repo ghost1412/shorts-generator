@@ -238,6 +238,9 @@ def render_with_remotion(
             print("[RemotionRenderer] No NVIDIA GPU detected: Using standard CPU-based encoding.")
 
         # Trigger npx remotion render
+        gl_flag = "--hardware-acceleration=if-possible" if use_nvenc else "--gl=angle"
+        concurrency_flag = "--concurrency=2" if use_nvenc else "--concurrency=1"
+
         cmd = [
             "npx", "remotion", "render",
             "ShortFlow",
@@ -245,9 +248,10 @@ def render_with_remotion(
             f"--props={props_filename}",
             f"--frames=0-{duration_frames - 1}",
             "--codec=h264",
-            "--hardware-acceleration=if-possible",
-            "--timeout=120000",
-            "--concurrency=2"
+            gl_flag,
+            "--chromium-options=--no-sandbox --disable-dev-shm-usage",
+            "--timeout=180000",
+            concurrency_flag
         ]
 
         
