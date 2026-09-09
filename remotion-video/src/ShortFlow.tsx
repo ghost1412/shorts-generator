@@ -50,12 +50,18 @@ export const captionThisSchema = z.object({
   promptText: z.string(),
 });
 
+export const emojiGuessSchema = z.object({
+  emojis: z.string(),
+  answer: z.string(),
+  hint: z.string().optional(),
+});
+
 export const shortFlowSchema = z.object({
   audioUrl: z.string(),
   bgMusicUrl: z.string().optional(),
   bgMusicVolume: z.number().default(0.15),
   words: z.array(wordSchema),
-  mode: z.enum(["FACTS", "STORY", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS", "NEWS", "NEWS_SERIOUS", "RIDDLE"]),
+  mode: z.enum(["FACTS", "STORY", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS", "NEWS", "NEWS_SERIOUS", "RIDDLE", "EMOJI_GUESS"]),
   category: z.string().default("general"),
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
@@ -65,6 +71,7 @@ export const shortFlowSchema = z.object({
   thisOrThat: thisOrThatSchema.optional(),
   rankIt: rankItSchema.optional(),
   captionThis: captionThisSchema.optional(),
+  emojiGuess: emojiGuessSchema.optional(),
 });
 
 type ShortFlowProps = z.infer<typeof shortFlowSchema>;
@@ -338,6 +345,172 @@ const BackgroundSegment: React.FC<{
   );
 };
 
+const EmojiGuessOverlay: React.FC<{
+  emojis: string;
+  answer: string;
+  hint?: string;
+  fps: number;
+}> = ({ emojis, answer, hint, fps }) => {
+  const frame = useCurrentFrame();
+  const timeInSeconds = frame / fps;
+
+  const revealTime = 5.0;
+  const isRevealed = timeInSeconds >= revealTime;
+  const countdownSec = Math.max(0, Math.ceil(revealTime - timeInSeconds));
+
+  const pulseScale = interpolate(
+    frame % 30,
+    [0, 15, 30],
+    [1.0, 1.06, 1.0],
+    { extrapolateRight: "clamp" }
+  );
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "0px",
+        left: "0px",
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        padding: "40px",
+        zIndex: 35,
+      }}
+    >
+      {hint && (
+        <div
+          style={{
+            position: "absolute",
+            top: "220px",
+            background: "linear-gradient(135deg, #ff007f, #7928ca)",
+            border: "4px solid #ffffff",
+            borderRadius: "50px",
+            padding: "16px 45px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.6)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "Impact, Arial Black, sans-serif",
+              fontSize: "48px",
+              color: "#ffffff",
+              letterSpacing: "2px",
+              textTransform: "uppercase",
+            }}
+          >
+            💡 {hint}
+          </span>
+        </div>
+      )}
+
+      <div
+        style={{
+          transform: `scale(${pulseScale})`,
+          background: "rgba(15, 23, 42, 0.88)",
+          backdropFilter: "blur(16px)",
+          border: "6px solid #00f2fe",
+          borderRadius: "40px",
+          padding: "40px 60px",
+          boxShadow: "0 25px 60px rgba(0, 242, 254, 0.4)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          marginBottom: "60px",
+        }}
+      >
+        <span
+          style={{
+            fontSize: "110px",
+            letterSpacing: "15px",
+            filter: "drop-shadow(0 10px 20px rgba(0,0,0,0.8))",
+          }}
+        >
+          {emojis}
+        </span>
+      </div>
+
+      {!isRevealed ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            background: "rgba(0, 0, 0, 0.8)",
+            border: "5px solid #ff0055",
+            borderRadius: "30px",
+            padding: "20px 50px",
+            boxShadow: "0 10px 30px rgba(255, 0, 85, 0.5)",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "Impact, Arial Black, sans-serif",
+              fontSize: "36px",
+              color: "#ff0055",
+              textTransform: "uppercase",
+              letterSpacing: "2px",
+            }}
+          >
+            GUESS THE ANSWER IN...
+          </span>
+          <span
+            style={{
+              fontFamily: "Impact, Arial Black, sans-serif",
+              fontSize: "100px",
+              color: "#ffffff",
+              textShadow: "0 0 20px #ff0055",
+              marginTop: "5px",
+            }}
+          >
+            ⏱️ {countdownSec}s
+          </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            background: "linear-gradient(135deg, #FF007F, #7928CA)",
+            border: "6px solid #ffffff",
+            borderRadius: "30px",
+            padding: "30px 60px",
+            boxShadow: "0 20px 50px rgba(255,0,127,0.7)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "Impact, Arial Black, sans-serif",
+              fontSize: "44px",
+              color: "#ffff00",
+              textTransform: "uppercase",
+              letterSpacing: "2px",
+            }}
+          >
+            💬 WRITE YOUR GUESS
+          </span>
+          <span
+            style={{
+              fontFamily: "Impact, Arial Black, sans-serif",
+              fontSize: "55px",
+              color: "#ffffff",
+              textShadow: "2px 4px 10px rgba(0,0,0,0.5)",
+              marginTop: "10px",
+            }}
+          >
+            IN THE COMMENTS BELOW! 👇
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ShortFlow: React.FC<ShortFlowProps> = ({
   audioUrl,
   bgMusicUrl,
@@ -353,6 +526,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   thisOrThat,
   rankIt,
   captionThis,
+  emojiGuess,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -606,6 +780,37 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
               {captionThis.promptText}
             </span>
           </div>
+        </div>
+      ) : mode === "EMOJI_GUESS" && emojiGuess ? (
+        // EMOJI_GUESS interactive puzzle layout
+        <div style={{ width: "100%", height: "100%", position: "relative" }}>
+          {backgrounds.map((bg, idx) => {
+            const startFrame = Math.round(bg.start * fps);
+            const endFrame = Math.round(bg.end * fps);
+            const isLast = idx === backgrounds.length - 1;
+            const durationInFrames = Math.max(1, (endFrame - startFrame) + (isLast ? 0 : 15));
+
+            return (
+              <Sequence
+                key={idx}
+                from={startFrame}
+                durationInFrames={durationInFrames}
+              >
+                <BackgroundSegment
+                  bg={bg}
+                  fps={fps}
+                  durationInFrames={durationInFrames}
+                  isFirst={idx === 0}
+                />
+              </Sequence>
+            );
+          })}
+          <EmojiGuessOverlay
+            emojis={emojiGuess.emojis}
+            answer={emojiGuess.answer}
+            hint={emojiGuess.hint}
+            fps={fps}
+          />
         </div>
       ) : (
         // Standard modes (FACTS, STORY, NEWS, RIDDLE) with background loops

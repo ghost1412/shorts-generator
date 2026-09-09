@@ -1400,6 +1400,47 @@ def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.m
     
     return output_path
 
+def create_emoji_guess_video(audio_path, subs_path, emoji_data, bg_video_paths, output_path="emoji_guess_short.mp4", music_path=None, bitrate="12000k", preset="medium"):
+    """
+    Fallback MoviePy generator for EMOJI_GUESS mode.
+    """
+    try:
+        audio_clip = AudioFileClip(audio_path)
+    except Exception as e:
+        print(f"[Error] Failed to load main audio: {e}")
+        raise RuntimeError(f"Main audio file is unreadable: {audio_path}")
+
+    duration = audio_clip.duration
+    emojis = emoji_data.get("emojis", "🦁 👑")
+    answer = emoji_data.get("answer", "The Lion King")
+
+    bg_paths = bg_video_paths if isinstance(bg_video_paths, list) else [bg_video_paths]
+    bg_clip = VideoFileClip(bg_paths[0]).without_audio()
+    if bg_clip.duration < duration:
+        bg_clip = vfx.loop(bg_clip, duration=duration)
+    else:
+        bg_clip = bg_clip.subclip(0, duration)
+    bg_clip = bg_clip.resize(height=1920)
+    if bg_clip.w > 1080:
+        bg_clip = bg_clip.crop(x_center=bg_clip.w/2, width=1080)
+    bg_clip = bg_clip.fl_image(lambda img: (img * 0.45).astype('uint8'))
+
+    sub_clips = generate_word_subtitles(subs_path, duration) if os.path.exists(subs_path) else []
+
+    final_video = CompositeVideoClip([bg_clip] + sub_clips, size=(1080, 1920))
+
+    music_clip = apply_audio_ducking(audio_clip, music_path, duration)
+    if music_clip:
+        final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+        final_video = final_video.with_audio(final_audio)
+    else:
+        final_video = final_video.with_audio(audio_clip)
+
+    final_video = final_video.with_duration(duration)
+    print(f"[Log] Exporting EMOJI_GUESS fallback short: {output_path}")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
+    return output_path
+
 def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_path="reddit_short.mp4", music_path=None, bitrate="8000k", preset="medium"):
     """
     Composes a Reddit Story video with a static title overlay and dynamic subtitles.

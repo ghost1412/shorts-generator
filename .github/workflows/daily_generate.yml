@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Generation Mode (FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT, NEWS, NEWS_SERIOUS, RIDDLE)'
+        description: 'Generation Mode (FACTS, STORY, FIND_IT, WYR, EMOJI_GUESS, REDDIT, TRIVIA, QUOTE, ODD_ONE_OUT, NEWS, NEWS_SERIOUS, RIDDLE)'
         required: false
         default: 'AUTO'
       category:
@@ -57,11 +57,23 @@ on:
         description: 'Source Video URL for Extraction'
         required: false
         default: ''
+      use_remotion:
+        description: 'Use Remotion Engine (React dynamic animated captions)'
+        required: false
+        default: 'true'
+      caption_style:
+        description: 'Subtitle Preset (HORMOZI, GLOW_BOX, BOUNCE, MINIMAL, AUTO)'
+        required: false
+        default: 'AUTO'
+      runner_type:
+        description: 'Runner Environment (ubuntu-latest, self-hosted)'
+        required: false
+        default: 'ubuntu-latest'
 
 jobs:
   generate-and-post:
-    runs-on: ${{ github.event_name == 'workflow_dispatch' && 'self-hosted' || 'ubuntu-latest' }}
-    # Note: Using self-hosted for manual triggers, ubuntu-latest for cron fallback
+    runs-on: ${{ github.event.inputs.runner_type != '' && github.event.inputs.runner_type || (github.event_name == 'workflow_dispatch' && 'self-hosted' || 'ubuntu-latest') }}
+    # Selectable runner (ubuntu-latest or self-hosted) with fallback
 
     steps:
     - uses: actions/checkout@v4
@@ -70,6 +82,15 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+
+    - name: Set up Node.js (for Remotion React Video Engine)
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Remotion dependencies
+      working-directory: remotion-video
+      run: npm install
 
     - name: Cache dependencies and media
       uses: actions/cache@v4
@@ -110,8 +131,12 @@ jobs:
         echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
         echo "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" >> .env
         echo "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" >> .env
-        echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
-        echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
+        if [ -n "${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" ]; then
+          echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
+        fi
+        if [ -n "${{ secrets.GOOGLE_CLIENT_SECRETS }}" ]; then
+          echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
+        fi
 
     - name: Setup Environment Variables (Windows)
       if: runner.os == 'Windows'
@@ -120,8 +145,8 @@ jobs:
         "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" | Out-File -Append -Encoding ascii .env
         "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" | Out-File -Append -Encoding ascii .env
         "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" | Out-File -Append -Encoding ascii .env
-        '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' | Out-File -Encoding ascii token.json
-        '${{ secrets.GOOGLE_CLIENT_SECRETS }}' | Out-File -Encoding ascii client_secrets.json
+        if ("${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" -ne "") { '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' | Out-File -Encoding ascii token.json }
+        if ("${{ secrets.GOOGLE_CLIENT_SECRETS }}" -ne "") { '${{ secrets.GOOGLE_CLIENT_SECRETS }}' | Out-File -Encoding ascii client_secrets.json }
 
     - name: Run Video Generator (Windows)
       if: runner.os == 'Windows'
@@ -133,6 +158,9 @@ jobs:
         USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
+          $skip_upload = if (-not (Test-Path "token.json") -or (Get-Item "token.json").Length -eq 0) { "--skip-upload" } else { "" }
+          $use_remotion = if ("${{ github.event.inputs.use_remotion }}" -ne "false") { "--use_remotion" } else { "" }
+          $cap_style = if ("${{ github.event.inputs.caption_style }}" -ne "") { "${{ github.event.inputs.caption_style }}" } else { "AUTO" }
           $use_comfy = if ("${{ github.event.inputs.use_comfy }}" -eq "true") { "--use_comfy" } else { "" }
           $use_ai_audio = if ("${{ github.event.inputs.use_ai_audio }}" -eq "true") { "--use_ai_audio" } else { "" }
           $c_flag = if ("${{ github.event.inputs.cartoon }}" -eq "true" -or ("${{ github.event.inputs.mode }}" -like "*NEWS*")) { "--cartoon" } else { "" }
@@ -142,7 +170,11 @@ jobs:
           $s_val = if ("${{ github.event.inputs.custom_script }}" -ne "") { "${{ github.event.inputs.custom_script }}" } else { "" }
           $v_flag = if ("${{ github.event.inputs.source_video }}" -ne "") { "--source_video" } else { "" }
           $v_val = if ("${{ github.event.inputs.source_video }}" -ne "") { "${{ github.event.inputs.source_video }}" } else { "" }
-          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --user_id "${{ github.event.inputs.user_id }}" --video_id "${{ github.event.inputs.video_id }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val $v_flag $v_val
+          $u_flag = if ("${{ github.event.inputs.user_id }}" -ne "") { "--user_id" } else { "" }
+          $u_val = if ("${{ github.event.inputs.user_id }}" -ne "") { "${{ github.event.inputs.user_id }}" } else { "" }
+          $id_flag = if ("${{ github.event.inputs.video_id }}" -ne "") { "--video_id" } else { "" }
+          $id_val = if ("${{ github.event.inputs.video_id }}" -ne "") { "${{ github.event.inputs.video_id }}" } else { "" }
+          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" --caption_style $cap_style $use_remotion $skip_upload $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val $v_flag $v_val $u_flag $u_val $id_flag $id_val
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
@@ -155,12 +187,18 @@ jobs:
         USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
+        ARG_SKIP_UPLOAD=""
+        if [ ! -f "token.json" ] || [ ! -s "token.json" ]; then
+          ARG_SKIP_UPLOAD="--skip-upload"
+        fi
         ARG_MODE="${{ github.event.inputs.mode && github.event.inputs.mode != 'AUTO' && format('--mode {0}', github.event.inputs.mode) || '--mode AUTO' }}"
         ARG_CAT="${{ github.event.inputs.category && github.event.inputs.category != 'random' && format('--category {0}', github.event.inputs.category) || '' }}"
         ARG_VIBE="${{ github.event.inputs.vibe && github.event.inputs.vibe != 'suspense' && format('--vibe {0}', github.event.inputs.vibe) || '' }}"
         ARG_USER_ID="${{ github.event.inputs.user_id && format('--user_id {0}', github.event.inputs.user_id) || '' }}"
         ARG_VIDEO_ID="${{ github.event.inputs.video_id && format('--video_id {0}', github.event.inputs.video_id) || '' }}"
         ARG_SCRIPT="${{ github.event.inputs.custom_script && format('--script \"{0}\"', github.event.inputs.custom_script) || '' }}"
+        ARG_REMOTION="${{ github.event.inputs.use_remotion != 'false' && '--use_remotion' || '' }}"
+        ARG_CAPSTYLE="${{ github.event.inputs.caption_style && format('--caption_style {0}', github.event.inputs.caption_style) || '--caption_style AUTO' }}"
         ARG_COMFY="${{ github.event.inputs.use_comfy == 'true' && '--use_comfy' || '' }}"
         ARG_AUDIO="${{ github.event.inputs.use_ai_audio == 'true' && '--use_ai_audio' || '' }}"
         # Auto-enable cartoon for NEWS or NEWS_SERIOUS
@@ -170,4 +208,4 @@ jobs:
         ARG_PRESET="${{ github.event.inputs.preset && format('--preset {0}', github.event.inputs.preset) || '--preset medium' }}"
         ARG_SOURCE_VIDEO="${{ github.event.inputs.source_video && format('--source_video {0}', github.event.inputs.source_video) || '' }}"
         
-        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET $ARG_SOURCE_VIDEO
+        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_REMOTION $ARG_CAPSTYLE $ARG_SKIP_UPLOAD $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET $ARG_SOURCE_VIDEO

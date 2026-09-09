@@ -36,6 +36,7 @@ def render_with_remotion(
     this_or_that=None,  # dict: {"option_a": str, "option_b": str, "path_a": str, "path_b": str}
     rank_it=None,       # dict: {"items": list of str, "paths": list of str}
     caption_this=None,  # dict: {"image_path": str, "prompt_text": str}
+    emoji_guess=None,   # dict: {"emojis": str, "answer": str, "hint": str}
     duration=None,
     start_offset=0.0,
     caption_style="HORMOZI",
@@ -44,6 +45,18 @@ def render_with_remotion(
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
     """
+    valid_styles = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]
+    if not caption_style or caption_style.upper() in ["AUTO", "RANDOM"] or caption_style.upper() not in valid_styles:
+        if mode in ["NEWS", "NEWS_SERIOUS"]:
+            caption_style = "MINIMAL"
+        elif mode in ["RIDDLE", "THIS_OR_THAT"]:
+            caption_style = "BOUNCE"
+        else:
+            import random
+            caption_style = random.choice(valid_styles)
+    else:
+        caption_style = caption_style.upper()
+
     print(f"\n[RemotionRenderer] Initiating modern render pipeline for mode: {mode} (Caption Preset: {caption_style})...")
     
     # 1. Establish directory paths
@@ -176,6 +189,7 @@ def render_with_remotion(
         if remotion_tot: props["thisOrThat"] = remotion_tot
         if remotion_rank: props["rankIt"] = remotion_rank
         if remotion_cap: props["captionThis"] = remotion_cap
+        if emoji_guess: props["emojiGuess"] = emoji_guess
         
         # Write props to a JSON file inside remotion-video folder
         props_filename = f"temp_props_{run_id}.json"

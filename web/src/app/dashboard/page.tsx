@@ -59,6 +59,7 @@ export default function Dashboard() {
     { id: 'FACTS', label: 'Facts Mode', icon: <Eye size={16} />, color: 'text-cyan-400', category: 'Templates' },
     { id: 'STORY', label: 'Story Mode', icon: <Video size={16} />, color: 'text-orange-400', category: 'Templates' },
     { id: 'WYR', label: 'Would You Rather', icon: <Zap size={16} />, color: 'text-emerald-400', category: 'Games' },
+    { id: 'EMOJI_GUESS', label: '🧩 Emoji Guess', icon: <Sparkles size={16} />, color: 'text-amber-400', category: 'Games' },
     { id: 'REDDIT', label: 'Reddit Stories', icon: <ArrowRight size={16} />, color: 'text-red-400', category: 'Templates' },
     { id: 'TRIVIA', label: 'Genius Trivia', icon: <PlusCircle size={16} />, color: 'text-yellow-400', category: 'Games' },
     { id: 'QUOTE', label: 'Daily Quotes', icon: <Clock size={16} />, color: 'text-pink-400', category: 'Templates' },

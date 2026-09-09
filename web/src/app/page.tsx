@@ -96,6 +96,7 @@ export default function LandingPage() {
                   title: 'Interactive Games', 
                   modes: [
                     { id: 'WYR', label: 'Would You Rather', icon: <Zap size={32} />, color: 'text-emerald-400', desc: 'Psychology-based games.' },
+                    { id: 'EMOJI_GUESS', label: 'Emoji Guess', icon: <Sparkles size={32} />, color: 'text-amber-400', desc: 'Guess the movie from emojis.' },
                     { id: 'TRIVIA', label: 'Trivia', icon: <PlusCircle size={32} />, color: 'text-yellow-400', desc: 'Genius-level trivia.' },
                     { id: 'ODD_ONE_OUT', label: 'Odd One Out', icon: <Users size={32} />, color: 'text-indigo-400', desc: 'Visual attention tests.' },
                     { id: 'RIDDLE', label: 'Brain Riddles', icon: <Sparkles size={32} />, color: 'text-rose-400', desc: 'Lateral thinking challenges.' },

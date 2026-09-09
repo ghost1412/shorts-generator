@@ -95,7 +95,7 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE, ODD_ONE_OUT, or FILTER shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--prompt", help="Prompt for AI Music/Image generation.")
     parser.add_argument("--ckpt_name", default="stable_audio_3_medium_base.safetensors", help="Checkpoint name for ComfyUI audio model.")
     parser.add_argument("--category", help="Specify content category.")
@@ -152,7 +152,7 @@ def parse_args():
     parser.add_argument("--cartoon", action="store_true", help="Enable cartoon-style news persona.")
     parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
-    parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI).")
+    parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "AUTO", "RANDOM"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI).")
     parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for subtitles in Remotion (default: 1150).")
     parser.add_argument("--max_workers", type=int, default=None, help="Force number of parallel rendering worker threads (e.g. 2 or 4 for Remotion/FFmpeg).")
     
@@ -845,8 +845,8 @@ else:
     else:
         # 🟢 WINNER-HEAVY SELECTION: Facts (Spot the Lie) and News are 2x more likely than others
         mode = random.choices(
-            ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "EXPLAINER"],
-            weights=[20, 0, 0, 20, 5, 5, 0, 5, 10, 20, 0, 20, 30]
+            ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "EMOJI_GUESS", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "EXPLAINER"],
+            weights=[15, 0, 10, 15, 20, 5, 5, 0, 5, 10, 10, 0, 15, 20]
         )[0]
     if args.recap_title and not args.mode: mode = "MOVIE_RECAP"
     
@@ -1025,6 +1025,12 @@ else:
             full_script = f"{random.choice(intros)} ... 🔍 Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
             facts_data = []
             print(f"[Log] Game mode: {mode}", flush=True)
+        elif mode == "EMOJI_GUESS":
+            from engine.script_gen import generate_emoji_guess
+            emoji_data = generate_emoji_guess(category)
+            full_script = emoji_data.get("script", f"Can you guess this from emojis? {emoji_data.get('emojis')} ... 5 seconds on the clock! ... Answer is {emoji_data.get('answer')}!")
+            facts_data = []
+            print(f"[Log] EMOJI_GUESS Data: {emoji_data}")
         elif mode == "WYR":
             wyr_data = generate_wyr(category)
             full_script = f"Would you rather? 🔴 {wyr_data['option_a']} ... OR ... 🔵 {wyr_data['option_b']} ... ... What did you choose? Let me know in the comments!"
@@ -1144,7 +1150,7 @@ else:
     print(f"[Log] Selected voice for '{args.vibe}' vibe: {selected_voice}")
 
 # Voice CTA only for interactive/game modes
-add_cta = mode in ["FACTS", "WYR", "FIND_IT", "ODD_ONE_OUT", "TRIVIA", "GUESS_SOUND"]
+add_cta = mode in ["FACTS", "WYR", "FIND_IT", "ODD_ONE_OUT", "TRIVIA", "GUESS_SOUND", "EMOJI_GUESS"]
 audio_path, subs_path = generate_voice(
     full_script, 
     output_audio=voice_file, 
@@ -1166,9 +1172,9 @@ if not audio_path or not subs_path:
 print("[Log] Searching for relevant background videos...")
 bg_video_paths = []
 
-# 🧪 A/B EXPERIMENT: 60% chance to use local high-retention collection
+# 🧪 A/B EXPERIMENT: Disabled (defaults to Pexels / media_gen search)
 LOCAL_BG_DIR = "assets/backgrounds/local"
-is_local_experiment = random.random() < 0.8 if os.path.exists(LOCAL_BG_DIR) else False
+is_local_experiment = False
 local_bg_pool = []
 if is_local_experiment:
     local_bg_pool = [os.path.join(LOCAL_BG_DIR, f) for f in os.listdir(LOCAL_BG_DIR) if f.endswith(".mp4")]
@@ -1387,12 +1393,13 @@ if args.use_ai_audio:
     else:
         print("[Warning] AI Music generation failed, falling back to stock music.")
 
-remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR"]
+remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS"]
 if args.use_remotion and mode in remotion_supported_modes:
     from engine.remotion_renderer import render_with_remotion
     
     remotion_mode = mode
     this_or_that_data = None
+    emoji_guess_data = None
     
     if mode == "WYR":
         remotion_mode = "THIS_OR_THAT"
@@ -1404,6 +1411,12 @@ if args.use_remotion and mode in remotion_supported_modes:
             "path_a": path_a,
             "path_b": path_b
         }
+    elif mode == "EMOJI_GUESS":
+        emoji_guess_data = {
+            "emojis": emoji_data.get("emojis", "🦁 👑"),
+            "answer": emoji_data.get("answer", "The Lion King"),
+            "hint": emoji_data.get("hint", "")
+        }
     
     final_video = render_with_remotion(
         audio_path=audio_path,
@@ -1414,6 +1427,7 @@ if args.use_remotion and mode in remotion_supported_modes:
         title_text=args.recap_title or args.category or "ShortsFlow",
         background_paths=bg_video_paths,
         this_or_that=this_or_that_data,
+        emoji_guess=emoji_guess_data,
         caption_style=getattr(args, "caption_style", "HORMOZI")
     )
 else:
@@ -1435,6 +1449,18 @@ else:
         final_video = create_wyr_video(
             audio_path,
             wyr_data,
+            bg_video_paths,
+            output_filename,
+            music_path=bg_music,
+            bitrate=target_bitrate,
+            preset=target_preset
+        )
+    elif mode == "EMOJI_GUESS":
+        from engine.video_gen import create_emoji_guess_video
+        final_video = create_emoji_guess_video(
+            audio_path,
+            subs_path,
+            emoji_data,
             bg_video_paths,
             output_filename,
             music_path=bg_music,
