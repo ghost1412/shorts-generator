@@ -887,21 +887,21 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         captionStyle={captionStyle}
       />
 
-      {/* 6. CARTOON AVATAR OVERLAY (Centered Bottom TV / News Anchor) */}
+      {/* 6. CARTOON AVATAR OVERLAY (Big & Centered News Anchor / TV Window) */}
       {avatarUrl && (
         <div
           style={{
             position: "absolute",
-            bottom: "80px",
+            top: "50%",
             left: "50%",
             zIndex: 45,
-            width: "360px",
-            height: "240px",
-            borderRadius: "24px",
+            width: "900px",
+            height: "506px",
+            borderRadius: "32px",
             overflow: "hidden",
-            border: "5px solid #ffffff",
-            boxShadow: "0 20px 40px rgba(0,0,0,0.8)",
-            transform: `translateX(-50%) scale(${isSpeaking ? 1.04 + Math.sin(frame * 0.4) * 0.03 : 1.0})`,
+            border: "6px solid #ffffff",
+            boxShadow: "0 25px 60px rgba(0,0,0,0.85), 0 0 35px rgba(251,191,36,0.3)",
+            transform: `translate(-50%, -50%) scale(${isSpeaking ? 1.03 + Math.sin(frame * 0.4) * 0.02 : 1.0})`,
             transition: "transform 0.05s ease-out",
           }}
         >

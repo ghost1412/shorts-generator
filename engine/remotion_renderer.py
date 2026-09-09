@@ -56,7 +56,7 @@ def render_with_remotion(
         else:
             import random
             caption_style = random.choice(valid_styles)
-    if subtitle_y_pos == 1150 and mode in ["EMOJI_GUESS", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS"]:
+    if subtitle_y_pos == 1150 and (avatar_path or mode in ["EMOJI_GUESS", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS"]):
         subtitle_y_pos = 1500
 
     print(f"\n[RemotionRenderer] Initiating modern render pipeline for mode: {mode} (Caption Preset: {caption_style})...")
