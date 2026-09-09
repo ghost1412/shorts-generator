@@ -98,8 +98,6 @@ const Subtitles: React.FC<{
   fps: number;
   captionStyle?: "HORMOZI" | "GLOW_BOX" | "BOUNCE" | "MINIMAL";
 }> = ({ words, currentTime, yPos, fps, captionStyle = "HORMOZI" }) => {
-  const frame = useCurrentFrame();
-  
   // Find current word index
   let currentWordIdx = words.findIndex(
     (w) => currentTime >= w.start && currentTime <= w.end
@@ -340,7 +338,6 @@ const BackgroundSegment: React.FC<{
         <OffthreadVideo
           src={getAssetUrl(bg.path)}
           muted
-          loop
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (
@@ -537,7 +534,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   emojiGuess,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames, width, height } = useVideoConfig();
+  const { fps, durationInFrames } = useVideoConfig();
   const currentTime = frame / fps;
   const durationInSeconds = durationInFrames / fps;
 
@@ -572,7 +569,6 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
               <OffthreadVideo
                 src={getAssetUrl(thisOrThat.imageA)}
                 muted
-                loop
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
@@ -616,7 +612,6 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
               <OffthreadVideo
                 src={getAssetUrl(thisOrThat.imageB)}
                 muted
-                loop
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
