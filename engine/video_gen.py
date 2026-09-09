@@ -534,6 +534,24 @@ def apply_stylish_captions(transcript_data, start_offset, end_offset, size=(1080
             
     return word_clips
 
+def generate_word_subtitles(subs_path, duration, y_pos=1500):
+    """Generates subtitle clips from a word-timestamped JSON file."""
+    if not subs_path or not os.path.exists(subs_path):
+        return []
+    try:
+        with open(subs_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            transcript_data = {"segments": [{"words": data, "start": 0, "end": duration}]}
+        elif isinstance(data, dict):
+            transcript_data = data
+        else:
+            return []
+        return apply_stylish_captions(transcript_data, 0, duration, y_pos=y_pos)
+    except Exception as e:
+        print(f"[Warning] Failed to generate word subtitles from {subs_path}: {e}")
+        return []
+
 def color_shift_green_kill(get_frame, t, duration):
     """Gradually kills the green channel to transition Yellow (255,255,0) -> Red (255,0,0)."""
     frame = get_frame(t)
