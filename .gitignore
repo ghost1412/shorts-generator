@@ -13,6 +13,13 @@ assets/subs.json
 *.mp4
 *.mp4.txt
 *.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!**/package.json
+!**/package-lock.json
+!**/tsconfig.json
+remotion-video/temp_props_*.json
 *.mp3
 actions-runner/*
 
