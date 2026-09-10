@@ -72,9 +72,11 @@ docker compose up -d
 
 ## 🖥️ Graphical User Interfaces & Usability
 
-ShortsFlow AI Studio provides a **sleek, single-window 3-column Studio interface**:
+ShortsFlow AI Studio features a **sleek, single-window 3-column Studio UI**:
 
-![ShortsFlow AI Studio GUI](demos/ui_studio_preview.png)
+<div align="center">
+  <img src="demos/ui_studio_preview.png" width="100%" alt="ShortsFlow AI Studio GUI Preview" />
+</div>
 
 ### 1. 🖥️ Standalone Desktop GUI Studio (Easiest)
 - **Launch Command**: `launch.bat` (Option 1) or `python gui_app.py`
