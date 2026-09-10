@@ -31,7 +31,9 @@ VIBE_VOICE_MAP = {
     "suspense": "en-US-ChristopherNeural", # Deep, intense
     "spooky": "en-US-AndrewNeural",       # Atmospheric
     "cinematic": "en-GB-SoniaNeural",      # Sophisticated narrator
-    "upbeat": "en-US-AvaNeural"             # Energetic, modern
+    "upbeat": "en-US-AvaNeural",            # Energetic, modern
+    "sarcastic": "en-US-GuyNeural",         # Witty, punchy sarcastic male narrator
+    "funny": "en-US-ChristopherNeural"      # High-energy comedy commentator
 }
 
 CARTOON_VOICE_MAP = {
@@ -95,12 +97,17 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE, ODD_ONE_OUT, or FILTER shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--scene", help="Scene or scenario prompt for FUNNY_EXPLAINER mode.")
+    parser.add_argument("--photos_dir", help="Directory containing photos for PHOTO_REEL mode.")
+    parser.add_argument("--music", help="Path to audio/music track for PHOTO_REEL or background music.")
+    parser.add_argument("--smart_story", action="store_true", help="Use Multimodal Vision LLM to re-order photos into a narrative story arc and generate captions.")
     parser.add_argument("--prompt", help="Prompt for AI Music/Image generation.")
     parser.add_argument("--ckpt_name", default="stable_audio_3_medium_base.safetensors", help="Checkpoint name for ComfyUI audio model.")
     parser.add_argument("--category", help="Specify content category.")
     parser.add_argument("--script", help="Provide a manual script to skip generation.")
-    parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat"], default="suspense", help="Select background music vibe.")
+    parser.add_argument("--vibe", choices=["suspense", "spooky", "cinematic", "upbeat", "sarcastic", "funny"], default="suspense", help="Select background music vibe.")
+    parser.add_argument("--voice", help="Specify TTS voice (e.g. en-US-GuyNeural, en-US-ChristopherNeural, en-US-EricNeural, en-US-AnaNeural).")
     parser.add_argument("--user_id", help="The Supabase user ID triggering the generation.")
     parser.add_argument("--video_id", help="The unique ID for this video job.")
     parser.add_argument("--skip-upload", "--skip_upload", action="store_true", dest="skip_upload", help="Generate video but do not upload to social media.")
@@ -541,6 +548,110 @@ if getattr(args, "batch_file", None):
     print("\n[Log] Batch processing completed.")
     sys.exit(0)
 
+# 🟢 Standalone Photo Reel Mode (Photos + Music Beat Sync)
+if getattr(args, "mode", None) == "PHOTO_REEL":
+    from engine.beat_sync import detect_beats
+    from engine.video_gen import create_photo_reel_video
+    from engine.remotion_renderer import render_with_remotion
+    from engine.media_gen import is_url, download_source_video_from_url
+
+    photos_dir = getattr(args, "photos_dir", None)
+    music_path = getattr(args, "music", None)
+
+    if not photos_dir or not os.path.exists(photos_dir):
+        print("[Error] Standalone PHOTO_REEL mode requires valid --photos_dir parameter.")
+        sys.exit(1)
+
+    session_dir = args.session_dir if args.session_dir else f"sessions/photoreel_{int(time.time())}"
+    os.makedirs(session_dir, exist_ok=True)
+
+    # Automatically download music if a YouTube URL is provided
+    if music_path and is_url(music_path):
+        print(f"[Log] 🎵 Detected URL for music: '{music_path}'. Downloading audio track...")
+        music_path = download_source_video_from_url(music_path, session_dir, filename="youtube_music.mp4")
+
+    # Extract audio to MP3 if music_path is a video container for HTML5/Remotion compatibility
+    if music_path and os.path.exists(music_path):
+        ext = os.path.splitext(music_path)[1].lower()
+        if ext in ['.mp4', '.mov', '.mkv', '.webm', '.avi']:
+            mp3_out = os.path.join(session_dir, "clean_music.mp3")
+            try:
+                import imageio_ffmpeg
+                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                subprocess.run([
+                    ffmpeg_exe, "-y", "-i", music_path,
+                    "-vn", "-acodec", "libmp3lame", "-q:a", "2", mp3_out
+                ], capture_output=True, check=True)
+                music_path = mp3_out
+                print(f"[Log] 🎵 Converted music track to clean MP3 for Remotion compatibility: {music_path}")
+            except Exception as e:
+                print(f"[Warning] MP3 extraction failed: {e}. Using original audio file.")
+
+    valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.heic')
+    photo_files = sorted([
+        os.path.join(photos_dir, f) for f in os.listdir(photos_dir)
+        if f.lower().endswith(valid_exts)
+    ])
+
+    if not photo_files:
+        print(f"[Error] No image files ({valid_exts}) found in directory: {photos_dir}")
+        sys.exit(1)
+
+    photo_captions = None
+    # 🧠 Vision LLM Story Arc Analysis (if --smart_story flag is set)
+    if getattr(args, "smart_story", False):
+        from engine.script_gen import analyze_photo_story_with_vision
+        vision_res = analyze_photo_story_with_vision(photo_files, user_prompt=getattr(args, "prompt", None))
+        ordered_indices = vision_res.get("ordered_indices", [])
+        photo_captions = vision_res.get("captions", [])
+        if ordered_indices and len(ordered_indices) == len(photo_files):
+            try:
+                photo_files = [photo_files[idx] for idx in ordered_indices]
+                if photo_captions and len(photo_captions) == len(photo_files):
+                    photo_captions = [photo_captions[idx] for idx in ordered_indices]
+                print(f"[Log] 🧠 Re-ordered {len(photo_files)} photos into a narrative story arc!")
+            except Exception as e:
+                print(f"[Warning] Could not reorder photos: {e}")
+
+    session_dir = args.session_dir if args.session_dir else f"sessions/photoreel_{int(time.time())}"
+    os.makedirs(session_dir, exist_ok=True)
+    out_video = os.path.join(session_dir, "photo_reel.mp4")
+
+    target_dur = getattr(args, "target_duration", 30) or 30
+
+    # Detect beats in input audio if provided (capped at target_duration)
+    beat_timestamps = detect_beats(music_path, target_count=len(photo_files), max_duration=target_dur) if music_path else None
+    print(f"[Log] 📸 Loaded {len(photo_files)} photos for PHOTO_REEL mode.")
+    if beat_timestamps:
+        print(f"[Log] 🎵 Beat detection completed: {len(beat_timestamps)} timestamps extracted over {target_dur}s.")
+
+    if getattr(args, "use_remotion", False):
+        print("[Log] 🎬 Rendering Photo Reel using Remotion React engine...")
+        render_with_remotion(
+            audio_path=music_path if music_path else None,
+            subs_path=None,
+            output_path=out_video,
+            mode="PHOTO_REEL",
+            bg_music_path=music_path,
+            title_text=getattr(args, "prompt", None), # Only show title if --prompt is explicitly set
+            background_paths=photo_files,
+            beat_timestamps=beat_timestamps,
+            captions=photo_captions,
+            caption_style=getattr(args, "caption_style", "HORMOZI")
+        )
+    else:
+        print("[Log] 🎬 Rendering Photo Reel using FFmpeg/MoviePy pipeline...")
+        create_photo_reel_video(
+            photo_paths=photo_files,
+            music_path=music_path,
+            output_path=out_video,
+            beat_timestamps=beat_timestamps,
+            target_duration=getattr(args, "target_duration", 30)
+        )
+
+    print(f"[Success] 🎉 Photo Reel rendered successfully: {out_video}")
+    sys.exit(0)
+
 # 🟢 Standalone Video Filter Mode
 if getattr(args, "mode", None) == "FILTER":
     from engine.video_gen import apply_standalone_video_filter
@@ -611,7 +722,7 @@ if getattr(args, "mode", None) == "FILTER":
     print(f"[Success] 🎨 Filtered video ready at: {output_video}")
     sys.exit(0)
 
-if getattr(args, "source_video", None) and args.mode != "TRAILER_MISSED":
+if getattr(args, "source_video", None) and args.mode not in ["TRAILER_MISSED", "FUNNY_EXPLAINER", "PHOTO_REEL"]:
     import time
     from engine.video_gen import extract_segments
     from engine.analysis import process_source_video
@@ -863,7 +974,7 @@ else:
     
     # 2. Choose Category
     categories = ["science", "math", "aptitude", "space", "physics", "puzzle", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports", "kids", "children", "bedtime"]
-    category = args.category if args.category else random.choice(categories)
+    category = args.category if args.category else ("movies" if mode == "FUNNY_EXPLAINER" else random.choice(categories))
     topic = args.prompt if args.prompt else category
 
     if args.hero or args.interactive:
@@ -1108,6 +1219,81 @@ else:
             full_script = f"{jwst_data['hook']} ... {jwst_data['story']} ... {jwst_data.get('loop_lead', '')}"
             facts_data = []
             print(f"[Log] JWST Data: {jwst_data}")
+        elif mode == "FUNNY_EXPLAINER":
+            from engine.script_gen import generate_funny_explainer_script
+            scene_prompt = None
+            raw_source_input = getattr(args, 'source_video', None)
+            
+            # Handle YouTube URL or local source video input
+            if raw_source_input:
+                if is_url(raw_source_input):
+                    temp_dl_dir = f"assets/temp_{random.randint(100000, 999999)}"
+                    os.makedirs(temp_dl_dir, exist_ok=True)
+                    print(f"[Log] 🎵 Detected YouTube URL for scene video: '{raw_source_input}'. Downloading...")
+                    args.source_video = download_source_video_from_url(raw_source_input, temp_dl_dir)
+                
+                # Extract YouTube Title & Description from yt-dlp info.json
+                video_meta_info = ""
+                try:
+                    from engine.media_gen import get_chapters_json_path
+                    info_p = get_chapters_json_path(raw_source_input)
+                    if info_p and os.path.exists(info_p):
+                        with open(info_p, 'r', encoding='utf-8') as f_info:
+                            i_data = json.load(f_info)
+                            v_title = i_data.get("title", "")
+                            v_desc = i_data.get("description", "")
+                            if v_title:
+                                video_meta_info = f"VIDEO TITLE / SHOW: {v_title}"
+                                if v_desc:
+                                    video_meta_info += f"\nVIDEO DESCRIPTION: {v_desc[:400]}"
+                                print(f"[Log] 🎬 Extracted video metadata: '{v_title}'")
+                except Exception as e:
+                    print(f"[Warning] Could not extract video metadata: {e}")
+
+                transcript_context = ""
+                if args.source_video and os.path.exists(args.source_video):
+                    try:
+                        from engine.analysis import transcribe_video
+                        temp_t_dir = args.session_dir if args.session_dir else f"assets/temp_{random.randint(100000, 999999)}"
+                        print(f"[Log] 🎙️ Transcribing source video to extract scene context for FUNNY_EXPLAINER...")
+                        t_path = transcribe_video(args.source_video, temp_t_dir)
+                        if os.path.exists(t_path):
+                            with open(t_path, 'r', encoding='utf-8') as tf:
+                                t_data = json.load(tf)
+                                transcript_text = t_data.get("text", "")
+                                if not transcript_text and "segments" in t_data:
+                                    transcript_text = " ".join([seg.get("text", "") for seg in t_data["segments"]])
+                                if transcript_text and len(transcript_text.strip()) > 10:
+                                    if len(transcript_text) > 2500:
+                                        part1 = transcript_text[:1000]
+                                        mid_idx = len(transcript_text) // 2
+                                        part2 = transcript_text[mid_idx - 600 : mid_idx + 600]
+                                        part3 = transcript_text[-1000:]
+                                        transcript_context = f"FULL VIDEO DIALOGUE:\n[BEGINNING]: {part1}\n\n[MIDDLE]: {part2}\n\n[ENDING]: {part3}"
+                                    else:
+                                        transcript_context = f"FULL VIDEO DIALOGUE:\n{transcript_text}"
+                                    print(f"[Log] 📄 Extracted full video transcript ({len(transcript_text)} chars).")
+                    except Exception as e:
+                        print(f"[Warning] Failed to transcribe source video: {e}")
+                
+                user_ctx = getattr(args, 'scene', None) or args.prompt or getattr(args, 'user_context', None) or ""
+                context_parts = []
+                if video_meta_info: context_parts.append(video_meta_info)
+                if user_ctx: context_parts.append(f"USER CONTEXT / SHOW SCENE: {user_ctx}")
+                if transcript_context: context_parts.append(transcript_context)
+                
+                if context_parts:
+                    scene_prompt = "\n\n".join(context_parts)
+            
+            if not scene_prompt:
+                scene_prompt = getattr(args, 'scene', None) or args.prompt or category or "Why cats knock glasses off tables at 3 AM"
+
+            vibe = getattr(args, 'vibe', 'sarcastic') or 'sarcastic'
+            funny_data = generate_funny_explainer_script(scene_prompt, vibe=vibe, target_duration=args.target_duration)
+            step_texts = " ".join([s.get('text', '') for s in funny_data.get('scene_steps', []) if isinstance(s, dict)])
+            full_script = f"{funny_data.get('hook', '')} {step_texts} {funny_data.get('outro', '')}".strip()
+            facts_data = []
+            print(f"[Log] 😼 FUNNY_EXPLAINER Data: {funny_data}")
     except RuntimeError as e:
         print(f"[Error] Generation failed: {e}")
         print("[Log] Gracefully skipping this video to maintain channel diversity.")
@@ -1133,9 +1319,9 @@ if is_kids_story:
     selected_rate = "+5%"
     print(f"[Log] Kids Story Mode Active: Voice={selected_voice}, Pitch={selected_pitch}, Rate={selected_rate}")
 else:
-    selected_voice = VIBE_VOICE_MAP.get(args.vibe, "en-US-AriaNeural")
+    selected_voice = getattr(args, "voice", None) or VIBE_VOICE_MAP.get(args.vibe, "en-US-GuyNeural")
     selected_pitch = "+0Hz"
-    selected_rate = "+15%"
+    selected_rate = "+20%" if mode == "FUNNY_EXPLAINER" else "+15%"
 
 # Overwrite voice if Cartoon persona is active
 selected_persona = args.persona if args.persona else ("mafia_cat" if args.cartoon else None)
@@ -1329,6 +1515,61 @@ elif mode == "JWST":
         print("[Warning] No JWST images found, falling back to Pexels space video.")
         bg_filename = os.path.join(session_dir, "bg_jwst_fallback.mp4")
         bg_video_paths = get_bg_path("outer space james webb telescope", bg_filename)
+elif mode == "FUNNY_EXPLAINER":
+    bg_video_paths = []
+    if getattr(args, 'source_video', None) and os.path.exists(args.source_video):
+        print(f"[Log] 🎬 Extracting scene clips across the ENTIRE source video timeline to cover full video...")
+        steps = funny_data.get("scene_steps", []) if 'funny_data' in locals() else []
+        num_steps = max(3, len(steps))
+        clip_dur = total_bg_duration / num_steps
+
+        # Probe total video duration
+        src_dur = 60.0
+        try:
+            import subprocess, json
+            probe_cmd = ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", args.source_video]
+            res = subprocess.run(probe_cmd, capture_output=True, text=True)
+            if res.returncode == 0:
+                format_info = json.loads(res.stdout).get("format", {})
+                src_dur = float(format_info.get("duration", 60.0))
+        except Exception:
+            pass
+
+        print(f"[Log] Total source video duration: {src_dur:.1f}s. Extracting {num_steps} scene clips across timeline...")
+        step_interval = max(0.0, (src_dur - clip_dur) / max(1, num_steps - 1))
+
+        extracted_scene_paths = []
+        for idx in range(num_steps):
+            start_t = idx * step_interval
+            clip_out = os.path.join(session_dir, f"scene_clip_{idx+1}.mp4")
+            cut_cmd = [
+                "ffmpeg", "-y", "-ss", str(round(start_t, 2)), "-i", args.source_video,
+                "-t", str(round(clip_dur, 2)), "-c:v", "libx264", "-c:a", "aac",
+                "-preset", "ultrafast", "-crf", "23", clip_out
+            ]
+            try:
+                subprocess.run(cut_cmd, capture_output=True, check=True)
+                if os.path.exists(clip_out) and os.path.getsize(clip_out) > 0:
+                    extracted_scene_paths.append(clip_out)
+            except Exception as e:
+                print(f"[Warning] Failed to cut scene clip at {start_t:.1f}s: {e}")
+
+        if extracted_scene_paths:
+            bg_video_paths = extracted_scene_paths
+        else:
+            bg_video_paths = [args.source_video]
+    else:
+        steps = funny_data.get("scene_steps", []) if 'funny_data' in locals() else []
+        step_dur = total_bg_duration / max(1, len(steps))
+        for idx, s in enumerate(steps):
+            vp = s.get("visual_prompt") or f"{category or 'funny'} scene"
+            s_file = os.path.join(session_dir, f"bg_funny_step_{idx}.mp4")
+            s_paths = get_bg_path(vp, s_file, target_duration=step_dur)
+            if s_paths:
+                bg_video_paths.extend(s_paths)
+    if not bg_video_paths:
+        bg_filename = os.path.join(session_dir, "bg_funny_fallback.mp4")
+        bg_video_paths = get_bg_path(f"{category or 'funny'} comedy meme", bg_filename, target_duration=total_bg_duration)
 elif mode == "EXPLAINER":
     print("[Log] Rendering Manim animation code...")
     from engine.video_gen import render_manim_scene
@@ -1375,14 +1616,19 @@ if args.video_id and args.user_id:
 
 # 4. Compose Video
 print(f"[Log] Composing final interactive video with {args.vibe} mood (Job ID: {session_id})...", flush=True)
-output_filename = f"interactive_short_{session_id}.mp4"
+if args.session_dir:
+    output_filename = os.path.join(args.session_dir, f"interactive_short_{session_id}.mp4")
+else:
+    output_filename = f"interactive_short_{session_id}.mp4"
 
 # Dynamic Music Selection based on Vibe
 vibe_music_map = {
     "suspense": "music/bg_music.mp3",
     "spooky": "music/spooky.mp3",
     "cinematic": "music/cinematic.mp3",
-    "upbeat": "music/upbeat.mp3"
+    "upbeat": "music/upbeat.mp3",
+    "sarcastic": "music/upbeat.mp3",
+    "funny": "music/upbeat.mp3"
 }
 music_file = vibe_music_map.get(args.vibe, "music/bg_music.mp3")
 bg_music = music_file if os.path.exists(music_file) else "music/bg_music.mp3"
@@ -1410,13 +1656,14 @@ if selected_persona:
             avatar_path = p_path
             break
 
-remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS"]
+remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS", "FUNNY_EXPLAINER"]
 if args.use_remotion and mode in remotion_supported_modes:
     from engine.remotion_renderer import render_with_remotion
     
     remotion_mode = mode
     this_or_that_data = None
     emoji_guess_data = None
+    funny_explainer_data = None
     
     if mode == "WYR":
         remotion_mode = "THIS_OR_THAT"
@@ -1434,6 +1681,8 @@ if args.use_remotion and mode in remotion_supported_modes:
             "answer": emoji_data.get("answer", "The Lion King"),
             "hint": emoji_data.get("hint", "")
         }
+    elif mode == "FUNNY_EXPLAINER":
+        funny_explainer_data = funny_data if 'funny_data' in locals() else None
     
     final_video = render_with_remotion(
         audio_path=audio_path,
@@ -1441,10 +1690,11 @@ if args.use_remotion and mode in remotion_supported_modes:
         output_path=output_filename,
         mode=remotion_mode,
         bg_music_path=bg_music,
-        title_text=args.recap_title or args.category or "ShortsFlow",
+        title_text=funny_data.get("title") if mode == "FUNNY_EXPLAINER" and 'funny_data' in locals() else (args.recap_title or args.category or "ShortsFlow"),
         background_paths=bg_video_paths,
         this_or_that=this_or_that_data,
         emoji_guess=emoji_guess_data,
+        funny_explainer=funny_explainer_data,
         avatar_path=avatar_path,
         caption_style=getattr(args, "caption_style", "HORMOZI")
     )
@@ -1632,6 +1882,14 @@ elif mode in ("NEWS", "NEWS_SERIOUS"):
         metadata['description'] = metadata.get('description', '') + f"\n\n📰 Source: {source_credit}"
 elif mode == "GUESS_SOUND":
     metadata = ensure_dict(generate_viral_metadata(f"Can you guess this sound? It's a {sound_data['object']}", mode="STORY", category=category))
+elif mode == "FUNNY_EXPLAINER":
+    funny_title = funny_data.get("title") if 'funny_data' in locals() and isinstance(funny_data, dict) else "Scene Breakdown 🎬"
+    funny_desc = funny_data.get("hook") if 'funny_data' in locals() and isinstance(funny_data, dict) else "Viral sarcastic scene breakdown."
+    metadata = ensure_dict({
+        "title": funny_title,
+        "description": funny_desc,
+        "tags": ["shorts", "funny", "scenebreakdown", category]
+    })
 else:
     # For STORY or other modes
     story_content = story_data['story'] if 'story_data' in locals() and story_data else "Viral Story"

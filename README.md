@@ -44,7 +44,7 @@ cd shorts-generator
 # Run 1-Click Setup 
 setup.bat
 
-# Launch Desktop GUI Studio
+# Launch Interactive Studio Launcher
 launch.bat
 ```
 
@@ -58,7 +58,7 @@ cd shorts-generator
 chmod +x setup.sh
 ./setup.sh
 
-# Launch Desktop GUI or CLI
+# Launch Desktop GUI Studio
 python3 gui_app.py
 ```
 
@@ -67,6 +67,37 @@ python3 gui_app.py
 ```bash
 docker compose up -d
 ```
+
+---
+
+## 🖥️ Graphical User Interfaces & Usability
+
+ShortsFlow AI Studio provides a **sleek, single-window 3-column Studio interface**:
+
+![ShortsFlow AI Studio GUI](demos/ui_studio_preview.png)
+
+### 1. 🖥️ Standalone Desktop GUI Studio (Easiest)
+- **Launch Command**: `launch.bat` (Option 1) or `python gui_app.py`
+- **Usability Features**: 
+  - Single-window studio layout with 9:16 vertical video preview canvas.
+  - Interactive clickable cards for Remotion caption spring physics (`HORMOZI`, `GLOW_BOX`, `BOUNCE`, `MINIMAL`).
+  - Source video URL input, custom output directory picker, standalone content modes, and voiceover selectors.
+  - Quality pipeline switches (`Smart Crop`, `Auto-Tighten`, `HQ`, `SuperRes`, `SRT Export`, `B-Roll`).
+  - Master 1-click render button with animated progress bar and collapsible live log console.
+
+### 2. 🌐 Next.js 15 Web Dashboard
+- **Launch Web Frontend**: `cd web && npm run dev` (Access at `http://localhost:3000`)
+- **Launch Render Worker**: `python server.py` (Runs on port `5000`)
+- **Usability Features**: 
+  - Modern browser-based web dashboard.
+  - Asynchronous background render queueing via Flask worker (`server.py`).
+  - Multi-user authentication & payment integrations (Stripe/LemonSqueezy).
+
+### 3. ⚡ Interactive CLI & Scriptable Launcher
+- **Launch Command**: `launch.bat` (Option 2) or `python main.py [FLAGS]`
+- **Usability Features**: 
+  - Step-by-step terminal prompts for quick extraction.
+  - 100% scriptable flags for headless server deployment, cron jobs, and GitHub Actions autonomous generation.
 
 ---
 

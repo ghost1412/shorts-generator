@@ -13,6 +13,7 @@ assets/subs.json
 *.mp4
 !assets/avatars/*.mp4
 !assets/avatars/*.png
+!demos/ui_studio_preview.png
 *.mp4.txt
 *.json
 !package.json

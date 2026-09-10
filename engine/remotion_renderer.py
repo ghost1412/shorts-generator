@@ -9,18 +9,35 @@ import uuid
 def copy_to_public(src_path, dest_dir, public_base="temp_assets"):
     """
     Copies a local file to the Remotion public directory and returns the path relative to public/.
+    Standardizes image color profiles (CMYK/RGBA -> sRGB RGB) to prevent Chromium decoding errors.
     """
     if not src_path or not os.path.exists(src_path):
         return None
     
     filename = os.path.basename(src_path)
-    # Sanitize filename to prevent path traversal
-    filename = "".join(c for c in filename if c.isalnum() or c in "._-")
-    if not filename:
-        filename = f"asset_{uuid.uuid4().hex[:8]}"
-        
+    file_hash = uuid.uuid4().hex[:6]
+    clean_name = "".join(c for c in filename if c.isalnum() or c in "._-")
+    if not clean_name:
+        clean_name = "asset"
+    filename = f"{file_hash}_{clean_name}"
     dest_path = os.path.join(dest_dir, filename)
-    shutil.copy2(src_path, dest_path)
+
+    ext = os.path.splitext(src_path)[1].lower()
+    if ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.heic']:
+        try:
+            from PIL import Image, ImageOps
+            with Image.open(src_path) as img:
+                img = ImageOps.exif_transpose(img)
+                rgb_img = img.convert("RGB")
+                if not dest_path.lower().endswith(('.jpg', '.jpeg')):
+                    dest_path = os.path.splitext(dest_path)[0] + ".jpg"
+                    filename = os.path.splitext(filename)[0] + ".jpg"
+                rgb_img.save(dest_path, format="JPEG", quality=92)
+        except Exception as e:
+            print(f"[Warning] Image standardization failed for {src_path}: {e}. Falling back to direct copy.")
+            shutil.copy2(src_path, dest_path)
+    else:
+        shutil.copy2(src_path, dest_path)
     
     # Return path relative to public/
     rel_path = os.path.join(public_base, os.path.basename(dest_dir), filename).replace("\\", "/")
@@ -42,7 +59,10 @@ def render_with_remotion(
     duration=None,
     start_offset=0.0,
     caption_style="HORMOZI",
-    subtitle_y_pos=1150
+    subtitle_y_pos=1150,
+    beat_timestamps=None,
+    captions=None,
+    funny_explainer=None
 ):
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
@@ -125,7 +145,9 @@ def render_with_remotion(
         
         # Determine total duration in seconds
         if not duration:
-            if words:
+            if mode == "PHOTO_REEL" and beat_timestamps:
+                duration = max(beat_timestamps[-1] + 1.5, 5.0)
+            elif words:
                 duration = max(w['end'] for w in words) + 1.0
             else:
                 duration = 30.0  # default fallback
@@ -180,13 +202,39 @@ def render_with_remotion(
             seg_dur = duration / max(1, len(bg_paths))
             for i, bp in enumerate(bg_paths):
                 rel_bp = copy_to_public(bp, run_assets_dir)
-                bg_type = "image" if bp.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')) else "video"
-                remotion_bg.append({
+                ext = os.path.splitext(bp)[1].lower()
+                bg_type = "image" if ext in ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.heic') else "video"
+                
+                orientation = "landscape"
+                if bg_type == "image":
+                    try:
+                        from PIL import Image, ImageOps
+                        with Image.open(bp) as im:
+                            im = ImageOps.exif_transpose(im)
+                            w_img, h_img = im.size
+                            if h_img >= w_img:
+                                orientation = "portrait"
+                    except Exception:
+                        pass
+
+                if beat_timestamps and i < len(beat_timestamps):
+                    start_t = beat_timestamps[i]
+                    end_t = beat_timestamps[i+1] if i + 1 < len(beat_timestamps) else duration
+                else:
+                    start_t = i * seg_dur
+                    end_t = (i + 1) * seg_dur
+
+                item_dict = {
                     "path": rel_bp,
-                    "start": i * seg_dur,
-                    "end": (i + 1) * seg_dur,
-                    "type": bg_type
-                })
+                    "start": start_t,
+                    "end": end_t,
+                    "type": bg_type,
+                    "orientation": orientation
+                }
+                if captions and i < len(captions) and captions[i]:
+                    item_dict["caption"] = captions[i]
+
+                remotion_bg.append(item_dict)
                 
         # 5. Build props JSON
         props = {
@@ -207,6 +255,7 @@ def render_with_remotion(
         if remotion_rank: props["rankIt"] = remotion_rank
         if remotion_cap: props["captionThis"] = remotion_cap
         if emoji_guess: props["emojiGuess"] = emoji_guess
+        if funny_explainer: props["funnyExplainer"] = funny_explainer
         
         # Write props to a JSON file inside remotion-video folder
         props_filename = f"temp_props_{run_id}.json"

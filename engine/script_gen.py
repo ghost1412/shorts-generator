@@ -466,8 +466,18 @@ def validate_sound_challenge(data):
 def validate_odd_one_out(data):
     return isinstance(data, dict) and "hook" in data and "theme" in data
 
-def validate_riddle(data):
-    return isinstance(data, dict) and "question" in data and "answer" in data and "search_term" in data
+def validate_funny_explainer(data):
+    if not isinstance(data, dict):
+        return False
+    if "hook" not in data or "scene_steps" not in data:
+        return False
+    steps = data.get("scene_steps", [])
+    if not isinstance(steps, list) or len(steps) < 2:
+        return False
+    for step in steps:
+        if not isinstance(step, dict) or "text" not in step:
+            return False
+    return True
 
 def validate_manim(data):
     if not isinstance(data, dict):
@@ -1467,6 +1477,100 @@ Format:
 
     return with_best_of_n(llm_call, validate_riddle, n=3)
 
+def generate_funny_explainer_script(scene_prompt=None, vibe="sarcastic", target_duration=30):
+    """
+    Generates a sarcastic, hilarious scene breakdown short script with timestamped SFX triggers and visual prompts.
+    """
+    if not scene_prompt:
+        scene_prompt = "Why cats knock glasses off tables at 3 AM"
+
+    system_prompt = (
+        "You are an elite viral comedy writer, roast master, and sarcastic pop-culture commentator (in the style of Ryan Reynolds, Screen Rant Pitch Meetings, and Honest Trailers). "
+        "Your superpower is taking video clips, TV show scenes, or awkward moments and writing sharp, hilarious, absurd, and extremely sarcastic commentaries that make audiences burst out laughing. "
+        "DO NOT write generic corporate summaries or plain factual text. Roast character actions, highlight awkward body language, use absurd metaphors, and deliver top-tier comedy punchlines."
+    )
+
+    prompt = f"""Break down this entire video scene/scenario in an extremely funny, sarcastic, and roast-heavy way for a 30-60 second viral video Short.
+
+Video Context:
+"{scene_prompt}"
+
+Vibe: {vibe} (heavy sarcasm, hilarious roasts, dry humor, witty, absurd exaggeration)
+
+CRITICAL REQUIREMENT:
+Your breakdown MUST cover the FULL story arc of the video:
+- Step 1: The setup/beginning of the video.
+- Step 2-3: The escalation/middle of the video.
+- Step 4: The final climax/resolution/ending of the video.
+
+Respond strictly with a valid JSON object matching this structure:
+{{
+  "title": "<Short punchy title with emoji>",
+  "hook": "<Catchy opening sarcastic question or statement that grabs attention in 2 seconds>",
+  "scene_steps": [
+    {{
+      "step_title": "<Phase 1 name>",
+      "text": "<Hilarious 1-2 sentence sarcastic roast line for phase 1>",
+      "visual_prompt": "<Specific Pexels or image prompt describing what visual to show>",
+      "sound_effect": "VINE_BOOM",
+      "sarcastic_note": "<Short punchy 2-4 word sarcastic overlay comment>"
+    }},
+    {{
+      "step_title": "<Phase 2 name>",
+      "text": "<Hilarious 1-2 sentence sarcastic roast line for phase 2>",
+      "visual_prompt": "<Specific Pexels or image prompt describing what visual to show>",
+      "sound_effect": "WHOOSH",
+      "sarcastic_note": "<Short punchy 2-4 word sarcastic overlay comment>"
+    }},
+    {{
+      "step_title": "<Phase 3 name>",
+      "text": "<Hilarious 1-2 sentence sarcastic roast line for phase 3>",
+      "visual_prompt": "<Specific Pexels or image prompt describing what visual to show>",
+      "sound_effect": "RECORD_SCRATCH",
+      "sarcastic_note": "<Short punchy 2-4 word sarcastic overlay comment>"
+    }}
+  ],
+  "outro": "<Final sarcastic punchline or CTA>"
+}}
+"""
+
+    def llm_call(attempt):
+        response_text = get_llm_response(prompt, system_prompt=system_prompt, max_tokens=1024, temperature=0.85)
+        return robust_json_parse(response_text)
+
+    parsed = with_best_of_n(llm_call, validate_funny_explainer, n=3)
+    if not parsed:
+        parsed = {
+            "title": f"Scene Breakdown: {scene_prompt[:25]} 😼",
+            "hook": f"Let's break down the sheer genius behind '{scene_prompt}' with zero filter.",
+            "scene_steps": [
+                {
+                    "step_title": "Phase 1: The Setup",
+                    "text": "It all begins with innocent intentions right before absolute chaos erupts.",
+                    "visual_prompt": f"{scene_prompt} funny setup moment",
+                    "sound_effect": "VINE_BOOM",
+                    "sarcastic_note": "A masterpiece of bad decisions."
+                },
+                {
+                    "step_title": "Phase 2: Point of No Return",
+                    "text": "Physics surrenders and gravity takes over while everyone pretends everything is fine.",
+                    "visual_prompt": f"{scene_prompt} chaos climax funny",
+                    "sound_effect": "WHOOSH",
+                    "sarcastic_note": "Newton would be proud."
+                },
+                {
+                    "step_title": "Phase 3: The Aftermath",
+                    "text": "The dust settles, zero lessons are learned, and it will happen again tomorrow.",
+                    "visual_prompt": f"{scene_prompt} aftermath reaction meme",
+                    "sound_effect": "RECORD_SCRATCH",
+                    "sarcastic_note": "10 out of 10 performance."
+                }
+            ],
+            "outro": "Follow for more highly scientific breakdowns of human and animal behavior."
+        }
+
+    return parsed
+
 def generate_trend_script(topic):
     """Generates a viral news script for a specific trending topic."""
     system_prompt = "You are a viral news anchor specializing in high-energy, breaking news reports. ALWAYS respond with RAW JSON."
@@ -1578,6 +1682,135 @@ def generate_trailer_missed_script(title):
 
 
 
+
+def analyze_photo_story_with_vision(photo_paths, user_prompt=None):
+    """
+    Uses Gemini Multimodal Vision API to visually analyze a list of photo paths.
+    Returns structured JSON containing:
+    - 'ordered_indices': Best narrative story sequence e.g. [2, 0, 4, 1, 3]
+    - 'photo_energies': List of energy levels ['high', 'medium', 'low', ...]
+    - 'captions': Contextual overlay captions per photo (e.g. "Touchdown ✈️", "Golden hour 🌅")
+    """
+    if not photo_paths:
+        return {"ordered_indices": [], "photo_energies": [], "captions": []}
+
+    import base64
+    from io import BytesIO
+    from PIL import Image, ImageOps
+
+    print(f"[Log] 🧠 Initiating Vision LLM analysis on {len(photo_paths)} photos...")
+    parts = []
+    
+    instructions = f"""You are a viral video editor. Analyze these {len(photo_paths)} photos (labeled Image 0 to Image {len(photo_paths)-1}).
+    
+Goal:
+1. Re-order these image indices [0 to {len(photo_paths)-1}] into a narrative story arc (e.g. arrival/setup -> action/climax -> sunset/ending).
+2. Classify each image's energy level as "high" (action, dancing, bright colors, expression), "medium", or "low" (scenic, relaxed, dark).
+3. Provide a short 1-3 word aesthetic caption with an emoji for each photo (e.g., "Golden Hour 🌅", "City Lights 🌆").
+
+Return JSON ONLY in this exact format:
+{{
+  "ordered_indices": [0, 1, 2, ...],
+  "photo_energies": ["medium", "high", "low", ...],
+  "captions": ["Caption 1", "Caption 2", ...]
+}}
+"""
+    parts.append({"text": instructions})
+
+    for i, p in enumerate(photo_paths[:12]):
+        try:
+            with Image.open(p) as img:
+                img = ImageOps.exif_transpose(img)
+                img.thumbnail((512, 512))
+                buf = BytesIO()
+                img.convert("RGB").save(buf, format="JPEG", quality=80)
+                b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                parts.append({
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": b64
+                    }
+                })
+                parts.append({"text": f"Image {i}: {os.path.basename(p)}"})
+        except Exception as e:
+            print(f"[Warning] Failed to encode photo {p} for Vision LLM: {e}")
+
+    g_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
+    if g_key:
+        for g_model in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={g_key}"
+                headers = {"Content-Type": "application/json"}
+                payload = {
+                    "contents": [{"role": "user", "parts": parts}],
+                    "generationConfig": {"temperature": 0.3, "maxOutputTokens": 800, "responseMimeType": "application/json"}
+                }
+                res = requests.post(url, headers=headers, json=payload, timeout=30)
+                res.raise_for_status()
+                raw_text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                data = robust_json_parse(raw_text)
+                
+                if isinstance(data, dict) and "ordered_indices" in data:
+                    print(f"[Log] 🎨 Vision LLM Story Arc analysis complete via {g_model}! Order: {data.get('ordered_indices')}")
+                    return data
+            except Exception as e:
+                print(f"[Warning] Gemini API ({g_model}) failed: {e}")
+    else:
+        print("[Warning] GEMINI_API_KEY missing for Cloud Vision analysis. Checking local Ollama Vision...")
+
+    # 2. Local Ollama Vision Fallback (llava / qwen2-vl / llama3.2-vision)
+    try:
+        raw_url = os.getenv("LOCAL_LLM_URL", "http://localhost:11434").rstrip("/")
+        if raw_url.endswith("/api/generate") or raw_url.endswith("/api/chat"):
+            ollama_chat_url = raw_url.rsplit("/", 1)[0] + "/chat"
+        elif raw_url.endswith("/api"):
+            ollama_chat_url = f"{raw_url}/chat"
+        else:
+            ollama_chat_url = f"{raw_url}/api/chat"
+        
+        b64_images = []
+        for p in photo_paths[:8]:
+            try:
+                with Image.open(p) as img:
+                    img = ImageOps.exif_transpose(img)
+                    img.thumbnail((512, 512))
+                    buf = BytesIO()
+                    img.convert("RGB").save(buf, format="JPEG", quality=80)
+                    b64_images.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+            except Exception:
+                pass
+
+        if b64_images:
+            for v_model in ["llava", "qwen2-vl", "llama3.2-vision", LOCAL_LLM_MODEL]:
+                try:
+                    print(f"[Log] Attempting local Ollama Vision API ({v_model})...")
+                    payload = {
+                        "model": v_model,
+                        "messages": [{
+                            "role": "user",
+                            "content": instructions,
+                            "images": b64_images
+                        }],
+                        "stream": False,
+                        "format": "json"
+                    }
+                    res = requests.post(ollama_chat_url, json=payload, timeout=45)
+                    if res.status_code == 200:
+                        raw_text = res.json().get("message", {}).get("content", "")
+                        data = robust_json_parse(raw_text)
+                        if isinstance(data, dict) and "ordered_indices" in data:
+                            print(f"[Log] 🎨 Ollama Vision Story Arc complete via {v_model}! Order: {data.get('ordered_indices')}")
+                            return data
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"[Warning] Ollama Vision fallback failed: {e}")
+
+    return {
+        "ordered_indices": list(range(len(photo_paths))),
+        "photo_energies": ["medium"] * len(photo_paths),
+        "captions": [""] * len(photo_paths)
+    }
 
 if __name__ == "__main__":
     res = generate_mixed_facts("science")

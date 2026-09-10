@@ -7,6 +7,7 @@ import {
   Sequence,
   AbsoluteFill,
   interpolate,
+  spring,
   staticFile,
 } from "remotion";
 import React from "react";
@@ -32,6 +33,8 @@ export const backgroundSchema = z.object({
   start: z.number(),
   end: z.number(),
   type: z.enum(["video", "image"]),
+  caption: z.string().optional(),
+  orientation: z.enum(["portrait", "landscape"]).optional(),
 });
 
 export const thisOrThatSchema = z.object({
@@ -64,12 +67,27 @@ export const emojiGuessSchema = z.object({
   hint: z.string().optional(),
 });
 
+export const funnyExplainerStepSchema = z.object({
+  step_title: z.string().optional(),
+  text: z.string().optional(),
+  visual_prompt: z.string().optional(),
+  sound_effect: z.string().optional(),
+  sarcastic_note: z.string().optional(),
+});
+
+export const funnyExplainerSchema = z.object({
+  title: z.string().optional(),
+  hook: z.string().optional(),
+  scene_steps: z.array(funnyExplainerStepSchema).optional(),
+  outro: z.string().optional(),
+});
+
 export const shortFlowSchema = z.object({
   audioUrl: z.string(),
   bgMusicUrl: z.string().optional(),
   bgMusicVolume: z.number().default(0.15),
   words: z.array(wordSchema),
-  mode: z.enum(["FACTS", "STORY", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS", "NEWS", "NEWS_SERIOUS", "RIDDLE", "EMOJI_GUESS"]),
+  mode: z.enum(["FACTS", "STORY", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS", "NEWS", "NEWS_SERIOUS", "RIDDLE", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER"]),
   category: z.string().default("general"),
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
@@ -80,6 +98,7 @@ export const shortFlowSchema = z.object({
   rankIt: rankItSchema.optional(),
   captionThis: captionThisSchema.optional(),
   emojiGuess: emojiGuessSchema.optional(),
+  funnyExplainer: funnyExplainerSchema.optional(),
 });
 
 type ShortFlowProps = z.infer<typeof shortFlowSchema>;
@@ -333,7 +352,7 @@ const BackgroundSegment: React.FC<{
       );
 
   return (
-    <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center", opacity }}>
+    <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center", opacity, backgroundColor: "#000" }}>
       {bg.type === "video" ? (
         <OffthreadVideo
           src={getAssetUrl(bg.path)}
@@ -341,10 +360,261 @@ const BackgroundSegment: React.FC<{
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (
-        <Img
-          src={getAssetUrl(bg.path)}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        <div style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}>
+          {/* Blurred Background Layer for Non-Vertical Photos */}
+          <Img
+            src={getAssetUrl(bg.path)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: "blur(25px) brightness(0.6)",
+              transform: "scale(1.2)",
+              position: "absolute",
+              top: 0,
+              left: 0,
+            }}
+          />
+          {/* Foreground Crisp Image (objectFit: contain ensures no horizontal cropping) */}
+          <Img
+            src={getAssetUrl(bg.path)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              position: "relative",
+              zIndex: 1,
+              dropShadow: "0 10px 30px rgba(0,0,0,0.5)",
+            }}
+          />
+        </div>
+      )}
+    </AbsoluteFill>
+  );
+};
+
+const PhotoReelSegment: React.FC<{
+  bg: z.infer<typeof backgroundSchema>;
+  fps: number;
+  durationInFrames: number;
+  segmentIndex: number;
+  isFirst: boolean;
+}> = ({ bg, fps, durationInFrames, segmentIndex, isFirst }) => {
+  const frame = useCurrentFrame();
+
+  // 1. Spring physics entrance bounce
+  const spr = spring({
+    frame,
+    fps,
+    config: {
+      damping: 12,
+      mass: 0.5,
+      stiffness: 100,
+    },
+  });
+
+  const entryScale = interpolate(spr, [0, 1], [0.92, 1.0]);
+
+  // 2. Multi-axis dynamic Ken Burns motion based on segmentIndex
+  const modeIndex = segmentIndex % 4;
+  let transformStr = "";
+
+  if (modeIndex === 0) {
+    // Zoom In
+    const zoom = interpolate(frame, [0, durationInFrames], [1.0, 1.15], { extrapolateRight: "clamp" });
+    transformStr = `scale(${zoom * entryScale})`;
+  } else if (modeIndex === 1) {
+    // Zoom Out
+    const zoom = interpolate(frame, [0, durationInFrames], [1.18, 1.02], { extrapolateRight: "clamp" });
+    transformStr = `scale(${zoom * entryScale})`;
+  } else if (modeIndex === 2) {
+    // Pan Right + Scale
+    const panX = interpolate(frame, [0, durationInFrames], [-4, 4], { extrapolateRight: "clamp" });
+    transformStr = `scale(${1.08 * entryScale}) translateX(${panX}%)`;
+  } else {
+    // Pan Left + Scale
+    const panX = interpolate(frame, [0, durationInFrames], [4, -4], { extrapolateRight: "clamp" });
+    transformStr = `scale(${1.08 * entryScale}) translateX(${panX}%)`;
+  }
+
+  // 3. Flash / Light-Leak Cut Effect (3-frame white burst at start of segment)
+  const flashOpacity = interpolate(
+    frame,
+    [0, 2, 6],
+    [0.9, 0.4, 0],
+    { extrapolateRight: "clamp" }
+  );
+
+  // 4. Crossfade Opacity at transition boundaries
+  const fadeFrames = 8;
+  const safeEndFade = Math.max(fadeFrames + 1, durationInFrames - fadeFrames);
+  const opacity = isFirst
+    ? interpolate(frame, [safeEndFade, durationInFrames], [1, 0], { extrapolateRight: "clamp" })
+    : interpolate(frame, [0, fadeFrames, safeEndFade, durationInFrames], [0, 1, 1, 0], { extrapolateRight: "clamp", extrapolateLeft: "clamp" });
+
+  // 5. Animated Caption Sticker Pop-In
+  const stickerSpr = spring({
+    frame: Math.max(0, frame - 4),
+    fps,
+    config: { damping: 14, mass: 0.6, stiffness: 120 },
+  });
+  const stickerScale = interpolate(stickerSpr, [0, 1], [0.5, 1.0]);
+  const stickerOpacity = interpolate(stickerSpr, [0, 1], [0, 1]);
+
+  const isPortrait = bg.orientation === "portrait";
+
+  return (
+    <AbsoluteFill style={{ opacity, backgroundColor: "#060608" }}>
+      {/* Background Ambient Blur Layer (for landscape photos) */}
+      {!isPortrait && (
+        <div style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0, overflow: "hidden" }}>
+          <Img
+            src={getAssetUrl(bg.path)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: "blur(40px) brightness(0.55) contrast(1.1)",
+              transform: "scale(1.3)",
+              position: "absolute",
+              top: 0,
+              left: 0,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              background: "radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.8) 100%)",
+              zIndex: 1,
+            }}
+          />
+        </div>
+      )}
+
+      {/* Main Photo Layer */}
+      {isPortrait ? (
+        // Edge-to-Edge Fullscreen Vertical Photo (9:16 Canvas)
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            transform: transformStr,
+            transformOrigin: "center",
+            position: "relative",
+            zIndex: 2,
+          }}
+        >
+          <Img
+            src={getAssetUrl(bg.path)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        </div>
+      ) : (
+        // Floating Glassmorphism Photo Card for Horizontal Photos
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            position: "relative",
+            zIndex: 2,
+            padding: "60px 40px",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              transform: transformStr,
+              transformOrigin: "center",
+            }}
+          >
+            <Img
+              src={getAssetUrl(bg.path)}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+                borderRadius: "28px",
+                boxShadow: "0 30px 80px rgba(0, 0, 0, 0.85), 0 0 40px rgba(255, 0, 127, 0.2)",
+                border: "3px solid rgba(255, 255, 255, 0.3)",
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Flash / Light Leak Transition Overlay */}
+      {frame < 8 && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "linear-gradient(135deg, #ffffff, #00ffff)",
+            opacity: flashOpacity,
+            mixBlendMode: "overlay",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}
         />
+      )}
+
+      {/* Aesthetic Kinetic Sticker Caption */}
+      {bg.caption && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "220px",
+            width: "100%",
+            display: "flex",
+            justifyContent: "center",
+            zIndex: 20,
+            transform: `scale(${stickerScale})`,
+            opacity: stickerOpacity,
+          }}
+        >
+          <div
+            style={{
+              background: "rgba(15, 23, 42, 0.85)",
+              backdropFilter: "blur(16px)",
+              border: "2px solid rgba(255, 255, 255, 0.3)",
+              borderRadius: "50px",
+              padding: "16px 36px",
+              boxShadow: "0 15px 35px rgba(0,0,0,0.6), 0 0 25px rgba(0,255,255,0.3)",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "Impact, Arial Black, sans-serif",
+                fontSize: "36px",
+                color: "#ffffff",
+                letterSpacing: "1.5px",
+                textTransform: "uppercase",
+              }}
+            >
+              {bg.caption}
+            </span>
+          </div>
+        </div>
       )}
     </AbsoluteFill>
   );
@@ -812,6 +1082,32 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             hint={emojiGuess.hint}
             fps={fps}
           />
+        </div>
+      ) : mode === "PHOTO_REEL" ? (
+        // Pro Photo Reel Mode with Spring Physics & Flash Cut Transitions
+        <div style={{ width: "100%", height: "100%", position: "relative" }}>
+          {backgrounds.map((bg, idx) => {
+            const startFrame = Math.round(bg.start * fps);
+            const endFrame = Math.round(bg.end * fps);
+            const isLast = idx === backgrounds.length - 1;
+            const durationInFrames = Math.max(1, (endFrame - startFrame) + (isLast ? 0 : 10));
+
+            return (
+              <Sequence
+                key={idx}
+                from={startFrame}
+                durationInFrames={durationInFrames}
+              >
+                <PhotoReelSegment
+                  bg={bg}
+                  fps={fps}
+                  durationInFrames={durationInFrames}
+                  segmentIndex={idx}
+                  isFirst={idx === 0}
+                />
+              </Sequence>
+            );
+          })}
         </div>
       ) : (
         // Standard modes (FACTS, STORY, NEWS, RIDDLE) with background loops

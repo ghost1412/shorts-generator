@@ -1,15 +1,15 @@
 import os
 import sys
-
-# PyInstaller Subprocess Hook: If running as compiled executable and given our flag, run backend.
-if getattr(sys, 'frozen', False) and len(sys.argv) > 1 and sys.argv[1] == "--run-main-pipeline":
-    sys.argv.pop(1) # Remove the flag so argparse doesn't break
-    import main
-    sys.exit(0)
-
 import threading
 import subprocess
 import json
+import time
+
+# PyInstaller Subprocess Hook: If running as compiled executable and given our flag, run backend.
+if getattr(sys, 'frozen', False) and len(sys.argv) > 1 and sys.argv[1] == "--run-main-pipeline":
+    sys.argv.pop(1)  # Remove flag
+    import main
+    sys.exit(0)
 
 try:
     import customtkinter as ctk
@@ -19,884 +19,728 @@ except ImportError:
     import customtkinter as ctk
     from tkinter import filedialog, messagebox
 
-# Configure theme
+# Configure dark theme aesthetics
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
 
 class ModernShortsGeneratorUI(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("⚡ ShortsFlow AI Studio - Complete AI & Master Engine")
-        self.geometry("1200x900")
-        self.minsize(1000, 800)
+        self.title("⚡ ShortsFlow AI Studio - Complete AI Video Engine")
+        self.geometry("1380x940")
+        self.minsize(1200, 800)
+        self.configure(fg_color="#0A0E17")  # Deep space dark background
 
-        # Header Frame
+        # State Variables
+        self.selected_caption_style = "HORMOZI"
+        self.is_running = False
+        self.latest_output_file = None
+
+        # Build UI Sections
         self.create_header()
-
-        # Tabview navigation
-        self.tabview = ctk.CTkTabview(self, width=1000, height=640)
-        self.tabview.pack(fill="both", expand=True, padx=20, pady=(10, 10))
-
-        self.tab_quickstart = self.tabview.add("⚡ Quick Start (1-Click)")
-        self.tab_clipping = self.tabview.add("✂️ Video Extraction")
-        self.tab_context = self.tabview.add("🧠 AI Context & Styles")
-        self.tab_llms = self.tabview.add("🤖 Integrated LLMs & Models")
-        self.tab_modes = self.tabview.add("🎬 Standalone Modes & Manim")
-        self.tab_quality = self.tabview.add("📐 Resolution & Quality")
-        self.tab_character = self.tabview.add("🧙 Story Creator")
-        self.tab_advanced = self.tabview.add("⚙️ Advanced & Batch")
-        self.tab_logs = self.tabview.add("📋 Execution Logs")
-
-        self.build_quickstart_tab()
-        self.build_clipping_tab()
-        self.build_context_tab()
-        self.build_llms_tab()
-        self.build_modes_tab()
-        self.build_quality_tab()
-        self.build_character_tab()
-        self.build_advanced_tab()
-        self.build_logs_tab()
-
-        # Footer Action Bar
-        self.create_footer()
-
-    def build_quickstart_tab(self):
-        card = ctk.CTkFrame(self.tab_quickstart, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(card, text="⚡ 1-Click Viral Short Generator", font=ctk.CTkFont(size=18, weight="bold"), text_color="#38BDF8").pack(anchor="w", padx=20, pady=(15, 2))
-        ctk.CTkLabel(card, text="Select a preset or paste a video URL / local file to generate high-retention 9:16 Shorts automatically.", font=ctk.CTkFont(size=12), text_color="#94A3B8").pack(anchor="w", padx=20, pady=(0, 15))
-
-        # Input source card
-        input_frame = ctk.CTkFrame(card, fg_color="#0F172A", corner_radius=8)
-        input_frame.pack(fill="x", padx=20, pady=10)
-
-        ctk.CTkLabel(input_frame, text="🎬 Source Video (YouTube URL or Local MP4 file):", font=ctk.CTkFont(size=12, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 5))
-
-        entry_subframe = ctk.CTkFrame(input_frame, fg_color="transparent")
-        entry_subframe.pack(fill="x", padx=15, pady=(0, 12))
-
-        self.qs_source_entry = ctk.CTkEntry(entry_subframe, placeholder_text="Paste YouTube URL or browse local MP4 video file...", width=620)
-        self.qs_source_entry.pack(side="left", padx=(0, 10))
-
-        browse_qs_btn = ctk.CTkButton(entry_subframe, text="📁 Browse", width=100, fg_color="#334155", hover_color="#475569", command=self.browse_qs_file)
-        browse_qs_btn.pack(side="left")
-
-        # Preset selection frame
-        preset_frame = ctk.CTkFrame(card, fg_color="#0F172A", corner_radius=8)
-        preset_frame.pack(fill="x", padx=20, pady=10)
-
-        ctk.CTkLabel(preset_frame, text="🎨 Styling & Subtitle Engine Presets:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 8))
-
-        grid = ctk.CTkFrame(preset_frame, fg_color="transparent")
-        grid.pack(fill="x", padx=15, pady=(0, 15))
-
-        # Subtitle Preset
-        ctk.CTkLabel(grid, text="Subtitle Preset:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=0, sticky="w", padx=(0, 10))
-        self.qs_caption_style = ctk.CTkOptionMenu(grid, values=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"], width=130)
-        self.qs_caption_style.grid(row=0, column=1, sticky="w", padx=(0, 15))
-
-        # Visual Filter Preset
-        ctk.CTkLabel(grid, text="Color Grade Filter:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=2, sticky="w", padx=(0, 10))
-        self.qs_video_filter = ctk.CTkOptionMenu(grid, values=["auto", "dynamic", "none", "kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"], width=140)
-        self.qs_video_filter.grid(row=0, column=3, sticky="w", padx=(0, 15))
-
-        # Mode Preset
-        ctk.CTkLabel(grid, text="Generation Mode:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").grid(row=0, column=4, sticky="w", padx=(0, 10))
-        self.qs_mode_preset = ctk.CTkOptionMenu(grid, values=["✂️ Auto Clipping (Long -> Short)", "📖 AI Story Mode", "💡 AI Facts Mode", "🎨 Filter Only (Color Grade)", "🧮 Math Explainer"], width=210)
-        self.qs_mode_preset.grid(row=0, column=5, sticky="w")
-
-        # Big 1-Click Launch Button
-        btn_frame = ctk.CTkFrame(card, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=(25, 10))
-
-        launch_qs_btn = ctk.CTkButton(
-            btn_frame,
-            text="🚀 GENERATE VIRAL SHORT NOW (1-CLICK)",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            fg_color="#10B981",
-            hover_color="#059669",
-            height=52,
-            command=self.run_qs_generation
-        )
-        launch_qs_btn.pack(fill="x")
-
-        # Open Output Folder Button
-        link_frame = ctk.CTkFrame(card, fg_color="transparent")
-        link_frame.pack(fill="x", padx=20, pady=(10, 15))
-
-        open_folder_btn = ctk.CTkButton(
-            link_frame,
-            text="📁 Open Rendered Videos Folder (sessions/)",
-            fg_color="#0284C7",
-            hover_color="#0369A1",
-            command=self.open_output_dir
-        )
-        open_folder_btn.pack(side="left")
-
-    def browse_qs_file(self):
-        filename = filedialog.askopenfilename(title="Select Source Video File", filetypes=[("Video Files", "*.mp4 *.mov *.avi *.mkv")])
-        if filename:
-            self.qs_source_entry.delete(0, "end")
-            self.qs_source_entry.insert(0, filename)
-
-    def open_output_dir(self):
-        sessions_dir = os.path.abspath("sessions")
-        os.makedirs(sessions_dir, exist_ok=True)
-        os.startfile(sessions_dir)
-
-    def run_qs_generation(self):
-        source = self.qs_source_entry.get().strip()
-        mode_val = self.qs_mode_preset.get()
-        caption_style = self.qs_caption_style.get()
-
-        # Carry the Quick Start caption style into start_generation via temp attribute
-        self._qs_caption_override = caption_style
-
-        if "Auto Clipping" in mode_val:
-            if not source:
-                messagebox.showwarning("Input Required", "Please enter a YouTube URL or select a local video file for Auto Clipping.")
-                return
-            self.source_entry.delete(0, "end")
-            self.source_entry.insert(0, source)
-            # Enable Remotion so the caption preset is actually used
-            if hasattr(self, "remotion_switch"):
-                self.remotion_switch.select()
-            self.tabview.set("✂️ Video Extraction")
-        else:
-            self.tabview.set("🎬 Standalone Modes & Manim")
-
-        self.start_generation()
+        self.create_studio_layout()
+        self.create_log_drawer()
 
     def create_header(self):
-        header = ctk.CTkFrame(self, fg_color="#0F172A", height=70, corner_radius=10)
-        header.pack(fill="x", padx=20, pady=(15, 5))
+        """Top Header Bar with Glassmorphic Accent and Status Badges"""
+        header = ctk.CTkFrame(self, fg_color="#0F172A", height=65, corner_radius=12, border_width=1, border_color="#1E293B")
+        header.pack(fill="x", padx=16, pady=(12, 6))
 
-        title_label = ctk.CTkLabel(
-            header, 
-            text="⚡ ShortsFlow AI Studio", 
-            font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
+        # Brand Logo & Title
+        brand_frame = ctk.CTkFrame(header, fg_color="transparent")
+        brand_frame.pack(side="left", padx=16, pady=10)
+
+        ctk.CTkLabel(
+            brand_frame,
+            text="⚡ ShortsFlow AI Studio",
+            font=ctk.CTkFont(family="Segoe UI", size=20, weight="bold"),
             text_color="#38BDF8"
-        )
-        title_label.pack(side="left", padx=20, pady=10)
+        ).pack(side="left")
 
-        subtitle_label = ctk.CTkLabel(
-            header, 
-            text="Autonomous Short/Long Video Pipeline & Multi-LLM Engine", 
+        ctk.CTkLabel(
+            brand_frame,
+            text="  |  Autonomous 9:16 Shorts & Video Studio",
             font=ctk.CTkFont(family="Segoe UI", size=12),
             text_color="#94A3B8"
-        )
-        subtitle_label.pack(side="left", pady=10)
+        ).pack(side="left", padx=(5, 0))
 
-        gpu_badge = ctk.CTkLabel(
-            header,
-            text="🟢 RTX 4060 GPU CUDA Active",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+        # Status Badges Frame
+        badges_frame = ctk.CTkFrame(header, fg_color="transparent")
+        badges_frame.pack(side="right", padx=16, pady=12)
+
+        # GPU Badge
+        gpu_label = ctk.CTkLabel(
+            badges_frame,
+            text="🟢 RTX GPU CUDA Active",
+            font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#064E3B",
             text_color="#34D399",
             corner_radius=6,
             padx=10,
             pady=4
         )
-        gpu_badge.pack(side="right", padx=20, pady=15)
+        gpu_label.pack(side="left", padx=4)
 
-    def build_llms_tab(self):
-        # 1. API Keys & Provider Settings Card
-        keys_card = ctk.CTkFrame(self.tab_llms, fg_color="#1E293B", corner_radius=10)
-        keys_card.pack(fill="x", padx=15, pady=(10, 5))
-
-        ctk.CTkLabel(keys_card, text="🔑 API Keys & Provider Integration", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 2))
-        ctk.CTkLabel(keys_card, text="Paste your custom Gemini, HuggingFace, or Stock API keys below to integrate your own accounts.", font=ctk.CTkFont(size=11), text_color="#94A3B8").pack(anchor="w", padx=15, pady=(0, 10))
-
-        grid_keys = ctk.CTkFrame(keys_card, fg_color="transparent")
-        grid_keys.pack(fill="x", padx=15, pady=(0, 10))
-
-        # Gemini API Key
-        ctk.CTkLabel(grid_keys, text="⚡ Gemini API Key:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#38BDF8").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.gemini_key_entry = ctk.CTkEntry(grid_keys, placeholder_text="Paste your Gemini API Key (e.g. AIzaSy...)", width=450, show="*")
-        self.gemini_key_entry.insert(0, os.getenv("GEMINI_API_KEY", ""))
-        self.gemini_key_entry.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=6)
-
-        # HuggingFace API Key
-        ctk.CTkLabel(grid_keys, text="🤗 HuggingFace Key:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#FBBF24").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.hf_key_entry = ctk.CTkEntry(grid_keys, placeholder_text="Paste your HuggingFace Token (hf_...)", width=450, show="*")
-        self.hf_key_entry.insert(0, os.getenv("HF_API_KEY", ""))
-        self.hf_key_entry.grid(row=1, column=1, sticky="w", padx=(0, 10), pady=6)
-
-        # Pexels API Key
-        ctk.CTkLabel(grid_keys, text="📹 Pexels Stock Key:", font=ctk.CTkFont(size=12, weight="bold"), text_color="#34D399").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.pexels_key_entry = ctk.CTkEntry(grid_keys, placeholder_text="Paste your Pexels Stock API Key", width=450, show="*")
-        self.pexels_key_entry.insert(0, os.getenv("PEXELS_API_KEY", ""))
-        self.pexels_key_entry.grid(row=2, column=1, sticky="w", padx=(0, 10), pady=6)
-
-        # Force Ollama Switch
-        self.ollama_switch = ctk.CTkSwitch(grid_keys, text="🦙 Force Local Ollama LLM (Bypass Cloud API for Offline/Privacy)")
-        self.ollama_switch.grid(row=3, column=0, columnspan=2, sticky="w", pady=6)
-
-        save_btn = ctk.CTkButton(grid_keys, text="💾 Save API Keys", width=140, fg_color="#0284C7", hover_color="#0369A1", command=self.save_api_keys)
-        save_btn.grid(row=0, column=2, rowspan=4, padx=15, pady=6, sticky="ns")
-
-        # 2. Model Status & Cascading Hierarchy Card
-        card = ctk.CTkFrame(self.tab_llms, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(card, text="🤖 Integrated AI LLMs & Cascading Fallback Hierarchy", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 5))
-        ctk.CTkLabel(card, text="ShortsFlow AI automatically cascades across these models for maximum intelligence and zero downtime.", text_color="#94A3B8").pack(anchor="w", padx=15, pady=(0, 15))
-
-        # Model Grid Cards
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(fill="x", padx=15, pady=5)
-
-        # 1. Google Gemini API
-        m1 = ctk.CTkFrame(grid, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#38BDF8")
-        m1.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
-
-        ctk.CTkLabel(m1, text="⚡ Google Gemini API", font=ctk.CTkFont(size=13, weight="bold"), text_color="#38BDF8").pack(anchor="w", padx=12, pady=(10, 2))
-        ctk.CTkLabel(m1, text="Models: gemini-3.7-flash, gemini-3.6-flash\nStatus: Integrated Primary API\nRole: Viral script generation & narrative extractions", font=ctk.CTkFont(size=11), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=12, pady=(0, 10))
-
-        # 2. Local Ollama LLM
-        m2 = ctk.CTkFrame(grid, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#10B981")
-        m2.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-
-        ctk.CTkLabel(m2, text="🦙 Local Ollama LLM", font=ctk.CTkFont(size=13, weight="bold"), text_color="#34D399").pack(anchor="w", padx=12, pady=(10, 2))
-        ctk.CTkLabel(m2, text="Models: qwen3:8b (or local Qwen/Llama)\nStatus: Integrated Local Privacy Fallback\nRole: Unlimited offline processing & reasoning", font=ctk.CTkFont(size=11), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=12, pady=(0, 10))
-
-        # 3. HuggingFace Router API
-        m3 = ctk.CTkFrame(grid, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#F59E0B")
-        m3.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
-
-        ctk.CTkLabel(m3, text="🤗 HuggingFace Router", font=ctk.CTkFont(size=13, weight="bold"), text_color="#FBBF24").pack(anchor="w", padx=12, pady=(10, 2))
-        ctk.CTkLabel(m3, text="Models: meta-llama/Llama-3.1-8B-Instruct\nStatus: Integrated Secondary Cloud API\nRole: Facts, WYR & Trivia generator fallback", font=ctk.CTkFont(size=11), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=12, pady=(0, 10))
-
-        # 4. Whisper GPU Transcription
-        m4 = ctk.CTkFrame(grid, fg_color="#0F172A", corner_radius=8, border_width=1, border_color="#8B5CF6")
-        m4.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-
-        ctk.CTkLabel(m4, text="🎙️ Faster-Whisper GPU Engine", font=ctk.CTkFont(size=13, weight="bold"), text_color="#C084FC").pack(anchor="w", padx=12, pady=(10, 2))
-        ctk.CTkLabel(m4, text="Models: Whisper Medium/Large-v3 (FP16 CUDA)\nStatus: NVIDIA RTX GPU Accelerated (~10x speed)\nRole: Word-level timestamped transcription", font=ctk.CTkFont(size=11), text_color="#CBD5E1", justify="left").pack(anchor="w", padx=12, pady=(0, 10))
-
-    def save_api_keys(self):
-        gemini_key = self.gemini_key_entry.get().strip()
-        hf_key = self.hf_key_entry.get().strip()
-        pexels_key = self.pexels_key_entry.get().strip()
-
-        if gemini_key: os.environ["GEMINI_API_KEY"] = gemini_key
-        if hf_key: os.environ["HF_API_KEY"] = hf_key
-        if pexels_key: os.environ["PEXELS_API_KEY"] = pexels_key
-
-        env_file = ".env"
-        env_vars = {}
-        if os.path.exists(env_file):
-            try:
-                with open(env_file, "r", encoding="utf-8", errors="replace") as f:
-                    for line in f:
-                        if "=" in line and not line.strip().startswith("#"):
-                            parts = line.strip().split("=", 1)
-                            env_vars[parts[0].strip()] = parts[1].strip()
-            except Exception:
-                pass
-
-        if gemini_key: env_vars["GEMINI_API_KEY"] = gemini_key
-        if hf_key: env_vars["HF_API_KEY"] = hf_key
-        if pexels_key: env_vars["PEXELS_API_KEY"] = pexels_key
-
-        try:
-            with open(env_file, "w", encoding="utf-8") as f:
-                for k, v in env_vars.items():
-                    f.write(f"{k}={v}\n")
-        except Exception as e:
-            print(f"[Warning] Failed to write .env file: {e}")
-
-        messagebox.showinfo("ShortsFlow AI", "✅ API Keys saved successfully!\nYour custom Gemini API Key will be used for all video generations.")
-
-    def build_clipping_tab(self):
-        card1 = ctk.CTkFrame(self.tab_clipping, fg_color="#1E293B", corner_radius=10)
-        card1.pack(fill="x", padx=15, pady=10)
-
-        ctk.CTkLabel(card1, text="📹 Video Source (YouTube URL or Local File)", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 5))
-
-        src_frame = ctk.CTkFrame(card1, fg_color="transparent")
-        src_frame.pack(fill="x", padx=15, pady=(0, 15))
-
-        self.source_entry = ctk.CTkEntry(
-            src_frame, 
-            placeholder_text="Paste YouTube Link (https://www.youtube.com/watch?v=...) or select video file path", 
-            width=680
+        # Remotion Engine Badge
+        remotion_label = ctk.CTkLabel(
+            badges_frame,
+            text="⚡ Remotion React Engine",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#1E1B4B",
+            text_color="#A78BFA",
+            corner_radius=6,
+            padx=10,
+            pady=4
         )
-        self.source_entry.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        remotion_label.pack(side="left", padx=4)
 
-        browse_btn = ctk.CTkButton(src_frame, text="📁 Browse", width=90, command=self.browse_source_file)
-        browse_btn.pack(side="right")
+        # Folder Shortcut
+        open_folder_btn = ctk.CTkButton(
+            badges_frame,
+            text="📁 sessions/",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#334155",
+            hover_color="#475569",
+            width=85,
+            height=26,
+            command=self.open_output_dir
+        )
+        open_folder_btn.pack(side="left", padx=4)
 
-        card2 = ctk.CTkFrame(self.tab_clipping, fg_color="#1E293B", corner_radius=10)
-        card2.pack(fill="x", padx=15, pady=10)
+    def create_studio_layout(self):
+        """Main 3-Column Studio Grid Layout"""
+        self.studio_grid = ctk.CTkFrame(self, fg_color="transparent")
+        self.studio_grid.pack(fill="both", expand=True, padx=16, pady=4)
 
-        ctk.CTkLabel(card2, text="🎛️ Extraction & Duration Controls", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 10))
+        self.studio_grid.grid_columnconfigure(0, weight=3)  # Left Column: Inputs & Modes
+        self.studio_grid.grid_columnconfigure(1, weight=4)  # Center Column: Video Canvas & Master CTA
+        self.studio_grid.grid_columnconfigure(2, weight=3)  # Right Column: Subtitles & Aesthetics
+        self.studio_grid.grid_rowconfigure(0, weight=1)
 
-        grid = ctk.CTkFrame(card2, fg_color="transparent")
-        grid.pack(fill="x", padx=15, pady=(0, 15))
+        self.build_left_pane()
+        self.build_center_pane()
+        self.build_right_pane()
 
-        # Extract Mode (Shorts vs Long)
-        ctk.CTkLabel(grid, text="Extraction Format:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", padx=(0, 5), pady=8)
-        self.extract_mode_dropdown = ctk.CTkOptionMenu(
-            grid,
+    def build_left_pane(self):
+        """Left Column: Source Video, Extraction Format, All Modes, LLM & Persona Voice"""
+        scroll_left = ctk.CTkScrollableFrame(self.studio_grid, fg_color="#0F172A", corner_radius=12, border_width=1, border_color="#1E293B")
+        scroll_left.grid(row=0, column=0, sticky="nsew", padx=(0, 6), pady=4)
+
+        # Title
+        ctk.CTkLabel(scroll_left, text="📥 Source & Extraction Format", font=ctk.CTkFont(size=15, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=14, pady=(14, 2))
+        ctk.CTkLabel(scroll_left, text="Specify video source link, extraction format & mode.", font=ctk.CTkFont(size=11), text_color="#94A3B8").pack(anchor="w", padx=14, pady=(0, 8))
+
+        # 1. Source Video Card
+        source_card = ctk.CTkFrame(scroll_left, fg_color="#1E293B", corner_radius=10)
+        source_card.pack(fill="x", padx=10, pady=5)
+
+        ctk.CTkLabel(source_card, text="🎬 Source Video (YouTube URL or Local File):", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=12, pady=(10, 4))
+
+        input_row = ctk.CTkFrame(source_card, fg_color="transparent")
+        input_row.pack(fill="x", padx=12, pady=(0, 6))
+
+        self.source_entry = ctk.CTkEntry(input_row, placeholder_text="Paste https://youtube.com/watch?v=...", height=34)
+        self.source_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        browse_btn = ctk.CTkButton(input_row, text="📁 Browse", width=70, height=34, fg_color="#334155", hover_color="#475569", command=self.browse_file)
+        browse_btn.pack(side="left")
+
+        # Extraction Format Dropdown
+        ctk.CTkLabel(source_card, text="🎞️ Video Extraction Format:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.extract_mode_menu = ctk.CTkOptionMenu(
+            source_card,
             values=[
-                "shorts (Short-form 9:16 vertical clips up to 60s)",
-                "long (Long-form extended highlights / compilations)"
+                "shorts (9:16 Vertical Viral Shorts)",
+                "highlights (Single Peak Viral Moment)",
+                "mashup (Combine All Clips into 1 Remix Video)",
+                "long (Process Long-Form Timeline)"
             ],
-            width=360
+            height=30,
+            fg_color="#0F172A",
+            button_color="#334155"
         )
-        self.extract_mode_dropdown.grid(row=0, column=1, columnspan=2, sticky="w", pady=8)
+        self.extract_mode_menu.pack(fill="x", padx=12, pady=(0, 10))
 
-        # Clip Count Slider
-        ctk.CTkLabel(grid, text="Clip Count:").grid(row=1, column=0, sticky="w", padx=(0, 5), pady=8)
-        self.clip_count_lbl = ctk.CTkLabel(grid, text="3 clips", font=ctk.CTkFont(weight="bold"))
-        self.clip_count_lbl.grid(row=1, column=1, sticky="w", padx=(0, 15), pady=8)
+        # 2. Complete Generation Modes Selector
+        mode_card = ctk.CTkFrame(scroll_left, fg_color="#1E293B", corner_radius=10)
+        mode_card.pack(fill="x", padx=10, pady=5)
 
-        self.clip_slider = ctk.CTkSlider(grid, from_=1, to=30, number_of_steps=29, command=self.update_clip_lbl, width=220)
-        self.clip_slider.set(3)
-        self.clip_slider.grid(row=1, column=2, sticky="w", padx=(0, 30), pady=8)
+        ctk.CTkLabel(mode_card, text="🎯 All Standalone Content Modes:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=12, pady=(10, 4))
 
-        # UNLIMITED Target Duration Input
-        ctk.CTkLabel(grid, text="Target Duration (Seconds):", font=ctk.CTkFont(weight="bold")).grid(row=2, column=0, sticky="w", padx=(0, 5), pady=8)
-        
-        dur_frame = ctk.CTkFrame(grid, fg_color="transparent")
-        dur_frame.grid(row=2, column=1, columnspan=2, sticky="w", pady=8)
-
-        self.dur_entry = ctk.CTkEntry(dur_frame, width=100)
-        self.dur_entry.insert(0, "30")
-        self.dur_entry.pack(side="left", padx=(0, 10))
-
-        ctk.CTkLabel(dur_frame, text="(Enter any duration: e.g. 30s, 60s, 180s, 300s, 600s, 1800s)").pack(side="left")
-
-        # Toggles
-        card3 = ctk.CTkFrame(self.tab_clipping, fg_color="#1E293B", corner_radius=10)
-        card3.pack(fill="x", padx=15, pady=10)
-
-        toggles_frame = ctk.CTkFrame(card3, fg_color="transparent")
-        toggles_frame.pack(fill="x", padx=15, pady=15)
-
-        self.smart_crop_switch = ctk.CTkSwitch(toggles_frame, text="AI Smart Crop (9:16 Face Tracking)")
-        self.smart_crop_switch.select()
-        self.smart_crop_switch.grid(row=0, column=0, padx=(0, 20), pady=5, sticky="w")
-
-        self.tighten_switch = ctk.CTkSwitch(toggles_frame, text="Tighten Pacing (Silence Removal)")
-        self.tighten_switch.select()
-        self.tighten_switch.grid(row=0, column=1, padx=(0, 20), pady=5, sticky="w")
-
-        self.mashup_switch = ctk.CTkSwitch(toggles_frame, text="Combine into Single Reel (Mashup)")
-        self.mashup_switch.grid(row=0, column=2, pady=5, sticky="w")
-
-        self.audio_detect_switch = ctk.CTkSwitch(toggles_frame, text="Use Audio Signal Detection (Spikes)")
-        self.audio_detect_switch.grid(row=1, column=0, padx=(0, 20), pady=5, sticky="w")
-
-        self.cache_switch = ctk.CTkSwitch(toggles_frame, text="Reuse Cached Transcripts & Videos")
-        self.cache_switch.select()
-        self.cache_switch.grid(row=1, column=1, pady=5, sticky="w")
-        
-        self.chapters_switch = ctk.CTkSwitch(toggles_frame, text="Use YouTube Chapters for Scoring")
-        self.chapters_switch.select()
-        self.chapters_switch.grid(row=2, column=0, padx=(0, 20), pady=5, sticky="w")
-        
-        self.broll_switch = ctk.CTkSwitch(toggles_frame, text="Auto B-Roll Cutaways (During Silence)")
-        self.broll_switch.grid(row=2, column=1, padx=(0, 20), pady=5, sticky="w")
-        
-        self.preview_switch = ctk.CTkSwitch(toggles_frame, text="Fast Preview Mode (Proxy Render)")
-        self.preview_switch.grid(row=2, column=2, pady=5, sticky="w")
-
-    def update_clip_lbl(self, val):
-        self.clip_count_lbl.configure(text=f"{int(val)} clips")
-
-    def build_context_tab(self):
-        card = ctk.CTkFrame(self.tab_context, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(card, text="🧠 AI Extraction Instructions & Style Presets", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 10))
-
-        # 1. Multiple Editing Style Presets Checkboxes
-        style_frame = ctk.CTkFrame(card, fg_color="transparent")
-        style_frame.pack(fill="x", padx=15, pady=5)
-
-        ctk.CTkLabel(style_frame, text="Editing Style Presets (Select one or multiple):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 5))
-
-        styles_grid = ctk.CTkFrame(style_frame, fg_color="transparent")
-        styles_grid.pack(fill="x", pady=5)
-
-        self.style_meme_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(styles_grid, text="Meme (Sound Effects, Zooms & Captions)", variable=self.style_meme_var).grid(row=0, column=0, padx=(0, 20), pady=5, sticky="w")
-
-        self.style_funny_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(styles_grid, text="Funny (Comedy Effects & Fast Pacing)", variable=self.style_funny_var).grid(row=0, column=1, padx=(0, 20), pady=5, sticky="w")
-
-        self.style_action_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(styles_grid, text="Action (High Energy Transitions & Cuts)", variable=self.style_action_var).grid(row=0, column=2, pady=5, sticky="w")
-
-        self.style_sarcastic_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(styles_grid, text="Sarcastic (Deadpan Commentary & SFX)", variable=self.style_sarcastic_var).grid(row=1, column=0, padx=(0, 20), pady=5, sticky="w")
-
-        self.style_stylish_var = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(styles_grid, text="Stylish (Cinematic Grading & Smooth Cuts)", variable=self.style_stylish_var).grid(row=1, column=1, padx=(0, 20), pady=5, sticky="w")
-
-        # 2. Dedicated User Context Box
-        ctx_frame = ctk.CTkFrame(card, fg_color="transparent")
-        ctx_frame.pack(fill="x", padx=15, pady=10)
-
-        ctk.CTkLabel(ctx_frame, text="User Narrative Context (--user_context):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 2))
-        ctk.CTkLabel(ctx_frame, text="Guide the AI on what specific scenes or content to extract (e.g. 'Extract high-speed police chases and funny GTA fails').", text_color="#94A3B8").pack(anchor="w", pady=(0, 5))
-        self.user_context_box = ctk.CTkTextbox(ctx_frame, height=75)
-        self.user_context_box.pack(fill="x")
-
-        # 3. Dedicated Style Context Box
-        sctx_frame = ctk.CTkFrame(card, fg_color="transparent")
-        sctx_frame.pack(fill="x", padx=15, pady=10)
-
-        ctk.CTkLabel(sctx_frame, text="Editing Style Context (--style_context):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 2))
-        ctk.CTkLabel(sctx_frame, text="Custom instructions for pacing and visual editing (e.g. 'Ultra fast cuts, dramatic bass drops, zoom in on funny faces').", text_color="#94A3B8").pack(anchor="w", pady=(0, 5))
-        self.style_context_box = ctk.CTkTextbox(sctx_frame, height=75)
-        self.style_context_box.pack(fill="x")
-
-    def build_quality_tab(self):
-        card = ctk.CTkFrame(self.tab_quality, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(card, text="📐 Resolution, Format & Bitrate Controls", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 10))
-
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(fill="x", padx=15, pady=5)
-
-        # Aspect Ratio / Resolution
-        ctk.CTkLabel(grid, text="Resolution & Format:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=8)
-        self.res_dropdown = ctk.CTkOptionMenu(
-            grid,
-            values=[
-                "9:16 Vertical (Shorts/Reels/TikTok - 1080x1920)",
-                "16:9 Landscape (YouTube Standard - 1920x1080)",
-                "1:1 Square (Instagram Post - 1080x1080)",
-                "4:5 Portrait (Social Feed - 1080x1350)"
-            ],
-            width=380
-        )
-        self.res_dropdown.grid(row=0, column=1, columnspan=2, sticky="w", pady=8)
-
-        # Quality Preset
-        ctk.CTkLabel(grid, text="Render Quality Preset:", font=ctk.CTkFont(weight="bold")).grid(row=1, column=0, sticky="w", padx=(0, 10), pady=8)
-        self.quality_dropdown = ctk.CTkOptionMenu(
-            grid,
-            values=["Medium (12M Bitrate - Standard)", "High (25M Bitrate - HQ Master)", "Ultra (50M Bitrate - 4K Crisp)", "Low (4M Bitrate - Fast Draft)"],
-            width=380
-        )
-        self.quality_dropdown.grid(row=1, column=1, columnspan=2, sticky="w", pady=8)
-
-        # Manual Bitrate & FFmpeg Preset
-        ctk.CTkLabel(grid, text="Manual Bitrate (e.g. 15000k):").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=8)
-        self.bitrate_entry = ctk.CTkEntry(grid, placeholder_text="Auto (leave blank for preset)", width=220)
-        self.bitrate_entry.grid(row=2, column=1, sticky="w", pady=8)
-
-        ctk.CTkLabel(grid, text="FFmpeg Preset:").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=8)
-        self.preset_dropdown = ctk.CTkOptionMenu(
-            grid,
-            values=["medium (Balanced)", "ultrafast (Fastest)", "slow (High Quality)", "slower (Maximum Compression)"],
-            width=220
-        )
-        self.preset_dropdown.grid(row=3, column=1, sticky="w", pady=8)
-        
-        # Gap Closure: SRT Export
-        self.srt_switch = ctk.CTkSwitch(grid, text="Export Subtitles as standard .SRT file")
-        self.srt_switch.select()
-        self.srt_switch.grid(row=4, column=0, columnspan=2, sticky="w", padx=(0, 10), pady=8)
-
-    def build_modes_tab(self):
-        card = ctk.CTkFrame(self.tab_modes, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(card, text="🎬 Standalone Content Generation Modes", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 10))
-
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(fill="x", padx=15, pady=5)
-
-        # Mode Dropdown
-        ctk.CTkLabel(grid, text="Select Content Mode:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", padx=(0, 10), pady=5)
         self.mode_dropdown = ctk.CTkOptionMenu(
-            grid,
+            mode_card,
             values=[
-                "FACTS (2 Truths 1 Lie)",
-                "STORY (AI First-Person Story)",
-                "EXPLAINER (Manim Math/Code Animations)",
-                "MUSIC (AI Audio & Visuals)",
-                "RIDDLE (Lateral Thinking Challenge)",
-                "NEWS (RSS Headlines)",
-                "NEWS_SERIOUS",
-                "REDDIT (AITA Drama)",
-                "TRIVIA (3 Options Reveal)",
-                "QUOTE (Cinematic Deep Quotes)",
-                "JWST (Space & Universe)",
-                "WYR (Would You Rather)",
-                "FIND_IT (Spot the Hidden Object)",
-                "ODD_ONE_OUT",
-                "GUESS_SOUND"
+                "✂️ Auto Clipping (Long -> Shorts)",
+                "💡 AI Facts Mode",
+                "📖 AI Story & Voiceover",
+                "🎭 Funny Explainer (Scene Breakdown)",
+                "🧮 Manim Math & CS Explainer",
+                "🤔 This or That (WYR Challenge)",
+                "🏆 Rank-It Tier List Reveal",
+                "❓ Interactive Trivia Quiz",
+                "🧩 Riddle & Lateral Thinking",
+                "📰 News Breakdown (Persona/Cartoon)",
+                "🚀 JWST Space Deep-Dive",
+                "🔊 Guess Sound Challenge",
+                "🖼️ Photo Reel & Slideshow",
+                "🎨 Color Grade Video Only"
             ],
-            width=360
+            height=34,
+            fg_color="#0F172A",
+            button_color="#334155",
+            command=self.on_mode_dropdown_change
         )
-        self.mode_dropdown.grid(row=0, column=1, sticky="w", pady=5)
+        self.mode_dropdown.pack(fill="x", padx=12, pady=(0, 8))
 
-        # Topic / Prompt
-        ctk.CTkLabel(grid, text="Prompt / Topic / Title:").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=5)
-        self.prompt_entry = ctk.CTkEntry(grid, placeholder_text="e.g. 'Mind-bending quantum physics facts' or 'Pythagorean Theorem'", width=480)
-        self.prompt_entry.grid(row=1, column=1, columnspan=2, sticky="w", pady=5)
+        # Context & Script Input (--user_context)
+        ctk.CTkLabel(mode_card, text="User Context / Scene Target:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.user_context_entry = ctk.CTkEntry(mode_card, placeholder_text="e.g. 'Dexter Morgan scene' or 'Pythagorean theorem'", height=30)
+        self.user_context_entry.pack(fill="x", padx=12, pady=(0, 6))
 
-        # Custom Script Box
-        ctk.CTkLabel(grid, text="Custom Script (Optional):").grid(row=2, column=0, sticky="nw", padx=(0, 10), pady=5)
-        self.script_box = ctk.CTkTextbox(grid, width=480, height=75)
-        self.script_box.grid(row=2, column=1, columnspan=2, sticky="w", pady=5)
+        # Style & Pacing Context (--style_context)
+        ctk.CTkLabel(mode_card, text="Editing Style & Pacing Context:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.style_context_entry = ctk.CTkEntry(mode_card, placeholder_text="e.g. 'fast cuts', 'cinematic build-up', 'meme pacing'", height=30)
+        self.style_context_entry.pack(fill="x", padx=12, pady=(0, 6))
 
-        # Custom Background Media (Image or Video)
-        ctk.CTkLabel(grid, text="Custom BG Media:").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=5)
-        bg_frame = ctk.CTkFrame(grid, fg_color="transparent")
-        bg_frame.grid(row=3, column=1, columnspan=2, sticky="w", pady=5)
+        # Mood / Vibe Selector
+        ctk.CTkLabel(mode_card, text="Narrative Vibe / Mood:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.vibe_menu = ctk.CTkOptionMenu(mode_card, values=["suspense", "sarcastic", "energetic", "calm", "mysterious", "spooky", "cinematic", "funny"], height=28, fg_color="#0F172A", button_color="#334155")
+        self.vibe_menu.pack(fill="x", padx=12, pady=(0, 10))
 
-        self.bg_media_entry = ctk.CTkEntry(bg_frame, placeholder_text="Path to custom background video (.mp4/.mov) or image (.png/.jpg)...", width=380)
-        self.bg_media_entry.pack(side="left", padx=(0, 10))
+        # 3. AI Model, Cartoon Persona & Voice Synthesizer Card
+        ai_card = ctk.CTkFrame(scroll_left, fg_color="#1E293B", corner_radius=10)
+        ai_card.pack(fill="x", padx=10, pady=5)
 
-        # Target Duration (For Standalone Modes)
-        ctk.CTkLabel(grid, text="Target Duration (s):").grid(row=4, column=0, sticky="w", padx=(0, 10), pady=5)
-        self.modes_dur_entry = ctk.CTkEntry(grid, placeholder_text="e.g. 45 or 60", width=120)
-        self.modes_dur_entry.grid(row=4, column=1, sticky="w", pady=5)
-
-        # Video Format (Shorts vs Long)
-        ctk.CTkLabel(grid, text="Video Format:").grid(row=5, column=0, sticky="w", padx=(0, 10), pady=5)
-        self.modes_extract_dropdown = ctk.CTkOptionMenu(
-            grid,
-            values=["shorts (Vertical 9:16)", "long (Horizontal 16:9)"],
-            width=180
+        ctk.CTkLabel(ai_card, text="🤖 LLM Model Provider:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=12, pady=(10, 4))
+        self.llm_provider = ctk.CTkOptionMenu(
+            ai_card,
+            values=["⚡ Gemini API (Primary)", "🦙 Local Ollama (Qwen/Llama)", "🤗 HuggingFace Router", "🚀 Groq Llama 3.3 70B", "🐉 DeepSeek Chat"],
+            height=30,
+            fg_color="#0F172A",
+            button_color="#334155"
         )
-        self.modes_extract_dropdown.grid(row=5, column=1, sticky="w", pady=5)
+        self.llm_provider.pack(fill="x", padx=12, pady=(0, 8))
 
-        browse_bg_btn = ctk.CTkButton(bg_frame, text="📁 Browse Media", width=100, command=self.browse_bg_media)
-        browse_bg_btn.pack(side="left")
-
-        # Category, Persona, Vibe
-        opt_grid = ctk.CTkFrame(card, fg_color="transparent")
-        opt_grid.pack(fill="x", padx=15, pady=10)
-
-        ctk.CTkLabel(opt_grid, text="Category:").grid(row=0, column=0, sticky="w", padx=(0, 5))
-        self.cat_dropdown = ctk.CTkOptionMenu(
-            opt_grid,
-            values=["science", "space", "history", "tech", "gaming", "animals", "cooking_hacks", "world", "politics"],
-            width=150
+        ctk.CTkLabel(ai_card, text="🎙️ Text-to-Speech Voice:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.voice_menu = ctk.CTkOptionMenu(
+            ai_card,
+            values=["en-US-GuyNeural (Male Dramatic)", "en-US-JennyNeural (Female Crisp)", "en-GB-SoniaNeural (British Deep)", "en-AU-WilliamNeural (Aussie Energetic)", "en-US-ChristopherNeural (Heroic)"],
+            height=28,
+            fg_color="#0F172A",
+            button_color="#334155"
         )
-        self.cat_dropdown.grid(row=0, column=1, padx=(0, 15))
+        self.voice_menu.pack(fill="x", padx=12, pady=(0, 8))
 
-        ctk.CTkLabel(opt_grid, text="Music Vibe:").grid(row=0, column=2, sticky="w", padx=(0, 5))
-        self.vibe_dropdown = ctk.CTkOptionMenu(
-            opt_grid,
-            values=["suspense", "spooky", "cinematic", "upbeat"],
-            width=140
+        # Cartoon Persona Selector
+        ctk.CTkLabel(ai_card, text="🧙 Cartoon Persona / Avatar:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.persona_menu = ctk.CTkOptionMenu(
+            ai_card,
+            values=["none (Standard Host)", "mafia_cat (Mafia Boss Cat)", "superhero (Hero Narrator)", "robot (Robotic Commentary)", "rabbit (Squeaky Cartoon)", "old_man (Grumpy Old Man)", "orange_cat (Energetic Cat)"],
+            height=28,
+            fg_color="#0F172A",
+            button_color="#334155"
         )
-        self.vibe_dropdown.grid(row=0, column=3, padx=(0, 15))
+        self.persona_menu.pack(fill="x", padx=12, pady=(0, 10))
 
-        ctk.CTkLabel(opt_grid, text="Cartoon Persona:").grid(row=0, column=4, sticky="w", padx=(0, 5))
-        self.persona_dropdown = ctk.CTkOptionMenu(
-            opt_grid,
-            values=["Default", "mafia_cat", "orange_cat", "rabbit", "robot", "superhero"],
-            width=140
+        # API Keys Accordion Drawer
+        keys_btn = ctk.CTkButton(scroll_left, text="🔑 Edit API Keys (.env)", fg_color="transparent", text_color="#38BDF8", hover_color="#1E293B", anchor="w", command=self.toggle_keys_window)
+        keys_btn.pack(fill="x", padx=10, pady=(4, 10))
+
+    def build_center_pane(self):
+        """Center Column: Live 9:16 Video Canvas Preview & Master CTA"""
+        center_frame = ctk.CTkFrame(self.studio_grid, fg_color="#0F172A", corner_radius=12, border_width=1, border_color="#1E293B")
+        center_frame.grid(row=0, column=1, sticky="nsew", padx=4, pady=4)
+
+        # Title
+        ctk.CTkLabel(center_frame, text="🎬 Live Canvas & Render Controls", font=ctk.CTkFont(size=15, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=16, pady=(14, 2))
+
+        # 9:16 Vertical Video Canvas Mock Container
+        self.canvas_frame = ctk.CTkFrame(center_frame, fg_color="#020617", corner_radius=14, border_width=2, border_color="#38BDF8")
+        self.canvas_frame.pack(fill="both", expand=True, padx=20, pady=8)
+
+        # Mock Video Content Inside Canvas
+        preview_inner = ctk.CTkFrame(self.canvas_frame, fg_color="#0F172A", corner_radius=10)
+        preview_inner.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # Top Badge Tag Bar inside Canvas
+        badge_row = ctk.CTkFrame(preview_inner, fg_color="transparent")
+        badge_row.pack(fill="x", padx=10, pady=8)
+
+        badge_box = ctk.CTkFrame(badge_row, fg_color="#1E1B4B", corner_radius=6)
+        badge_box.pack(side="right")
+        ctk.CTkLabel(badge_box, text="9:16 Vertical Short", font=ctk.CTkFont(size=10, weight="bold"), text_color="#A78BFA").pack(padx=8, pady=3)
+
+        # Mock Caption Text Display (Shows real-time subtitle preset feedback)
+        self.caption_preview_label = ctk.CTkLabel(
+            preview_inner,
+            text="TRANSFORM YOUR VIDEOS\nINTO VIRAL SHORTS",
+            font=ctk.CTkFont(family="Impact", size=22, weight="bold"),
+            text_color="#FFEA00",
+            justify="center"
         )
-        self.persona_dropdown.grid(row=0, column=5)
+        self.caption_preview_label.pack(expand=True)
 
-    def build_character_tab(self):
-        card = ctk.CTkFrame(self.tab_character, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
+        # Editable Parameters Below Canvas
+        param_row = ctk.CTkFrame(center_frame, fg_color="transparent")
+        param_row.pack(fill="x", padx=16, pady=4)
 
-        ctk.CTkLabel(card, text="🧙 Interactive Story & Kids Character Creator", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 10))
+        ctk.CTkLabel(param_row, text="Target Duration (s):", font=ctk.CTkFont(size=11), text_color="#94A3B8").pack(side="left", padx=(0, 4))
+        self.duration_menu = ctk.CTkComboBox(param_row, values=["15", "30", "45", "60", "90", "120", "180"], width=95, height=28)
+        self.duration_menu.set("45")
+        self.duration_menu.pack(side="left", padx=(0, 12))
 
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(param_row, text="Clip Count:", font=ctk.CTkFont(size=11), text_color="#94A3B8").pack(side="left", padx=(0, 4))
+        self.clip_count_menu = ctk.CTkComboBox(param_row, values=["1", "3", "5", "10", "15"], width=85, height=28)
+        self.clip_count_menu.set("3")
+        self.clip_count_menu.pack(side="left")
 
-        ctk.CTkLabel(grid, text="Hero Type:").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.hero_entry = ctk.CTkEntry(grid, placeholder_text="e.g. friendly dragon, brave knight, teddy bear", width=420)
-        self.hero_entry.grid(row=0, column=1, sticky="w", pady=6)
+        # Destination Output Directory Card
+        output_dir_frame = ctk.CTkFrame(center_frame, fg_color="#1E293B", corner_radius=8)
+        output_dir_frame.pack(fill="x", padx=16, pady=(6, 4))
 
-        ctk.CTkLabel(grid, text="Hero Name:").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.hero_name_entry = ctk.CTkEntry(grid, placeholder_text="e.g. Barnaby, Luna, Sparky", width=420)
-        self.hero_name_entry.grid(row=1, column=1, sticky="w", pady=6)
+        ctk.CTkLabel(output_dir_frame, text="📁 Destination Output Directory:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=10, pady=(6, 2))
 
-        ctk.CTkLabel(grid, text="Companion:").grid(row=2, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.companion_entry = ctk.CTkEntry(grid, placeholder_text="e.g. Twinkle the Pixie, Barnaby the Owl", width=420)
-        self.companion_entry.grid(row=2, column=1, sticky="w", pady=6)
+        dir_row = ctk.CTkFrame(output_dir_frame, fg_color="transparent")
+        dir_row.pack(fill="x", padx=10, pady=(0, 6))
 
-        ctk.CTkLabel(grid, text="Adventure Quest:").grid(row=3, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.quest_entry = ctk.CTkEntry(grid, placeholder_text="e.g. Finding the Lost Crystal of Wisdom", width=420)
-        self.quest_entry.grid(row=3, column=1, sticky="w", pady=6)
+        self.output_dir_entry = ctk.CTkEntry(dir_row, placeholder_text="Default: sessions/", height=28)
+        self.output_dir_entry.insert(0, os.path.abspath("sessions"))
+        self.output_dir_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
-        ctk.CTkLabel(grid, text="Adventure Setting:").grid(row=4, column=0, sticky="w", padx=(0, 10), pady=6)
-        self.setting_entry = ctk.CTkEntry(grid, placeholder_text="e.g. Starry Night Forest, Enchanted Castle", width=420)
-        self.setting_entry.grid(row=4, column=1, sticky="w", pady=6)
+        browse_out_btn = ctk.CTkButton(dir_row, text="📁 Browse", width=70, height=28, fg_color="#334155", hover_color="#475569", command=self.browse_output_dir)
+        browse_out_btn.pack(side="left")
 
-    def build_advanced_tab(self):
-        card = ctk.CTkFrame(self.tab_advanced, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(card, text="⚙️ Batch Processing, ComfyUI & Export Settings", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 10))
-
-        grid = ctk.CTkFrame(card, fg_color="transparent")
-        grid.pack(fill="x", padx=15, pady=5)
-
-        # Batch File
-        ctk.CTkLabel(grid, text="Batch File (urls.txt):").grid(row=0, column=0, sticky="w", padx=(0, 10), pady=5)
-        self.batch_entry = ctk.CTkEntry(grid, placeholder_text="Path to text file containing video URLs (one per line)", width=460)
-        self.batch_entry.grid(row=0, column=1, sticky="w", pady=5)
-        ctk.CTkButton(grid, text="Browse", width=80, command=self.browse_batch_file).grid(row=0, column=2, padx=(10, 0))
-
-        # Output JSON Export
-        ctk.CTkLabel(grid, text="JSON Export Path:").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=5)
-        self.json_entry = ctk.CTkEntry(grid, placeholder_text="e.g. output_results.json", width=460)
-        self.json_entry.grid(row=1, column=1, sticky="w", pady=5)
-
-        # Switches
-        sw_frame = ctk.CTkFrame(card, fg_color="transparent")
-        sw_frame.pack(fill="x", padx=15, pady=15)
-
-        self.remotion_switch = ctk.CTkSwitch(sw_frame, text="Use Remotion Engine")
-        self.remotion_switch.pack(side="left", padx=(0, 15))
-
-        self.comfy_switch = ctk.CTkSwitch(sw_frame, text="Use ComfyUI AI Backgrounds")
-        self.comfy_switch.pack(side="left", padx=(0, 15))
-
-        self.skip_upload_switch = ctk.CTkSwitch(sw_frame, text="Skip Social Uploads")
-        self.skip_upload_switch.select()
-        self.skip_upload_switch.pack(side="left")
-
-    def build_logs_tab(self):
-        card = ctk.CTkFrame(self.tab_logs, fg_color="#1E293B", corner_radius=10)
-        card.pack(fill="both", expand=True, padx=15, pady=10)
-
-        ctk.CTkLabel(card, text="📋 Real-Time Execution Log Console", font=ctk.CTkFont(size=14, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=15, pady=(12, 5))
-
-        self.log_text = ctk.CTkTextbox(card, font=ctk.CTkFont(family="Consolas", size=12), text_color="#E2E8F0", fg_color="#0F172A")
-        self.log_text.pack(fill="both", expand=True, padx=15, pady=(0, 10))
-
-    def create_footer(self):
-        footer = ctk.CTkFrame(self, fg_color="transparent")
-        footer.pack(fill="x", padx=20, pady=(5, 15))
-
-        self.generate_btn = ctk.CTkButton(
-            footer,
-            text="🚀 GENERATE VIDEO PIPELINE NOW",
-            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
-            fg_color="#2563EB",
-            hover_color="#1D4ED8",
-            height=48,
+        # Master CTA Generate Button
+        self.launch_btn = ctk.CTkButton(
+            center_frame,
+            text="🚀 GENERATE VIRAL SHORT NOW",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            fg_color="#10B981",
+            hover_color="#059669",
+            height=50,
+            corner_radius=10,
             command=self.start_generation
         )
-        self.generate_btn.pack(fill="x")
+        self.launch_btn.pack(fill="x", padx=16, pady=(8, 4))
 
-    def browse_source_file(self):
-        fn = filedialog.askopenfilename(filetypes=[("Video Files", "*.mp4 *.mov *.mkv *.webm"), ("All Files", "*.*")])
-        if fn:
+        # Progress Bar & Status Readout
+        self.progress_bar = ctk.CTkProgressBar(center_frame, height=8, fg_color="#1E293B", progress_color="#10B981")
+        self.progress_bar.set(0.0)
+        self.progress_bar.pack(fill="x", padx=16, pady=(2, 4))
+
+        self.status_label = ctk.CTkLabel(center_frame, text="Ready to create. Click button to render.", font=ctk.CTkFont(size=11), text_color="#94A3B8")
+        self.status_label.pack(pady=(0, 6))
+
+        # Quick Action Buttons Frame
+        action_row = ctk.CTkFrame(center_frame, fg_color="transparent")
+        action_row.pack(fill="x", padx=16, pady=(0, 10))
+
+        open_folder_btn = ctk.CTkButton(
+            action_row,
+            text="📁 Open Rendered Videos (sessions/)",
+            fg_color="#1E293B",
+            hover_color="#334155",
+            height=32,
+            command=self.open_output_dir
+        )
+        open_folder_btn.pack(side="left", fill="x", expand=True, padx=(0, 4))
+
+        self.play_last_btn = ctk.CTkButton(
+            action_row,
+            text="▶ Play Output",
+            fg_color="#0284C7",
+            hover_color="#0369A1",
+            height=32,
+            state="disabled",
+            command=self.play_latest_video
+        )
+        self.play_last_btn.pack(side="left", padx=(4, 0))
+
+    def build_right_pane(self):
+        """Right Column: Subtitle Presets, Aesthetic Filters, Quality Enhancements & Quality Settings"""
+        scroll_right = ctk.CTkScrollableFrame(self.studio_grid, fg_color="#0F172A", corner_radius=12, border_width=1, border_color="#1E293B")
+        scroll_right.grid(row=0, column=2, sticky="nsew", padx=(6, 0), pady=4)
+
+        # Title
+        ctk.CTkLabel(scroll_right, text="🎨 Subtitle & Pipeline Studio", font=ctk.CTkFont(size=15, weight="bold"), text_color="#F8FAFC").pack(anchor="w", padx=14, pady=(14, 2))
+        ctk.CTkLabel(scroll_right, text="Select caption presets & visual quality options.", font=ctk.CTkFont(size=11), text_color="#94A3B8").pack(anchor="w", padx=14, pady=(0, 8))
+
+        # Subtitle Style Selection Cards
+        ctk.CTkLabel(scroll_right, text="💬 Remotion Subtitle Style Preset:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=14, pady=(4, 4))
+
+        self.preset_cards = {}
+        styles = [
+            ("HORMOZI", "⚡ Hormozi Pop", "Dynamic word spring + neon highlights"),
+            ("GLOW_BOX", "✨ Glow Box", "Glassmorphic gradient phrase pill box"),
+            ("BOUNCE", "💥 Bounce Jump", "Upward jump animation + drop shadow"),
+            ("MINIMAL", "💬 Minimal Bar", "Clean modern dark bar subtitle")
+        ]
+
+        for key, title, desc in styles:
+            card = ctk.CTkFrame(scroll_right, fg_color="#1E293B", corner_radius=8, border_width=1, border_color="#334155", cursor="hand2")
+            card.pack(fill="x", padx=10, pady=3)
+
+            card.bind("<Button-1>", lambda e, k=key: self.select_caption_style(k))
+
+            lbl_title = ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=12, weight="bold"), text_color="#38BDF8")
+            lbl_title.pack(anchor="w", padx=12, pady=(6, 0))
+            lbl_title.bind("<Button-1>", lambda e, k=key: self.select_caption_style(k))
+
+            lbl_desc = ctk.CTkLabel(card, text=desc, font=ctk.CTkFont(size=10), text_color="#94A3B8")
+            lbl_desc.pack(anchor="w", padx=12, pady=(0, 6))
+            lbl_desc.bind("<Button-1>", lambda e, k=key: self.select_caption_style(k))
+
+            self.preset_cards[key] = card
+
+        self.select_caption_style("HORMOZI")  # Default active selection
+
+        # Visual Filter Selection Card
+        filter_card = ctk.CTkFrame(scroll_right, fg_color="#1E293B", corner_radius=10)
+        filter_card.pack(fill="x", padx=10, pady=(10, 5))
+
+        ctk.CTkLabel(filter_card, text="🎨 Visual Color Grade Preset:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=12, pady=(8, 4))
+
+        self.video_filter_menu = ctk.CTkOptionMenu(
+            filter_card,
+            values=["dynamic (AI Scene Switch)", "auto (AI Best Grade)", "none (Natural Colors)", "cyberpunk", "kurosawa (B&W Samurai)", "teal_orange (Movie)", "cinematic_warm", "vibrant_action", "vintage_vhs", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"],
+            height=30,
+            fg_color="#0F172A",
+            button_color="#334155"
+        )
+        self.video_filter_menu.set("dynamic (AI Scene Switch)")
+        self.video_filter_menu.pack(fill="x", padx=12, pady=(0, 8))
+
+        # Pipeline Enhancements & Quality Card
+        engine_card = ctk.CTkFrame(scroll_right, fg_color="#1E293B", corner_radius=10)
+        engine_card.pack(fill="x", padx=10, pady=5)
+
+        ctk.CTkLabel(engine_card, text="⚙️ Enhancements & Export Pipeline:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=12, pady=(8, 4))
+
+        self.smart_crop_switch = ctk.CTkSwitch(engine_card, text="🎯 Smart Crop & EMA Face Tracking", font=ctk.CTkFont(size=11))
+        self.smart_crop_switch.select()
+        self.smart_crop_switch.pack(anchor="w", padx=12, pady=4)
+
+        self.tighten_switch = ctk.CTkSwitch(engine_card, text="✂️ Auto-Tighten Audio (80ms Silence Cut)", font=ctk.CTkFont(size=11))
+        self.tighten_switch.select()
+        self.tighten_switch.pack(anchor="w", padx=12, pady=4)
+
+        self.hq_switch = ctk.CTkSwitch(engine_card, text="✨ High Quality Enhancements (Sharpen & Color)", font=ctk.CTkFont(size=11))
+        self.hq_switch.pack(anchor="w", padx=12, pady=4)
+
+        self.superres_switch = ctk.CTkSwitch(engine_card, text="📺 Super-Resolution / Legacy Deinterlace", font=ctk.CTkFont(size=11))
+        self.superres_switch.pack(anchor="w", padx=12, pady=4)
+
+        self.srt_switch = ctk.CTkSwitch(engine_card, text="📝 Export Standalone SRT Subtitle File", font=ctk.CTkFont(size=11))
+        self.srt_switch.pack(anchor="w", padx=12, pady=4)
+
+        self.broll_switch = ctk.CTkSwitch(engine_card, text="🎬 Download & Insert Auto B-Roll Cutaways", font=ctk.CTkFont(size=11))
+        self.broll_switch.pack(anchor="w", padx=12, pady=4)
+
+        self.remotion_switch = ctk.CTkSwitch(engine_card, text="⚡ Remotion React Subtitle Engine", font=ctk.CTkFont(size=11))
+        self.remotion_switch.select()
+        self.remotion_switch.pack(anchor="w", padx=12, pady=(0, 6))
+
+        ctk.CTkLabel(engine_card, text="Parallel Render Thread Workers:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.workers_menu = ctk.CTkOptionMenu(engine_card, values=["2 Workers (Default)", "4 Workers (High-End GPU)", "1 Worker (Low-RAM)"], height=28, fg_color="#0F172A", button_color="#334155")
+        self.workers_menu.pack(fill="x", padx=12, pady=(0, 10))
+
+    def create_log_drawer(self):
+        """Bottom Expandable Execution Log Drawer"""
+        self.log_drawer = ctk.CTkFrame(self, fg_color="#0F172A", height=130, corner_radius=12, border_width=1, border_color="#1E293B")
+        self.log_drawer.pack(fill="x", padx=16, pady=(4, 12))
+
+        header_row = ctk.CTkFrame(self.log_drawer, fg_color="transparent")
+        header_row.pack(fill="x", padx=12, pady=(6, 2))
+
+        ctk.CTkLabel(header_row, text="📋 Execution Log & Real-time Console", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(side="left")
+
+        self.log_textbox = ctk.CTkTextbox(self.log_drawer, height=85, fg_color="#020617", text_color="#34D399", font=ctk.CTkFont(family="Consolas", size=10))
+        self.log_textbox.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        self.log_textbox.insert("end", "--- ShortsFlow AI Studio Log Ready ---\n")
+
+    def select_caption_style(self, key):
+        """Visually Highlights Selected Caption Style Card"""
+        self.selected_caption_style = key
+
+        for card_key, card in self.preset_cards.items():
+            if card_key == key:
+                card.configure(fg_color="#1E1B4B", border_color="#38BDF8", border_width=2)
+            else:
+                card.configure(fg_color="#1E293B", border_color="#334155", border_width=1)
+
+        # Update mock canvas text styling
+        if key == "HORMOZI":
+            self.caption_preview_label.configure(text="TRANSFORM YOUR VIDEOS\nINTO VIRAL SHORTS", text_color="#FFEA00")
+        elif key == "GLOW_BOX":
+            self.caption_preview_label.configure(text="✨ GLASSMORPHIC GLOW\nPHRASE PILL", text_color="#00E5FF")
+        elif key == "BOUNCE":
+            self.caption_preview_label.configure(text="💥 UPWARD SPRING JUMP\nANIMATION", text_color="#39FF14")
+        else:
+            self.caption_preview_label.configure(text="💬 CLEAN MINIMAL\nMODERN BAR", text_color="#F8FAFC")
+
+    def on_mode_dropdown_change(self, val):
+        self.log(f"[Info] Selected Generation Mode: {val}")
+        if "Auto Clipping" in val or "Color Grade" in val:
+            self.voice_menu.configure(state="disabled")
+            self.persona_menu.configure(state="disabled")
+        else:
+            self.voice_menu.configure(state="normal")
+            self.persona_menu.configure(state="normal")
+
+    def browse_file(self):
+        filename = filedialog.askopenfilename(title="Select Source Video File", filetypes=[("Video Files", "*.mp4 *.mov *.avi *.mkv")])
+        if filename:
             self.source_entry.delete(0, "end")
-            self.source_entry.insert(0, fn)
+            self.source_entry.insert(0, filename)
+            self.log(f"[Input] Selected local video: {filename}")
 
-    def browse_batch_file(self):
-        fn = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
-        if fn:
-            self.batch_entry.delete(0, "end")
-            self.batch_entry.insert(0, fn)
+    def browse_output_dir(self):
+        folder = filedialog.askdirectory(title="Select Output Directory for Rendered Videos")
+        if folder:
+            self.output_dir_entry.delete(0, "end")
+            self.output_dir_entry.insert(0, folder)
+            self.log(f"[Output] Custom output directory set to: {folder}")
 
-    def browse_bg_media(self):
-        fn = filedialog.askopenfilename(filetypes=[("Media Files", "*.mp4 *.mov *.png *.jpg *.jpeg *.webp"), ("All Files", "*.*")])
-        if fn:
-            self.bg_media_entry.delete(0, "end")
-            self.bg_media_entry.insert(0, fn)
+    def open_output_dir(self):
+        target_dir = self.output_dir_entry.get().strip() or os.path.abspath("sessions")
+        os.makedirs(target_dir, exist_ok=True)
+        os.startfile(target_dir)
 
-    def log(self, msg):
-        self.log_text.insert("end", msg + "\n")
-        self.log_text.see("end")
+    def play_latest_video(self):
+        if self.latest_output_file and os.path.exists(self.latest_output_file):
+            os.startfile(self.latest_output_file)
+        else:
+            self.open_output_dir()
+
+    def toggle_keys_window(self):
+        """Popup Dialog to Edit API Keys"""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("🔑 Edit API Keys (.env)")
+        dialog.geometry("500x340")
+        dialog.attributes("-topmost", True)
+
+        ctk.CTkLabel(dialog, text="Edit API Keys", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
+
+        f = ctk.CTkFrame(dialog)
+        f.pack(fill="both", expand=True, padx=20, pady=10)
+
+        ctk.CTkLabel(f, text="Gemini API Key:").pack(anchor="w", padx=10, pady=(6, 0))
+        gemini_e = ctk.CTkEntry(f, width=420, show="*")
+        gemini_e.insert(0, os.getenv("GEMINI_API_KEY", ""))
+        gemini_e.pack(padx=10, pady=(0, 6))
+
+        ctk.CTkLabel(f, text="HuggingFace API Key:").pack(anchor="w", padx=10, pady=(4, 0))
+        hf_e = ctk.CTkEntry(f, width=420, show="*")
+        hf_e.insert(0, os.getenv("HF_API_KEY", ""))
+        hf_e.pack(padx=10, pady=(0, 6))
+
+        ctk.CTkLabel(f, text="Pexels API Key:").pack(anchor="w", padx=10, pady=(4, 0))
+        pex_e = ctk.CTkEntry(f, width=420, show="*")
+        pex_e.insert(0, os.getenv("PEXELS_API_KEY", ""))
+        pex_e.pack(padx=10, pady=(0, 10))
+
+        def save_keys():
+            os.environ["GEMINI_API_KEY"] = gemini_e.get().strip()
+            os.environ["HF_API_KEY"] = hf_e.get().strip()
+            os.environ["PEXELS_API_KEY"] = pex_e.get().strip()
+            self.log("[Success] API keys updated in environment.")
+            dialog.destroy()
+
+        ctk.CTkButton(dialog, text="💾 Save API Keys", fg_color="#10B981", command=save_keys).pack(pady=10)
+
+    def log(self, message):
+        self.log_textbox.insert("end", f"{message}\n")
+        self.log_textbox.see("end")
+
+    def open_output_dir(self):
+        sessions_dir = os.path.abspath("sessions")
+        os.makedirs(sessions_dir, exist_ok=True)
+        os.startfile(sessions_dir)
+
+    def play_latest_video(self):
+        if self.latest_output_file and os.path.exists(self.latest_output_file):
+            os.startfile(self.latest_output_file)
+        else:
+            self.open_output_dir()
 
     def start_generation(self):
-        self.tabview.set("📋 Execution Logs")
-        self.log_text.delete("1.0", "end")
-        self.generate_btn.configure(state="disabled", text="⏳ PIPELINE RUNNING...")
+        if self.is_running:
+            messagebox.showwarning("Busy", "A generation job is already running!")
+            return
 
-        threading.Thread(target=self.run_generation_thread, daemon=True).start()
+        source = self.source_entry.get().strip()
+        mode_str = self.mode_dropdown.get()
 
-    def run_generation_thread(self):
+        if "Auto Clipping" in mode_str and not source:
+            messagebox.showwarning("Input Required", "Please enter a YouTube URL or select a local video file for Auto Clipping.")
+            return
+
+        # Prepare Command Line Arguments for main.py
+        cmd = [sys.executable, "main.py"]
+
+        # Extraction Format
+        ext_mode = self.extract_mode_menu.get().split()[0]
+
+        if "Auto Clipping" in mode_str:
+            cmd.extend(["--source_video", source, "--extract_mode", ext_mode])
+            if ext_mode == "mashup":
+                cmd.append("--mashup")
+        elif "AI Facts" in mode_str:
+            cmd.extend(["--mode", "FACTS", "--category", self.user_context_entry.get().strip() or "space mysteries"])
+        elif "AI Story" in mode_str:
+            cmd.extend(["--mode", "STORY", "--category", self.user_context_entry.get().strip() or "sci-fi mystery"])
+        elif "Funny Explainer" in mode_str:
+            cmd.extend(["--mode", "FUNNY_EXPLAINER"])
+            if source: cmd.extend(["--source_video", source])
+        elif "Math Explainer" in mode_str:
+            cmd.extend(["--mode", "EXPLAINER", "--prompt", self.user_context_entry.get().strip() or "Explain gravity visually"])
+        elif "This or That" in mode_str:
+            cmd.extend(["--mode", "WYR", "--category", self.user_context_entry.get().strip() or "superpowers"])
+        elif "Rank-It" in mode_str:
+            cmd.extend(["--mode", "RANK_IT", "--category", self.user_context_entry.get().strip() or "supercars"])
+        elif "Trivia Quiz" in mode_str:
+            cmd.extend(["--mode", "TRIVIA", "--category", self.user_context_entry.get().strip() or "movies"])
+        elif "Riddle" in mode_str:
+            cmd.extend(["--mode", "RIDDLE", "--category", self.user_context_entry.get().strip() or "general"])
+        elif "News Breakdown" in mode_str:
+            cmd.extend(["--mode", "NEWS"])
+        elif "JWST Space" in mode_str:
+            cmd.extend(["--mode", "JWST"])
+        elif "Guess Sound" in mode_str:
+            cmd.extend(["--mode", "GUESS_SOUND"])
+        elif "Photo Reel" in mode_str:
+            cmd.extend(["--mode", "PHOTO_REEL", "--smart_story"])
+        elif "Color Grade" in mode_str:
+            cmd.extend(["--mode", "FILTER", "--source_video", source])
+
+        # Clip count & duration (Safely extracts typed integers or preset values)
+        clip_raw = self.clip_count_menu.get().strip()
+        clip_clean = ''.join(c for c in clip_raw if c.isdigit()) or "3"
+        cmd.extend(["--clip_count", clip_clean])
+
+        dur_raw = self.duration_menu.get().strip()
+        dur_clean = ''.join(c for c in dur_raw if c.isdigit()) or "45"
+        cmd.extend(["--target_duration", dur_clean])
+
+        # Voiceover selection (Only needed for AI Script Generation Modes, not Extraction Mode)
+        if "Auto Clipping" not in mode_str and "Color Grade" not in mode_str:
+            voice_str = self.voice_menu.get().split()[0]
+            cmd.extend(["--voice", voice_str])
+
+        # Cartoon Persona
+        persona_str = self.persona_menu.get().split()[0]
+        if persona_str != "none":
+            cmd.extend(["--cartoon", "--persona", persona_str])
+
+        # Vibe / Mood
+        cmd.extend(["--vibe", self.vibe_menu.get()])
+
+        # Caption style & Remotion
+        if self.remotion_switch.get() == 1:
+            cmd.extend(["--use_remotion", "--caption_style", self.selected_caption_style])
+
+        # Filter preset
+        filter_val = self.video_filter_menu.get().split()[0]
+        if filter_val != "none":
+            cmd.extend(["--video_filter", filter_val])
+
+        # Quality & Pipeline Switches
+        if self.smart_crop_switch.get() == 1:
+            cmd.append("--smart_crop")
+        if self.tighten_switch.get() == 1:
+            cmd.append("--tighten")
+        if self.hq_switch.get() == 1:
+            cmd.append("--hq")
+        if self.superres_switch.get() == 1:
+            cmd.append("--superres")
+        if self.srt_switch.get() == 1:
+            cmd.append("--srt")
+        if self.broll_switch.get() == 1:
+            cmd.append("--broll")
+
+        # Worker threads
+        workers_val = self.workers_menu.get().split()[0]
+        cmd.extend(["--max_workers", workers_val])
+
+        # Custom Session / Output Directory Override
+        custom_out_dir = self.output_dir_entry.get().strip()
+        if custom_out_dir:
+            cmd.extend(["--session_dir", custom_out_dir])
+
+        # User context (--user_context)
+        u_ctx = self.user_context_entry.get().strip()
+        if u_ctx:
+            cmd.extend(["--user_context", u_ctx])
+
+        # Style context (--style_context)
+        s_ctx = self.style_context_entry.get().strip()
+        if s_ctx:
+            cmd.extend(["--style_context", s_ctx])
+
+        # Skip upload for safety
+        cmd.append("--skip-upload")
+
+        # Launch Thread
+        self.is_running = True
+        self.launch_btn.configure(state="disabled", fg_color="#475569", text="⏳ GENERATING SHORT...")
+        self.progress_bar.set(0.15)
+        self.status_label.configure(text="[Processing] Launching main.py pipeline...", text_color="#FBBF24")
+
+        self.log(f"[Execution] Command: {' '.join(cmd)}")
+
+        threading.Thread(target=self.run_pipeline_thread, args=(cmd,), daemon=True).start()
+
+    def run_pipeline_thread(self, cmd):
         try:
-            if getattr(sys, 'frozen', False):
-                cmd = [sys.executable, "--run-main-pipeline"]
-            else:
-                python_exe = sys.executable
-                gpu_python = r"C:\Users\win10\AppData\Local\Programs\Python\Python312\python.exe"
-                if os.path.exists(gpu_python):
-                    python_exe = gpu_python
-                cmd = [python_exe, "main.py"]
-
-            source = self.source_entry.get().strip()
-            batch = self.batch_entry.get().strip()
-            mode_choice = self.mode_dropdown.get()
-
-            # Resolution & Quality Mapping
-            q_choice = self.quality_dropdown.get()
-            if "High" in q_choice: cmd.extend(["--quality", "high"])
-            elif "Ultra" in q_choice: cmd.extend(["--quality", "ultra"])
-            elif "Low" in q_choice: cmd.extend(["--quality", "low"])
-            else: cmd.extend(["--quality", "medium"])
-
-            bitrate = self.bitrate_entry.get().strip()
-            if bitrate: cmd.extend(["--bitrate", bitrate])
-
-            preset_choice = self.preset_dropdown.get().split()[0]
-            if preset_choice: cmd.extend(["--preset", preset_choice])
-
-            # Character Creator
-            hero = self.hero_entry.get().strip()
-            if hero: cmd.extend(["--hero", hero])
-
-            hero_name = self.hero_name_entry.get().strip()
-            if hero_name: cmd.extend(["--hero_name", hero_name])
-
-            companion = self.companion_entry.get().strip()
-            if companion: cmd.extend(["--companion", companion])
-
-            quest = self.quest_entry.get().strip()
-            if quest: cmd.extend(["--quest", quest])
-
-            setting = self.setting_entry.get().strip()
-            if setting: cmd.extend(["--setting", setting])
-
-            # Unlimited Target Duration (Applies to ALL modes, including EXPLAINER)
-            target_dur = ""
-            if hasattr(self, "modes_dur_entry") and self.modes_dur_entry.get().strip():
-                target_dur = self.modes_dur_entry.get().strip()
-            elif hasattr(self, "dur_entry") and self.dur_entry.get().strip():
-                target_dur = self.dur_entry.get().strip()
-            
-            if target_dur:
-                cmd.extend(["--target_duration", target_dur])
-
-            # Extract Format (shorts vs long) - Applies to all modes
-            if not source and hasattr(self, "modes_extract_dropdown"):
-                ext_fmt = self.modes_extract_dropdown.get().split()[0]
-            else:
-                ext_fmt = self.extract_mode_dropdown.get().split()[0]
-            cmd.extend(["--extract_mode", ext_fmt])
-
-            # Mode vs Extraction determination
-            if source:
-                cmd.extend(["--source_video", source])
-                cmd.extend(["--clip_count", str(int(self.clip_slider.get()))])
-
-                if self.smart_crop_switch.get(): cmd.append("--smart_crop")
-                if self.tighten_switch.get(): cmd.append("--tighten")
-                if self.mashup_switch.get(): cmd.append("--mashup")
-                if self.audio_detect_switch.get(): cmd.append("--use_audio_detect")
-                if self.cache_switch.get(): cmd.append("--use_cache")
-                
-                # Gap Closure Flags
-                if hasattr(self, 'chapters_switch') and self.chapters_switch.get(): cmd.append("--use_chapters")
-                if hasattr(self, 'broll_switch') and self.broll_switch.get(): cmd.append("--broll")
-                if hasattr(self, 'preview_switch') and self.preview_switch.get(): cmd.append("--preview")
-                if hasattr(self, 'srt_switch') and self.srt_switch.get(): cmd.append("--srt")
-                
-                # Multiple Style Presets Flags
-                if self.style_meme_var.get(): cmd.extend(["--style", "meme"])
-                if self.style_funny_var.get(): cmd.extend(["--style", "funny"])
-                if self.style_action_var.get(): cmd.extend(["--style", "action"])
-                if self.style_sarcastic_var.get(): cmd.extend(["--style", "sarcastic"])
-                if self.style_stylish_var.get(): cmd.extend(["--style", "stylish"])
-
-            elif batch:
-                cmd.extend(["--batch_file", batch])
-            else:
-                mode_key = mode_choice.split()[0]
-                cmd.extend(["--mode", mode_key])
-
-                prompt = self.prompt_entry.get().strip()
-                if prompt: cmd.extend(["--prompt", prompt])
-
-                script = self.script_box.get("1.0", "end").strip()
-                if script: cmd.extend(["--script", script])
-
-                cmd.extend(["--category", self.cat_dropdown.get()])
-                cmd.extend(["--vibe", self.vibe_dropdown.get()])
-
-                persona = self.persona_dropdown.get()
-                if persona != "Default": cmd.extend(["--persona", persona])
-
-            # User Context & Style Context
-            user_ctx = self.user_context_box.get("1.0", "end").strip()
-            if user_ctx: cmd.extend(["--user_context", user_ctx])
-
-            style_ctx = self.style_context_box.get("1.0", "end").strip()
-            if style_ctx: cmd.extend(["--style_context", style_ctx])
-
-            json_out = self.json_entry.get().strip()
-            if json_out: cmd.extend(["--output_json", json_out])
-
-            if self.remotion_switch.get(): cmd.append("--use_remotion")
-            if self.comfy_switch.get(): cmd.append("--use_comfy")
-            if self.skip_upload_switch.get(): cmd.append("--skip-upload")
-            if hasattr(self, "ollama_switch") and self.ollama_switch.get(): cmd.append("--use_ollama")
-
-            # Caption style: prefer Quick Start selection if coming from there, else default HORMOZI
-            caption_style_val = getattr(self, "_qs_caption_override", None)
-            if caption_style_val:
-                cmd.extend(["--caption_style", caption_style_val])
-                self._qs_caption_override = None  # consume it
-            else:
-                cmd.extend(["--caption_style", "HORMOZI"])  # safe default
-
-            bg_media = self.bg_media_entry.get().strip() if hasattr(self, "bg_media_entry") else ""
-            if bg_media: cmd.extend(["--bg_media", bg_media])
-
-            self.log("============================================================")
-            self.log(f"[ShortsFlow Studio] Executing Command:")
-            self.log(f"   {' '.join(cmd)}")
-            self.log("============================================================\n")
-
-            env = os.environ.copy()
-            env["PYTHONIOENCODING"] = "utf-8"
-            if hasattr(self, "gemini_key_entry") and self.gemini_key_entry.get().strip():
-                env["GEMINI_API_KEY"] = self.gemini_key_entry.get().strip()
-            if hasattr(self, "hf_key_entry") and self.hf_key_entry.get().strip():
-                env["HF_API_KEY"] = self.hf_key_entry.get().strip()
-            if hasattr(self, "pexels_key_entry") and self.pexels_key_entry.get().strip():
-                env["PEXELS_API_KEY"] = self.pexels_key_entry.get().strip()
-
-            proc = subprocess.Popen(
+            process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
-                env=env
+                encoding='utf-8',
+                errors='replace'
             )
 
-            for line in proc.stdout:
-                self.after(0, self.log, line.strip())
+            for line in process.stdout:
+                line_str = line.strip()
+                if line_str:
+                    self.log(line_str)
+                    if "Downloading" in line_str:
+                        self.progress_bar.set(0.35)
+                        self.status_label.configure(text="[Step 1/3] Downloading source video & transcribing...")
+                    elif "Remotion" in line_str or "Rendered" in line_str:
+                        self.progress_bar.set(0.75)
+                        self.status_label.configure(text="[Step 2/3] Rendering Remotion React captions...")
+                        if ".mp4" in line_str and ("saved to:" in line_str or "created:" in line_str):
+                            parts = line_str.split()
+                            for p in parts:
+                                if p.endswith(".mp4"):
+                                    self.latest_output_file = p
+                                    self.play_last_btn.configure(state="normal")
+                    elif "SUCCESS" in line_str:
+                        self.progress_bar.set(1.0)
+                        self.status_label.configure(text="🎉 SUCCESS! Video rendered in sessions/", text_color="#34D399")
 
-            proc.wait()
+            process.wait()
 
-            if proc.returncode == 0:
-                self.after(0, self.on_success)
+            if process.returncode == 0:
+                self.log("[Success] Pipeline completed successfully!")
+                self.progress_bar.set(1.0)
+                self.status_label.configure(text="🎉 SUCCESS! Video rendered in sessions/", text_color="#34D399")
             else:
-                self.after(0, self.on_failure, f"Process failed with exit code {proc.returncode}")
+                self.log(f"[Error] Pipeline exited with code {process.returncode}")
+                self.status_label.configure(text="❌ Execution failed. Check logs below.", text_color="#F87171")
 
         except Exception as e:
-            self.after(0, self.on_failure, str(e))
+            self.log(f"[Critical Error] {str(e)}")
+            self.status_label.configure(text=f"❌ Error: {str(e)}", text_color="#F87171")
 
-    def on_success(self):
-        self.generate_btn.configure(state="normal", text="🚀 GENERATE VIDEO PIPELINE NOW")
-        self.log("\n============================================================")
-        self.log("🎉 SUCCESS! Video generation completed. Output saved in sessions/")
-        self.log("============================================================")
-        messagebox.showinfo("ShortsFlow AI", "Generation Completed Successfully!\nOutput saved in 'sessions/' folder.")
+        finally:
+            self.is_running = False
+            self.launch_btn.configure(state="normal", fg_color="#10B981", text="🚀 GENERATE VIRAL SHORT NOW")
 
-    def on_failure(self, err):
-        self.generate_btn.configure(state="normal", text="🚀 GENERATE VIDEO PIPELINE NOW")
-        self.log(f"\n[Error] Pipeline error: {err}")
-        messagebox.showerror("ShortsFlow AI Error", f"Generation error occurred:\n{err}")
 
 if __name__ == "__main__":
     app = ModernShortsGeneratorUI()

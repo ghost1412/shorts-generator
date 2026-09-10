@@ -2707,7 +2707,84 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 
             return [out]
             
-    return extracted_files
+def create_photo_reel_video(photo_paths, music_path, output_path, beat_timestamps=None, target_duration=30.0):
+    """
+    Creates a 9:16 vertical Photo Reel / slideshow video with beat-synced transitions
+    and ambient blurred backgrounds from input photos and a music track.
+    """
+    if not photo_paths:
+        raise ValueError("No input photos provided for Photo Reel.")
+
+    # 1. Load background music track if available
+    audio_clip = None
+    if music_path and os.path.exists(music_path):
+        audio_clip = AudioFileClip(music_path)
+        music_dur = audio_clip.duration
+        if target_duration:
+            duration = min(target_duration, music_dur)
+        else:
+            duration = music_dur
+    else:
+        duration = target_duration or 30.0
+
+    # 2. Determine segment timestamps per photo
+    N = len(photo_paths)
+    if not beat_timestamps or len(beat_timestamps) < N:
+        seg_dur = duration / max(1, N)
+        timestamps = [i * seg_dur for i in range(N)]
+        timestamps.append(duration)
+    else:
+        timestamps = list(beat_timestamps[:N+1])
+        if len(timestamps) <= N:
+            timestamps.append(duration)
+
+    clips = []
+    for i, p_path in enumerate(photo_paths):
+        if not os.path.exists(p_path):
+            continue
+
+        t_start = timestamps[i]
+        t_end = timestamps[i+1] if i + 1 < len(timestamps) else duration
+        seg_duration = max(0.2, t_end - t_start)
+
+        try:
+            img_clip = ImageClip(p_path).with_duration(seg_duration)
+            
+            # Fit to 1080x1920 portrait canvas
+            if (img_clip.w / img_clip.h) >= (1080 / 1920):
+                fg_clip = img_clip.resized(width=1080)
+            else:
+                fg_clip = img_clip.resized(height=1920)
+                
+            fg_clip = fg_clip.with_position("center")
+
+            # Background layer filled to 1080x1920
+            bg_clip = img_clip.resized((1080, 1920))
+
+            comp = CompositeVideoClip([bg_clip, fg_clip], size=(1080, 1920)).with_duration(seg_duration)
+            clips.append(comp)
+        except Exception as e:
+            print(f"[Warning] Error processing photo {p_path}: {e}")
+
+    if not clips:
+        raise ValueError("Failed to process any valid photo clips for Photo Reel.")
+
+    from moviepy import concatenate_videoclips
+    final_video = concatenate_videoclips(clips, method="compose")
+
+    if audio_clip:
+        sub_audio = audio_clip.subclipped(0, min(audio_clip.duration, final_video.duration))
+        final_video = final_video.with_audio(sub_audio)
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    print(f"[Log] Rendering Photo Reel to {output_path}...")
+    final_video.write_videofile(output_path, fps=30, codec="libx264", audio_codec="aac")
+
+    if audio_clip:
+        audio_clip.close()
+    final_video.close()
+    return output_path
 
 if __name__ == "__main__":
     pass
+

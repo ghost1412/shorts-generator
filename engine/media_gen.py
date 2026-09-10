@@ -430,13 +430,22 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4")
     cached_video_path = os.path.join(global_cache_dir, f"{url_hash}.mp4")
     target_path = os.path.join(output_dir, filename)
 
-    # If already cached globally, copy and return immediately
+    # If already cached globally, validate integrity before reusing
     if os.path.exists(cached_video_path) and os.path.getsize(cached_video_path) > 1024:
-        print(f"[Log] Found cached video for URL: '{url}'")
-        print(f"[Log] Reusing cached file: {cached_video_path}")
-        if os.path.abspath(cached_video_path) != os.path.abspath(target_path):
-            shutil.copy2(cached_video_path, target_path)
-        return target_path
+        try:
+            import imageio_ffmpeg
+            ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+            probe = subprocess.run([ffmpeg_exe, "-i", cached_video_path], capture_output=True, text=True, timeout=10)
+            if "moov atom not found" in probe.stderr or "Invalid data" in probe.stderr:
+                print(f"[Warning] Cached file corrupted ({cached_video_path}). Removing and re-downloading...")
+                os.remove(cached_video_path)
+            else:
+                print(f"[Log] Found valid cached video for URL: '{url}'")
+                if os.path.abspath(cached_video_path) != os.path.abspath(target_path):
+                    shutil.copy2(cached_video_path, target_path)
+                return target_path
+        except Exception:
+            pass
 
     print(f"[Log] Downloading video from URL: {url}")
     
