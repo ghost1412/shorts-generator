@@ -15,7 +15,7 @@ ShortsFlow AI Studio is an open-source, local-first AI video generator and autom
 * **Transcription Engine (`Whisper / CUDA`)**: Local GPU-accelerated word-timestamped transcription.
 * **Animation & Rendering Engine (`remotion-video/`)**: React-based video engine rendering high-retention spring captions (Hormozi, Glow Box, Bounce, Minimal).
 * **Educational Explainer Engine (`Manim`)**: Renders programmatic 2D/3D math and computer science animations (`test_manim.py`).
-* **Desktop GUI (`gui_app.py`)**: PySimpleGUI interface for standalone user operation.
+* **Desktop Studio GUI (`gui_app.py`)**: Single-window 3-column CustomTkinter studio interface with live 9:16 video canvas preview.
 * **Web Dashboard (`web/` & `server.py`)**: Next.js 15 App Router interface with Stripe/LemonSqueezy payments & YouTube OAuth.
 * **Automated CI/CD Workflows (`.github/workflows/daily_generate.yml`)**: GitHub Action for scheduled autonomous short generation and social posting.
 
@@ -28,13 +28,18 @@ ShortsFlow AI Studio is an open-source, local-first AI video generator and autom
 * **Node.js**: `v18+` (Required for Remotion React video rendering)
 * **FFmpeg**: Must be available in system `PATH`
 
-### 1-Click Installation
+### 1-Click Installation & GUI Launch
 ```bash
-# Windows
+# Windows Setup & Interactive Launcher
 setup.bat
+launch.bat  # Select Option 1 for Desktop Studio GUI
+
+# Launch GUI directly via Python:
+python gui_app.py
 
 # Linux / macOS
 chmod +x setup.sh && ./setup.sh
+python3 gui_app.py
 
 # Docker Container
 docker compose up -d
@@ -89,6 +94,12 @@ python main.py \
   --use_remotion
 ```
 
+### Skill 5: Launch Single-Window Interactive Studio GUI
+```bash
+# Launch visual CustomTkinter 3-column studio layout
+python gui_app.py
+```
+
 ---
 
 ## 📜 4. Engine Codebase Map
@@ -96,7 +107,7 @@ python main.py \
 | File Path | Functional Role |
 | :--- | :--- |
 | `main.py` | Primary CLI entry point & global pipeline orchestrator |
-| `gui_app.py` | PySimpleGUI desktop application |
+| `gui_app.py` | Single-window 3-column CustomTkinter Desktop Studio application |
 | `engine/media_gen.py` | Stock media downloader (Pexels API fallback), AI image generation |
 | `engine/video_gen.py` | FFmpeg filters, face-tracking EMA, silence removal (`--tighten`) |
 | `engine/remotion_renderer.py` | Bridge between Python pipeline and Node.js Remotion React renderer |
