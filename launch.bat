@@ -39,7 +39,13 @@ if "%API_OK%"=="0" (
 :: DEFAULT: LAUNCH DESKTOP GUI
 echo.
 echo [Info] Launching ShortsFlow Studio GUI...
-python gui_app.py
+py -3.12 --version >nul 2>&1
+if %errorlevel% equ 0 (
+    set PY_CMD=py -3.12
+) else (
+    set PY_CMD=python
+)
+%PY_CMD% gui_app.py
 if %errorlevel% neq 0 (
     echo.
     echo [Error] ShortsFlow Studio GUI failed to launch!
@@ -90,7 +96,7 @@ echo ============================================================
 echo.
 
 :: Happy Path Default Command (Best settings for long-form to shorts)
-python main.py --source_video "%VIDEO_INPUT%" --clip_count %CLIP_COUNT% --target_duration 45 --min_duration 15 --smart_crop --tighten --broll --use_remotion --caption_style %CAPTION_PRESET% --output_json "latest_run.json"
+%PY_CMD% main.py --source_video "%VIDEO_INPUT%" --clip_count %CLIP_COUNT% --target_duration 45 --min_duration 15 --smart_crop --tighten --broll --use_remotion --caption_style %CAPTION_PRESET% --output_json "latest_run.json"
 
 echo.
 echo ============================================================

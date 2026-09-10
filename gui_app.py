@@ -565,6 +565,17 @@ class ModernShortsGeneratorUI(ctk.CTk):
         else:
             self.open_output_dir()
 
+    def get_python_cmd(self):
+        """Returns the preferred Python command list (prefers 'py -3.12' on Windows if available)."""
+        if sys.platform == "win32":
+            try:
+                res = subprocess.run(["py", "-3.12", "-c", "import sys; sys.exit(0)"], capture_output=True)
+                if res.returncode == 0:
+                    return ["py", "-3.12"]
+            except Exception:
+                pass
+        return [sys.executable]
+
     def start_generation(self):
         if self.is_running:
             messagebox.showwarning("Busy", "A generation job is already running!")
@@ -577,8 +588,8 @@ class ModernShortsGeneratorUI(ctk.CTk):
             messagebox.showwarning("Input Required", "Please enter a YouTube URL or select a local video file for Auto Clipping.")
             return
 
-        # Prepare Command Line Arguments for main.py
-        cmd = [sys.executable, "main.py"]
+        # Prepare Command Line Arguments for main.py (uses py -3.12 when available)
+        cmd = self.get_python_cmd() + ["main.py"]
 
         # Extraction Format
         ext_mode = self.extract_mode_menu.get().split()[0]
