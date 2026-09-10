@@ -825,20 +825,24 @@ if getattr(args, "source_video", None) and args.mode not in ["TRAILER_MISSED", "
     )
     
     # Export SRT for each extracted file
-    if args.srt and os.path.exists(transcript_path):
+    if getattr(args, 'srt', False) and extracted_files and os.path.exists(transcript_path):
         print(f"[Log] Exporting SRT files for {len(extracted_files)} clips...")
-        with open(transcript_path, 'r', encoding='utf-8') as f:
-            t_data = json.load(f)
-        for i, clip_file in enumerate(extracted_files):
-            # Try to map the global transcript to the specific clip bounds
-            hi = highlights[i]
-            clip_segs = [s for s in t_data.get('segments', []) if s['start'] >= hi['start'] and s['end'] <= hi['end']]
-            # Offset times relative to clip start
-            for s in clip_segs:
-                s['start'] = max(0, s['start'] - hi['start'])
-                s['end'] = max(0, s['end'] - hi['start'])
-            srt_path = clip_file.rsplit('.', 1)[0] + ".srt"
-            export_srt({'segments': clip_segs}, srt_path)
+        try:
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                t_data = json.load(f)
+            for i, clip_file in enumerate(extracted_files):
+                if i < len(highlights):
+                    hi = highlights[i]
+                    clip_segs = [s for s in t_data.get('segments', []) if s['start'] >= hi['start'] and s['end'] <= hi['end']]
+                    # Offset times relative to clip start
+                    for s in clip_segs:
+                        s['start'] = max(0, s['start'] - hi['start'])
+                        s['end'] = max(0, s['end'] - hi['start'])
+                    srt_path = clip_file.rsplit('.', 1)[0] + ".srt"
+                    from engine.video_gen import export_srt
+                    export_srt({'segments': clip_segs}, srt_path)
+        except Exception as e:
+            print(f"[Warning] Failed to export SRT files: {e}")
             
 
     
