@@ -1140,17 +1140,17 @@ else:
             facts_data = [] # Not used in story mode but kept for metadata function compatibility
             print(f"[Log] Story: {story_data['story']}")
         elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
-            # Channel Manager Intro
+            target_q = args.category or args.hero or args.prompt or "Cat"
+            num_t = args.clip_count if getattr(args, "clip_count", 7) and args.clip_count != 5 else 7
             intros = [
-                "Only GIGACHADS can find this! 🗿",
-                "Bro is hiding from the IRS! 🤫",
-                "99% of you will FAIL this challenge! 🧠",
-                "POV: You are searching for your brain cells... found him yet?",
-                "If you don't find this, you owe me a sub! 🤝"
+                f"99% of people WILL FAIL to find all {num_t} {target_q}s! 🧠",
+                f"Only GIGACHADS can spot all {num_t} {target_q}s! 🗿",
+                f"Can you spot all {num_t} hidden {target_q}s before time runs out? 🤫",
+                f"If you find all {num_t} {target_q}s, you owe me a sub! 🤝"
             ]
-            full_script = f"{random.choice(intros)} ... 🔍 Spot the target in 5 seconds! ... ... ... ... ... Did you find it? ... ... "
+            full_script = f"{random.choice(intros)} ... 🔍 10 seconds on the clock! ... ... ... ... ... Did you spot them all? Comment below!"
             facts_data = []
-            print(f"[Log] Game mode: {mode}", flush=True)
+            print(f"[Log] Meme Puzzle Game Mode: {mode} (Target: {target_q}, Count: {num_t})", flush=True)
         elif mode == "EMOJI_GUESS":
             from engine.script_gen import generate_emoji_guess
             emoji_data = generate_emoji_guess(category)
@@ -1452,15 +1452,30 @@ elif mode == "STORY":
         paths = get_bg_path(search_query, bg_filename, target_duration=seg_len)
         bg_video_paths.extend(paths)
 elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
-    from engine.media_gen import get_game_assets
-    # Pass a custom directory or unique prefix if possible (get_game_assets needs update)
-    game_assets = get_game_assets(50, output_dir=session_dir)
+    from engine.media_gen import get_puzzle_meme_assets, download_image
+    target_q = getattr(args, "bg_media", None) or args.category or args.hero or args.prompt or "Cat"
+    num_t = args.clip_count if getattr(args, "clip_count", 7) and args.clip_count != 5 else 7
+    game_assets = get_puzzle_meme_assets(target_query=target_q, num_objects=num_t, output_dir=session_dir)
     target_path = game_assets["target_path"]
     target_name = game_assets["target_name"]
-    obj_paths = game_assets["objects"]
-    if not target_path:
-        print(f"[Error] Failed to download {target_name} image.", flush=True)
+    num_targets = game_assets["num_targets"]
+    if not target_path or not os.path.exists(target_path):
+        print(f"[Error] Failed to load {target_name} sticker image.", flush=True)
         sys.exit(0)
+    static_bg_path = os.path.join(session_dir, "bg_puzzle_scenic_static.png")
+    scenic_queries = [
+        "scenic landscape rice terraces nature mountains",
+        "beautiful nature landscape vertical 4k",
+        "scenic countryside nature vertical",
+        "cozy aesthetic room interior"
+    ]
+    bg_img = download_image(random.choice(scenic_queries), output_path=static_bg_path)
+    if bg_img and os.path.exists(bg_img):
+        bg_video_paths = [bg_img]
+    else:
+        bg_filename = os.path.join(session_dir, "bg_puzzle_scenic.mp4")
+        paths = get_bg_path("scenic landscape nature mountains", bg_filename, target_duration=total_bg_duration)
+        bg_video_paths.extend(paths)
 elif mode == "WYR":
     # 2 backgrounds for split screen
     seg_len = total_bg_duration / 2
@@ -1715,17 +1730,18 @@ if args.use_remotion and mode in remotion_supported_modes:
     )
 else:
     if mode == "FIND_IT" or mode == "FIND_CAT":
-        from engine.video_gen import create_game_video
-        final_video = create_game_video(
+        from engine.video_gen import create_meme_puzzle_video
+        final_video = create_meme_puzzle_video(
             audio_path,
-            subs_path,
+            bg_video_paths,
             target_path,
-            obj_paths,
             output_filename,
             target_name=target_name,
+            num_targets=num_targets,
             music_path=bg_music,
             bitrate=target_bitrate,
-            preset=target_preset
+            preset=target_preset,
+            show_reveal=getattr(args, "show_reveal", False)
         )
     elif mode == "WYR":
         from engine.video_gen import create_wyr_video

@@ -967,7 +967,11 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                     img_clip = img_clip.cropped(x1=0, y1=y_start, x2=w, y2=y_start + w)
                 
                 # Loop to cover full duration
-                img_clip = img_clip.with_effects([vfx.Loop(n=None, duration=duration)])
+                if img_clip.duration and img_clip.duration > 0:
+                    n_loops = int(np.ceil(duration / img_clip.duration))
+                    img_clip = img_clip.with_effects([vfx.Loop(n=n_loops)]).with_duration(duration)
+                else:
+                    img_clip = img_clip.with_effects([vfx.Loop(duration=duration)])
             else:
                 # Image Avatar: Load as static image
                 img_clip = ImageClip(avatar_path).with_start(0).with_duration(duration)
@@ -1331,6 +1335,185 @@ def create_game_video(audio_path, subs_path, target_path, object_paths, output_p
     final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
     
     return output_path
+
+def create_rounded_header_banner(text="Find 7 Cat", width=900, height=170, bg_color="white", text_color="black"):
+    """
+    Creates a clean rounded rectangle header banner matching viral TikTok puzzle UI.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    corner_radius = 45
+    draw.rounded_rectangle([(0, 0), (width, height)], radius=corner_radius, fill=bg_color, outline="#111111", width=4)
+    
+    font = None
+    font_size = 90
+    while font_size > 30:
+        try:
+            font = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", font_size)
+        except Exception:
+            font = ImageFont.load_default()
+            break
+        bbox = draw.textbbox((0, 0), text, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        if w < width - 60 and h < height - 30:
+            break
+        font_size -= 5
+        
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    
+    tx = (width - tw) // 2
+    ty = (height - th) // 2 - 5
+    
+    draw.text((tx, ty), text, font=font, fill=text_color)
+    
+    out_path = os.path.join("assets", f"header_banner_{random.randint(100,999)}.png")
+    os.makedirs("assets", exist_ok=True)
+    img.save(out_path, "PNG")
+    return out_path
+
+def create_meme_puzzle_video(audio_path, bg_paths, target_sticker_path, output_path="meme_puzzle_short.mp4", target_name="Cat", num_targets=7, music_path=None, bitrate="8000k", preset="medium", show_reveal=False):
+    """
+    Renders high-engagement 'Find N Meme' puzzle video (e.g. Find 7 Cat) with scenic background,
+    white rounded header, scattered cutout stickers, countdown bar, and comment CTA.
+    """
+    try:
+        audio_clip = AudioFileClip(audio_path)
+        duration = audio_clip.duration
+    except Exception as e:
+        print(f"[Warning] Audio unreadable or absent: {e}")
+        audio_clip = None
+        duration = 15.0
+
+    # 1. Scenic Background Setup
+    if isinstance(bg_paths, list) and len(bg_paths) > 0:
+        bg_file = bg_paths[0]
+    elif isinstance(bg_paths, str) and os.path.exists(bg_paths):
+        bg_file = bg_paths
+    else:
+        bg_file = None
+
+    if bg_file and bg_file.lower().endswith(('.mp4', '.mov', '.avi', '.webm')):
+        try:
+            raw_bg = VideoFileClip(bg_file)
+            bg_clip = raw_bg.without_audio().with_effects([vfx.Resize(height=1920)])
+            if bg_clip.w < 1080:
+                bg_clip = bg_clip.with_effects([vfx.Resize(width=1080)])
+            bg_clip = bg_clip.cropped(x_center=bg_clip.w/2, y_center=bg_clip.h/2, width=1080, height=1920)
+            if bg_clip.duration < duration:
+                bg_clip = bg_clip.with_effects([vfx.Loop(duration=duration)])
+            else:
+                bg_clip = bg_clip.subclipped(0, duration)
+        except Exception as e:
+            print(f"[Warning] Failed loading video BG, using scenic color fallback: {e}")
+            bg_clip = ColorClip(size=(1080, 1920), color=(40, 120, 60)).with_duration(duration)
+    elif bg_file and bg_file.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+        try:
+            img = Image.open(bg_file).convert("RGB")
+            # Crop to 9:16 ratio
+            target_ratio = 1080 / 1920
+            img_ratio = img.width / img.height
+            if img_ratio > target_ratio:
+                new_w = int(img.height * target_ratio)
+                left = (img.width - new_w) // 2
+                img = img.crop((left, 0, left + new_w, img.height))
+            else:
+                new_h = int(img.width / target_ratio)
+                top = (img.height - new_h) // 2
+                img = img.crop((0, top, img.width, top + new_h))
+            img = img.resize((1080, 1920), Image.Resampling.LANCZOS)
+            temp_bg = os.path.join("assets", f"scenic_bg_{random.randint(100,999)}.png")
+            os.makedirs("assets", exist_ok=True)
+            img.save(temp_bg)
+            bg_clip = ImageClip(temp_bg).with_duration(duration)
+        except Exception as e:
+            print(f"[Warning] Failed processing image BG: {e}")
+            bg_clip = ColorClip(size=(1080, 1920), color=(40, 120, 60)).with_duration(duration)
+    else:
+        bg_clip = ColorClip(size=(1080, 1920), color=(35, 110, 55)).with_duration(duration)
+
+    # 2. Header Banner: "Find N Object" inside white rounded rectangle
+    header_text = f"Find {num_targets} {target_name}"
+    header_img_path = create_rounded_header_banner(text=header_text, width=900, height=170)
+    top_header = ImageClip(header_img_path).with_start(0).with_duration(duration).with_position(("center", 120))
+
+    # 3. Scatter N Target Cutout Stickers across scenic background
+    target_clips = []
+    positions = []
+    
+    # 4 columns x 5 rows grid in puzzle usable space (x: 80..980, y: 340..1540)
+    grid_cols, grid_rows = 4, 5
+    cell_w, cell_h = (900 // grid_cols), (1200 // grid_rows)
+    
+    possible_cells = [(r, c) for r in range(grid_rows) for c in range(grid_cols)]
+    random.shuffle(possible_cells)
+    
+    selected_cells = possible_cells[:num_targets]
+    
+    for idx, (r, c) in enumerate(selected_cells):
+        base_x = 80 + c * cell_w + random.randint(10, max(15, cell_w - 90))
+        base_y = 340 + r * cell_h + random.randint(10, max(15, cell_h - 90))
+        
+        # Scale variety: 1 large, 2 medium, rest small/sneaky
+        if idx == 0:
+            target_w = random.randint(160, 210)
+        elif idx in (1, 2):
+            target_w = random.randint(110, 140)
+        else:
+            target_w = random.randint(55, 85)
+            
+        try:
+            rot = random.randint(-15, 15)
+            if rot != 0:
+                try:
+                    pil_t = Image.open(target_sticker_path).convert("RGBA")
+                    rot_pil = pil_t.rotate(rot, expand=True, resample=Image.Resampling.BICUBIC)
+                    rot_path = target_sticker_path.rsplit('.', 1)[0] + f"_rot_{idx}_{rot}.png"
+                    rot_pil.save(rot_path, "PNG")
+                    t_path_to_use = rot_path
+                except Exception:
+                    t_path_to_use = target_sticker_path
+            else:
+                t_path_to_use = target_sticker_path
+
+            t_clip = ImageClip(t_path_to_use).resized(width=target_w).with_start(0).with_duration(duration)
+            t_clip = t_clip.with_position((base_x, base_y))
+            target_clips.append(t_clip)
+            positions.append((base_x, base_y))
+        except Exception as e:
+            print(f"[Warning] Failed placing sticker {idx}: {e}")
+
+    # 4. Progress Countdown Bar & CTA Footer Overlay
+    bar_height = 24
+    bg_bar = ColorClip(size=(1080, bar_height), color=(30, 30, 30)).with_duration(duration).with_position(("center", 1680))
+    progress_bar = ColorClip(size=(1080, bar_height), color=(255, 220, 0)).with_duration(duration).with_position(("center", 1680))
+    progress_bar = progress_bar.with_effects([vfx.Resize(lambda t: (max(1, int(1080 * t / duration)), bar_height))])
+
+    cta_img = create_text_image(f"DID YOU FIND ALL {num_targets}? COMMENT BELOW! 👇", font_size=55, color="yellow", stroke_color="black", y_pos=1750)
+    bottom_cta = ImageClip(cta_img).with_start(0).with_duration(duration)
+
+    # 5. Composite Assembly (NO reveal circle pulse at end per user request)
+    layers = [bg_clip] + target_clips + [top_header, bg_bar, progress_bar, bottom_cta]
+    
+    final_video = CompositeVideoClip(layers, size=(1080, 1920)).with_duration(duration)
+
+    if audio_clip:
+        music_clip = apply_audio_ducking(audio_clip, music_path, duration, boom_vol=0.3)
+        if music_clip:
+            final_audio = CompositeAudioClip([audio_clip, music_clip]).with_duration(duration)
+            final_video = final_video.with_audio(final_audio)
+        else:
+            final_video = final_video.with_audio(audio_clip)
+
+    print(f"[Log] 🧩 Exporting 'Find {num_targets} {target_name}' Puzzle Video: {output_path}")
+    final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", bitrate=bitrate, preset=preset, threads=4)
+    return output_path
+
 
 def create_wyr_video(audio_path, wyr_data, video_paths, output_path="wyr_short.mp4", music_path=None, bitrate="8000k", preset="medium", use_hq=False):
     """

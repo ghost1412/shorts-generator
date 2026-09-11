@@ -239,6 +239,231 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
             
     return assets
 
+def create_generic_target_sticker(out_path, label="Target", width=400, height=400):
+    """
+    Generates a clean, attractive target sticker badge for ANY requested item (Doge, Gigachad, Cat, custom).
+    Ensures 0 silent fallbacks to Cat.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    
+    img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    
+    cx, cy = width // 2, height // 2
+    
+    # Outer circle badge with dark outline
+    draw.ellipse([(15, 15), (width - 15, height - 15)], fill=(255, 235, 210, 255), outline=(40, 30, 20, 255), width=6)
+    draw.ellipse([(35, 35), (width - 35, height - 35)], fill=(255, 255, 255, 255))
+    
+    try:
+        font = ImageFont.truetype("C:\\Windows\\Fonts\\arialbd.ttf", 55)
+    except Exception:
+        font = ImageFont.load_default()
+        
+    display_text = label[:12].upper()
+    bbox = draw.textbbox((0, 0), display_text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    
+    draw.text(((width - tw)//2, (height - th)//2 - 5), display_text, font=font, fill=(30, 30, 30, 255))
+    
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    img.save(out_path, "PNG")
+    return out_path
+
+def fetch_real_viral_cat_sticker(out_path):
+    """
+    Downloads a real viral cat photo from verified Wikimedia Commons sources.
+    """
+    import requests
+    from PIL import Image, ImageDraw
+    
+    cat_urls = [
+        "https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/4/4d/Cat_November_2010-1a.jpg",
+        "https://upload.wikimedia.org/wikipedia/commons/b/b1/VAN_CAT.png"
+    ]
+    
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    
+    for url in random.sample(cat_urls, len(cat_urls)):
+        try:
+            r = requests.get(url, timeout=12)
+            if r.status_code == 200:
+                with open(out_path, "wb") as f:
+                    f.write(r.content)
+                img = Image.open(out_path).convert("RGBA")
+                min_dim = min(img.width, img.height)
+                left = (img.width - min_dim) // 2
+                top = (img.height - min_dim) // 2
+                img = img.crop((left, top, left + min_dim, top + min_dim))
+                img = img.resize((400, 400), Image.Resampling.LANCZOS)
+                
+                mask = Image.new("L", (400, 400), 0)
+                draw = ImageDraw.Draw(mask)
+                draw.ellipse((8, 8, 392, 392), fill=255)
+                img.putalpha(mask)
+                
+                img.save(out_path, "PNG")
+                return out_path
+        except Exception as e:
+            print(f"[Warning] Failed downloading cat image: {e}")
+            
+    return create_generic_target_sticker(out_path, label="Cat")
+
+def create_meme_sticker_with_outline(img_path, border_size=0, border_color=(50, 255, 100, 255)):
+    """
+    Applies optional sticker outline stroke border around a PNG/JPG/GIF target image using PIL.
+    Defaults to border_size=0 for stealth puzzle placement (natural blending).
+    """
+    from PIL import Image, ImageFilter, ImageDraw
+    try:
+        img = Image.open(img_path)
+        if getattr(img, "is_animated", False):
+            img.seek(0)
+        img = img.convert("RGBA")
+        
+        alpha = img.split()[3]
+        extrema = alpha.getextrema()
+        is_fully_opaque = (extrema[0] == 255 and extrema[1] == 255)
+        
+        if is_fully_opaque:
+            min_dim = min(img.width, img.height)
+            left = (img.width - min_dim) // 2
+            top = (img.height - min_dim) // 2
+            img = img.crop((left, top, left + min_dim, top + min_dim))
+            
+            datas = img.getdata()
+            new_data = []
+            for item in datas:
+                if (item[0] > 235 and item[1] > 235 and item[2] > 235) or (item[0] < 15 and item[1] < 15 and item[2] < 15):
+                    new_data.append((255, 255, 255, 0))
+                else:
+                    new_data.append(item)
+            img.putdata(new_data)
+            
+            mask = Image.new("L", img.size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((4, 4, img.width - 4, img.height - 4), fill=255)
+            
+            curr_alpha = img.split()[3]
+            combined_alpha = Image.new("L", img.size, 0)
+            for x in range(img.width):
+                for y in range(img.height):
+                    m_val = mask.getpixel((x, y))
+                    a_val = curr_alpha.getpixel((x, y))
+                    combined_alpha.putpixel((x, y), min(m_val, a_val))
+            img.putalpha(combined_alpha)
+            
+        if border_size <= 0:
+            out_path = img_path.rsplit('.', 1)[0] + "_clean.png"
+            img.save(out_path, "PNG")
+            return out_path
+            
+        pad = border_size * 3
+        padded = Image.new("RGBA", (img.width + pad * 2, img.height + pad * 2), (0, 0, 0, 0))
+        padded.paste(img, (pad, pad), img)
+        
+        a_channel = padded.split()[3]
+        expanded_alpha = a_channel.filter(ImageFilter.MaxFilter(border_size * 2 + 1))
+        expanded_alpha = expanded_alpha.filter(ImageFilter.GaussianBlur(1))
+        
+        outline = Image.new("RGBA", padded.size, border_color)
+        outline.putalpha(expanded_alpha)
+        
+        sticker = Image.alpha_composite(outline, padded)
+        out_path = img_path.rsplit('.', 1)[0] + "_sticker.png"
+        sticker.save(out_path, "PNG")
+        return out_path
+    except Exception as e:
+        print(f"[Warning] Failed to process sticker: {e}")
+        return img_path
+
+def get_puzzle_meme_assets(target_query=None, num_objects=7, output_dir="assets/game"):
+    """
+    Fetches scenic background landscape and cutout target meme sticker (user input file/URL, cat, doge, gigachad, etc.).
+    Guarantees 0 unwanted cat fallbacks.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 1. Direct User Input File Path
+    if target_query and os.path.isfile(target_query):
+        base_filename = os.path.basename(target_query).lower()
+        if "cat" in base_filename: target_name = "Cat"
+        elif "dog" in base_filename: target_name = "Doge"
+        elif "chad" in base_filename: target_name = "Gigachad"
+        elif "pepe" in base_filename: target_name = "Pepe"
+        elif "capybara" in base_filename: target_name = "Capybara"
+        else:
+            raw_name = os.path.splitext(os.path.basename(target_query))[0]
+            raw_name = re.sub(r'^\d+[-_]?', '', raw_name)
+            target_name = raw_name.replace('_', ' ').replace('-', ' ').title() or "Target"
+            
+        print(f"[Log] 🧩 Using Direct User Input Image/GIF File: '{target_query}' (Display Name: '{target_name}')")
+        sticker_path = create_meme_sticker_with_outline(target_query, border_size=0)
+        return {
+            "target_name": target_name,
+            "target_path": sticker_path,
+            "num_targets": num_objects
+        }
+        
+    # 2. Direct User Input URL
+    if target_query and (target_query.startswith("http://") or target_query.startswith("https://")):
+        print(f"[Log] 🧩 Downloading User Input Target Image URL: '{target_query}'")
+        raw_path = os.path.join(output_dir, f"user_target_{random.randint(1000,9999)}.png")
+        try:
+            r = requests.get(target_query, timeout=15)
+            with open(raw_path, "wb") as f:
+                f.write(r.content)
+            sticker_path = create_meme_sticker_with_outline(raw_path, border_size=0)
+            return {
+                "target_name": "Target",
+                "target_path": sticker_path,
+                "num_targets": num_objects
+            }
+        except Exception as e:
+            print(f"[Warning] Failed downloading target URL: {e}")
+
+    # 3. Target Query Text
+    meme_defaults = [
+        {"name": "Cat", "query": "cute cat"},
+        {"name": "Doge", "query": "doge meme"},
+        {"name": "Gigachad", "query": "gigachad meme"},
+        {"name": "Pepe", "query": "pepe frog meme"},
+        {"name": "Capybara", "query": "cute capybara meme"}
+    ]
+    
+    if not target_query or target_query.lower() in ["random", "auto"]:
+        chosen = random.choice(meme_defaults)
+        target_name = chosen["name"]
+    else:
+        q_lower = target_query.strip().lower()
+        if "cat" in q_lower: target_name = "Cat"
+        elif "dog" in q_lower: target_name = "Doge"
+        elif "chad" in q_lower: target_name = "Gigachad"
+        elif "pepe" in q_lower: target_name = "Pepe"
+        elif "capybara" in q_lower: target_name = "Capybara"
+        else: target_name = target_query.title()
+        
+    print(f"[Log] 🧩 Generating Target Sticker for: '{target_name}'")
+    raw_target_path = os.path.join(output_dir, f"target_{target_name.lower()}_{random.randint(1000,9999)}.png")
+    
+    if target_name == "Cat":
+        fetch_real_viral_cat_sticker(raw_target_path)
+    else:
+        dl_path = download_image(f"cute {target_name.lower()} animal portrait", output_path=raw_target_path)
+        if not dl_path or not os.path.exists(dl_path):
+            print(f"[Log] Generating generic target badge for '{target_name}'")
+            create_generic_target_sticker(raw_target_path, label=target_name)
+            
+    sticker_path = create_meme_sticker_with_outline(raw_target_path, border_size=0)
+    
+    return {
+        "target_name": target_name,
+        "target_path": sticker_path,
+        "num_targets": num_objects
+    }
+
+
 SFX_LIBRARY = {
     "lion": "https://upload.wikimedia.org/wikipedia/commons/4/47/Lion_roar.ogg",
     "jet": "https://upload.wikimedia.org/wikipedia/commons/e/e0/F-14_Tomcat_Takeoff.ogg",

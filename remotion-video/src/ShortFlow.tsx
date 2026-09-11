@@ -357,6 +357,7 @@ const BackgroundSegment: React.FC<{
         <OffthreadVideo
           src={getAssetUrl(bg.path)}
           muted
+          loop
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (
@@ -837,6 +838,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
               <OffthreadVideo
                 src={getAssetUrl(thisOrThat.imageA)}
                 muted
+                loop
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
@@ -880,6 +882,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
               <OffthreadVideo
                 src={getAssetUrl(thisOrThat.imageB)}
                 muted
+                loop
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
@@ -1205,6 +1208,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             <OffthreadVideo
               src={getAssetUrl(avatarUrl)}
               muted
+              loop
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           ) : (

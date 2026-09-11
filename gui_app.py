@@ -178,6 +178,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
                 "🎭 Funny Explainer (Scene Breakdown)",
                 "🧮 Manim Math & CS Explainer",
                 "🤔 This or That (WYR Challenge)",
+                "🔍 Find N Meme Puzzle (Find 7 Cat/Gigachad)",
                 "🏆 Rank-It Tier List Reveal",
                 "❓ Interactive Trivia Quiz",
                 "🧩 Riddle & Lateral Thinking",
@@ -609,6 +610,9 @@ class ModernShortsGeneratorUI(ctk.CTk):
             cmd.extend(["--mode", "EXPLAINER", "--prompt", self.user_context_entry.get().strip() or "Explain gravity visually"])
         elif "This or That" in mode_str:
             cmd.extend(["--mode", "WYR", "--category", self.user_context_entry.get().strip() or "superpowers"])
+        elif "Find N Meme" in mode_str:
+            target_cat = self.user_context_entry.get().strip() or "cat"
+            cmd.extend(["--mode", "FIND_IT", "--category", target_cat])
         elif "Rank-It" in mode_str:
             cmd.extend(["--mode", "RANK_IT", "--category", self.user_context_entry.get().strip() or "supercars"])
         elif "Trivia Quiz" in mode_str:
