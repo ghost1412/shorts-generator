@@ -293,31 +293,25 @@ Format as JSON ONLY:
 class YouTubeUploader:
     def __init__(self, secrets_file=None, token_file=None, account=None):
         acc = str(account or os.getenv("YOUTUBE_ACCOUNT", "")).strip()
-        self.account = acc
+        self.account = acc or "1"
         
         suffix = f"_{acc.upper()}" if (acc and acc != "1") else ""
-
-        # Check environment variable overrides for secrets/tokens (e.g. GOOGLE_YOUTUBE_TOKEN_2 vs GOOGLE_YOUTUBE_TOKEN)
-        env_token = os.getenv(f"GOOGLE_YOUTUBE_TOKEN{suffix}")
-        if not env_token and suffix:
-            env_token = os.getenv("GOOGLE_YOUTUBE_TOKEN")
-
-        env_secrets = os.getenv(f"GOOGLE_CLIENT_SECRETS{suffix}")
-        if not env_secrets and suffix:
-            env_secrets = os.getenv("GOOGLE_CLIENT_SECRETS")
-
         file_suffix = f"_{acc.lower()}" if (acc and acc != "1") else ""
+
+        # Strict Account isolation: Only read env token/secrets for target account slot
+        env_token = os.getenv(f"GOOGLE_YOUTUBE_TOKEN{suffix}") or (os.getenv("GOOGLE_YOUTUBE_TOKEN") if not suffix else None)
+        env_secrets = os.getenv(f"GOOGLE_CLIENT_SECRETS{suffix}") or (os.getenv("GOOGLE_CLIENT_SECRETS") if not suffix else None)
+
         if not secrets_file:
-            secrets_file = os.getenv("YOUTUBE_SECRETS_FILE") or (f"client_secrets{file_suffix}.json" if (file_suffix and os.path.exists(f"client_secrets{file_suffix}.json")) else "client_secrets.json")
+            secrets_file = os.getenv("YOUTUBE_SECRETS_FILE") or f"client_secrets{file_suffix}.json"
         if not token_file:
-            token_file = os.getenv("YOUTUBE_TOKEN_FILE") or (f"token{file_suffix}.json" if (file_suffix and os.path.exists(f"token{file_suffix}.json")) else ("token.json" if not file_suffix else f"token{file_suffix}.json"))
+            token_file = os.getenv("YOUTUBE_TOKEN_FILE") or f"token{file_suffix}.json"
 
         # Auto-populate token/secrets files if environment secrets are provided
         if env_token and env_token.strip():
             try:
                 with open(token_file, "w", encoding="utf-8") as f:
                     f.write(env_token.strip())
-                print(f"[Log] Wrote YouTube token from environment to '{token_file}'.")
             except Exception as e:
                 print(f"[Warning] Failed writing env token to {token_file}: {e}")
 
@@ -325,7 +319,6 @@ class YouTubeUploader:
             try:
                 with open(secrets_file, "w", encoding="utf-8") as f:
                     f.write(env_secrets.strip())
-                print(f"[Log] Wrote YouTube client secrets from environment to '{secrets_file}'.")
             except Exception as e:
                 print(f"[Warning] Failed writing env secrets to {secrets_file}: {e}")
 
@@ -361,7 +354,7 @@ class YouTubeUploader:
                 try:
                     creds = Credentials.from_authorized_user_file(self.token_file, self.scopes)
                 except Exception as e:
-                    print(f"[Log] Could not load existing token: {e}")
+                    print(f"[Log] Could not load existing token file '{self.token_file}': {e}")
 
         # Refresh if needed
         if not creds or not creds.valid:
@@ -369,13 +362,19 @@ class YouTubeUploader:
                 try:
                     creds.refresh(Request())
                 except Exception as e:
-                    print(f"[Log] Token refresh failed: {e}")
+                    print(f"[Log] Token refresh failed for '{self.token_file}': {e}")
                     creds = None
             
             if not creds:
-                # Manual flow as a last resort
+                # Do NOT attempt interactive browser login in CI/headless GitHub runner environment
+                if os.getenv("CI") or os.getenv("GITHUB_ACTIONS"):
+                    suffix = f"_{self.account.upper()}" if self.account != "1" else ""
+                    print(f"[Error] YouTube credentials for Account {self.account} ('{self.token_file}') are missing or expired in GitHub Secrets.")
+                    print(f"[Log] Please generate '{self.token_file}' using 'python get_youtube_token.py {self.account}' and paste its text into GitHub Secret 'GOOGLE_YOUTUBE_TOKEN{suffix}'.")
+                    return False
+
                 if not os.path.exists(self.secrets_file):
-                    print(f"[Error] No valid credentials found for YouTube upload.")
+                    print(f"[Error] No valid client_secrets file ('{self.secrets_file}') found for YouTube upload.")
                     return False
                 
                 try:

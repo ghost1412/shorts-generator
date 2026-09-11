@@ -140,12 +140,14 @@ jobs:
         ACC="${{ github.event.inputs.youtube_account || '1' }}"
         if [ "$ACC" = "2" ] && [ -n "${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" ]; then
           echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}' > token.json
+          echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}' > token_2.json
         elif [ -n "${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" ]; then
           echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
         fi
         
         if [ "$ACC" = "2" ] && [ -n "${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" ]; then
           echo '${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}' > client_secrets.json
+          echo '${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}' > client_secrets_2.json
         elif [ -n "${{ secrets.GOOGLE_CLIENT_SECRETS }}" ]; then
           echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
         fi
@@ -162,12 +164,14 @@ jobs:
         $acc = if ("${{ github.event.inputs.youtube_account }}" -ne "") { "${{ github.event.inputs.youtube_account }}" } else { "1" }
         if ($acc -eq "2" -and "${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" -ne "") {
           '${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}' | Out-File -Encoding ascii token.json
+          '${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}' | Out-File -Encoding ascii token_2.json
         } elseif ("${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" -ne "") {
           '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' | Out-File -Encoding ascii token.json
         }
         
         if ($acc -eq "2" -and "${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" -ne "") {
           '${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}' | Out-File -Encoding ascii client_secrets.json
+          '${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}' | Out-File -Encoding ascii client_secrets_2.json
         } elseif ("${{ secrets.GOOGLE_CLIENT_SECRETS }}" -ne "") {
           '${{ secrets.GOOGLE_CLIENT_SECRETS }}' | Out-File -Encoding ascii client_secrets.json
         }
@@ -198,7 +202,8 @@ jobs:
           $u_val = if ("${{ github.event.inputs.user_id }}" -ne "") { "${{ github.event.inputs.user_id }}" } else { "" }
           $id_flag = if ("${{ github.event.inputs.video_id }}" -ne "") { "--video_id" } else { "" }
           $id_val = if ("${{ github.event.inputs.video_id }}" -ne "") { "${{ github.event.inputs.video_id }}" } else { "" }
-          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" --caption_style $cap_style $use_remotion $skip_upload $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val $v_flag $v_val $u_flag $u_val $id_flag $id_val
+          $yt_acc = if ("${{ github.event.inputs.youtube_account }}" -ne "") { "--youtube_account ${{ github.event.inputs.youtube_account }}" } else { "" }
+          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" --caption_style $cap_style $use_remotion $skip_upload $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val $v_flag $v_val $u_flag $u_val $id_flag $id_val $yt_acc
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
@@ -231,5 +236,6 @@ jobs:
         ARG_BITRATE="${{ github.event.inputs.bitrate && format('--bitrate {0}', github.event.inputs.bitrate) || '--bitrate 12000k' }}"
         ARG_PRESET="${{ github.event.inputs.preset && format('--preset {0}', github.event.inputs.preset) || '--preset medium' }}"
         ARG_SOURCE_VIDEO="${{ github.event.inputs.source_video && format('--source_video {0}', github.event.inputs.source_video) || '' }}"
+        ARG_YT_ACC="${{ github.event.inputs.youtube_account && format('--youtube_account {0}', github.event.inputs.youtube_account) || '' }}"
         
-        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_REMOTION $ARG_CAPSTYLE $ARG_SKIP_UPLOAD $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET $ARG_SOURCE_VIDEO
+        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_REMOTION $ARG_CAPSTYLE $ARG_SKIP_UPLOAD $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET $ARG_SOURCE_VIDEO $ARG_YT_ACC
