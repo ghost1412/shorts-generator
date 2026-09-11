@@ -52,7 +52,7 @@ on:
       persona:
         description: 'Cartoon Persona (mafia_cat, rabbit, robot, squirrel)'
         required: false
-        default: 'mafia_cat'
+        default: ''
       source_video:
         description: 'Source Video URL for Extraction'
         required: false

@@ -978,7 +978,15 @@ else:
     
     # 2. Choose Category
     categories = ["science", "math", "aptitude", "space", "physics", "puzzle", "animals", "history", "anime_lore", "intimacy_facts", "cooking_hacks", "world", "politics", "celebrities", "tech", "sports", "kids", "children", "bedtime"]
-    category = args.category if args.category else ("movies" if mode == "FUNNY_EXPLAINER" else random.choice(categories))
+    if not args.category or args.category.lower() == "random":
+        if mode in ("EMOJI_GUESS", "FUNNY_EXPLAINER"):
+            category = random.choice(["movies", "pop_culture", "superheroes", "disney", "anime", "video_games"])
+        elif mode in ("NEWS", "NEWS_SERIOUS"):
+            category = random.choice(["world", "tech", "celebrities", "sports", "science", "politics"])
+        else:
+            category = random.choice(categories)
+    else:
+        category = args.category
     topic = args.prompt if args.prompt else category
 
     if args.hero or args.interactive:
