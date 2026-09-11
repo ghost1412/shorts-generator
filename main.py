@@ -175,7 +175,10 @@ def parse_args():
     parser.add_argument("--hero_name", help="Name of the hero (e.g. Luna).")
     parser.add_argument("--companion", help="Hero's companion (e.g. Twinkle the Pixie).")
     parser.add_argument("--quest", help="Hero's adventure quest.")
-    parser.add_argument("--setting", help="Adventure setting (e.g. Starry Night Forest).")
+    # YouTube Multi-Account Flags
+    parser.add_argument("--youtube_account", help="Select YouTube account slot (e.g. 1, 2, channel_b).")
+    parser.add_argument("--youtube_token_file", help="Path to custom YouTube token.json file.")
+    parser.add_argument("--youtube_secrets_file", help="Path to custom YouTube client_secrets.json file.")
 
     args = parser.parse_args()
     return args
@@ -1971,7 +1974,11 @@ if not actually_skip_upload:
 
     if not actually_skip_upload:
         print("[Log] Initializing YouTube Uploader...")
-        uploader = YouTubeUploader()
+        uploader = YouTubeUploader(
+            secrets_file=getattr(args, 'youtube_secrets_file', None),
+            token_file=getattr(args, 'youtube_token_file', None),
+            account=getattr(args, 'youtube_account', None)
+        )
         youtube_video_id = None
         if uploader.authenticate(creds_dict=youtube_creds):
             youtube_video_id = uploader.upload_video(

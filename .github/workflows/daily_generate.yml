@@ -65,6 +65,10 @@ on:
         description: 'Subtitle Preset (HORMOZI, GLOW_BOX, BOUNCE, MINIMAL, AUTO)'
         required: false
         default: 'AUTO'
+      youtube_account:
+        description: 'YouTube Account Slot (e.g. 1, 2)'
+        required: false
+        default: '1'
       runner_type:
         description: 'Runner Environment (ubuntu-latest, self-hosted)'
         required: false
@@ -131,12 +135,11 @@ jobs:
         echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
         echo "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" >> .env
         echo "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" >> .env
-        if [ -n "${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" ]; then
-          echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
-        fi
-        if [ -n "${{ secrets.GOOGLE_CLIENT_SECRETS }}" ]; then
-          echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
-        fi
+        echo "GOOGLE_YOUTUBE_TOKEN=${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" >> .env
+        echo "GOOGLE_YOUTUBE_TOKEN_2=${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" >> .env
+        echo "GOOGLE_CLIENT_SECRETS=${{ secrets.GOOGLE_CLIENT_SECRETS }}" >> .env
+        echo "GOOGLE_CLIENT_SECRETS_2=${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" >> .env
+        echo "YOUTUBE_ACCOUNT=${{ github.event.inputs.youtube_account || '1' }}" >> .env
 
     - name: Setup Environment Variables (Windows)
       if: runner.os == 'Windows'
@@ -145,8 +148,11 @@ jobs:
         "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" | Out-File -Append -Encoding ascii .env
         "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" | Out-File -Append -Encoding ascii .env
         "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" | Out-File -Append -Encoding ascii .env
-        if ("${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" -ne "") { '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' | Out-File -Encoding ascii token.json }
-        if ("${{ secrets.GOOGLE_CLIENT_SECRETS }}" -ne "") { '${{ secrets.GOOGLE_CLIENT_SECRETS }}' | Out-File -Encoding ascii client_secrets.json }
+        "GOOGLE_YOUTUBE_TOKEN=${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" | Out-File -Append -Encoding ascii .env
+        "GOOGLE_YOUTUBE_TOKEN_2=${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" | Out-File -Append -Encoding ascii .env
+        "GOOGLE_CLIENT_SECRETS=${{ secrets.GOOGLE_CLIENT_SECRETS }}" | Out-File -Append -Encoding ascii .env
+        "GOOGLE_CLIENT_SECRETS_2=${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" | Out-File -Append -Encoding ascii .env
+        "YOUTUBE_ACCOUNT=${{ github.event.inputs.youtube_account || '1' }}" | Out-File -Append -Encoding ascii .env
 
     - name: Run Video Generator (Windows)
       if: runner.os == 'Windows'

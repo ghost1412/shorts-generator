@@ -291,7 +291,44 @@ Format as JSON ONLY:
     }
 
 class YouTubeUploader:
-    def __init__(self, secrets_file="client_secrets.json", token_file="token.json"):
+    def __init__(self, secrets_file=None, token_file=None, account=None):
+        acc = str(account or os.getenv("YOUTUBE_ACCOUNT", "")).strip()
+        self.account = acc
+        
+        suffix = f"_{acc.upper()}" if (acc and acc != "1") else ""
+
+        # Check environment variable overrides for secrets/tokens (e.g. GOOGLE_YOUTUBE_TOKEN_2 vs GOOGLE_YOUTUBE_TOKEN)
+        env_token = os.getenv(f"GOOGLE_YOUTUBE_TOKEN{suffix}")
+        if not env_token and suffix:
+            env_token = os.getenv("GOOGLE_YOUTUBE_TOKEN")
+
+        env_secrets = os.getenv(f"GOOGLE_CLIENT_SECRETS{suffix}")
+        if not env_secrets and suffix:
+            env_secrets = os.getenv("GOOGLE_CLIENT_SECRETS")
+
+        file_suffix = f"_{acc.lower()}" if (acc and acc != "1") else ""
+        if not secrets_file:
+            secrets_file = os.getenv("YOUTUBE_SECRETS_FILE") or (f"client_secrets{file_suffix}.json" if (file_suffix and os.path.exists(f"client_secrets{file_suffix}.json")) else "client_secrets.json")
+        if not token_file:
+            token_file = os.getenv("YOUTUBE_TOKEN_FILE") or (f"token{file_suffix}.json" if (file_suffix and os.path.exists(f"token{file_suffix}.json")) else ("token.json" if not file_suffix else f"token{file_suffix}.json"))
+
+        # Auto-populate token/secrets files if environment secrets are provided
+        if env_token and env_token.strip():
+            try:
+                with open(token_file, "w", encoding="utf-8") as f:
+                    f.write(env_token.strip())
+                print(f"[Log] Wrote YouTube token from environment to '{token_file}'.")
+            except Exception as e:
+                print(f"[Warning] Failed writing env token to {token_file}: {e}")
+
+        if env_secrets and env_secrets.strip():
+            try:
+                with open(secrets_file, "w", encoding="utf-8") as f:
+                    f.write(env_secrets.strip())
+                print(f"[Log] Wrote YouTube client secrets from environment to '{secrets_file}'.")
+            except Exception as e:
+                print(f"[Warning] Failed writing env secrets to {secrets_file}: {e}")
+
         self.secrets_file = secrets_file
         self.token_file = token_file
         self.scopes = ["https://www.googleapis.com/auth/youtube.upload"]
