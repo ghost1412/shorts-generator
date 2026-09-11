@@ -135,11 +135,20 @@ jobs:
         echo "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" >> .env
         echo "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" >> .env
         echo "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" >> .env
-        echo "GOOGLE_YOUTUBE_TOKEN=${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" >> .env
-        echo "GOOGLE_YOUTUBE_TOKEN_2=${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" >> .env
-        echo "GOOGLE_CLIENT_SECRETS=${{ secrets.GOOGLE_CLIENT_SECRETS }}" >> .env
-        echo "GOOGLE_CLIENT_SECRETS_2=${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" >> .env
         echo "YOUTUBE_ACCOUNT=${{ github.event.inputs.youtube_account || '1' }}" >> .env
+        
+        ACC="${{ github.event.inputs.youtube_account || '1' }}"
+        if [ "$ACC" = "2" ] && [ -n "${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" ]; then
+          echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}' > token.json
+        elif [ -n "${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" ]; then
+          echo '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' > token.json
+        fi
+        
+        if [ "$ACC" = "2" ] && [ -n "${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" ]; then
+          echo '${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}' > client_secrets.json
+        elif [ -n "${{ secrets.GOOGLE_CLIENT_SECRETS }}" ]; then
+          echo '${{ secrets.GOOGLE_CLIENT_SECRETS }}' > client_secrets.json
+        fi
 
     - name: Setup Environment Variables (Windows)
       if: runner.os == 'Windows'
@@ -148,11 +157,20 @@ jobs:
         "PEXELS_API_KEY=${{ secrets.PEXELS_API_KEY }}" | Out-File -Append -Encoding ascii .env
         "FACEBOOK_PAGE_ID=${{ secrets.FACEBOOK_PAGE_ID }}" | Out-File -Append -Encoding ascii .env
         "INSTAGRAM_ACCESS_TOKEN=${{ secrets.INSTAGRAM_ACCESS_TOKEN }}" | Out-File -Append -Encoding ascii .env
-        "GOOGLE_YOUTUBE_TOKEN=${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" | Out-File -Append -Encoding ascii .env
-        "GOOGLE_YOUTUBE_TOKEN_2=${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" | Out-File -Append -Encoding ascii .env
-        "GOOGLE_CLIENT_SECRETS=${{ secrets.GOOGLE_CLIENT_SECRETS }}" | Out-File -Append -Encoding ascii .env
-        "GOOGLE_CLIENT_SECRETS_2=${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" | Out-File -Append -Encoding ascii .env
         "YOUTUBE_ACCOUNT=${{ github.event.inputs.youtube_account || '1' }}" | Out-File -Append -Encoding ascii .env
+        
+        $acc = if ("${{ github.event.inputs.youtube_account }}" -ne "") { "${{ github.event.inputs.youtube_account }}" } else { "1" }
+        if ($acc -eq "2" -and "${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}" -ne "") {
+          '${{ secrets.GOOGLE_YOUTUBE_TOKEN_2 }}' | Out-File -Encoding ascii token.json
+        } elseif ("${{ secrets.GOOGLE_YOUTUBE_TOKEN }}" -ne "") {
+          '${{ secrets.GOOGLE_YOUTUBE_TOKEN }}' | Out-File -Encoding ascii token.json
+        }
+        
+        if ($acc -eq "2" -and "${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}" -ne "") {
+          '${{ secrets.GOOGLE_CLIENT_SECRETS_2 }}' | Out-File -Encoding ascii client_secrets.json
+        } elseif ("${{ secrets.GOOGLE_CLIENT_SECRETS }}" -ne "") {
+          '${{ secrets.GOOGLE_CLIENT_SECRETS }}' | Out-File -Encoding ascii client_secrets.json
+        }
 
     - name: Run Video Generator (Windows)
       if: runner.os == 'Windows'
