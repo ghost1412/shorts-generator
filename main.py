@@ -97,7 +97,7 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE, ODD_ONE_OUT, or FILTER shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "TEACH", "DUB", "SPLIT_SCREEN", "PODCAST", "TOP_5", "CHAT_STORY", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "TEACH", "DUB", "SPLIT_SCREEN", "PODCAST", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--scene", help="Scene or scenario prompt for FUNNY_EXPLAINER mode.")
     parser.add_argument("--photos_dir", help="Directory containing photos for PHOTO_REEL mode.")
     parser.add_argument("--music", help="Path to audio/music track for PHOTO_REEL or background music.")
@@ -1468,6 +1468,48 @@ else:
             full_script = teach_data.get("narrator_script", "")
             facts_data = []
             print(f"[Log] 🎓 TEACH Data: {teach_data}")
+        elif mode == "TOP_5":
+            from engine.script_gen import generate_top5_script
+            top5_data = generate_top5_script(category)
+            full_script = top5_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 🔝 TOP_5 Data: {top5_data}")
+        elif mode == "CHAT_STORY":
+            from engine.script_gen import generate_chat_story_script
+            chat_data = generate_chat_story_script(topic)
+            full_script = chat_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 💬 CHAT_STORY Data: {chat_data}")
+        elif mode == "HORROR":
+            from engine.script_gen import generate_horror_story_script
+            horror_data = generate_horror_story_script(topic)
+            full_script = horror_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 👁️ HORROR Data: {horror_data}")
+        elif mode == "TRUE_CRIME":
+            from engine.script_gen import generate_true_crime_script
+            crime_data = generate_true_crime_script(topic)
+            full_script = crime_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 🕵️ TRUE_CRIME Data: {crime_data}")
+        elif mode == "BIBLE":
+            from engine.script_gen import generate_bible_story_script
+            bible_data = generate_bible_story_script(topic)
+            full_script = bible_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 📜 BIBLE Data: {bible_data}")
+        elif mode == "ARTICLE":
+            from engine.script_gen import generate_article_summary_script
+            article_data = generate_article_summary_script(topic)
+            full_script = article_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 📰 ARTICLE Data: {article_data}")
+        elif mode == "UGC":
+            from engine.script_gen import generate_ugc_product_script
+            ugc_data = generate_ugc_product_script(topic)
+            full_script = ugc_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 🚀 UGC Data: {ugc_data}")
     except RuntimeError as e:
         print(f"[Error] Generation failed: {e}")
         print("[Log] Gracefully skipping this video to maintain channel diversity.")

@@ -368,8 +368,28 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     t.join()
     
     if result["error"]:
-        print(f"Error in generate_voice: {result['error']}")
-        return None, None
+        print(f"[Warning] edge-tts failed ({result['error']}). Attempting gTTS fallback...")
+        try:
+            from gtts import gTTS
+            tts = gTTS(text=clean_for_tts(text), lang='en')
+            tts.save(output_audio)
+            
+            words = clean_for_tts(text).split()
+            duration = max(2.0, len(words) * 0.35)
+            avg_w = duration / max(1, len(words))
+            subtitles = [{"word": w, "start": round(i*avg_w, 3), "end": round((i+1)*avg_w, 3), "duration": round(avg_w, 3)} for i, w in enumerate(words)]
+            with open(output_subs, "w", encoding="utf-8") as f:
+                json.dump(subtitles, f, indent=2)
+            return output_audio, output_subs
+        except Exception as ge:
+            print(f"[Warning] gTTS fallback failed ({ge}). Creating silent audio fallback.")
+            # Generate minimal silent MP3 audio via FFmpeg fallback
+            import subprocess
+            subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono", "-t", "5", output_audio], capture_output=True)
+            subtitles = [{"word": "Audio", "start": 0.0, "end": 2.5, "duration": 2.5}, {"word": "Unavailable", "start": 2.5, "end": 5.0, "duration": 2.5}]
+            with open(output_subs, "w", encoding="utf-8") as f:
+                json.dump(subtitles, f, indent=2)
+            return output_audio, output_subs
         
     return result["audio"], result["subs"]
 
