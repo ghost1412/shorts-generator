@@ -1,256 +1,144 @@
 # ⚡ ShortsFlow AI Studio
 
-> **The Open-Source Opus Clip Alternative**
-> Turn Long Videos, YouTube Links, or AI Concepts into High-Retention 9:16 Shorts on Autopilot.
+> **The Open-Source Opus Clip Alternative**  
+> Turn YouTube Links, Long Videos, or Text Ideas into High-Retention Shorts & Reels on Autopilot.
 
 <div align="center">
-  <img src="demos/demo_short.gif" width="250" />
-  <img src="demos/demo_facts.gif" width="250" />
-  <img src="demos/demo_explainer.gif" width="250" />
+  <img src="demos/demo_short.gif" width="250" alt="Viral Short Preview" />
+  <img src="demos/demo_facts.gif" width="250" alt="AI Facts Preview" />
+  <img src="demos/demo_explainer.gif" width="250" alt="Manim Explainer Preview" />
 </div>
 
-[![Python](https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python)](https://python.org)
-[![Remotion](https://img.shields.io/badge/Remotion-Video_Engine-61DAFB?style=flat&logo=react)](https://remotion.dev)
-[![CUDA](https://img.shields.io/badge/CUDA-GPU_Accelerated-76B900?style=flat&logo=nvidia)](https://nvidia.com)
-[![Fast Clone](https://img.shields.io/badge/Clone_Size-16.5_MB-brightgreen?style=flat&logo=git)](https://github.com/ghost1412/shorts-generator)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
+<p align="center">
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python" alt="Python" /></a>
+  <a href="https://remotion.dev"><img src="https://img.shields.io/badge/Remotion-React_Video-61DAFB?style=flat&logo=react" alt="Remotion" /></a>
+  <a href="https://nvidia.com"><img src="https://img.shields.io/badge/CUDA-GPU_Accelerated-76B900?style=flat&logo=nvidia" alt="CUDA" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
+</p>
+
+---
+
+## ⚡ Quick Start (60 Seconds)
+
+```bash
+# 1. Clone Repo & Navigate
+git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
+cd shorts-generator
+
+# 2. 1-Click Setup & Launch Desktop Studio GUI
+setup.bat && launch.bat
+```
+
+> 🐧 **Linux / macOS**: `chmod +x setup.sh && ./setup.sh && python3 gui_app.py`  
+> 🐳 **Docker**: `docker compose up -d`
 
 ---
 
 ## ⚡ ShortsFlow vs Paid SaaS Tools
 
-| Feature | ⚡ ShortsFlow AI Studio (Open Source) | 💳 Opus Clip / Paid SaaS ($20–$50/mo) |
+| Feature | ⚡ ShortsFlow AI Studio (Open Source) | 💳 Paid SaaS ($20–$50/mo) |
 |---|---|---|
 | **Monthly Cost** | **$0 / 100% Free Forever** | $19 – $49 / month |
-| **Data Privacy** | **100% Local GPU / Private** | Your videos uploaded to 3rd party cloud |
-| **Creation Modes** | **AI Clipping + Manim Explainers + Facts + Riddles + WYR** | Video clipping only |
+| **Data Privacy** | **100% Local GPU / Private** | Uploaded to 3rd party cloud |
+| **Creation Modes** | **Clipping + Explainers + Facts + Riddles + Top 5 + Dubbing** | Video clipping only |
 | **Subtitle Quality** | **Remotion React Spring Physics (Hormozi, Glow Box, Bounce)** | Basic cloud subtitles |
-| **Limits & Watermarks** | **Unlimited Exports & Zero Watermarks** | Monthly credit caps & paid watermark removals |
-| **AI LLM Flexibility** | **Google Gemini, Local Ollama (Qwen/Llama), HuggingFace** | Locked cloud AI models |
-
-> ⭐ **If ShortsFlow saves you $240+/year on video clipping subscriptions, drop a star on the repo to support independent open-source AI!**
+| **Limits & Watermarks** | **Unlimited Exports & Zero Watermarks** | Credit caps & paid watermarks |
 
 ---
 
-## ⚡ Quick Start (Get Your First Video in 60 Seconds)
-
-### 1-Click Automated Setup (Windows)
-
-```bash
-# ⚡ 1-Click Fast Clone (~16.5 MB)
-git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
-cd shorts-generator
-
-# Run 1-Click Setup 
-setup.bat
-
-# Launch Interactive Studio Launcher
-launch.bat
-```
-
-### 🐧 Linux & macOS Setup
-
-```bash
-# ⚡ 1-Click Fast Clone (~16.5 MB)
-git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
-cd shorts-generator
-
-chmod +x setup.sh
-./setup.sh
-
-# Launch Desktop GUI Studio
-python3 gui_app.py
-```
-
-### 🐳 Docker Quickstart (Self-Hosted)
-
-```bash
-docker compose up -d
-```
-
----
-
-## 🖥️ Graphical User Interfaces & Usability
-
-ShortsFlow AI Studio features a **sleek, single-window 3-column Studio UI**:
+## 🖥️ Desktop Studio GUI (`gui_app.py`)
 
 <div align="center">
   <img src="demos/ui_studio_preview.png" width="100%" alt="ShortsFlow AI Studio GUI Preview" />
 </div>
 
-### 1. 🖥️ Standalone Desktop GUI Studio (Easiest)
-- **Launch Command**: `launch.bat` (Option 1) or `python gui_app.py`
-- **Usability Features**: 
-  - Single-window studio layout with 9:16 vertical video preview canvas.
-  - Interactive clickable cards for Remotion caption spring physics (`HORMOZI`, `GLOW_BOX`, `BOUNCE`, `MINIMAL`).
-  - Source video URL input, custom output directory picker, standalone content modes, and voiceover selectors.
-  - Quality pipeline switches (`Smart Crop`, `Auto-Tighten`, `HQ`, `SuperRes`, `SRT Export`, `B-Roll`).
-  - Master 1-click render button with animated progress bar and collapsible live log console.
-
-### 2. 🌐 Next.js 15 Web Dashboard
-- **Launch Web Frontend**: `cd web && npm run dev` (Access at `http://localhost:3000`)
-- **Launch Render Worker**: `python server.py` (Runs on port `5000`)
-- **Usability Features**: 
-  - Modern browser-based web dashboard.
-  - Asynchronous background render queueing via Flask worker (`server.py`).
-  - Multi-user authentication & payment integrations (Stripe/LemonSqueezy).
-
-### 3. ⚡ Interactive CLI & Scriptable Launcher
-- **Launch Command**: `launch.bat` (Option 2) or `python main.py [FLAGS]`
-- **Usability Features**: 
-  - Step-by-step terminal prompts for quick extraction.
-  - 100% scriptable flags for headless server deployment, cron jobs, and GitHub Actions autonomous generation.
+- **3-Column Single-Window Studio Layout**: Live 9:16 vertical canvas preview, mode picker, preset cards, and 1-click render launcher.
+- **Interactive Remotion Presets**: 1-click selection between `HORMOZI`, `GLOW_BOX`, `BOUNCE`, and `MINIMAL` spring captions.
 
 ---
 
-## 🔥 Key Features
+## 🎬 Video Generator Modes
 
-- **🚀 AI Video Extraction & URL Ingestion**: Paste any YouTube link, Podcast URL, or local file. ShortsFlow detects viral hooks, energy shifts, and key moments using multimodal AI analysis.
-- **🎨 Visual Filters & Color Grading**: 12 custom color grades + AI Auto & AI Dynamic multi-scene timeline filtering.
-- **🎞️ Standalone Filter Mode (`--mode FILTER`)**: Apply color grading filters directly to any video file without cutting or reframing.
-- **💬 4 Subtitle Style Presets**:
-  - `HORMOZI`: Dynamic word spring pop, black strokes, multi-color neon highlights (`#39FF14`, `#FFEA00`, `#00E5FF`).
-  - `GLOW_BOX`: Glassmorphic gradient pill box around active phrases with neon glow.
-  - `BOUNCE`: Upward jump animation with intense drop-shadow text glow.
-  - `MINIMAL`: Crisp dark translucent box with accent border.
-- **⚡ Parallel Remotion Video Engine**: High-performance React subtitle rendering with custom multi-worker thread pools (`--max_workers 2` or `4`).
-- **🤖 Multi-LLM Orchestration**: Native support for **Google Gemini**, **OpenAI** (`gpt-4o-mini`), **DeepSeek** (`deepseek-chat`), **Groq** (`llama-3.3-70b`), **Anthropic Claude**, **OpenRouter**, **Local Ollama** (`qwen3:8b`), and custom OpenAI-compatible endpoints with automatic failover (`--llm_provider` & `--llm_model`).
-- **🎯 Smart Crop & Anti-Blinking Face Tracking**: Intelligent face detection with Exponential Moving Average (EMA) smoothing and velocity clamping to prevent camera jitter.
-- **✂️ Padded Silence Removal**: Auto-tighten audio gaps with an 80ms safety buffer to ensure zero word truncation or sub-frame flickering.
-- **🎙️ Local TTS & Zero-Shot Voice Cloning**: Support for VoiceStudio local REST TTS endpoints (`/v1/audio/speech`), ElevenLabs, EdgeTTS, and custom `.wav` sample audio cloning (`--tts_provider` & `--clone_voice`).
-- **📐 Multi-Aspect Ratio Engine**: Render videos in standard Vertical (`9:16`), Landscape (`16:9`), Square (`1:1`), or Social Feed (`4:5`) formats (`--aspect_ratio`).
-- **🌐 Multilingual Video Translation & Dubbing (`--mode DUB`)**: Automatically transcribe, translate, and re-synthesize target language voiceovers (Spanish, Hindi, German, French, Japanese, etc.) via `--target_lang`.
-- **🔊 Auto SFX & Dynamic Audio Ducking**: Programmatically synthesized sound effects (`whoosh`, `pop`, `riser`, `boom`) plus dynamic background music volume ducking during spoken narration (`--auto_ducking` & `--sfx_preset`).
-- **🎥 Dynamic Camera Push-In Zoom Motion**: Subtle 1.0x to 1.15x smooth push-in camera keyframing to prevent static visual monotony (`--enable_zoom`).
-- **🎚️ Studio Audio Master & Noise Cleanup**: Offline FFmpeg audio mastering filter chain with highpass 80Hz rumble cut, lowpass 12kHz hiss cut, dynamic compressor, and EBU R128 loudness normalization (`--enhance_audio`).
-- **📦 Automated Batch Queue Processor**: Process content calendars of topics or video links sequentially in an automated background queue (`--batch_file`).
-- **🧮 Standalone Creation Modes**:
-  - `EXPLAINER`: Automated educational math & coding animations powered by Manim.
-  - `FACTS` & `STORY`: AI-scripted facts and narratives with automated background video stitching.
-  - `TOP_5`: Numbered listicle countdown shorts (#5 ➔ #1) with rank badges.
-  - `CHAT_STORY`: Animated text message conversation shorts (iMessage / WhatsApp format).
-  - `PODCAST`: 2-speaker debate shorts with alternating multi-voice synthesis.
-  - `DUB`: Multilingual video translation & voice re-synthesis.
-  - `THIS_OR_THAT` / `WYR`: Split-screen comparison challenges.
-  - `RANK_IT`: Tier-list rank reveals.
-  - `RIDDLE`: Interactive lateral thinking challenge designed to drive comments.
-  - `NEWS & PERSONA`: RSS headline breakdown with optional cartoon personas (e.g. Mafia Cat).
+| Mode | Visual Format | Quick Command |
+| :--- | :--- | :--- |
+| ✂️ **AI Clipping** | Slices long YouTube/local videos into high-scoring vertical shorts | `py main.py --source_video "URL" --smart_crop` |
+| 🔢 **Top 5 Countdown** | Numbered listicle countdown shorts (#5 ➔ #1) with rank badges | `py main.py --mode TOP_5 --category "inventions"` |
+| 💬 **Chat Story** | Animated text message conversation shorts (iMessage format) | `py main.py --mode CHAT_STORY --category "mystery"` |
+| 👥 **Podcast** | 2-speaker debate shorts with alternating multi-voice synthesis | `py main.py --mode PODCAST --prompt "AI future"` |
+| 🌐 **Video Dubbing** | Multilingual video translation & voice re-synthesis | `py main.py --mode DUB --source_video "clip.mp4" --target_lang es` |
+| 🧮 **Manim Explainer** | Programmatic 2D/3D math, CS, and science animations | `py main.py --mode EXPLAINER --prompt "Gravity"` |
+| 💡 **AI Facts** | High-energy trivia & mystery facts with scene stock loops | `py main.py --mode FACTS --category "space"` |
+| 📖 **AI Story** | Narrative story voiceover with visual scene stitching | `py main.py --mode STORY --category "sci-fi"` |
+| 🤔 **This or That (WYR)** | Split-screen dilemma challenge with VS central badge | `py main.py --mode WYR --category "superpowers"` |
+| 🏆 **Rank It** | Sequential Tier List (S, A, B, C, D) item ranking reveal | `py main.py --mode RANK_IT --category "supercars"` |
+| 🧩 **Emoji Guess** | Interactive emoji puzzle game with animated reveal | `py main.py --mode EMOJI_GUESS --category "movies"` |
+| 📰 **News Breakdown** | RSS news headline summary with cartoon personas | `py main.py --mode NEWS --cartoon --persona mafia_cat` |
 
 ---
 
-## 🎨 Visual Color Grading & AI Filter Modes (`--video_filter`)
+## 🎛️ Engine Power Capabilities
 
-ShortsFlow AI Studio includes an AI-driven color grading engine with 3 modes:
+| Capability | Supported Technologies & Flags |
+| :--- | :--- |
+| 🎙️ **Voice Synthesis & Cloning** | Zero-Shot Voice Cloning (`--clone_voice "sample.wav"`), VoiceStudio Local REST (`--tts_provider voicestudio`), ElevenLabs, EdgeTTS |
+| 📐 **Aspect Ratios** | `9:16` (Vertical), `16:9` (Landscape), `1:1` (Square), `4:5` (Social Feed) via `--aspect_ratio` |
+| 🔊 **Audio Mastering & SFX** | Auto SFX (`whoosh`, `pop`, `riser`, `boom`), Dynamic BGM Audio Ducking (`--auto_ducking`), Studio Master Filter (`--enhance_audio`) |
+| 🎥 **Motion & Visual Filters** | Dynamic Camera Push-In Zoom (`--enable_zoom`), 12 Color Grade Presets (`--video_filter cyberpunk`, `kurosawa`, `teal_orange`) |
+| 📦 **Batch Automation** | Automated queue execution from CSV / text lists (`--batch_file "topics.txt"`) |
+| 🤖 **Multi-LLM Matrix** | Google Gemini, Local Ollama (`qwen3:8b`), DeepSeek, Groq, Anthropic, OpenRouter (`--llm_provider`) |
 
-| Filter Mode | CLI Flag | How It Works | Best Used For |
-| :--- | :--- | :--- | :--- |
-| 🧠 **AI Dynamic** | `--video_filter dynamic` | AI analyzes video timeline & **switches filters automatically per scene phase** in a single pass. | High-retention edits (Combat ➔ B&W Duel ➔ Sunset Finish) |
-| 🤖 **AI Auto** | `--video_filter auto` | AI inspects video context & picks the **1 best overall filter** (or `none` if natural colors are best). | Quick 1-click optimization without guessing filter names |
-| 🎨 **Manual Preset** | `--video_filter <name>` | Force 1 of **12 iconic visual color grades** (`kurosawa`, `cyberpunk`, `teal_orange`, etc.). | Specific aesthetic themes & game styles |
+---
 
-![AI Dynamic Filter Showcase](demos/demo_filters_opt.gif)
-
-### 🎨 12 Curated Visual Presets
+## 🎨 Visual Color Grading Presets (`--video_filter`)
 
 | Preset Name | Visual Atmosphere | Preset Name | Visual Atmosphere |
 | :--- | :--- | :--- | :--- |
-| **`kurosawa`** | Black & White high-contrast samurai + grain | **`anime_vivid`** | Bright pastel saturation for anime/cartoons |
-| **`cyberpunk`** | Neon boosted purples/blues for night racing | **`matrix_green`** | Cyberpunk green tint / hacker aesthetic |
-| **`teal_orange`** | Blockbuster movie cinematic color balance | **`sepia_western`** | Vintage brown sepia tone for historical clips |
-| **`cinematic_warm`** | Golden hour warmth for scenery & drama | **`cold_thriller`** | Icy blue desaturated shadows for suspense |
-| **`vibrant_action`** | Sharp contrast & saturation boost for combat/sports | **`hdr_pop`** | High dynamic range pop with deep contrast |
+| **`dynamic`** | AI auto-switches color grade per scene beat | **`kurosawa`** | Black & White high-contrast samurai |
+| **`cyberpunk`** | Neon boosted purples/blues for night sci-fi | **`teal_orange`** | Blockbuster movie cinematic color balance |
+| **`cinematic_warm`** | Golden hour warmth for scenery & drama | **`vibrant_action`** | Sharp contrast & saturation for sports/action |
 | **`vintage_vhs`** | Analog retro tape scanlines & color shift | **`moody_dark`** | Dark fantasy / horror shadow contrast |
 
 ---
 
-## 🏗️ Architecture Flow
+## 💡 Top Command Recipes
 
-```mermaid
-graph TD
-    A[Source Video / YouTube URL / AI Prompt] --> B(Ingestion & Persistent Cache)
-    B -->|Whisper + CUDA GPU| C(Multimodal Signal Analysis)
-    C --> D[Hooks, Loudness & Face Tracking]
-    D --> E(Viral Scoring Engine)
-    E --> F{Smart Editing Pipeline}
-    F -->|Crop| G[9:16 Vertical Reframing]
-    F -->|Tighten| H[Silence Removal + Safety Buffer]
-    F -->|Remotion| I[React Subtitle Animation Engine]
-    G & H & I --> J[Final High-Retention Short]
+```bash
+# 1. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
+py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion
+
+# 2. Render Landscape 16:9 YouTube Video with SFX
+py main.py --mode EXPLAINER --prompt "Quantum physics" --aspect_ratio 16:9 --sfx_preset whoosh
+
+# 3. Translate and Dub Video into Spanish
+py main.py --mode DUB --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --target_lang es --use_remotion
+
+# 4. Process Batch Content Calendar Queue
+py main.py --batch_file "topics.txt" --mode FACTS --aspect_ratio 9:16 --use_remotion
 ```
 
 ---
 
-## 💻 CLI Usage Examples
+## ⚙️ Environment Configuration (`.env`)
 
-### 1. AI Dynamic Scene-Level Filter + Parallel Remotion Render
-```bash
-python main.py --source_video "gameplay.mp4" --extract_mode shorts --smart_crop --use_remotion --max_workers 2 --video_filter dynamic --user_context "Samurai katana duel and sunset field"
-```
+Rename `env.example` to `.env`:
 
-### 2. Multi-Provider LLM Override (DeepSeek, OpenAI, Groq, or Local Ollama)
-```bash
-# Use DeepSeek LLM for analysis & scripting
-python main.py --source_video "gameplay.mp4" --llm_provider deepseek --llm_model deepseek-chat
-
-# Use Groq for ultra-fast Llama 3.3 70B inference
-python main.py --source_video "gameplay.mp4" --llm_provider groq --llm_model llama-3.3-70b-versatile
-```
-
-### 3. Full Long-Form Video Color Grading Mode (`--mode FILTER`)
-```bash
-# AI auto-selects visual grade for a long-form video
-python main.py --mode FILTER --source_video "night_race.mp4" --video_filter auto
-
-# Manual visual filter preset (e.g. Kurosawa / Cyberpunk / Teal-Orange)
-python main.py --mode FILTER --source_video "clip.mp4" --video_filter kurosawa
-```
-
-### 4. Generate AI Facts Short with Custom Remotion Captions
-```bash
-python main.py --mode FACTS --category "space mysteries" --vibe "suspense" --use_remotion --caption_style GLOW_BOX
-```
-
-### 4. Generate a Manim Educational Math Explainer Short
-```bash
-python main.py --mode EXPLAINER --prompt "Explain the Pythagorean theorem visually" --extract_mode shorts
-```
-
----
-
-## 🎬 Standalone Content Modes
-
-| Mode | Format & Visual Style |
-|---|---|
-| ✂️ **AI Video Clipping** | Turn YouTube podcasts/long videos into high-retention 9:16 viral shorts |
-| 🧮 **Explainer (Manim)** | Automated math, science, and computer science animations |
-| 💡 **Facts Mode** | High-energy trivia & mystery facts with stock video background loops |
-| 📖 **Story Mode** | AI narrator voiceover with dynamic visual scene stitching |
-| 🤔 **This or That / WYR** | Split-screen dilemma challenge with VS central badge |
-| 🏆 **Rank It** | Sequential Tier List (S, A, B, C, D) item ranking reveal |
-| 🧩 **Riddle** | Interactive lateral thinking challenge designed to drive comments |
-| 📰 **News & Persona** | RSS headline breakdown with optional cartoon personas (e.g. Mafia Cat) |
-
----
-
-## ⚙️ Prerequisites & Installation
-
-- **Python**: 3.12+ (PyTorch CUDA recommended for fast Whisper transcription)
-- **Node.js**: v18+ (Required for Remotion React video rendering)
-- **FFmpeg**: Installed and accessible in your system `PATH`
-
-### Environment Configuration (`.env`)
-Create a `.env` file in the root directory (or run `setup.bat`):
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=your_gemini_key_here
 HF_API_KEY=your_huggingface_key_here
 PEXELS_API_KEY=your_pexels_key_here
+
+# Local Voice Studio & Production Defaults
+VOICE_PROVIDER=auto
+VOICE_STUDIO_URL=http://localhost:8000/v1/audio/speech
+DEFAULT_ASPECT_RATIO=9:16
+AUTO_DUCKING=true
 ```
 
 ---
 
-## 🤖 AI Agent Prompt & Onboarding Instructions
+## 🤖 AI Agent Onboarding
 
-If you are an AI Coding Agent (Cursor, Antigravity, Claude Code, Copilot, AutoGPT) onboarding into this codebase, check out **[AGENTS.md](AGENTS.md)** for structured architectural context, module maps, CLI skills, and execution rules.
+If you are an AI Coding Agent (Cursor, Antigravity, Claude Code, Copilot, AutoGPT) onboarding into this codebase, see **[AGENTS.md](AGENTS.md)** for structured architectural context, module maps, CLI skills, and execution rules.
 
 ---
 
