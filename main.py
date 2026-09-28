@@ -97,7 +97,7 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE, ODD_ONE_OUT, or FILTER shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "TEACH", "DUB", "SPLIT_SCREEN", "PODCAST", "TOP_5", "CHAT_STORY", "AUTO"], help="Force a specific mode.")
     parser.add_argument("--scene", help="Scene or scenario prompt for FUNNY_EXPLAINER mode.")
     parser.add_argument("--photos_dir", help="Directory containing photos for PHOTO_REEL mode.")
     parser.add_argument("--music", help="Path to audio/music track for PHOTO_REEL or background music.")
@@ -137,6 +137,8 @@ def parse_args():
     
     parser.add_argument("--output_json", help="Path to write structured JSON results (transcript, clips, scores, hooks).")
     parser.add_argument("--batch_file", help="Path to text file containing list of video URLs or local files to process in batch.")
+    parser.add_argument("--cookies_from_browser", default=None, help="Browser to extract cookies from for age-restricted videos (edge, chrome, firefox, brave).")
+    parser.add_argument("--cookies", help="Path to cookies.txt file for YouTube authentication.")
     
     parser.add_argument("--use_comfy", action="store_true", help="Use local ComfyUI for premium AI backgrounds.")
     parser.add_argument("--use_ai_audio", action="store_true", help="Use local ComfyUI for premium AI music & SFX.")
@@ -148,6 +150,8 @@ def parse_args():
     parser.add_argument("--tighten", action="store_true", help="Remove silences from the final video.")
     parser.add_argument("--tighten_mode", choices=["cut", "speed"], default="cut", help="How to handle silences: 'cut' them or 'speed' them up.")
     parser.add_argument("--smart_crop", action="store_true", help="Enabled AI-powered face/interest tracking for vertical cropping.")
+    parser.add_argument("--add_commentary", action="store_true", help="Generate an AI voiceover intro commentary hook for third-party clips to ensure 100%% YouTube policy compliance.")
+    parser.add_argument("--show_banner", action="store_true", help="Overlay visual rounded header banner ('VIRAL MOMENT') on top of commentary intro clips.")
     
     # 🟢 Gap Closure Flags
     parser.add_argument("--srt", action="store_true", help="Export SRT subtitle file alongside each video.")
@@ -179,6 +183,16 @@ def parse_args():
     parser.add_argument("--youtube_account", help="Select YouTube account slot (e.g. 1, 2, channel_b).")
     parser.add_argument("--youtube_token_file", help="Path to custom YouTube token.json file.")
     parser.add_argument("--youtube_secrets_file", help="Path to custom YouTube client_secrets.json file.")
+
+    # Voice, Production & Aspect Ratio Flags
+    parser.add_argument("--tts_provider", choices=["auto", "elevenlabs", "voicestudio", "edgetts", "local"], default="auto", help="Specify Text-to-Speech synthesis provider.")
+    parser.add_argument("--clone_voice", help="Path to custom audio sample file (.wav, .mp3) for zero-shot voice cloning.")
+    parser.add_argument("--aspect_ratio", choices=["9:16", "16:9", "1:1", "4:5"], default="9:16", help="Select output video aspect ratio (default 9:16 vertical).")
+    parser.add_argument("--target_lang", help="Target language code for automatic video translation and dubbing (e.g. es, hi, de, fr, ja, pt).")
+    parser.add_argument("--auto_ducking", action="store_true", help="Enable dynamic background music ducking during voice audio.")
+    parser.add_argument("--sfx_preset", choices=["auto", "whoosh", "pop", "riser", "boom", "none"], default="auto", help="Select sound effects preset to overlay on visual transitions.")
+    parser.add_argument("--enable_zoom", action="store_true", help="Apply smooth camera push-in zoom motion keyframing.")
+    parser.add_argument("--enhance_audio", action="store_true", help="Apply studio audio mastering (highpass, noise gate, compressor, EBU R128 loudnorm).")
 
     args = parser.parse_args()
     return args
@@ -235,9 +249,36 @@ if getattr(args, "llm_provider", None) and args.llm_provider != "auto":
     os.environ["LLM_PROVIDER"] = args.llm_provider
     print(f"[Log] 🤖 Requested LLM Provider: {args.llm_provider}")
 
-if getattr(args, "llm_model", None):
-    os.environ["LLM_MODEL"] = args.llm_model
-    print(f"[Log] 🤖 Requested LLM Model: {args.llm_model}")
+if getattr(args, "batch_file", None) and os.path.exists(args.batch_file):
+    print(f"\n[Log] 📦 BATCH PROCESSING MODE ACTIVE: Reading {args.batch_file}...")
+    with open(args.batch_file, "r", encoding="utf-8") as bf:
+        lines = [line.strip() for line in bf if line.strip() and not line.strip().startswith("#")]
+        
+    print(f"[Log] Found {len(lines)} item(s) in batch list. Executing sequential generation...\n")
+    for b_idx, item in enumerate(lines, 1):
+        print(f"\n" + "="*70)
+        print(f"📦 BATCH ITEM {b_idx}/{len(lines)}: {item}")
+        print("="*70)
+        
+        cmd = [sys.executable, "main.py"]
+        if is_url(item) or item.endswith((".mp4", ".mov", ".mkv")):
+            cmd.extend(["--source_video", item])
+        else:
+            cmd.extend(["--mode", args.mode or "FACTS", "--category", item])
+            
+        if args.use_remotion: cmd.append("--use_remotion")
+        if args.caption_style: cmd.extend(["--caption_style", args.caption_style])
+        if args.aspect_ratio: cmd.extend(["--aspect_ratio", args.aspect_ratio])
+        if args.tts_provider: cmd.extend(["--tts_provider", args.tts_provider])
+        if args.auto_ducking: cmd.append("--auto_ducking")
+        if args.enable_zoom: cmd.append("--enable_zoom")
+        if args.enhance_audio: cmd.append("--enhance_audio")
+        cmd.append("--skip_upload")
+        
+        subprocess.run(cmd, check=False)
+        
+    print("\n[Log] 🏁 All batch queue items completed successfully.")
+    sys.exit(0)
 
 # Quality Mapping (Overridden by manual flags if present)
 bitrate_map = {"low": "4M", "medium": "12M", "high": "25M", "ultra": "50M"}
@@ -739,7 +780,7 @@ if getattr(args, "source_video", None) and args.mode not in ["TRAILER_MISSED", "
     # 🟢 Auto-download video if source_video is a URL
     if is_url(args.source_video):
         print(f"[Log] Detected Video URL: '{args.source_video}'. Downloading stream...")
-        args.source_video = download_source_video_from_url(args.source_video, session_dir)
+        args.source_video = download_source_video_from_url(args.source_video, session_dir, cookies_from_browser=getattr(args, 'cookies_from_browser', None), cookies_file=getattr(args, 'cookies', None))
         print(f"[Log] Video downloaded locally to: {args.source_video}")
 
     print("[Log] Running Transcript-based Highlight Analysis...")
@@ -846,6 +887,93 @@ if getattr(args, "source_video", None) and args.mode not in ["TRAILER_MISSED", "
                     export_srt({'segments': clip_segs}, srt_path)
         except Exception as e:
             print(f"[Warning] Failed to export SRT files: {e}")
+
+    # 🟢 Policy-Safety: Prepend AI Voiceover Commentary Hook if --add_commentary is set
+    if getattr(args, 'add_commentary', False) and extracted_files:
+        print("[Log] 🎙️ Policy Protection Active: Generating AI intro commentary hooks for clips...")
+        from engine.script_gen import generate_clip_commentary_hook
+        from engine.voice_gen import generate_voice
+        from engine.video_gen import create_rounded_header_banner
+        import imageio_ffmpeg
+
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
+        for i, clip_file in enumerate(extracted_files):
+            try:
+                hi = highlights[i] if i < len(highlights) else {}
+                snippet_text = hi.get("text") or hi.get("context") or hi.get("reason") or "Viral video moment"
+                hook_sentence = generate_clip_commentary_hook(snippet_text, category=getattr(args, 'category', 'general'))
+                print(f"  -> Clip #{i+1} Commentary Hook: '{hook_sentence}'")
+
+                comm_audio_path = os.path.join(session_dir, f"comm_audio_{i}.mp3")
+                comm_voice = getattr(args, "voice", None) or "en-US-BrianNeural"
+                generate_voice(hook_sentence, output_audio=comm_audio_path, voice_name=comm_voice, rate="+0%", add_cta=False)
+
+                if os.path.exists(comm_audio_path):
+                    show_banner = getattr(args, 'show_banner', False)
+                    temp_out = clip_file.replace(".mp4", "_comm.mp4")
+
+                    # Calculate exact commentary audio duration
+                    comm_dur = 3.5
+                    try:
+                        res = subprocess.run([ffmpeg_exe, "-i", comm_audio_path], capture_output=True, text=True)
+                        for line in res.stderr.split("\n"):
+                            if "Duration:" in line:
+                                dur_str = line.split("Duration:")[1].split(",")[0].strip()
+                                parts = dur_str.split(":")
+                                comm_dur = float(parts[0])*3600 + float(parts[1])*60 + float(parts[2])
+                                break
+                    except Exception:
+                        pass
+
+                    if show_banner:
+                        banner_path = create_rounded_header_banner(text="VIRAL REACTION", width=860, height=110, bg_color="white", text_color="black")
+                        filter_complex = (
+                            f"[0:v][1:v]overlay=(main_w-overlay_w)/2:30:enable='between(t,0,{comm_dur + 0.5:.2f})'[outv];"
+                            f"[0:a]volume=enable='between(t,0,{comm_dur:.2f})':volume=0.20[ducked_bg];"
+                            f"[2:a]adelay=0|0,volume=1.2[commaudio];"
+                            f"[ducked_bg][commaudio]amix=inputs=2:duration=first:dropout_transition=1[outa]"
+                        )
+
+                        cmd = [
+                            ffmpeg_exe, "-y",
+                            "-i", clip_file,
+                            "-i", banner_path,
+                            "-i", comm_audio_path,
+                            "-filter_complex", filter_complex,
+                            "-map", "[outv]",
+                            "-map", "[outa]",
+                            "-c:v", "libx264", "-preset", "fast",
+                            "-c:a", "aac", "-b:a", "192k",
+                            temp_out
+                        ]
+                    else:
+                        # Audio-only commentary mix with smart audio ducking (drops original clip audio to 20% while commentary speaks)
+                        filter_complex = (
+                            f"[0:a]volume=enable='between(t,0,{comm_dur:.2f})':volume=0.20[ducked_bg];"
+                            f"[1:a]adelay=0|0,volume=1.2[commaudio];"
+                            f"[ducked_bg][commaudio]amix=inputs=2:duration=first:dropout_transition=1[outa]"
+                        )
+
+                        cmd = [
+                            ffmpeg_exe, "-y",
+                            "-i", clip_file,
+                            "-i", comm_audio_path,
+                            "-filter_complex", filter_complex,
+                            "-map", "0:v",
+                            "-map", "[outa]",
+                            "-c:v", "copy",
+                            "-c:a", "aac", "-b:a", "192k",
+                            temp_out
+                        ]
+
+                    run_res = subprocess.run(cmd, capture_output=True, text=True)
+                    if run_res.returncode == 0 and os.path.exists(temp_out):
+                        os.replace(temp_out, clip_file)
+                        print(f"  -> Applied commentary hook to clip #{i+1} (Ducked background audio to 20%)")
+            except Exception as ce:
+                print(f"[Warning] Could not apply commentary hook to clip #{i+1}: {ce}")
+
             
 
     
@@ -873,35 +1001,56 @@ if getattr(args, "source_video", None) and args.mode not in ["TRAILER_MISSED", "
             i, h = idx_h
             if i >= len(extracted_files): return None
             # Sanitize technical jargon from the context/reason
-            raw_context = h.get('context', h.get('reason', 'Gamer Highlight'))
-            if "Recovered" in raw_context or "Regex" in raw_context:
-                raw_context = "Epic Gaming Moment"
+            raw_context = h.get('context', h.get('reason', 'Viral Highlight'))
+            if any(j in raw_context for j in ["Recovered", "Regex", "FFmpeg", "stderr"]):
+                raw_context = "Viral Clip Highlight"
             
-            # Auto-detect game / topic name from user_context, session_dir, or source_video name
+            # Auto-detect topic name and category from user_context, args.category, session_dir, or source_video name
             lower_session = args.session_dir.lower() if args.session_dir else ""
             lower_source = args.source_video.lower() if args.source_video else ""
             lower_ctx = args.user_context.lower() if args.user_context else ""
             lower_combo = f"{lower_session} {lower_source} {lower_ctx}"
             
-            game_name = "Gaming"
-            if "ghost" in lower_combo or "tsushima" in lower_combo: game_name = "Ghost of Tsushima"
-            elif "nfs" in lower_combo or "rivals" in lower_combo or "speed" in lower_combo: game_name = "Need for Speed Rivals"
-            elif "gta" in lower_combo: game_name = "GTA 6"
-            elif "rdr" in lower_combo or "red dead" in lower_combo: game_name = "Red Dead Redemption 2"
-            elif "witcher" in lower_combo: game_name = "The Witcher 3"
-            elif "spider" in lower_combo: game_name = "Spider-Man"
-            elif "elden" in lower_combo: game_name = "Elden Ring"
+            active_cat = getattr(args, 'category', None) or "general"
+            import re
+            
+            topic_name = "Viral Highlight"
+            if re.search(r'\b(ghost|tsushima)\b', lower_combo):
+                topic_name = "Ghost of Tsushima"
+                active_cat = "gaming"
+            elif re.search(r'\b(nfs|rivals|need for speed)\b', lower_combo):
+                topic_name = "Need for Speed Rivals"
+                active_cat = "gaming"
+            elif re.search(r'\b(gta|grand theft auto)\b', lower_combo):
+                topic_name = "GTA 6"
+                active_cat = "gaming"
+            elif re.search(r'\b(rdr|rdr2|red dead)\b', lower_combo):
+                topic_name = "Red Dead Redemption 2"
+                active_cat = "gaming"
+            elif re.search(r'\b(witcher)\b', lower_combo):
+                topic_name = "The Witcher 3"
+                active_cat = "gaming"
+            elif re.search(r'\b(spider|spiderman)\b', lower_combo):
+                topic_name = "Spider-Man"
+                active_cat = "gaming"
+            elif re.search(r'\b(elden|elden ring)\b', lower_combo):
+                topic_name = "Elden Ring"
+                active_cat = "gaming"
+            elif any(m in lower_combo for m in ["music", "song", "track", "emdi", "ncs", "audio"]):
+                topic_name = "Music Performance / Track"
+                active_cat = "music"
             elif args.user_context:
-                game_name = " ".join(args.user_context.split()[:4])
+                topic_name = " ".join(args.user_context.split()[:4])
                 
             content_info = {
-                "game_name": game_name,
+                "topic_name": topic_name,
+                "game_name": topic_name if active_cat == "gaming" else topic_name,
                 "scene_description": raw_context,
                 "user_context": args.user_context,
                 "styles": args.style if isinstance(args.style, list) else ([args.style] if args.style else [])
             }
             
-            meta = generate_viral_metadata(content_info, mode="STORY", category="gaming", user_context=args.user_context)
+            meta = generate_viral_metadata(content_info, mode="STORY", category=active_cat, user_context=args.user_context)
             return {
                 "file": os.path.basename(extracted_files[i]),
                 "title": meta.get('title', 'Viral Moment'),
@@ -1309,6 +1458,16 @@ else:
             full_script = f"{funny_data.get('hook', '')} {step_texts} {funny_data.get('outro', '')}".strip()
             facts_data = []
             print(f"[Log] 😼 FUNNY_EXPLAINER Data: {funny_data}")
+        elif mode == "TEACH":
+            from engine.script_gen import generate_teach_script
+            vibe_val = getattr(args, 'vibe', 'upbeat')
+            if not vibe_val or vibe_val == 'suspense':
+                vibe_val = 'upbeat'
+                args.vibe = 'upbeat'
+            teach_data = generate_teach_script(category=category, topic_prompt=topic, vibe=vibe_val)
+            full_script = teach_data.get("narrator_script", "")
+            facts_data = []
+            print(f"[Log] 🎓 TEACH Data: {teach_data}")
     except RuntimeError as e:
         print(f"[Error] Generation failed: {e}")
         print("[Log] Gracefully skipping this video to maintain channel diversity.")
@@ -1395,7 +1554,7 @@ def get_video_duration(path):
         print(f"[Warning] Failed to get duration for {path}: {e}")
         return 10.0 # Fallback
 
-def get_bg_path(query, out_path, target_duration=15.0):
+def get_bg_path(query, out_path, target_duration=15.0, force_literal=False):
     if getattr(args, "bg_media", None) and os.path.exists(args.bg_media):
         from engine.media_gen import download_background_video
         path = download_background_video(query, output_path=out_path, custom_bg=args.bg_media)
@@ -1420,7 +1579,7 @@ def get_bg_path(query, out_path, target_duration=15.0):
         if path: return [path]
         print("[Warning] ComfyUI failed, falling back to Pexels...")
     from engine.media_gen import download_background_video
-    path = download_background_video(query, output_path=out_path)
+    path = download_background_video("", fallback_query=query, output_path=out_path, force_literal=force_literal)
     return [path] if path else []
 
 # Calculate segments for staggered backgrounds
@@ -1600,6 +1759,45 @@ elif mode == "FUNNY_EXPLAINER":
     if not bg_video_paths:
         bg_filename = os.path.join(session_dir, "bg_funny_fallback.mp4")
         bg_video_paths = get_bg_path(f"{category or 'funny'} comedy meme", bg_filename, target_duration=total_bg_duration)
+elif mode == "TEACH":
+    t_type = teach_data.get("type") if 'teach_data' in locals() else "general"
+    dish_or_topic = (teach_data.get("dish_name") if 'teach_data' in locals() else None) or topic or category or "cooking"
+    
+    if t_type == "recipe":
+        visual_queries = teach_data.get("action_visuals", []) if 'teach_data' in locals() else []
+        steps_list = teach_data.get("steps", []) if 'teach_data' in locals() else []
+        num_segments = max(len(steps_list), len(visual_queries) if visual_queries else 0, 3)
+        
+        if not visual_queries:
+            visual_queries = [
+                "boiling pasta pot water",
+                "sizzling garlic butter frying pan",
+                "tossing pasta parmesan cheese",
+                "delicious pasta plating food"
+            ]
+        
+        seg_dur = total_bg_duration / num_segments
+        bg_video_paths = []
+        
+        for s_idx in range(num_segments):
+            q_term = visual_queries[s_idx % len(visual_queries)]
+            s_out = os.path.join(session_dir, f"bg_recipe_action_{s_idx+1}.mp4")
+            paths = get_bg_path(q_term, s_out, target_duration=seg_dur, force_literal=True)
+            if paths:
+                bg_video_paths.extend(paths)
+        
+        if not bg_video_paths:
+            bg_filename = os.path.join(session_dir, "bg_recipe_fallback.mp4")
+            bg_video_paths = get_bg_path(f"{dish_or_topic} cooking food dish", bg_filename, target_duration=total_bg_duration, force_literal=True)
+    elif t_type == "code":
+        raw_search = (teach_data.get("search_term") if 'teach_data' in locals() else None) or dish_or_topic
+        search_query = f"{raw_search} programming code computer developer matrix"
+        bg_filename = os.path.join(session_dir, "bg_teach_code.mp4")
+        bg_video_paths = get_bg_path(search_query, bg_filename, target_duration=total_bg_duration, force_literal=True)
+    else:
+        raw_search = (teach_data.get("search_term") if 'teach_data' in locals() else None) or dish_or_topic
+        bg_filename = os.path.join(session_dir, "bg_teach.mp4")
+        bg_video_paths = get_bg_path(raw_search, bg_filename, target_duration=total_bg_duration, force_literal=True)
 elif mode == "EXPLAINER":
     print("[Log] Rendering Manim animation code...")
     from engine.video_gen import render_manim_scene
@@ -1686,7 +1884,7 @@ if selected_persona:
             avatar_path = p_path
             break
 
-remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS", "FUNNY_EXPLAINER"]
+remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS", "FUNNY_EXPLAINER", "TEACH"]
 if args.use_remotion and mode in remotion_supported_modes:
     from engine.remotion_renderer import render_with_remotion
     
@@ -1694,6 +1892,7 @@ if args.use_remotion and mode in remotion_supported_modes:
     this_or_that_data = None
     emoji_guess_data = None
     funny_explainer_data = None
+    teach_card_data = None
     
     if mode == "WYR":
         remotion_mode = "THIS_OR_THAT"
@@ -1713,6 +1912,8 @@ if args.use_remotion and mode in remotion_supported_modes:
         }
     elif mode == "FUNNY_EXPLAINER":
         funny_explainer_data = funny_data if 'funny_data' in locals() else None
+    elif mode == "TEACH":
+        teach_card_data = teach_data if 'teach_data' in locals() else None
     
     final_video = render_with_remotion(
         audio_path=audio_path,
@@ -1720,11 +1921,12 @@ if args.use_remotion and mode in remotion_supported_modes:
         output_path=output_filename,
         mode=remotion_mode,
         bg_music_path=bg_music,
-        title_text=funny_data.get("title") if mode == "FUNNY_EXPLAINER" and 'funny_data' in locals() else (args.recap_title or args.category or "ShortsFlow"),
+        title_text=(teach_data.get("title") if mode == "TEACH" and 'teach_data' in locals() else (funny_data.get("title") if mode == "FUNNY_EXPLAINER" and 'funny_data' in locals() else (args.recap_title or args.category or "ShortsFlow"))),
         background_paths=bg_video_paths,
         this_or_that=this_or_that_data,
         emoji_guess=emoji_guess_data,
         funny_explainer=funny_explainer_data,
+        teach_card=teach_card_data,
         avatar_path=avatar_path,
         caption_style=getattr(args, "caption_style", "HORMOZI")
     )

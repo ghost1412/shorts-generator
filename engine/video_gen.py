@@ -99,6 +99,95 @@ def generate_thumbnail(video_path, output_path, at_time=None):
     except Exception as e:
         print(f"[Warning] Thumbnail generation failed: {e}")
 
+def generate_thumbnail_with_badge(video_path, output_path, badge_text="VIRAL MOMENT", at_time=3.0):
+    """
+    Generates a thumbnail image from video_path with bold high-contrast viral badge text overlays using Pillow.
+    """
+    generate_thumbnail(video_path, output_path, at_time=at_time)
+    if not os.path.exists(output_path):
+        return output_path
+        
+    try:
+        from PIL import Image, ImageDraw, ImageFont, ImageFilter
+        with Image.open(output_path) as img:
+            img = img.convert("RGBA")
+            w, h = img.size
+            
+            # Create semi-transparent overlay graphic
+            overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)
+            
+            # Draw gradient vignette at top and bottom
+            for y in range(0, int(h * 0.25)):
+                alpha = int(180 * (1.0 - y / (h * 0.25)))
+                draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+            for y in range(int(h * 0.75), h):
+                alpha = int(200 * ((y - h * 0.75) / (h * 0.25)))
+                draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+                
+            # Render rounded badge pill box at upper middle
+            badge_str = badge_text.strip().upper()[:28]
+            font_size = max(24, int(w * 0.055))
+            try:
+                font = ImageFont.truetype("arial.ttf", font_size)
+            except Exception:
+                font = ImageFont.load_default()
+                
+            text_bbox = draw.textbbox((0, 0), badge_str, font=font)
+            tw = text_bbox[2] - text_bbox[0]
+            th = text_bbox[3] - text_bbox[1]
+            
+            px, py = (w - tw) // 2, int(h * 0.22)
+            pad_x, pad_y = 20, 12
+            rect_shape = [px - pad_x, py - pad_y, px + tw + pad_x, py + th + pad_y]
+            
+            # Pill background fill (Yellow/Neon with dark border)
+            draw.rounded_rectangle(rect_shape, radius=12, fill=(255, 234, 0, 240), outline=(0, 0, 0, 255), width=3)
+            draw.text((px, py), badge_str, font=font, fill=(10, 10, 10, 255))
+            
+            composite = Image.alpha_composite(img, overlay).convert("RGB")
+            composite.save(output_path, "JPEG", quality=95)
+            print(f"[Log] Viral thumbnail badge generated: {output_path}")
+    except Exception as e:
+        print(f"[Warning] Failed to render thumbnail badge: {e}")
+        
+    return output_path
+
+def enhance_audio_track(input_audio, output_audio):
+    """
+    Applies FFmpeg studio audio cleanup: highpass filter, noise reduction, dynamic range compression, and EBU R128 loudness normalization.
+    """
+    import imageio_ffmpeg, subprocess
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    os.makedirs(os.path.dirname(os.path.abspath(output_audio)), exist_ok=True)
+    
+    af_chain = "highpass=f=80,lowpass=f=12000,acompressor=threshold=-16dB:ratio=3:attack=5:release=50,loudnorm=I=-16:TP=-1.5:LRA=11"
+    
+    cmd = [
+        ffmpeg_exe, "-y",
+        "-i", input_audio,
+        "-af", af_chain,
+        "-c:a", "libmp3lame",
+        "-b:a", "192k",
+        output_audio
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, check=True, timeout=30)
+        print(f"[Log] Audio enhancement complete: {output_audio}")
+        return output_audio
+    except Exception as e:
+        print(f"[Warning] Audio enhancement failed ({e}). Returning original track.")
+        return input_audio
+
+def generate_ffmpeg_dynamic_zoom_filter(duration=30.0, zoom_factor=1.12):
+    """
+    Generates a smooth push-in camera zoom filter expression (1.0x to 1.12x) to create continuous subtle motion.
+    """
+    num_frames = int(duration * 30)
+    zoom_expr = f"min({zoom_factor},1.0+({zoom_factor - 1.0})*on/{max(1, num_frames)})"
+    filter_str = f"zoompan=z='{zoom_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30"
+    return filter_str
+
 def insert_broll_cutaways(clip, silence_intervals, broll_dir, fps=30):
     """
     Inserts B-roll video over long silence gaps to maintain visual engagement.
@@ -2889,6 +2978,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 clip.close()
                 
             return [out]
+
+        return extracted_files
             
 def create_photo_reel_video(photo_paths, music_path, output_path, beat_timestamps=None, target_duration=30.0):
     """

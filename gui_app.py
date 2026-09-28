@@ -172,6 +172,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.mode_dropdown = ctk.CTkOptionMenu(
             mode_card,
             values=[
+                "🎓 Teach & Learn (Language, Tech, Recipe)",
                 "✂️ Auto Clipping (Long -> Shorts)",
                 "💡 AI Facts Mode",
                 "📖 AI Story & Voiceover",
@@ -233,6 +234,24 @@ class ModernShortsGeneratorUI(ctk.CTk):
             button_color="#334155"
         )
         self.voice_menu.pack(fill="x", padx=12, pady=(0, 8))
+
+        ctk.CTkLabel(ai_card, text="🎛️ TTS Engine Provider:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        self.tts_provider_menu = ctk.CTkOptionMenu(
+            ai_card,
+            values=["auto (Best Available)", "voicestudio (Local Zero-Shot)", "elevenlabs (Cloud Premium)", "edgetts (Free Edge)"],
+            height=28,
+            fg_color="#0F172A",
+            button_color="#334155"
+        )
+        self.tts_provider_menu.pack(fill="x", padx=12, pady=(0, 8))
+
+        ctk.CTkLabel(ai_card, text="🗣️ Zero-Shot Voice Clone Sample:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
+        clone_row = ctk.CTkFrame(ai_card, fg_color="transparent")
+        clone_row.pack(fill="x", padx=12, pady=(0, 8))
+        self.clone_voice_entry = ctk.CTkEntry(clone_row, placeholder_text="Optional: voice_sample.wav", height=28)
+        self.clone_voice_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        clone_browse_btn = ctk.CTkButton(clone_row, text="📁", width=30, height=28, fg_color="#334155", hover_color="#475569", command=self.browse_clone_sample)
+        clone_browse_btn.pack(side="left")
 
         # Cartoon Persona Selector
         ctk.CTkLabel(ai_card, text="🧙 Cartoon Persona / Avatar:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
@@ -439,6 +458,14 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.broll_switch = ctk.CTkSwitch(engine_card, text="🎬 Download & Insert Auto B-Roll Cutaways", font=ctk.CTkFont(size=11))
         self.broll_switch.pack(anchor="w", padx=12, pady=4)
 
+        self.zoom_switch = ctk.CTkSwitch(engine_card, text="🎥 Dynamic Camera Push-In Zoom Motion", font=ctk.CTkFont(size=11))
+        self.zoom_switch.select()
+        self.zoom_switch.pack(anchor="w", padx=12, pady=4)
+
+        self.enhance_audio_switch = ctk.CTkSwitch(engine_card, text="🎚️ Studio Audio Master & Noise Cleanup", font=ctk.CTkFont(size=11))
+        self.enhance_audio_switch.select()
+        self.enhance_audio_switch.pack(anchor="w", padx=12, pady=4)
+
         self.remotion_switch = ctk.CTkSwitch(engine_card, text="⚡ Remotion React Subtitle Engine", font=ctk.CTkFont(size=11))
         self.remotion_switch.select()
         self.remotion_switch.pack(anchor="w", padx=12, pady=(0, 6))
@@ -496,6 +523,13 @@ class ModernShortsGeneratorUI(ctk.CTk):
             self.source_entry.delete(0, "end")
             self.source_entry.insert(0, filename)
             self.log(f"[Input] Selected local video: {filename}")
+
+    def browse_clone_sample(self):
+        filename = filedialog.askopenfilename(title="Select Voice Clone Audio Sample", filetypes=[("Audio Files", "*.wav *.mp3 *.m4a *.flac")])
+        if filename:
+            self.clone_voice_entry.delete(0, "end")
+            self.clone_voice_entry.insert(0, filename)
+            self.log(f"[Input] Selected voice clone sample: {filename}")
 
     def browse_output_dir(self):
         folder = filedialog.askdirectory(title="Select Output Directory for Rendered Videos")
@@ -585,12 +619,15 @@ class ModernShortsGeneratorUI(ctk.CTk):
         source = self.source_entry.get().strip()
         mode_str = self.mode_dropdown.get()
 
-        if "Auto Clipping" in mode_str and not source:
-            messagebox.showwarning("Input Required", "Please enter a YouTube URL or select a local video file for Auto Clipping.")
-            return
-
         # Prepare Command Line Arguments for main.py (uses py -3.12 when available)
         cmd = self.get_python_cmd() + ["main.py"]
+
+        if "Teach & Learn" in mode_str:
+            user_input = self.user_context_entry.get().strip() or "Japanese travel phrases"
+            cmd.extend(["--mode", "TEACH", "--prompt", user_input, "--use_remotion"])
+        elif "Auto Clipping" in mode_str and not source:
+            messagebox.showwarning("Input Required", "Please enter a YouTube URL or select a local video file for Auto Clipping.")
+            return
 
         # Extraction Format
         ext_mode = self.extract_mode_menu.get().split()[0]
@@ -639,10 +676,18 @@ class ModernShortsGeneratorUI(ctk.CTk):
         dur_clean = ''.join(c for c in dur_raw if c.isdigit()) or "45"
         cmd.extend(["--target_duration", dur_clean])
 
-        # Voiceover selection (Only needed for AI Script Generation Modes, not Extraction Mode)
+        # Voiceover selection & TTS Provider
         if "Auto Clipping" not in mode_str and "Color Grade" not in mode_str:
             voice_str = self.voice_menu.get().split()[0]
             cmd.extend(["--voice", voice_str])
+            
+            tts_prov = self.tts_provider_menu.get().split()[0]
+            if tts_prov != "auto":
+                cmd.extend(["--tts_provider", tts_prov])
+                
+            clone_path = self.clone_voice_entry.get().strip()
+            if clone_path and os.path.exists(clone_path):
+                cmd.extend(["--clone_voice", clone_path])
 
         # Cartoon Persona
         persona_str = self.persona_menu.get().split()[0]
@@ -674,6 +719,10 @@ class ModernShortsGeneratorUI(ctk.CTk):
             cmd.append("--srt")
         if self.broll_switch.get() == 1:
             cmd.append("--broll")
+        if self.zoom_switch.get() == 1:
+            cmd.append("--enable_zoom")
+        if self.enhance_audio_switch.get() == 1:
+            cmd.append("--enhance_audio")
 
         # Worker threads
         workers_val = self.workers_menu.get().split()[0]

@@ -62,7 +62,9 @@ def render_with_remotion(
     subtitle_y_pos=1150,
     beat_timestamps=None,
     captions=None,
-    funny_explainer=None
+    funny_explainer=None,
+    teach_card=None,
+    aspect_ratio="9:16"
 ):
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
@@ -76,8 +78,11 @@ def render_with_remotion(
         else:
             import random
             caption_style = random.choice(valid_styles)
-    if subtitle_y_pos == 1150 and (avatar_path or mode in ["EMOJI_GUESS", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS"]):
-        subtitle_y_pos = 1500
+    if subtitle_y_pos == 1150:
+        if mode == "TEACH":
+            subtitle_y_pos = 980
+        elif avatar_path or mode in ["EMOJI_GUESS", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS"]:
+            subtitle_y_pos = 1500
 
     print(f"\n[RemotionRenderer] Initiating modern render pipeline for mode: {mode} (Caption Preset: {caption_style})...")
     
@@ -256,6 +261,7 @@ def render_with_remotion(
         if remotion_cap: props["captionThis"] = remotion_cap
         if emoji_guess: props["emojiGuess"] = emoji_guess
         if funny_explainer: props["funnyExplainer"] = funny_explainer
+        if teach_card: props["teachCard"] = teach_card
         
         # Write props to a JSON file inside remotion-video folder
         props_filename = f"temp_props_{run_id}.json"
@@ -302,13 +308,25 @@ def render_with_remotion(
             gl_flag = "--gl=angle"
             concurrency_flag = "--concurrency=50%"
 
+        ASPECT_MAP = {
+            "9:16": (1080, 1920),
+            "16:9": (1920, 1080),
+            "1:1": (1080, 1080),
+            "4:5": (1080, 1350)
+        }
+        res_w, res_h = ASPECT_MAP.get(aspect_ratio, (1080, 1920))
+
         cmd = [
             "npx", "remotion", "render",
             "ShortFlow",
             render_output,
             f"--props={props_filename}",
             f"--frames=0-{duration_frames - 1}",
+            f"--width={res_w}",
+            f"--height={res_h}",
             "--codec=h264",
+            "--crf=16",
+            "--pixel-format=yuv420p",
             gl_flag,
             "--chromium-options=--no-sandbox --disable-dev-shm-usage",
             "--timeout=180000",

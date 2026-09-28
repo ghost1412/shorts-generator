@@ -1,4 +1,7 @@
 import os
+import sys
+import subprocess
+import time
 import json
 import requests
 import random
@@ -38,7 +41,7 @@ def extract_keywords(text):
     keywords = [w for w in words if w not in stopwords and len(w) > 3]
     return keywords[:3] # Return top 3 keywords
 
-def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4", orientation="portrait", custom_bg=None):
+def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4", orientation="portrait", custom_bg=None, force_literal=False):
     """
     downloads a background video based on keywords from the fact or custom background media.
     """
@@ -58,12 +61,12 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
         import shutil
         shutil.copy(custom_bg, output_path)
         return output_path
-    # 50% chance to force a high-retention background instead of a literal one
-    if random.random() > 0.5:
+    # 50% chance to force a high-retention background unless force_literal is requested
+    if not force_literal and random.random() > 0.5:
         query = random.choice(HIGH_RETENTION_QUERIES)
         print(f"[Log] Forcing HIGH-RETENTION background: '{query}'")
     else:
-        keywords = extract_keywords(fact_text)
+        keywords = extract_keywords(fact_text) if fact_text else []
         query = " ".join(keywords) if keywords else fallback_query
         print(f"[Log] Searching Pexels for: '{query}'")
     
@@ -633,7 +636,7 @@ def is_url(path_or_url):
     clean = path_or_url.strip()
     return clean.startswith("http://") or clean.startswith("https://") or clean.startswith("www.")
 
-def download_source_video_from_url(url, output_dir, filename="source_video.mp4"):
+def download_source_video_from_url(url, output_dir, filename="source_video.mp4", cookies_from_browser=None, cookies_file=None):
     """
     Downloads a video from a URL (YouTube, Twitch, Twitter, TikTok, direct video links, etc.)
     using yt-dlp or direct requests streaming fallback. Caches downloaded files to prevent re-downloading.
@@ -687,28 +690,74 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4")
             'nocheckcertificate': True,
             'writeinfojson': True,  # Save chapters + metadata alongside video
         }
+        if cookies_file and os.path.exists(cookies_file):
+            ydl_opts['cookiefile'] = cookies_file
+            print(f"[Log] Using cookies file: '{cookies_file}'")
+        elif cookies_from_browser:
+            ydl_opts['cookiesfrombrowser'] = (cookies_from_browser,)
+            print(f"[Log] Using cookies from browser: '{cookies_from_browser}'")
+            if sys.platform == "win32":
+                target_exe = "msedge.exe" if cookies_from_browser.lower() == "edge" else ("chrome.exe" if cookies_from_browser.lower() == "chrome" else None)
+                if target_exe:
+                    # Check if process is running
+                    check_proc = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {target_exe}"], capture_output=True, text=True)
+                    if target_exe in check_proc.stdout:
+                        print(f"[Log] Closing background '{target_exe}' processes to unlock cookie database...")
+                        subprocess.run(["taskkill", "/F", "/IM", target_exe], capture_output=True)
+                        time.sleep(1.0)
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            downloaded_file = ydl.prepare_filename(info)
-            base, _ = os.path.splitext(downloaded_file)
-            possible_mp4 = base + ".mp4"
-            if os.path.exists(possible_mp4):
-                final_file = possible_mp4
-            elif os.path.exists(downloaded_file):
-                final_file = downloaded_file
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                downloaded_file = ydl.prepare_filename(info)
+        except Exception as initial_err:
+            err_msg = str(initial_err).lower()
+            if "sign in" in err_msg or "age-restricted" in err_msg or "confirm your age" in err_msg or "cookies" in err_msg or "could not copy" in err_msg:
+                print("[Log] Video is age-restricted or cookie locked. Attempting browser cookie recovery...")
+                downloaded_file = None
+                browser_list = [cookies_from_browser] if cookies_from_browser else ["edge", "chrome", "firefox", "brave", "opera"]
+                for browser in browser_list:
+                    if not browser: continue
+                    try:
+                        if sys.platform == "win32":
+                            t_exe = "msedge.exe" if browser.lower() == "edge" else ("chrome.exe" if browser.lower() == "chrome" else None)
+                            if t_exe:
+                                subprocess.run(["taskkill", "/F", "/IM", t_exe], capture_output=True)
+                                time.sleep(1.0)
+                        print(f"[Log] Trying browser cookies from: '{browser}'...")
+                        opts_cookies = dict(ydl_opts)
+                        opts_cookies['cookiesfrombrowser'] = (browser,)
+                        with yt_dlp.YoutubeDL(opts_cookies) as ydl:
+                            info = ydl.extract_info(url, download=True)
+                            downloaded_file = ydl.prepare_filename(info)
+                            print(f"[Log] Successfully bypassed age restriction using '{browser}' cookies! 🎉")
+                            break
+                    except Exception as b_err:
+                        print(f"[Warning] Cookie extraction for '{browser}' failed: {b_err}")
+                        continue
+                if not downloaded_file:
+                    raise initial_err
             else:
-                files = [os.path.join(global_cache_dir, f) for f in os.listdir(global_cache_dir) if f.startswith(url_hash)]
-                if files:
-                    final_file = files[0]
-                else:
-                    raise FileNotFoundError("yt-dlp completed but output file was not found.")
+                raise initial_err
 
-            print(f"[Log] Successfully downloaded video via yt-dlp: {final_file}")
-            # Ensure cached file is copied to session target_path
-            if os.path.abspath(final_file) != os.path.abspath(target_path):
-                shutil.copy2(final_file, target_path)
-            return target_path
+        base, _ = os.path.splitext(downloaded_file)
+        possible_mp4 = base + ".mp4"
+        if os.path.exists(possible_mp4):
+            final_file = possible_mp4
+        elif os.path.exists(downloaded_file):
+            final_file = downloaded_file
+        else:
+            files = [os.path.join(global_cache_dir, f) for f in os.listdir(global_cache_dir) if f.startswith(url_hash)]
+            if files:
+                final_file = files[0]
+            else:
+                raise FileNotFoundError("yt-dlp completed but output file was not found.")
+
+        print(f"[Log] Successfully downloaded video via yt-dlp: {final_file}")
+        # Ensure cached file is copied to session target_path
+        if os.path.abspath(final_file) != os.path.abspath(target_path):
+            shutil.copy2(final_file, target_path)
+        return target_path
 
     except Exception as e:
         print(f"[Warning] yt-dlp download failed: {e}. Attempting direct HTTP fallback...")
@@ -718,10 +767,16 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4")
         import requests
         r = requests.get(url, stream=True, timeout=60)
         r.raise_for_status()
+        c_type = r.headers.get('content-type', '').lower()
+        if 'html' in c_type or 'text' in c_type:
+            raise ValueError("URL returned HTML web page instead of direct video stream.")
         with open(cached_video_path, 'wb') as f:
             for chunk in r.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
+        if os.path.getsize(cached_video_path) < 100000: # Must be at least 100 KB
+            os.remove(cached_video_path)
+            raise ValueError("Downloaded file is too small to be a valid video.")
         print(f"[Log] Successfully downloaded video via direct HTTP fallback: {cached_video_path}")
         if os.path.abspath(cached_video_path) != os.path.abspath(target_path):
             shutil.copy2(cached_video_path, target_path)
@@ -815,8 +870,99 @@ def download_broll_clips(output_dir="assets/broll", count=8, force_refresh=False
     print(f"[Log] B-roll library: {len(downloaded)} clips ready in {output_dir}")
     return downloaded
 
+def generate_sfx_audio(sfx_name="whoosh", output_path="assets/sfx/whoosh.wav"):
+    """
+    Programmatically generates local, clean SFX audio clips (whoosh, pop, chime, riser, vine_boom) using Python wave synthesis.
+    """
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    if os.path.exists(output_path):
+        return output_path
+        
+    import wave, struct, math, random
+    sample_rate = 44100
+    sfx_name = sfx_name.lower().strip()
+    
+    if sfx_name in ["pop", "click"]:
+        duration = 0.08
+    elif sfx_name in ["chime", "ding"]:
+        duration = 0.5
+    elif sfx_name in ["riser", "buildup"]:
+        duration = 1.0
+    elif sfx_name in ["boom", "vine_boom", "impact"]:
+        duration = 0.8
+    else: # whoosh / transition
+        duration = 0.35
+        
+    num_samples = int(sample_rate * duration)
+    wav_file = wave.open(output_path, "w")
+    wav_file.setnchannels(1)
+    wav_file.setsampwidth(2) # 16-bit PCM
+    wav_file.setframerate(sample_rate)
+    
+    for i in range(num_samples):
+        t = i / float(sample_rate)
+        progress = t / duration
+        
+        if sfx_name in ["pop", "click"]:
+            freq = 1200 - (progress * 900)
+            amp = math.exp(-15 * progress)
+            val = math.sin(2 * math.pi * freq * t) * amp
+        elif sfx_name in ["chime", "ding"]:
+            freq1, freq2 = 880, 1760
+            amp = math.exp(-5 * progress)
+            val = 0.6 * math.sin(2 * math.pi * freq1 * t) * amp + 0.4 * math.sin(2 * math.pi * freq2 * t) * amp
+        elif sfx_name in ["riser", "buildup"]:
+            freq = 150 + (progress ** 2) * 1100
+            amp = progress
+            val = math.sin(2 * math.pi * freq * t) * amp
+        elif sfx_name in ["boom", "vine_boom", "impact"]:
+            freq = max(20, 140 - (progress * 110))
+            amp = math.exp(-4 * progress)
+            distortion = 1.3
+            sample_val = math.sin(2 * math.pi * freq * t) * amp * distortion
+            val = max(-1.0, min(1.0, sample_val))
+        else: # whoosh
+            freq = 800 - (progress * 600)
+            noise = (random.random() * 2 - 1) * 0.3
+            amp = math.sin(math.pi * progress) # bell curve amplitude
+            val = (math.sin(2 * math.pi * freq * t) + noise) * amp * 0.7
 
+        int_val = int(max(-32768, min(32767, val * 32767)))
+        wav_file.writeframes(struct.pack("<h", int_val))
+        
+    wav_file.close()
+    return output_path
+
+def download_scene_media_sequence(scenes, output_dir="sessions/temp_scenes", orientation="portrait", aspect_ratio="9:16"):
+    """
+    Downloads scene-by-scene background media matched to visual search keywords per sentence beat.
+    Returns a list of local clip paths.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    clip_paths = []
+    
+    for i, scene in enumerate(scenes):
+        query = scene.get("visual_prompt") or scene.get("sentence") or "aesthetic"
+        out_file = os.path.join(output_dir, f"scene_{i+1:02d}.mp4")
+        
+        # Determine orientation mapping based on aspect ratio
+        ori = "portrait" if aspect_ratio in ["9:16", "4:5"] else "landscape" if aspect_ratio == "16:9" else "square"
+        
+        try:
+            path = download_background_video(
+                fact_text="",
+                fallback_query=query,
+                output_path=out_file,
+                orientation=ori,
+                force_literal=True
+            )
+            clip_paths.append(path)
+        except Exception as e:
+            print(f"[Warning] Failed to fetch scene media for query '{query}': {e}")
+            
+    return clip_paths
 
 if __name__ == "__main__":
     # download_background_video("A day on Venus is longer than a year on Venus.")
     print(get_game_assets(3))
+

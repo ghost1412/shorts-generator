@@ -35,7 +35,7 @@ Companion: ${companion}
 Quest: ${quest}
 Setting: ${setting}`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
     
     const payload = {
       contents: [

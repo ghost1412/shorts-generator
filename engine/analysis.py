@@ -1233,12 +1233,31 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                         if current_total >= target_duration * 1.05: break
                     print(f"[Log] After backfill: {current_total:.0f}s, {len(valid_highlights)} segments")
             
+            if mode == "shorts" and len(valid_highlights) < clip_count:
+                print(f"[Log] 🎬 Highlight count ({len(valid_highlights)}) is below requested count ({clip_count}). Backfilling top signal peaks...")
+                used_ranges = [(h['start'], h['end']) for h in valid_highlights]
+                fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0), reverse=True)
+                for seg in fallback_candidates:
+                    seg_dur = seg['end'] - seg['start']
+                    if seg_dur < 10.0: continue
+                    overlaps = any(not (seg['end'] < u[0] or seg['start'] > u[1]) for u in used_ranges)
+                    if overlaps: continue
+                    valid_highlights.append({
+                        'start': seg['start'], 'end': seg['end'],
+                        'viral_score': int((seg['norm_score'] + seg.get('norm_audio', 0)) * 50),
+                        'final_score': int((seg['norm_score'] + seg.get('norm_audio', 0)) * 50),
+                        'reason': 'Energy Peak (Backfill)'
+                    })
+                    used_ranges.append((seg['start'], seg['end']))
+                    if len(valid_highlights) >= clip_count:
+                        break
+
             # 🟢 MANDATORY: Re-sort chronologically to ensure narrative flow and fix timing mismatch
             # This ensures that even if we picked top scores, they play back in order.
             valid_highlights.sort(key=lambda x: x['start'])
             
             # Final filter by floor
-            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= min_duration]
+            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= max(8.0, min_duration - 5.0)]
         
         if not valid_highlights:
             print("[Warning] LLM analysis failed. Using Heuristic Signal Fallback (Top Peaks)...")

@@ -3,6 +3,7 @@ import json
 import re
 import random
 import os
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -58,18 +59,52 @@ Choose the SINGLE BEST visual color grade filter from this list:
 Respond with raw JSON: {{"filter": "<preset_name>"}}
 """
         response = get_llm_response(llm_prompt, system_prompt="You are a color grading expert. Return raw JSON only.")
-        parsed = json.loads(response)
-        selected = parsed.get("filter", "").lower().strip()
-        valid_presets = ["none", "kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid", "matrix_green", "sepia_western", "cold_thriller", "hdr_pop"]
-        if selected in valid_presets:
-            print(f"[Log] 🤖 AI Auto Filter selected: '{selected}'")
-            return selected
     except Exception as e:
         print(f"[Warning] AI Auto Filter fallback: {e}")
         
     return "none"
 
+def generate_clip_commentary_hook(transcript_text, category="general"):
+    """Generates a dynamic 8-15 word contextual AI commentary reaction for video clips."""
+    raw_text = str(transcript_text or "").strip()
+    if not raw_text or raw_text.lower() in ["viral moment", "none", "clip"]:
+        raw_text = f"{category} video moment"
+
+    prompt = f"""You are an elite viral YouTube Shorts commentator and reaction host.
+Analyze the clip content below:
+"{raw_text[:600]}"
+
+Category: {category}
+
+Write a 1-sentence viral commentary intro (8 to 15 words) that specifically reacts to what is being said or happening in this clip.
+
+RULES:
+- NEVER say generic fluff like "This viral moment will blow your mind" or "Wait till the end!" or "You won't believe this!".
+- Comment specifically on the topic, situation, statement, or funny conflict in the clip snippet.
+- Sound like a sharp, witty, or amazed real commentator introducing a wild moment.
+
+Return raw JSON only: {{"hook": "<your specific 8-15 word commentary reaction>"}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a viral shorts commentator. Respond with valid JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and data.get("hook"):
+            hook = data["hook"].strip()
+            if not any(bad in hook.lower() for bad in ["blow your mind", "viral moment", "wait till the end"]):
+                return hook
+    except Exception as e:
+        print(f"[Warning] Failed to generate commentary hook via LLM: {e}")
+    
+    fallbacks = [
+        "Listen closely to how this conversation completely flipped.",
+        "He really thought he could pull this off without anyone noticing.",
+        "Watch how fast the energy changes in this exact moment.",
+        "Nobody was expecting this answer to come out of nowhere."
+    ]
+    return random.choice(fallbacks)
+
 def generate_dynamic_filter_timeline(total_duration, user_context=None, transcript_data=None, scene_description=None):
+
     """Generates clip-specific timestamped filter cuts based on LLM transcript & scene analysis."""
     if total_duration <= 0:
         return []
@@ -217,6 +252,8 @@ def get_llm_response(
     timeout=300
 ):
     import requests
+    import time
+
 
     target_provider = (provider or os.getenv("LLM_PROVIDER") or "auto").lower().strip()
     target_model = model or os.getenv("LLM_MODEL")
@@ -285,24 +322,59 @@ def get_llm_response(
     force_ollama = os.getenv("FORCE_OLLAMA", "").lower() in ["1", "true", "yes"] or target_provider == "ollama"
     if not force_ollama and (GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")):
         g_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
-        gemini_models = [target_model] if (target_provider == "gemini" and target_model) else ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-1.5-flash"]
+        if target_provider == "gemini" and target_model:
+            gemini_models = [target_model, "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-pro-latest"]
+        else:
+            gemini_models = ["gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-pro-latest"]
+
+        # Deduplicate preserving order
+        gemini_models = list(dict.fromkeys(gemini_models))
+
         for g_model in gemini_models:
-            try:
-                print(f"[Log] Attempting Gemini API ({g_model})...")
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={g_key}"
-                headers = {"Content-Type": "application/json"}
-                payload = {
-                    "contents": [{"role": "user", "parts": [{"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}]}],
-                    "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens, "responseMimeType": "application/json"}
-                }
-                response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-                response.raise_for_status()
-                res_json = response.json()
-                content = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                print(f"[Log] Gemini API success with {g_model}!")
-                return content
-            except Exception as e:
-                print(f"[Warning] Gemini API ({g_model}) failed: {e}")
+            max_attempts = 4
+            for attempt in range(max_attempts):
+                try:
+                    if attempt > 0:
+                        backoff = min(30, (2 ** attempt) + random.uniform(0.5, 1.5))
+                        print(f"[Log] Retrying Gemini API ({g_model}) attempt {attempt+1}/{max_attempts} after {backoff:.1f}s backoff...")
+                        time.sleep(backoff)
+                    else:
+                        print(f"[Log] Attempting Gemini API ({g_model})...")
+
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": g_key
+                    }
+                    gen_config = {"temperature": temperature, "maxOutputTokens": max_tokens}
+                    # Omit responseMimeType on retries if server 5xx errors occurred
+                    if attempt < 2:
+                        gen_config["responseMimeType"] = "application/json"
+
+                    payload = {
+                        "contents": [{"role": "user", "parts": [{"text": f"System instructions:\n{system_prompt}\n\nPrompt:\n{prompt}"}]}],
+                        "generationConfig": gen_config
+                    }
+                    response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                    
+                    if response.status_code in [429, 500, 502, 503, 504, 529]:
+                        print(f"[Warning] Gemini API ({g_model}) returned transient status HTTP {response.status_code}. Retrying...")
+                        if attempt < max_attempts - 1:
+                            continue
+
+                    response.raise_for_status()
+                    res_json = response.json()
+                    content = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                    print(f"[Log] Gemini API success with {g_model}!")
+                    return content
+                except Exception as e:
+                    err_msg = str(e)
+                    if "404" in err_msg or "401" in err_msg or "403" in err_msg:
+                        print(f"[Warning] Gemini API ({g_model}) client error: {e}")
+                        break
+                    if attempt == max_attempts - 1:
+                        print(f"[Warning] Gemini API ({g_model}) failed after {max_attempts} attempts: {e}")
+
 
     # 3. DeepSeek Fallback
     if (DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY")) and target_provider == "auto":
@@ -351,7 +423,8 @@ def get_llm_response(
                 }
             }
 
-            response = requests.post(LOCAL_LLM_URL, json=payload, timeout=timeout)
+            ollama_timeout = min(timeout, 12) if timeout else 12
+            response = requests.post(LOCAL_LLM_URL, json=payload, timeout=ollama_timeout)
             response.raise_for_status()
 
             try:
@@ -1762,7 +1835,7 @@ Return JSON ONLY in this exact format:
 
     g_key = GEMINI_API_KEY or os.getenv("GEMINI_API_KEY")
     if g_key:
-        for g_model in ["gemini-2.5-flash", "gemini-1.5-flash"]:
+        for g_model in ["gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-flash-latest"]:
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={g_key}"
                 headers = {"Content-Type": "application/json"}
@@ -1837,8 +1910,485 @@ Return JSON ONLY in this exact format:
         "captions": [""] * len(photo_paths)
     }
 
+def generate_teach_script(category=None, topic_prompt=None, vibe="upbeat"):
+    """
+    Generates a structured educational micro-learning script for TEACH mode.
+    Supports sub-categories: 'language', 'tech'/'science', 'recipe', 'general'.
+    """
+    cat = (category or "").lower().strip()
+    raw_topic = (topic_prompt or "").strip()
+
+    if any(k in cat or k in raw_topic.lower() for k in ["language", "japanese", "spanish", "french", "german", "italian", "phrase", "word", "vocabulary"]):
+        sub_type = "language"
+    elif any(k in cat or k in raw_topic.lower() for k in ["recipe", "cooking", "food", "dish", "meal", "pasta", "kitchen"]):
+        sub_type = "recipe"
+    elif any(k in cat or k in raw_topic.lower() for k in ["tech", "coding", "python", "code", "programming", "science", "math", "developer"]):
+        sub_type = "code"
+    else:
+        sub_type = "general"
+
+    # Auto-pick dynamic topic if none or generic specified
+    DEFAULT_TEACH_TOPICS = {
+        "language": [
+            "Essential Japanese travel phrase (Arigatou Gozaimasu / Otsukaresama)",
+            "Useful Spanish greeting (Que tal / Hasta luego)",
+            "Polite French dining expression (Bon appetit / S'il vous plait)",
+            "Common Italian travel phrase (Grazie mille / Ciao bella)",
+            "German compound word of the day (Feierabend / Gemütlichkeit)",
+            "Korean daily expression (Daebak / Gamsahamnida)"
+        ],
+        "recipe": [
+            "3-Ingredient Garlic Butter Pasta",
+            "5-Minute Chocolate Mug Cake",
+            "10-Minute Spicy Chili Oil Noodles",
+            "Fluffy Japanese Souffle Pancakes",
+            "Crispy Rice Paper Tacos",
+            "2-Ingredient Banana Oat Pancakes"
+        ],
+        "code": [
+            "Python List Comprehension trick",
+            "JavaScript Optional Chaining (?.) magic",
+            "CSS Flexbox centering trick",
+            "Git Stash workflow secret",
+            "Python dictionary merging with pipe operator"
+        ],
+        "general": [
+            "How rainbows form full 360 degree circles",
+            "How active noise-cancelling headphones work",
+            "Why the sky turns orange during sunset",
+            "Why airplane windows have tiny bleed holes",
+            "How GPS satellites calculate your position"
+        ]
+    }
+
+    if not raw_topic or raw_topic.lower() in ["random", "category", "essential knowledge", "none", "recipe", "language", "tech", "general"]:
+        topic = random.choice(DEFAULT_TEACH_TOPICS.get(sub_type, DEFAULT_TEACH_TOPICS["general"]))
+        print(f"[Log] [TEACH] Auto-selected topic for category '{sub_type}': '{topic}'")
+    else:
+        topic = raw_topic
+
+    system_prompt = (
+        "You are an elite micro-learning educator and viral content creator. "
+        "Your goal is to teach a single concept, phrase, recipe, or tech trick in under 30-45 seconds in a punchy, ultra-clear, and engaging style."
+    )
+
+    prompt = f"""Create an engaging educational short video script about: "{topic}" (Category: {sub_type.upper()}).
+Vibe: {vibe}
+
+CREATIVE DIRECTIVE:
+- If "{topic}" is broad or general (e.g. "recipe", "Japanese", "coding tip"), pick a specific, highly famous, viral, and impressive item (e.g., a specific dish, a specific phrase, or a specific python trick).
+
+Respond strictly with valid raw JSON depending on category:
+
+If sub_type is 'language':
+{{
+  "type": "language",
+  "title": "<Short punchy lesson title with emoji>",
+  "hook": "<Viral hook phrase under 8 words>",
+  "word_or_phrase": "<Target word/phrase in target language>",
+  "original_script": "<Original script/Kanji/Accents if applicable>",
+  "phonetic": "<Phonetic pronunciation guide>",
+  "translation": "<English translation>",
+  "breakdown": ["<Part 1 meaning>", "<Part 2 meaning>"],
+  "example_sentence": "<Useful sample sentence>",
+  "narrator_script": "<Complete spoken narration text under 60 words>",
+  "search_term": "<Visual background video search term>"
+}}
+
+If sub_type is 'recipe':
+{{
+  "type": "recipe",
+  "title": "<Short punchy dish title with emoji e.g. 5-Min Garlic Butter Pasta 🍝>",
+  "hook": "<Viral mouth-watering hook phrase under 8 words e.g. The easiest 5-minute gourmet pasta!>",
+  "dish_name": "<Name of dish>",
+  "prep_time": "<Prep time e.g. 5 Mins>",
+  "ingredients": ["<Amount + Ingredient 1 e.g. 8 oz Spaghetti>", "<Amount + Ingredient 2 e.g. 4 cloves Garlic>", "<Amount + Ingredient 3 e.g. 4 tbsp Butter>", "<Amount + Ingredient 4 e.g. 1/2 cup Parmesan>"],
+  "steps": [
+    "<Step 1 action e.g. Boil 8 oz pasta in salted water until al dente>",
+    "<Step 2 action e.g. Sauté 4 cloves minced garlic in 4 tbsp butter for 1 min>",
+    "<Step 3 action e.g. Toss pasta with garlic butter & parmesan until glossy>"
+  ],
+  "action_visuals": [
+    "<2-3 word search query for step 1 e.g. boiling pasta>",
+    "<2-3 word search query for step 2 e.g. sizzling garlic butter>",
+    "<2-3 word search query for step 3 e.g. tossing pasta cheese>",
+    "<2-3 word search query for final result e.g. plating pasta dish>"
+  ],
+  "narrator_script": "<The exact spoken step-by-step recipe narration under 60 words. MUST explicitly mention step numbers, ingredients, and exact quantities sequentially so a viewer can follow along spoken and visually! E.g. 'Want 5-minute garlic butter pasta? First, boil 8 ounces of pasta in salted water. Next, sauté 4 cloves of minced garlic in 4 tablespoons of butter until golden. Finally, toss in cooked pasta with fresh parmesan and serve hot!'>",
+  "search_term": "<2-3 word main food search term e.g. garlic butter pasta>"
+}}
+
+If sub_type is 'code':
+{{
+  "type": "code",
+  "title": "<Short punchy tech tip title with emoji>",
+  "hook": "<Viral hook phrase under 8 words>",
+  "concept": "<Concept name>",
+  "code_snippet": "<Short 1-3 line clean code snippet>",
+  "explanation_steps": ["<Key point 1>", "<Key point 2>"],
+  "key_takeaway": "<One sentence key takeaway>",
+  "narrator_script": "<Complete spoken narration text under 60 words>",
+  "search_term": "<Visual background video search term>"
+}}
+
+If sub_type is 'general':
+{{
+  "type": "general",
+  "title": "<Short punchy lesson title with emoji>",
+  "hook": "<Viral hook phrase under 8 words>",
+  "concept": "<Core concept name>",
+  "breakdown": ["<Fact/Point 1>", "<Fact/Point 2>", "<Fact/Point 3>"],
+  "key_takeaway": "<One sentence key takeaway>",
+  "narrator_script": "<Complete spoken narration text under 60 words>",
+  "search_term": "<Visual background video search term>"
+}}
+"""
+
+    def llm_call(attempt=0):
+        resp = get_llm_response(prompt, system_prompt=system_prompt, temperature=0.5, max_tokens=600)
+        return robust_json_parse(resp)
+
+    def validate_teach(data):
+        if not isinstance(data, dict):
+            return False
+        if "title" not in data or "narrator_script" not in data:
+            return False
+        return True
+
+    try:
+        parsed = with_best_of_n(llm_call, validate_teach, n=3)
+        print(f"[Log] [TEACH] Script generated successfully (Type: {parsed.get('type')})")
+        return parsed
+    except Exception as e:
+        print(f"[Warning] TEACH script generation failed: {e}. Using intelligent fallback.")
+        if sub_type == "language":
+            return {
+                "type": "language",
+                "title": "Essential Japanese Phrase 🇯🇵",
+                "hook": "Want to sound like a local in Japan?",
+                "word_or_phrase": "Arigatou Gozaimasu",
+                "original_script": "ありがとうございます",
+                "phonetic": "Ah-ree-gah-toe Go-zigh-mass",
+                "translation": "Thank you very much (polite)",
+                "breakdown": ["Arigatou = Thank you", "Gozaimasu = Polite emphasis"],
+                "example_sentence": "Arigatou gozaimasu for the delicious food!",
+                "narrator_script": "Want to sound polite in Japan? Use Arigatou Gozaimasu. It means thank you very much! Save this for your next trip!",
+                "search_term": "tokyo japan street aesthetic"
+            }
+        elif sub_type == "recipe":
+            return {
+                "type": "recipe",
+                "title": "5-Min Garlic Butter Pasta 🍝",
+                "hook": "The easiest 5-minute gourmet pasta!",
+                "dish_name": "Garlic Butter Pasta",
+                "prep_time": "5 Mins",
+                "ingredients": ["8 oz Spaghetti", "4 cloves Garlic, minced", "4 tbsp Butter", "1/2 cup Parmesan", "Fresh Parsley"],
+                "steps": [
+                    "Boil 8 oz pasta in salted water until al dente",
+                    "Sauté 4 cloves minced garlic in 4 tbsp butter",
+                    "Toss pasta with garlic butter, parmesan & parsley"
+                ],
+                "action_visuals": [
+                    "boiling pasta",
+                    "chopping garlic",
+                    "sizzling garlic butter",
+                    "tossing pasta cheese",
+                    "plating pasta dish"
+                ],
+                "narrator_script": "Want 5-minute garlic butter pasta? Step 1: Boil 8 ounces of pasta in salted water. Step 2: Sauté 4 cloves of minced garlic in 4 tablespoons of butter for 1 minute. Step 3: Toss the cooked pasta into the garlic butter, top with fresh parmesan, and serve hot!",
+                "search_term": "garlic butter pasta"
+            }
+        elif sub_type == "code":
+            return {
+                "type": "code",
+                "title": "Python One-Liner Trick 🐍",
+                "hook": "Stop writing 5-line for loops in Python!",
+                "concept": "List Comprehension",
+                "code_snippet": "squares = [x**2 for x in range(10)]",
+                "explanation_steps": ["Creates a list of squares instantly", "Clean, modern one-liner"],
+                "key_takeaway": "Readable and up to 3x faster than standard loops!",
+                "narrator_script": "Stop writing long for loops in Python! Use list comprehensions to create clean, high-performance code in one single line.",
+                "search_term": "coding matrix technology dark cyber"
+            }
+        else:
+            return {
+                "type": "general",
+                "title": "How Rainbows Form 🌈",
+                "hook": "Ever wonder why rainbows are curved?",
+                "concept": "Light Refraction",
+                "breakdown": ["Sunlight enters rain droplets", "Light bends & splits into colors", "Reflects at a 42-degree angle"],
+                "key_takeaway": "Rainbows are full 360-degree circles cut off by the ground!",
+                "narrator_script": "Did you know rainbows are actually full 360-degree circles? We only see arches because the ground blocks the bottom half!",
+                "search_term": "rainbow sky nature landscape"
+            }
+
 if __name__ == "__main__":
     res = generate_mixed_facts("science")
     print(f"Hook: {res['hook']}")
     for i, f in enumerate(res["facts"]):
         print(f"{i+1}. {f['fact']} (True: {f['truth']})")
+
+def generate_scene_breakdown(script_text, category="general"):
+    """
+    Analyzes narration script text and breaks it down into sentence beats with concise 2-4 word visual search queries for scene-by-scene media matching.
+    """
+    if not script_text or not str(script_text).strip():
+        return []
+        
+    prompt = f"""
+Analyze the video narration script below and divide it into sentence beats.
+For each sentence beat, provide a 2 to 4 word highly descriptive visual search query suitable for searching stock footage or images.
+
+Script:
+"{script_text}"
+
+Return raw JSON only in this exact format:
+{{
+  "scenes": [
+    {{
+      "sentence": "<exact sentence text>",
+      "visual_prompt": "<2-4 word English search term for visual background>"
+    }}
+  ]
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a cinematic director. Return raw valid JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "scenes" in data and isinstance(data["scenes"], list):
+            scenes = data["scenes"]
+            if len(scenes) > 0:
+                return scenes
+    except Exception as e:
+        print(f"[Warning] LLM scene breakdown failed: {e}. Falling back to rule-based sentence splitting.")
+        
+    # Rule-based fallback: split by sentence punctuation (. ! ?)
+    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', str(script_text)) if s.strip()]
+    scenes = []
+    stopwords = {"did", "you", "know", "that", "the", "is", "of", "and", "a", "in", "to", "it", "with", "have", "for", "are", "on", "this", "what", "how", "why"}
+    for sent in sentences:
+        words = [w for w in re.findall(r'\w+', sent.lower()) if w not in stopwords and len(w) > 3]
+        query = " ".join(words[:3]) if words else category
+        scenes.append({"sentence": sent, "visual_prompt": query or category})
+        
+    return scenes
+
+def translate_script(script_text, target_lang="es"):
+    """
+    Translates script narration and context into target language (es, hi, de, fr, ja, pt, etc.) while keeping tone and viral punchiness.
+    """
+    lang_names = {
+        "es": "Spanish", "hi": "Hindi", "de": "German", "fr": "French",
+        "ja": "Japanese", "pt": "Portuguese", "zh": "Chinese", "it": "Italian",
+        "ru": "Russian", "ko": "Korean", "ar": "Arabic", "en": "English"
+    }
+    lang_full = lang_names.get(target_lang.lower(), target_lang)
+    
+    prompt = f"""
+Translate the following video narration script into high-retention, punchy {lang_full}.
+Maintain viral hooks, natural speech cadence, and spoken language idioms suitable for Voice synthesis.
+
+Original Script:
+"{script_text}"
+
+Return raw JSON only: {{"translated_script": "<translated script>", "target_language": "{lang_full}"}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a professional video translator and voice adapter. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and data.get("translated_script"):
+            return data["translated_script"]
+    except Exception as e:
+        print(f"[Warning] Translation LLM failed: {e}")
+        
+    return script_text
+
+EMOJI_KEYWORD_MAP = {
+    "fire": "🔥", "hot": "🔥", "burn": "🔥",
+    "money": "💰", "cash": "💰", "dollar": "💵", "rich": "🤑", "bank": "🏦",
+    "rocket": "🚀", "space": "🌌", "planet": "🪐", "star": "⭐", "moon": "🌙",
+    "mind": "🧠", "brain": "🧠", "think": "💡", "idea": "💡", "smart": "🧠",
+    "shock": "😱", "crazy": "🤯", "wild": "🤯", "secret": "🤫", "mystery": "🕵️",
+    "time": "⏰", "clock": "⏳", "history": "📜", "year": "📅", "fast": "⚡",
+    "robot": "🤖", "ai": "🤖", "tech": "💻", "code": "💻", "future": "🔮",
+    "heart": "❤️", "love": "❤️", "king": "👑", "queen": "👑", "winner": "🏆",
+    "scary": "👻", "ghost": "👻", "death": "💀", "skull": "💀", "danger": "⚠️",
+    "car": "🏎️", "speed": "🏎️", "game": "🎮", "food": "🍕", "earth": "🌍"
+}
+
+def extract_caption_emojis(words_list):
+    """
+    Scans word timestamp objects and attaches relevant animated emoji overlays for key nouns and emotions.
+    """
+    if not words_list or not isinstance(words_list, list):
+        return []
+        
+    emoji_events = []
+    for item in words_list:
+        if not isinstance(item, dict) or "word" not in item:
+            continue
+        w_clean = re.sub(r'[^\w]', '', item["word"].lower())
+        if w_clean in EMOJI_KEYWORD_MAP:
+            emoji_events.append({
+                "emoji": EMOJI_KEYWORD_MAP[w_clean],
+                "word": item["word"],
+                "start": item.get("start", 0),
+                "end": item.get("end", item.get("start", 0) + 0.8)
+            })
+    return emoji_events
+
+def generate_podcast_script(topic="artificial intelligence"):
+    """
+    Generates a 2-speaker viral podcast debate or Q&A script (Host vs Guest) with alternating dialogue turns.
+    """
+    prompt = f"""
+Write a viral 45-second 2-speaker podcast debate/dialogue about: "{topic}".
+Speaker 1 (Host): Witty, curious, asking punchy questions.
+Speaker 2 (Guest): Expert, bold, delivering surprising revelations.
+
+Return raw JSON only:
+{{
+  "topic": "{topic}",
+  "dialogue": [
+    {{"speaker": "Host", "text": "<Host line>", "voice_vibe": "curious"}},
+    {{"speaker": "Guest", "text": "<Guest line>", "voice_vibe": "expert"}},
+    {{"speaker": "Host", "text": "<Host follow-up>", "voice_vibe": "surprised"}},
+    {{"speaker": "Guest", "text": "<Guest punchline>", "voice_vibe": "bold"}}
+  ]
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a viral podcast producer. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "dialogue" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] Podcast script generation failed: {e}")
+        
+    return {
+        "topic": topic,
+        "dialogue": [
+            {"speaker": "Host", "text": f"Did you know {topic} is changing everything we know?"},
+            {"speaker": "Guest", "text": "It's even bigger than that. Most people have no idea what is coming next."},
+            {"speaker": "Host", "text": "Wait, what do you mean by that?"},
+            {"speaker": "Guest", "text": "Within 5 years, the entire industry will be completely unrecognizable."}
+        ]
+    }
+
+def generate_viral_metadata(script_text, category="general"):
+    """
+    Generates 3 viral YouTube Shorts titles, description with hashtags, and SEO tags.
+    """
+    prompt = f"""
+Analyze the video narration below and create viral social metadata.
+Category: {category}
+Script: "{script_text[:1000]}"
+
+Return raw JSON only:
+{{
+  "titles": ["<Title 1 with emoji>", "<Title 2 with emoji>", "<Title 3 with emoji>"],
+  "description": "<Punchy 2-line description with 5 viral hashtags>",
+  "hashtags": ["#shorts", "#viral", "#fyp", "#trending", "#tech"],
+  "seo_tags": ["short video", "viral moment", "explained", "interesting facts"]
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a social media growth manager. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "titles" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] Failed to generate viral metadata: {e}")
+        
+    return {
+        "titles": [f"This Changes Everything About {category.title()}! 😱", f"The Shocking Truth About {category.title()} 🤯", f"Did You Know This About {category.title()}? 🔥"],
+        "description": f"Mind-blowing insight into {category}! Subscribe for daily viral shorts. #shorts #viral #fyp #trending #{category.lower().replace(' ', '')}",
+        "hashtags": ["#shorts", "#viral", "#fyp", "#trending"],
+        "seo_tags": [category, "shorts", "viral video", "facts"]
+    }
+
+def generate_top5_script(category="inventions that changed history"):
+    """
+    Generates a viral Top 5 countdown listicle script (Rank 5 to Rank 1).
+    """
+    prompt = f"""
+Write a viral 45-second Top 5 Countdown short about: "{category}".
+Provide ranks from #5 down to #1 (the most mind-blowing item at #1).
+
+Return raw JSON only:
+{{
+  "title": "Top 5 {category.title()}",
+  "hook": "Here are the top 5 {category} of all time!",
+  "items": [
+    {{"rank": 5, "name": "<Item 5>", "fact": "<1 sentence fact>", "search_term": "<2-3 word visual prompt>"}},
+    {{"rank": 4, "name": "<Item 4>", "fact": "<1 sentence fact>", "search_term": "<2-3 word visual prompt>"}},
+    {{"rank": 3, "name": "<Item 3>", "fact": "<1 sentence fact>", "search_term": "<2-3 word visual prompt>"}},
+    {{"rank": 2, "name": "<Item 2>", "fact": "<1 sentence fact>", "search_term": "<2-3 word visual prompt>"}},
+    {{"rank": 1, "name": "<Item 1>", "fact": "<1 sentence mind-blowing fact>", "search_term": "<2-3 word visual prompt>"}}
+  ],
+  "narrator_script": "<Continuous narration script covering hook, ranks 5 through 1>"
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a viral listicle video producer. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "items" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] Top 5 script generation failed: {e}")
+        
+    return {
+        "title": f"Top 5 {category.title()}",
+        "hook": f"Here are the top 5 {category} you need to know about!",
+        "items": [
+            {"rank": 5, "name": "Item 5", "fact": "Rank 5 starts our list with an unexpected entry.", "search_term": category},
+            {"rank": 4, "name": "Item 4", "fact": "Rank 4 changed how experts view this field.", "search_term": category},
+            {"rank": 3, "name": "Item 3", "fact": "Rank 3 receives millions of searches every month.", "search_term": category},
+            {"rank": 2, "name": "Item 2", "fact": "Rank 2 was almost number one.", "search_term": category},
+            {"rank": 1, "name": "Item 1", "fact": "Number one is the undisputed champion of history.", "search_term": category}
+        ],
+        "narrator_script": f"Here are the top 5 {category}! At number 5, Item 5. At number 4, Item 4. At number 3, Item 3. At number 2, Item 2. And the number 1 undisputed champion is Item 1!"
+    }
+
+def generate_chat_story_script(topic="texting wrong number mystery"):
+    """
+    Generates a viral iMessage/WhatsApp style text message chat story between two characters.
+    """
+    prompt = f"""
+Write a viral 40-second animated text message story about: "{topic}".
+Sender 1 (Person A): Suspicious or startled.
+Sender 2 (Person B): Mysterious, funny, or shocking.
+
+Return raw JSON only:
+{{
+  "title": "{topic.title()}",
+  "messages": [
+    {{"sender": "Alex", "text": "Hey are you home yet?", "is_me": true}},
+    {{"sender": "Unknown", "text": "Who is this? Look outside your window right now.", "is_me": false}},
+    {{"sender": "Alex", "text": "Wait what?? That's not funny...", "is_me": true}},
+    {{"sender": "Unknown", "text": "I'm standing by the blue car. Turn off your lights.", "is_me": false}}
+  ],
+  "narrator_script": "Hey are you home yet? Who is this? Look outside your window right now. Wait what? That's not funny... I'm standing by the blue car. Turn off your lights."
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a viral chat story writer. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "messages" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] Chat story generation failed: {e}")
+        
+    return {
+        "title": topic.title(),
+        "messages": [
+            {"sender": "Alex", "text": "Hey are you home yet?", "is_me": True},
+            {"sender": "Unknown", "text": "Who is this? Look outside your window right now.", "is_me": False},
+            {"sender": "Alex", "text": "Wait what?? That's not funny...", "is_me": True},
+            {"sender": "Unknown", "text": "Turn off your lights right now.", "is_me": False}
+        ],
+        "narrator_script": "Hey are you home yet? Who is this? Look outside your window right now. Wait what? That's not funny... Turn off your lights right now."
+    }
+
+
+

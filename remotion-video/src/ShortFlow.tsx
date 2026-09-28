@@ -82,12 +82,30 @@ export const funnyExplainerSchema = z.object({
   outro: z.string().optional(),
 });
 
+export const teachCardSchema = z.object({
+  type: z.string().default("general"),
+  title: z.string().optional(),
+  word_or_phrase: z.string().optional(),
+  original_script: z.string().optional(),
+  phonetic: z.string().optional(),
+  translation: z.string().optional(),
+  breakdown: z.array(z.string()).optional(),
+  example_sentence: z.string().optional(),
+  dish_name: z.string().optional(),
+  prep_time: z.string().optional(),
+  ingredients: z.array(z.string()).optional(),
+  steps: z.array(z.string()).optional(),
+  concept: z.string().optional(),
+  code_snippet: z.string().optional(),
+  key_takeaway: z.string().optional(),
+});
+
 export const shortFlowSchema = z.object({
   audioUrl: z.string(),
   bgMusicUrl: z.string().optional(),
   bgMusicVolume: z.number().default(0.15),
   words: z.array(wordSchema),
-  mode: z.enum(["FACTS", "STORY", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS", "NEWS", "NEWS_SERIOUS", "RIDDLE", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER"]),
+  mode: z.enum(["FACTS", "STORY", "THIS_OR_THAT", "RANK_IT", "CAPTION_THIS", "NEWS", "NEWS_SERIOUS", "RIDDLE", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "TEACH"]),
   category: z.string().default("general"),
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
@@ -99,6 +117,7 @@ export const shortFlowSchema = z.object({
   captionThis: captionThisSchema.optional(),
   emojiGuess: emojiGuessSchema.optional(),
   funnyExplainer: funnyExplainerSchema.optional(),
+  teachCard: teachCardSchema.optional(),
 });
 
 type ShortFlowProps = z.infer<typeof shortFlowSchema>;
@@ -351,8 +370,10 @@ const BackgroundSegment: React.FC<{
         { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
       );
 
+  const activeScale = bg.type === "video" ? 1.0 : scale;
+
   return (
-    <AbsoluteFill style={{ transform: `scale(${scale})`, transformOrigin: "center", opacity, backgroundColor: "#000" }}>
+    <AbsoluteFill style={{ transform: `scale(${activeScale})`, transformOrigin: "center", opacity, backgroundColor: "#000" }}>
       {bg.type === "video" ? (
         <OffthreadVideo
           src={getAssetUrl(bg.path)}
@@ -803,6 +824,8 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   rankIt,
   captionThis,
   emojiGuess,
+  funnyExplainer,
+  teachCard,
 }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -1140,7 +1163,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
       )}
 
       {/* 4. OVERLAYS (HEADER/TITLE/TICKER) */}
-      {titleText && (
+      {titleText && mode !== "TEACH" && !teachCard && (
         <div
           style={{
             position: "absolute",
@@ -1224,6 +1247,11 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         </div>
       )}
 
+      {/* TEACH CARD OVERLAY */}
+      {teachCard && (
+        <TeachCardComponent card={teachCard} frame={frame} fps={fps} />
+      )}
+
       {/* 7. PROGRESS BAR (Snappy sliding bottom bar) */}
       <div
         style={{
@@ -1249,3 +1277,365 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
     </AbsoluteFill>
   );
 };
+
+// --- TEACH CARD COMPONENT FOR MICRO-LEARNING SHORTS ---
+const TeachCardComponent: React.FC<{
+  card: z.infer<typeof teachCardSchema>;
+  frame: number;
+  fps: number;
+}> = ({ card, frame, fps }) => {
+  const { durationInFrames } = useVideoConfig();
+  const progress = Math.min(0.99, Math.max(0, frame / Math.max(1, durationInFrames)));
+
+  const popIn = spring({
+    frame,
+    fps,
+    config: { damping: 14, mass: 0.8 },
+  });
+
+  const scale = interpolate(popIn, [0, 1], [0.85, 1.0]);
+  const opacity = interpolate(popIn, [0, 1], [0, 1]);
+
+  if (card.type === "language") {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          top: "350px",
+          left: "50%",
+          transform: `translateX(-50%) scale(${scale})`,
+          opacity,
+          width: "900px",
+          background: "rgba(15, 23, 42, 0.94)",
+          backdropFilter: "blur(20px)",
+          border: "4px solid #38bdf8",
+          borderRadius: "32px",
+          padding: "40px",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.7), 0 0 40px rgba(56, 189, 248, 0.3)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "24px",
+          zIndex: 45,
+          color: "#ffffff",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}
+      >
+        {card.original_script && (
+          <div style={{ fontSize: "56px", color: "#94a3b8", fontWeight: 600 }}>
+            {card.original_script}
+          </div>
+        )}
+        <div
+          style={{
+            fontSize: "76px",
+            fontWeight: 900,
+            color: "#38bdf8",
+            textAlign: "center",
+            textShadow: "0 4px 20px rgba(56, 189, 248, 0.5)",
+          }}
+        >
+          {card.word_or_phrase}
+        </div>
+        {card.phonetic && (
+          <div
+            style={{
+              fontSize: "36px",
+              background: "rgba(56, 189, 248, 0.15)",
+              color: "#7dd3fc",
+              padding: "10px 28px",
+              borderRadius: "50px",
+              border: "2px solid rgba(56, 189, 248, 0.4)",
+              fontStyle: "italic",
+            }}
+          >
+            🔊 {card.phonetic}
+          </div>
+        )}
+        {card.translation && (
+          <div
+            style={{
+              fontSize: "44px",
+              fontWeight: 700,
+              color: "#f8fafc",
+              textAlign: "center",
+              borderTop: "2px solid rgba(255, 255, 255, 0.1)",
+              paddingTop: "20px",
+              width: "100%",
+            }}
+          >
+            "{card.translation}"
+          </div>
+        )}
+        {card.example_sentence && (
+          <div
+            style={{
+              fontSize: "32px",
+              color: "#cbd5e1",
+              background: "rgba(30, 41, 59, 0.8)",
+              padding: "16px 24px",
+              borderRadius: "16px",
+              textAlign: "center",
+              width: "100%",
+            }}
+          >
+            💡 Example: {card.example_sentence}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (card.type === "code") {
+    return (
+      <div
+        style={{
+          position: "absolute",
+          top: "380px",
+          left: "50%",
+          transform: `translateX(-50%) scale(${scale})`,
+          opacity,
+          width: "920px",
+          background: "#0f172a",
+          border: "4px solid #38bdf8",
+          borderRadius: "24px",
+          padding: "36px",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(56, 189, 248, 0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "24px",
+          zIndex: 45,
+          color: "#f8fafc",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: "36px", fontWeight: 800, color: "#38bdf8" }}>
+            ⚡ {card.concept || "Code Trick"}
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#ef4444" }} />
+            <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#f59e0b" }} />
+            <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: "#10b981" }} />
+          </div>
+        </div>
+        {card.code_snippet && (
+          <pre
+            style={{
+              fontFamily: "'Fira Code', 'Courier New', monospace",
+              fontSize: "36px",
+              background: "#1e293b",
+              color: "#38bdf8",
+              padding: "28px",
+              borderRadius: "16px",
+              border: "2px solid #334155",
+              margin: 0,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {card.code_snippet}
+          </pre>
+        )}
+        {card.key_takeaway && (
+          <div style={{ fontSize: "32px", color: "#4ade80", fontWeight: 600 }}>
+            🚀 {card.key_takeaway}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (card.type === "recipe") {
+    const steps = card.steps || [];
+    const stepCount = steps.length;
+    // Calculate active step idx directly based on progress across steps
+    const activeStepIdx = Math.min(stepCount - 1, Math.max(0, Math.floor(progress * Math.max(1, stepCount))));
+
+    return (
+      <>
+        {/* TOP FLOATING RECIPE HEADER BADGE & INGREDIENTS BANNER */}
+        <div
+          style={{
+            position: "absolute",
+            top: "90px",
+            left: "50%",
+            transform: `translateX(-50%) scale(${scale})`,
+            opacity,
+            width: "940px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            zIndex: 45,
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}
+        >
+          {/* Main Dish Header */}
+          <div
+            style={{
+              background: "rgba(15, 23, 42, 0.94)",
+              backdropFilter: "blur(20px)",
+              border: "3px solid #fbbf24",
+              borderRadius: "24px",
+              padding: "16px 28px",
+              boxShadow: "0 15px 40px rgba(0,0,0,0.6), 0 0 25px rgba(251, 191, 36, 0.25)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              color: "#ffffff",
+            }}
+          >
+            <div style={{ fontSize: "38px", fontWeight: 900, color: "#fbbf24", letterSpacing: "1px", display: "flex", alignItems: "center", gap: "12px" }}>
+              🍳 {card.dish_name || card.title}
+            </div>
+            {card.prep_time && (
+              <div
+                style={{
+                  fontSize: "24px",
+                  background: "#d97706",
+                  color: "#ffffff",
+                  padding: "6px 18px",
+                  borderRadius: "20px",
+                  fontWeight: 800,
+                  boxShadow: "0 4px 12px rgba(217, 119, 6, 0.4)",
+                }}
+              >
+                ⏱️ {card.prep_time}
+              </div>
+            )}
+          </div>
+
+          {/* Persistent Ingredients Ribbon Bar */}
+          {card.ingredients && card.ingredients.length > 0 && (
+            <div
+              style={{
+                background: "rgba(15, 23, 42, 0.90)",
+                backdropFilter: "blur(16px)",
+                border: "2px solid rgba(251, 191, 36, 0.5)",
+                borderRadius: "20px",
+                padding: "12px 20px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+                overflowX: "hidden",
+              }}
+            >
+              <div style={{ fontSize: "22px", fontWeight: 800, color: "#fef08a", whiteSpace: "nowrap" }}>
+                🛒 Ingredients:
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+                {card.ingredients.map((ing, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      background: "rgba(251, 191, 36, 0.20)",
+                      border: "1px solid rgba(251, 191, 36, 0.6)",
+                      color: "#ffffff",
+                      fontSize: "20px",
+                      fontWeight: 700,
+                      padding: "4px 12px",
+                      borderRadius: "14px",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ✓ {ing}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* BOTTOM FLOATING INSTRUCTION STEP CARD */}
+        <div
+          style={{
+            position: "absolute",
+            top: "1350px",
+            left: "50%",
+            transform: `translateX(-50%) scale(${scale})`,
+            opacity,
+            width: "940px",
+            background: "rgba(15, 23, 42, 0.95)",
+            backdropFilter: "blur(20px)",
+            border: "3px solid #fbbf24",
+            borderRadius: "28px",
+            padding: "26px 32px",
+            boxShadow: "0 20px 50px rgba(0,0,0,0.85), 0 0 30px rgba(251, 191, 36, 0.25)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+            zIndex: 45,
+            color: "#ffffff",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+          }}
+        >
+          {steps.length > 0 && activeStepIdx >= 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {/* Step Stepper Progress Bar */}
+              <div style={{ display: "flex", gap: "8px" }}>
+                {steps.map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      flex: 1,
+                      height: "8px",
+                      borderRadius: "8px",
+                      background: i <= activeStepIdx ? "#fbbf24" : "rgba(255, 255, 255, 0.15)",
+                      boxShadow: i === activeStepIdx ? "0 0 12px #fbbf24" : "none",
+                      transition: "all 0.2s ease",
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Active Step Instructions */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ fontSize: "24px", fontWeight: 800, color: "#fbbf24", textTransform: "uppercase", letterSpacing: "1.2px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  📍 Step {activeStepIdx + 1} of {steps.length}
+                </div>
+                <div style={{ fontSize: "36px", fontWeight: 800, color: "#ffffff", lineHeight: "1.3", textShadow: "0 2px 10px rgba(0,0,0,0.8)" }}>
+                  {steps[activeStepIdx]}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </>
+    );
+  }
+
+  // General concept card
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "400px",
+        left: "50%",
+        transform: `translateX(-50%) scale(${scale})`,
+        opacity,
+        width: "900px",
+        background: "rgba(15, 23, 42, 0.94)",
+        backdropFilter: "blur(20px)",
+        border: "4px solid #a855f7",
+        borderRadius: "32px",
+        padding: "40px",
+        boxShadow: "0 25px 60px rgba(0,0,0,0.8), 0 0 35px rgba(168, 85, 247, 0.3)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "24px",
+        zIndex: 45,
+        color: "#ffffff",
+      }}
+    >
+      <div style={{ fontSize: "52px", fontWeight: 900, color: "#c084fc", textAlign: "center" }}>
+        🧠 {card.concept || card.title}
+      </div>
+      {card.key_takeaway && (
+        <div style={{ fontSize: "36px", color: "#f43f5e", fontWeight: 700, textAlign: "center" }}>
+          💡 {card.key_takeaway}
+        </div>
+      )}
+    </div>
+  );
+};
+

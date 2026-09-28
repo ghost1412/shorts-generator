@@ -152,19 +152,115 @@ def generate_voice_elevenlabs(text, output_audio="assets/voice.mp3", output_subs
     with open(output_subs, "w", encoding="utf-8") as f:
         json.dump(subtitles, f, indent=2)
 
-    print(f"[Log] ElevenLabs: {len(subtitles)} word timestamps saved.")
+def generate_voice_voicestudio(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name=None, clone_voice=None, voice_studio_url=None):
+    """
+    Generates voice via VoiceStudio / Local OpenAI-compatible TTS API (e.g. Kokoro, F5-TTS, XTTSv2).
+    Supports zero-shot voice cloning if clone_voice (sample_wav path) is specified.
+    """
+    import requests as req_lib
+    import base64
+
+    url = voice_studio_url or os.getenv("VOICE_STUDIO_URL", "http://localhost:8080").rstrip("/")
+    if not url.endswith("/v1/audio/speech") and not url.endswith("/api/tts") and not url.endswith("/api/generate"):
+        endpoint_url = f"{url}/v1/audio/speech"
+    else:
+        endpoint_url = url
+
+    sample_path = clone_voice or os.getenv("VOICE_CLONE_SAMPLE")
+    clean_text = clean_for_tts(text)
+
+    payload = {
+        "model": os.getenv("VOICE_STUDIO_MODEL", "tts-1"),
+        "input": clean_text,
+        "text": clean_text,
+        "voice": voice_name or "default",
+        "response_format": "mp3"
+    }
+
+    if sample_path and os.path.exists(sample_path):
+        try:
+            with open(sample_path, "rb") as sf:
+                payload["sample_audio_b64"] = base64.b64encode(sf.read()).decode("utf-8")
+                payload["clone_sample_path"] = os.path.abspath(sample_path)
+            print(f"[Log] VoiceStudio: Using voice clone sample '{sample_path}'")
+        except Exception as e:
+            print(f"[Warning] Failed to attach voice clone sample: {e}")
+
+    print(f"[Log] Generating local voice via VoiceStudio ({endpoint_url})...")
+    res = req_lib.post(endpoint_url, json=payload, timeout=60)
+    res.raise_for_status()
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_audio)), exist_ok=True)
+
+    subtitles = []
+    content_type = res.headers.get("content-type", "")
+
+    if "json" in content_type:
+        data = res.json()
+        audio_b64 = data.get("audio") or data.get("audio_base64")
+        if audio_b64:
+            with open(output_audio, "wb") as f:
+                f.write(base64.b64decode(audio_b64))
+        if data.get("subtitles"):
+            subtitles = data["subtitles"]
+    else:
+        with open(output_audio, "wb") as f:
+            f.write(res.content)
+
+    if not subtitles:
+        words = clean_text.split()
+        audio_duration = 0.0
+        try:
+            try:
+                from moviepy.audio.io.AudioFileClip import AudioFileClip
+            except ImportError:
+                from moviepy.editor import AudioFileClip
+            ac = AudioFileClip(output_audio)
+            audio_duration = ac.duration
+            ac.close()
+        except Exception:
+            audio_duration = max(1.0, len(words) * 0.35)
+
+        avg_word_dur = audio_duration / max(1, len(words))
+        for i, w in enumerate(words):
+            ws = i * avg_word_dur
+            subtitles.append({
+                "word": w,
+                "start": round(ws, 3),
+                "end": round(ws + avg_word_dur, 3),
+                "duration": round(max(0.08, avg_word_dur), 3)
+            })
+
+    with open(output_subs, "w", encoding="utf-8") as f:
+        json.dump(subtitles, f, indent=2)
+
+    print(f"[Log] VoiceStudio: Saved audio to {output_audio} ({len(subtitles)} words).")
     return output_audio, output_subs
 
 
-def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+15%", pitch="+0Hz", add_cta=True, group=False):
+def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name="en-US-AvaNeural", rate="+15%", pitch="+0Hz", add_cta=True, group=False, provider=None, clone_voice=None):
     """
     Generates voice with cinematic pacing and word-level subtitle timestamps.
-    Uses ElevenLabs if ELEVENLABS_API_KEY is set, otherwise falls back to edge-tts.
+    Supports ElevenLabs, VoiceStudio (local voice cloning / Kokoro), and EdgeTTS.
     group=False (default): writes individual word timestamps for frame-accurate Remotion captions.
-    group=True: merges into 4-word chunks (legacy behaviour).
     """
-    # Route to ElevenLabs if API key available
-    if os.getenv("ELEVENLABS_API_KEY"):
+    sel_provider = (provider or os.getenv("VOICE_PROVIDER", "auto")).lower()
+
+    # 1. Route to VoiceStudio / Local Voice Engine if requested or configured
+    if sel_provider in ["voicestudio", "local"] or (sel_provider == "auto" and os.getenv("VOICE_STUDIO_URL")):
+        try:
+            return generate_voice_voicestudio(
+                text=text,
+                output_audio=output_audio,
+                output_subs=output_subs,
+                voice_name=voice_name,
+                clone_voice=clone_voice
+            )
+        except Exception as e:
+            print(f"[Warning] VoiceStudio local synthesis failed ({e}). Falling back to next provider.")
+
+    # 2. Route to ElevenLabs if API key available
+    if sel_provider in ["elevenlabs", "auto"] and os.getenv("ELEVENLABS_API_KEY"):
         try:
             return generate_voice_elevenlabs(
                 text=clean_for_tts(text),

@@ -51,3 +51,6 @@ assets/temp_*
 sessions*
 test_manim_output/
 PROMOTION_GUIDE.md
+frame_*.jpg
+temp_edge_cookies.sqlite
+scratch/
