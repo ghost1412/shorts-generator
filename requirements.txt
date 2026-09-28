@@ -11,4 +11,5 @@ nest_asyncio
 cryptography
 supabase
 yt-dlp
+manimpango<0.6.0
 manim
