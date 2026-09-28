@@ -86,6 +86,19 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
     
     return f"{base_filter}crop={crop_w}:ih:'{x_expr}':0"
 
+def generate_ffmpeg_split_screen_filter(target_w=1080, target_h=1920):
+    """
+    Generates an FFmpeg complex filter string for dual-speaker podcast split screen layout.
+    Crops left and right speakers from a horizontal 16:9 video and stacks top and bottom in 9:16 vertical video.
+    """
+    half_h = target_h // 2
+    return (
+        f"split=2[v1][v2];"
+        f"[v1]crop=iw/2:ih:0:0,scale={target_w}:{half_h}:force_original_aspect_ratio=increase,crop={target_w}:{half_h}[top];"
+        f"[v2]crop=iw/2:ih:iw/2:0,scale={target_w}:{half_h}:force_original_aspect_ratio=increase,crop={target_w}:{half_h}[bottom];"
+        f"[top][bottom]vstack=inputs=2,format=yuv420p"
+    )
+
 def generate_thumbnail(video_path, output_path, at_time=None):
     """Generates a high-quality JPEG thumbnail from the video using FFmpeg."""
     import imageio_ffmpeg, subprocess
@@ -2551,7 +2564,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2591,12 +2604,15 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
 
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
         if mode == "shorts":
-            if interest_points:
+            if layout == "split":
+                vf_filter = generate_ffmpeg_split_screen_filter(w, h)
+            elif interest_points:
                 crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)
+                vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
             else:
                 base_filter = f"{letterbox_crop}," if letterbox_crop else ""
                 crop_filter = None if orientation == 'portrait' else f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
-            vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
+                vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
             vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
             

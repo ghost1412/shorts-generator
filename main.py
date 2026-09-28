@@ -2298,5 +2298,32 @@ with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
     tags_str = ", ".join(tags_list) if isinstance(tags_list, list) else str(tags_list)
     f.write(f"Tags: {tags_str}\n")
 
+# Multi-Platform Social Metadata Package Export (.meta.json)
+meta_package = {
+    "video_path": output_filename,
+    "title": metadata.get('title', 'Viral Short'),
+    "mode": mode,
+    "youtube": {
+        "title": metadata.get('title', ''),
+        "description": metadata.get('description', ''),
+        "tags": metadata.get('tags', [])
+    },
+    "tiktok": {
+        "caption": f"{metadata.get('title', '')} 😱 #fyp #viral #trending #{category.replace(' ', '')}",
+        "hashtags": ["#fyp", "#viral", "#trending", f"#{category.replace(' ', '')}"]
+    },
+    "instagram": {
+        "caption": f"{metadata.get('title', '')}\n\nTag someone who needs to see this! 👇\n\n{metadata.get('description', '')}",
+        "hashtags": ["#reels", "#explore", "#viral", f"#{category.replace(' ', '')}"]
+    }
+}
+try:
+    meta_json_path = f"{output_filename}.meta.json"
+    with open(meta_json_path, "w", encoding="utf-8") as mf:
+        json.dump(meta_package, mf, indent=2, ensure_ascii=False)
+    print(f"[Log] 📦 Social Media Metadata Package exported to: {meta_json_path}")
+except Exception as me:
+    print(f"[Warning] Failed to export .meta.json: {me}")
+
 if __name__ == "__main__":
     pass # Script runs globally

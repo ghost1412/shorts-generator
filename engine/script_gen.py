@@ -2392,5 +2392,149 @@ Return raw JSON only:
         "narrator_script": "Hey are you home yet? Who is this? Look outside your window right now. Wait what? That's not funny... Turn off your lights right now."
     }
 
+def generate_horror_story_script(topic="abandoned cabin in the woods"):
+    """Generates chilling, dark creepypasta horror story scripts."""
+    prompt = f"""
+Write a chilling 45-second horror story / creepypasta about: "{topic}".
+Build psychological tension, creepy whispers, and an unexpected scary twist.
+
+Return raw JSON only:
+{{
+  "title": "THE {topic.upper()} 👁️",
+  "narrator_script": "<Chilling 45-second narration with dramatic pauses>",
+  "search_term": "dark eerie horror abandoned mist fog"
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a master horror storyteller. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "narrator_script" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] Horror script generation failed: {e}")
+        
+    return {
+        "title": f"THE {topic.upper()} 👁️",
+        "narrator_script": f"Deep in the woods, there stands a cabin that no map records. They say if you hear knocking inside... never look through the window.",
+        "search_term": "dark eerie horror forest cabin mist"
+    }
+
+def generate_true_crime_script(case_topic="unsolved mystery of the missing vessel"):
+    """Generates documentary-style true crime case scripts."""
+    prompt = f"""
+Write a compelling 45-second true crime case summary about: "{case_topic}".
+Tone: Serious, documentary narrator, analytical.
+
+Return raw JSON only:
+{{
+  "title": "UNSOLVED: {case_topic.title()} 🕵️",
+  "narrator_script": "<Serious documentary case breakdown script>",
+  "search_term": "crime scene investigation evidence dark history"
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a true crime documentary producer. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "narrator_script" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] True crime script generation failed: {e}")
+        
+    return {
+        "title": f"UNSOLVED: {case_topic.title()} 🕵️",
+        "narrator_script": f"In 1984, an entire research team vanished without a single trace. Decades later, investigator files revealed one shocking detail that changes everything.",
+        "search_term": "crime scene investigation evidence dark history"
+    }
+
+def generate_bible_story_script(topic="David and Goliath"):
+    """Generates epic painterly historical and biblical narrative scripts."""
+    prompt = f"""
+Write an epic, inspirational 45-second narrative short about biblical story: "{topic}".
+Tone: Cinematic, painterly, awe-inspiring.
+
+Return raw JSON only:
+{{
+  "title": "{topic.title()} 📜",
+  "narrator_script": "<Cinematic historical narrative script>",
+  "search_term": "ancient epic cinematic landscape golden hour"
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a cinematic historical storyteller. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "narrator_script" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] Bible story script generation failed: {e}")
+        
+    return {
+        "title": f"{topic.title()} 📜",
+        "narrator_script": f"Against an army of giants, one young shepherd stood alone. Armed only with faith and five smooth stones, history was about to be rewritten.",
+        "search_term": "ancient epic cinematic landscape golden hour"
+    }
+
+def generate_article_summary_script(article_url_or_text):
+    """Summarizes any web article URL or raw text into a 45-second punchy narration script."""
+    raw_content = article_url_or_text
+    if str(article_url_or_text).startswith(("http://", "https://")):
+        try:
+            r = requests.get(article_url_or_text, timeout=10)
+            clean_text = re.sub(r'<[^>]+>', ' ', r.text)
+            raw_content = " ".join(clean_text.split()[:1500])
+        except Exception as e:
+            print(f"[Warning] Failed to fetch article URL ({e}). Using raw input string.")
+            
+    prompt = f"""
+Summarize the key findings from this article into a punchy 45-second YouTube Shorts narration script:
+"{raw_content[:2500]}"
+
+Return raw JSON only:
+{{
+  "title": "<Catchy article title with emoji>",
+  "narrator_script": "<Punchy 45-second news/tech summary script>",
+  "search_term": "<2-3 word visual prompt>"
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a viral news summary writer. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "narrator_script" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] Article summary failed: {e}")
+        
+    return {
+        "title": "BREAKING SUMMARY 📰",
+        "narrator_script": f"Here is what you need to know about this major story: {raw_content[:300]}",
+        "search_term": "technology news headline innovation"
+    }
+
+def generate_ugc_product_script(product_name="AI Video Generator"):
+    """Generates viral TikTok/Reels user-generated marketing & product demo shorts."""
+    prompt = f"""
+Write a viral 40-second UGC product marketing script for product: "{product_name}".
+Structure: Hook Problem ➔ Shocking Solution ➔ Product Demo Benefit ➔ Call-to-Action.
+
+Return raw JSON only:
+{{
+  "title": "TRY {product_name.upper()} 🚀",
+  "narrator_script": "<Punchy high-energy UGC script>",
+  "search_term": "modern technology smartphone product aesthetic"
+}}
+"""
+    try:
+        response = get_llm_response(prompt, system_prompt="You are a top TikTok UGC creator. Return raw JSON only.")
+        data = robust_json_parse(response)
+        if isinstance(data, dict) and "narrator_script" in data:
+            return data
+    except Exception as e:
+        print(f"[Warning] UGC script generation failed: {e}")
+        
+    return {
+        "title": f"TRY {product_name.upper()} 🚀",
+        "narrator_script": f"If you are still creating content manually in 2026, stop right now. {product_name} lets you generate complete viral shorts in under 60 seconds. Try it out now!",
+        "search_term": "modern technology smartphone product aesthetic"
+    }
+
 
 

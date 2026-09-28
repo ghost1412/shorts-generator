@@ -100,19 +100,39 @@ setup.bat && launch.bat
 
 ---
 
+## 🤖 Model Context Protocol (MCP) & AI Agent Server
+
+ShortsFlow AI Studio provides a native **MCP Server** (`mcp_server.py`) allowing AI assistants (Claude Desktop, Cursor, Antigravity, n8n, AutoGPT) to create shorts autonomously:
+
+```bash
+# Launch MCP Server over standard I/O for AI IDEs & Workflow Engines
+python mcp_server.py
+```
+
+### Available MCP Tools:
+* `generate_short`: Create AI shorts from topics or prompts.
+* `extract_clips`: Slice long YouTube videos with smart face-tracking or dual-speaker split layout (`--layout split`).
+* `generate_social_package`: Generate platform metadata (`.meta.json`) for YouTube Shorts, TikTok, and Reels.
+* `get_render_status`: Query live rendering job progress.
+
+---
+
 ## 💡 Top Command Recipes
 
 ```bash
-# 1. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
+# 1. Extract Dual-Speaker Podcast Shorts (Top & Bottom Split Layout)
+py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_mode shorts --layout split --tighten --use_remotion
+
+# 2. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
 py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion
 
-# 2. Render Landscape 16:9 YouTube Video with SFX
+# 3. Render Landscape 16:9 YouTube Video with SFX
 py main.py --mode EXPLAINER --prompt "Quantum physics" --aspect_ratio 16:9 --sfx_preset whoosh
 
-# 3. Translate and Dub Video into Spanish
+# 4. Translate and Dub Video into Spanish
 py main.py --mode DUB --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --target_lang es --use_remotion
 
-# 4. Process Batch Content Calendar Queue
+# 5. Process Batch Content Calendar Queue
 py main.py --batch_file "topics.txt" --mode FACTS --aspect_ratio 9:16 --use_remotion
 ```
 
