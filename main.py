@@ -1110,10 +1110,10 @@ else:
     if args.mode and args.mode != "AUTO":
         mode = args.mode
     else:
-        # 🟢 WINNER-HEAVY SELECTION: Facts (Spot the Lie) and News are 2x more likely than others
+        # 🟢 BALANCED MULTI-MODE SELECTION: Includes all newly added viral modes
         mode = random.choices(
-            ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "EMOJI_GUESS", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "EXPLAINER"],
-            weights=[15, 0, 10, 15, 35, 5, 5, 0, 5, 10, 10, 0, 15, 20]
+            ["FACTS", "FIND_IT", "WYR", "ODD_ONE_OUT", "EMOJI_GUESS", "STORY", "TRIVIA", "REDDIT", "QUOTE", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "EXPLAINER", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC"],
+            weights=[15, 5, 10, 10, 20, 5, 5, 5, 5, 10, 10, 5, 10, 15, 10, 10, 10, 10, 10, 10, 10]
         )[0]
     if args.recap_title and not args.mode: mode = "MOVIE_RECAP"
     
@@ -1876,6 +1876,12 @@ elif mode == "TRAILER_MISSED":
     )
     
     bg_video_paths = extracted_files
+else:
+    bg_filename = os.path.join(session_dir, f"bg_{mode.lower()}.mp4")
+    search_q = f"{category} {topic}".strip()
+    paths = get_bg_path(search_q, bg_filename, target_duration=total_bg_duration)
+    if paths:
+        bg_video_paths.extend(paths)
 
 if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
     print("[Error] Failed to download any background videos.")
@@ -1926,7 +1932,7 @@ if selected_persona:
             avatar_path = p_path
             break
 
-remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS", "FUNNY_EXPLAINER", "TEACH"]
+remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS", "FUNNY_EXPLAINER", "TEACH", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC"]
 if args.use_remotion and mode in remotion_supported_modes:
     from engine.remotion_renderer import render_with_remotion
     
@@ -1957,31 +1963,31 @@ if args.use_remotion and mode in remotion_supported_modes:
     elif mode == "TEACH":
         teach_card_data = teach_data if 'teach_data' in locals() else None
     
-        # Determine dynamic title text for video header
-        if mode == "EMOJI_GUESS" and 'emoji_data' in locals() and isinstance(emoji_data, dict):
-            render_title = emoji_data.get("title") or f"GUESS THE {emoji_data.get('hint', 'MOVIE').upper()} 🧩"
-        elif mode == "TEACH" and 'teach_data' in locals() and isinstance(teach_data, dict):
-            render_title = teach_data.get("title", "Learn Something New")
-        elif mode == "FUNNY_EXPLAINER" and 'funny_data' in locals() and isinstance(funny_data, dict):
-            render_title = funny_data.get("title", "Explainer")
-        elif mode == "TOP_5" and 'top5_data' in locals() and isinstance(top5_data, dict):
-            render_title = top5_data.get("title", "Top 5 Countdown")
-        elif mode == "CHAT_STORY" and 'chat_data' in locals() and isinstance(chat_data, dict):
-            render_title = chat_data.get("title", "Chat Story")
-        elif args.recap_title:
-            render_title = args.recap_title
-        elif args.category and args.category.lower() not in ["general", "movies", "ghost of tsushima"]:
-            render_title = args.category.title()
-        else:
-            render_title = "ShortsFlow Studio"
+    # Determine dynamic title text for video header
+    if mode == "EMOJI_GUESS" and 'emoji_data' in locals() and isinstance(emoji_data, dict):
+        render_title = emoji_data.get("title") or f"GUESS THE {emoji_data.get('hint', 'MOVIE').upper()} 🧩"
+    elif mode == "TEACH" and 'teach_data' in locals() and isinstance(teach_data, dict):
+        render_title = teach_data.get("title", "Learn Something New")
+    elif mode == "FUNNY_EXPLAINER" and 'funny_data' in locals() and isinstance(funny_data, dict):
+        render_title = funny_data.get("title", "Explainer")
+    elif mode == "TOP_5" and 'top5_data' in locals() and isinstance(top5_data, dict):
+        render_title = top5_data.get("title", "Top 5 Countdown")
+    elif mode == "CHAT_STORY" and 'chat_data' in locals() and isinstance(chat_data, dict):
+        render_title = chat_data.get("title", "Chat Story")
+    elif args.recap_title:
+        render_title = args.recap_title
+    elif args.category and args.category.lower() not in ["general", "movies", "ghost of tsushima"]:
+        render_title = args.category.title()
+    else:
+        render_title = "ShortsFlow Studio"
 
-        final_video = render_with_remotion(
-            audio_path=audio_path,
-            subs_path=subs_path,
-            output_path=output_filename,
-            mode=remotion_mode,
-            bg_music_path=bg_music,
-            title_text=render_title,
+    final_video = render_with_remotion(
+        audio_path=audio_path,
+        subs_path=subs_path,
+        output_path=output_filename,
+        mode=remotion_mode,
+        bg_music_path=bg_music,
+        title_text=render_title,
         background_paths=bg_video_paths,
         this_or_that=this_or_that_data,
         emoji_guess=emoji_guess_data,

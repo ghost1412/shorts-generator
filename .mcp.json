@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "shortsflow-ai-studio": {
+      "command": "python",
+      "args": [
+        "c:/Users/win10/.gemini/antigravity/scratch/shorts-generator/mcp_server.py"
+      ],
+      "description": "ShortsFlow AI Studio MCP Server for automated AI video generation & clipping"
+    }
+  }
+}

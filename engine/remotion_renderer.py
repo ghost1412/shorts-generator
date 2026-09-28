@@ -365,11 +365,14 @@ def render_with_remotion(
             print(full_output)
             raise RuntimeError(f"Remotion render failed with code {returncode}: {full_output[-300:]}")
             
-        # 7. Move output to final location
+        abs_output_path = os.path.abspath(output_path)
         if os.path.exists(render_output):
-            shutil.move(render_output, output_path)
-            print(f"[RemotionRenderer] SUCCESS! Rendered video saved to: {output_path}")
-            return output_path
+            if os.path.exists(abs_output_path):
+                try: os.remove(abs_output_path)
+                except: pass
+            shutil.move(render_output, abs_output_path)
+            print(f"[RemotionRenderer] SUCCESS! Rendered video saved to: {abs_output_path}")
+            return abs_output_path
         else:
             print("[RemotionRenderer] Remotion CLI Output:")
             print(full_output)
