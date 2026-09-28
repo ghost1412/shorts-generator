@@ -2,7 +2,7 @@ name: Daily Short Generator
 
 on:
   schedule:
-    - cron: '0 */8 * * *' # Every 4 hours
+    - cron: '0 */4 * * *' # Every 4 hours (6 videos/day)
   workflow_dispatch:
     inputs:
       mode:
