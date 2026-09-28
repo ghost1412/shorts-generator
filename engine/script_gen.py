@@ -1154,11 +1154,13 @@ def normalize_emoji_guess(data):
     hint = data.get("hint") or data.get("category") or data.get("clue") or "Guess the item!"
 
     if emojis and answer and script:
+        title_str = f"GUESS THE {str(hint).upper()} 🧩" if hint else "GUESS THE EMOJI 🧩"
         return {
             "emojis": str(emojis).strip(),
             "answer": str(answer).strip(),
             "hint": str(hint).strip(),
-            "script": str(script).strip()
+            "script": str(script).strip(),
+            "title": title_str
         }
     return None
 

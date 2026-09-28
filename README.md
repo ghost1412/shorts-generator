@@ -117,12 +117,24 @@ ShortsFlow AI Studio features a **sleek, single-window 3-column Studio UI**:
 - **🤖 Multi-LLM Orchestration**: Native support for **Google Gemini**, **OpenAI** (`gpt-4o-mini`), **DeepSeek** (`deepseek-chat`), **Groq** (`llama-3.3-70b`), **Anthropic Claude**, **OpenRouter**, **Local Ollama** (`qwen3:8b`), and custom OpenAI-compatible endpoints with automatic failover (`--llm_provider` & `--llm_model`).
 - **🎯 Smart Crop & Anti-Blinking Face Tracking**: Intelligent face detection with Exponential Moving Average (EMA) smoothing and velocity clamping to prevent camera jitter.
 - **✂️ Padded Silence Removal**: Auto-tighten audio gaps with an 80ms safety buffer to ensure zero word truncation or sub-frame flickering.
+- **🎙️ Local TTS & Zero-Shot Voice Cloning**: Support for VoiceStudio local REST TTS endpoints (`/v1/audio/speech`), ElevenLabs, EdgeTTS, and custom `.wav` sample audio cloning (`--tts_provider` & `--clone_voice`).
+- **📐 Multi-Aspect Ratio Engine**: Render videos in standard Vertical (`9:16`), Landscape (`16:9`), Square (`1:1`), or Social Feed (`4:5`) formats (`--aspect_ratio`).
+- **🌐 Multilingual Video Translation & Dubbing (`--mode DUB`)**: Automatically transcribe, translate, and re-synthesize target language voiceovers (Spanish, Hindi, German, French, Japanese, etc.) via `--target_lang`.
+- **🔊 Auto SFX & Dynamic Audio Ducking**: Programmatically synthesized sound effects (`whoosh`, `pop`, `riser`, `boom`) plus dynamic background music volume ducking during spoken narration (`--auto_ducking` & `--sfx_preset`).
+- **🎥 Dynamic Camera Push-In Zoom Motion**: Subtle 1.0x to 1.15x smooth push-in camera keyframing to prevent static visual monotony (`--enable_zoom`).
+- **🎚️ Studio Audio Master & Noise Cleanup**: Offline FFmpeg audio mastering filter chain with highpass 80Hz rumble cut, lowpass 12kHz hiss cut, dynamic compressor, and EBU R128 loudness normalization (`--enhance_audio`).
+- **📦 Automated Batch Queue Processor**: Process content calendars of topics or video links sequentially in an automated background queue (`--batch_file`).
 - **🧮 Standalone Creation Modes**:
   - `EXPLAINER`: Automated educational math & coding animations powered by Manim.
   - `FACTS` & `STORY`: AI-scripted facts and narratives with automated background video stitching.
-  - `FILTER`: Direct visual color grading & style application for full long-form videos or shorts.
+  - `TOP_5`: Numbered listicle countdown shorts (#5 ➔ #1) with rank badges.
+  - `CHAT_STORY`: Animated text message conversation shorts (iMessage / WhatsApp format).
+  - `PODCAST`: 2-speaker debate shorts with alternating multi-voice synthesis.
+  - `DUB`: Multilingual video translation & voice re-synthesis.
   - `THIS_OR_THAT` / `WYR`: Split-screen comparison challenges.
   - `RANK_IT`: Tier-list rank reveals.
+  - `RIDDLE`: Interactive lateral thinking challenge designed to drive comments.
+  - `NEWS & PERSONA`: RSS headline breakdown with optional cartoon personas (e.g. Mafia Cat).
 
 ---
 

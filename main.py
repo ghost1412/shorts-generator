@@ -1915,13 +1915,31 @@ if args.use_remotion and mode in remotion_supported_modes:
     elif mode == "TEACH":
         teach_card_data = teach_data if 'teach_data' in locals() else None
     
-    final_video = render_with_remotion(
-        audio_path=audio_path,
-        subs_path=subs_path,
-        output_path=output_filename,
-        mode=remotion_mode,
-        bg_music_path=bg_music,
-        title_text=(teach_data.get("title") if mode == "TEACH" and 'teach_data' in locals() else (funny_data.get("title") if mode == "FUNNY_EXPLAINER" and 'funny_data' in locals() else (args.recap_title or args.category or "ShortsFlow"))),
+        # Determine dynamic title text for video header
+        if mode == "EMOJI_GUESS" and 'emoji_data' in locals() and isinstance(emoji_data, dict):
+            render_title = emoji_data.get("title") or f"GUESS THE {emoji_data.get('hint', 'MOVIE').upper()} 🧩"
+        elif mode == "TEACH" and 'teach_data' in locals() and isinstance(teach_data, dict):
+            render_title = teach_data.get("title", "Learn Something New")
+        elif mode == "FUNNY_EXPLAINER" and 'funny_data' in locals() and isinstance(funny_data, dict):
+            render_title = funny_data.get("title", "Explainer")
+        elif mode == "TOP_5" and 'top5_data' in locals() and isinstance(top5_data, dict):
+            render_title = top5_data.get("title", "Top 5 Countdown")
+        elif mode == "CHAT_STORY" and 'chat_data' in locals() and isinstance(chat_data, dict):
+            render_title = chat_data.get("title", "Chat Story")
+        elif args.recap_title:
+            render_title = args.recap_title
+        elif args.category and args.category.lower() not in ["general", "movies", "ghost of tsushima"]:
+            render_title = args.category.title()
+        else:
+            render_title = "ShortsFlow Studio"
+
+        final_video = render_with_remotion(
+            audio_path=audio_path,
+            subs_path=subs_path,
+            output_path=output_filename,
+            mode=remotion_mode,
+            bg_music_path=bg_music,
+            title_text=render_title,
         background_paths=bg_video_paths,
         this_or_that=this_or_that_data,
         emoji_guess=emoji_guess_data,
