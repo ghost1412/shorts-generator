@@ -117,7 +117,7 @@ python mcp_server.py
 
 ### Available MCP Tools:
 * `generate_short`: Create AI shorts from topics or prompts.
-* `extract_clips`: Slice long YouTube videos into vertical shorts with smart face-tracking.
+* `extract_clips`: Slice long YouTube videos into vertical shorts with face tracking, a stacked two-speaker split (`layout: split`) or active-speaker switching (`layout: active`).
 * `generate_social_package`: Generate platform metadata (`.meta.json`) for YouTube Shorts, TikTok, and Reels.
 * `get_render_status`: Query live rendering job progress.
 
@@ -126,8 +126,8 @@ python mcp_server.py
 ## 💡 Top Command Recipes
 
 ```bash
-# 1. Extract Podcast Shorts with Face Tracking & Silence Removal
-py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_mode shorts --smart_crop --tighten --use_remotion
+# 1. Podcast Shorts that cut to whoever is talking (stacked split when unsure) + silence removal
+py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_mode shorts --layout active --tighten --use_remotion
 
 # 2. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
 py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion

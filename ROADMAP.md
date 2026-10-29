@@ -88,7 +88,8 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 | | Task | Owner | Notes |
 |---|---|---|---|
 | [ ] | C1. Show virality score + hook title per clip in the WebUI (scores already exist; use `--output_json`) | | Opus Clip's headline feature |
-| [ ] | C2. Implement `--layout split` (two speakers stacked) in `main.py`/`engine/video_gen.py` | | `mcp_server.py` already sends `--layout` and currently breaks |
+| [x] | C2. `--layout single/split/active`; active = speaker switching (issue #27) in `engine/speaker_focus.py` | Claude | Haar frontal+profile faces, mouth motion x audio envelope, 2.5 s dwell, stacked fallback. Tested on silent stock footage only - needs a check on a real podcast with speech |
+| [ ] | C4. Active speaker: try MediaPipe Face Mesh lip landmarks instead of Haar + frame difference (more accurate, needs Python <= 3.12) | | Analysis takes ~0.8x clip length at 1280 px |
 | [ ] | C3. In-browser preview + re-render a single clip with a different caption style | | |
 
 ### D. Distribution (`README.md`, new `spaces/`, packaging)
@@ -120,7 +121,6 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 
 ## Known issues
 
-- `mcp_server.py:283` passes `--layout` but `main.py` has no such flag → `extract_clips` with a layout fails (C2).
 - 3 pre-existing `tsc` errors in `ShortFlow.tsx` (E3).
 - Remotion props are not schema-validated at render time; `null` is passed for optional fields and works today.
 - `get_video_duration` in `main.py` returns 10.0 on ffprobe failure, which can mis-size backgrounds silently.

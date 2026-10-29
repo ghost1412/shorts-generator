@@ -2603,8 +2603,24 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         text_filter = ""
 
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
+        active_shots = None
+        if mode == "shorts" and layout == "active":
+            from engine.speaker_focus import plan_speaker_shots
+            try:
+                active_shots = plan_speaker_shots(source_path, hi['start'], hi['end'], ffmpeg_exe=ffmpeg_exe)
+            except Exception as e:
+                print(f"[Warning] Active-speaker analysis failed for clip {i+1}: {e}")
+            if active_shots:
+                print(f"[Log] 🎙️ Clip {i+1}: active-speaker shots " +
+                      ", ".join(f"{s['target']}@{s['start']:.1f}s" for s in active_shots))
+            else:
+                print(f"[Log] Clip {i+1}: not a two-person shot, using the regular crop.")
+
         if mode == "shorts":
-            if layout == "split":
+            if active_shots:
+                from engine.speaker_focus import build_active_speaker_filter
+                vf_filter = build_active_speaker_filter(active_shots, w, h)
+            elif layout == "split":
                 vf_filter = generate_ffmpeg_split_screen_filter(w, h)
             elif interest_points:
                 crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)

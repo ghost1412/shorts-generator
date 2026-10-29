@@ -117,9 +117,9 @@ TOOLS_DEFINITIONS = [
                 },
                 "layout": {
                     "type": "string",
-                    "enum": ["single", "split"],
+                    "enum": ["single", "split", "active"],
                     "default": "single",
-                    "description": "Single speaker crop or dual-speaker top/bottom split screen layout for podcasts"
+                    "description": "single: face-tracked crop; split: two speakers stacked; active: cut to whoever is talking (stacked when unsure) for podcasts/interviews"
                 },
                 "use_remotion": {
                     "type": "boolean",

@@ -150,6 +150,7 @@ def parse_args():
     # 🟢 Auto-Editor & AutoClip Flags
     parser.add_argument("--tighten", action="store_true", help="Remove silences from the final video.")
     parser.add_argument("--tighten_mode", choices=["cut", "speed"], default="cut", help="How to handle silences: 'cut' them or 'speed' them up.")
+    parser.add_argument("--layout", choices=["single", "split", "active"], default="single", help="Vertical framing for clips: single (face/center crop), split (two speakers stacked), active (cut to whoever is talking, stacked when unsure).")
     parser.add_argument("--smart_crop", action="store_true", help="Enabled AI-powered face/interest tracking for vertical cropping.")
     parser.add_argument("--add_commentary", action="store_true", help="Generate an AI voiceover intro commentary hook for third-party clips to ensure 100%% YouTube policy compliance.")
     parser.add_argument("--show_banner", action="store_true", help="Overlay visual rounded header banner ('VIRAL MOMENT') on top of commentary intro clips.")
@@ -866,7 +867,8 @@ if getattr(args, "source_video", None) and args.mode not in ["TRAILER_MISSED", "
         orientation=orientation, letterbox_crop=letterbox_crop,
         caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos,
         video_filter=active_video_filter, user_context=args.user_context,
-        max_workers=getattr(args, 'max_workers', None)
+        max_workers=getattr(args, 'max_workers', None),
+        layout=args.layout
     )
     
     # Export SRT for each extracted file

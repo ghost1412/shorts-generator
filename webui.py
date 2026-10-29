@@ -74,13 +74,14 @@ def _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_pr
     return args
 
 
-def clip_video(url, upload, clip_count, target_duration, smart_crop, tighten, broll, srt,
+def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
                target_lang, caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
     cmd = [sys.executable, "main.py", "--source_video", source, "--extract_mode", "shorts",
-           "--clip_count", str(int(clip_count)), "--target_duration", str(int(target_duration))]
+           "--clip_count", str(int(clip_count)), "--target_duration", str(int(target_duration)),
+           "--layout", layout]
     for flag, on in (("--smart_crop", smart_crop), ("--tighten", tighten), ("--broll", broll), ("--srt", srt)):
         if on:
             cmd.append(flag)
@@ -129,6 +130,8 @@ def build_ui():
                         with gr.Row():
                             clip_count = gr.Slider(1, 15, value=3, step=1, label="Number of clips")
                             target_duration = gr.Slider(15, 90, value=30, step=5, label="Target length (s)")
+                        layout = gr.Radio(["single", "active", "split"], value="single", label="Framing",
+                                          info="active = cut to whoever is talking (podcasts, interviews)")
                         with gr.Row():
                             smart_crop = gr.Checkbox(value=True, label="Face-tracking 9:16 crop")
                             tighten = gr.Checkbox(value=True, label="Remove silences")
@@ -142,7 +145,7 @@ def build_ui():
                         clip_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
                 clip_btn.click(
                     clip_video,
-                    [url, upload, clip_count, target_duration, smart_crop, tighten, broll, srt, target_lang, *clip_settings],
+                    [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, target_lang, *clip_settings],
                     [clip_log, clip_videos],
                 )
 
