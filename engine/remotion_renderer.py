@@ -6,6 +6,18 @@ import subprocess
 import time
 import uuid
 
+def _probe_duration(path):
+    """Clip length in seconds via ffprobe, or None if it can't be read."""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+        ).stdout.strip()
+        return float(out) if out else None
+    except Exception:
+        return None
+
 def copy_to_public(src_path, dest_dir, public_base="temp_assets"):
     """
     Copies a local file to the Remotion public directory and returns the path relative to public/.
@@ -236,6 +248,10 @@ def render_with_remotion(
                     "type": bg_type,
                     "orientation": orientation
                 }
+                if bg_type == "video":
+                    clip_dur = _probe_duration(bp)
+                    if clip_dur:
+                        item_dict["clipDuration"] = clip_dur
                 if captions and i < len(captions) and captions[i]:
                     item_dict["caption"] = captions[i]
 

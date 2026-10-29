@@ -6,6 +6,7 @@ import {
   useVideoConfig,
   Sequence,
   AbsoluteFill,
+  Loop,
   interpolate,
   spring,
   staticFile,
@@ -35,6 +36,7 @@ export const backgroundSchema = z.object({
   type: z.enum(["video", "image"]),
   caption: z.string().optional(),
   orientation: z.enum(["portrait", "landscape"]).optional(),
+  clipDuration: z.number().optional(), // seconds; used to loop clips shorter than their slot
 });
 
 export const thisOrThatSchema = z.object({
@@ -207,7 +209,8 @@ const Subtitles: React.FC<{
             return "#FFEA00"; // Neon Yellow default active
           };
 
-          const rotation = isActive ? (index % 2 === 0 ? -4 : 4) : 0;
+          // Alternate tilt per spoken word (index is always 0 in single-word mode)
+          const rotation = isActive ? ((displayWordIdx + index) % 2 === 0 ? -4 : 4) : 0;
 
           return (
             <span
@@ -224,7 +227,8 @@ const Subtitles: React.FC<{
                 textShadow: isActive 
                   ? "0px 20px 45px rgba(0,0,0,1.0), 8px 8px 0px #000000" 
                   : "0px 10px 25px rgba(0,0,0,0.9), 5px 5px 0px #000000",
-                WebkitTextStroke: "6px #000000",
+                WebkitTextStroke: "12px #000000",
+                paintOrder: "stroke fill", // outline drawn behind the fill so it doesn't eat into the glyphs
                 transition: "transform 0.04s cubic-bezier(0.17, 0.67, 0.83, 0.67), opacity 0.05s ease",
               }}
             >
@@ -297,7 +301,8 @@ const Subtitles: React.FC<{
                 textShadow: isActive
                   ? "0 0 20px #FFD700, 0 0 40px #FF4500, 4px 4px 0px #000000"
                   : "3px 3px 0px #000000",
-                WebkitTextStroke: "4px #000000",
+                WebkitTextStroke: "8px #000000",
+                paintOrder: "stroke fill",
                 transition: "transform 0.08s ease-out, color 0.08s ease",
               }}
             >
@@ -372,15 +377,26 @@ const BackgroundSegment: React.FC<{
 
   const activeScale = bg.type === "video" ? 1.0 : scale;
 
+  const badgeScale = spring({ frame, fps, config: { damping: 10, mass: 0.5, stiffness: 140 } });
+
+  // OffthreadVideo has no `loop` prop - repeat short stock clips explicitly so they never run out
+  const clipFrames = bg.clipDuration ? Math.floor(bg.clipDuration * fps) : 0;
+  const videoEl = (
+    <OffthreadVideo
+      src={getAssetUrl(bg.path)}
+      muted
+      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+    />
+  );
+
   return (
     <AbsoluteFill style={{ transform: `scale(${activeScale})`, transformOrigin: "center", opacity, backgroundColor: "#000" }}>
       {bg.type === "video" ? (
-        <OffthreadVideo
-          src={getAssetUrl(bg.path)}
-          muted
-          loop
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-        />
+        clipFrames > 0 && clipFrames < durationInFrames ? (
+          <Loop durationInFrames={clipFrames}>{videoEl}</Loop>
+        ) : (
+          videoEl
+        )
       ) : (
         <div style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}>
           {/* Blurred Background Layer for Non-Vertical Photos */}
@@ -406,9 +422,39 @@ const BackgroundSegment: React.FC<{
               objectFit: "contain",
               position: "relative",
               zIndex: 1,
-              dropShadow: "0 10px 30px rgba(0,0,0,0.5)",
+              filter: "drop-shadow(0 10px 30px rgba(0,0,0,0.5))",
             }}
           />
+        </div>
+      )}
+
+      {/* Segment badge (e.g. "FACT 2 / 3") - sits under the title header */}
+      {bg.caption && (
+        <div
+          style={{
+            position: "absolute",
+            top: "250px",
+            width: "100%",
+            display: "flex",
+            justifyContent: "center",
+            transform: `scale(${badgeScale})`,
+            zIndex: 41,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: "Impact, Arial Black, sans-serif",
+              fontSize: "54px",
+              color: "#000000",
+              background: "#FFEA00",
+              padding: "6px 30px",
+              borderRadius: "14px",
+              letterSpacing: "2px",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.55)",
+            }}
+          >
+            {bg.caption}
+          </span>
         </div>
       )}
     </AbsoluteFill>
@@ -602,7 +648,7 @@ const PhotoReelSegment: React.FC<{
         <div
           style={{
             position: "absolute",
-            bottom: "220px",
+            bottom: "430px", // above the Shorts/Reels title & description overlay
             width: "100%",
             display: "flex",
             justifyContent: "center",

@@ -5,6 +5,7 @@ import time
 import random
 import argparse
 import json
+import re
 import subprocess
 from dotenv import load_dotenv
 
@@ -1158,15 +1159,15 @@ else:
             facts_data = facts_res["facts"]
             
             # Construct the script: Hook -> Challenge Intro -> Facts -> Loop Outro
-            full_script = f"{hook} ... One of these facts is a LIE! ... "
+            full_script = f"{hook} ... Two of these are true. One is a LIE. ... "
             fact_segments = []
             for i, f in enumerate(facts_data[:3]): # Max 3 segments for UI consistency
-                fact_segments.append(f"{i+1}: {f['fact']}")
-            
+                fact_segments.append(f"Number {i+1}. {f['fact']}")
+
             full_script += " ... ".join(fact_segments)
-            
-            # 🟢 UPGRADE: Seamless Viral Loop
-            full_script += f" ... The real answer is ... wait... {facts_res.get('loop_lead', 'Go back and check again.')}"
+
+            # 🟢 Viral loop: ask for the answer instead of a fake-out reveal (answer goes in the description)
+            full_script += f" ... So, which number is the lie? {facts_res.get('loop_lead', 'Go back and check again.')}"
         elif mode == "MOVIE_RECAP":
             from engine.script_gen import generate_movie_recap
             recap_data = generate_movie_recap(args.recap_title)
@@ -1628,13 +1629,39 @@ def get_bg_path(query, out_path, target_duration=15.0, force_literal=False):
 audio_duration = get_video_duration(audio_path)
 total_bg_duration = audio_duration + 1.5
 
+def find_fact_start_times(subs_file, num_facts):
+    """Spoken start time of each 'Number N.' marker, so background cuts land on each fact."""
+    try:
+        with open(subs_file, "r", encoding="utf-8") as f:
+            words = json.load(f)
+        if isinstance(words, dict):
+            words = [w for seg in words.get("segments", []) for w in seg.get("words", [])]
+        starts = []
+        for n in range(1, num_facts + 1):
+            targets = {str(n), ["one", "two", "three", "four", "five"][n - 1]}
+            for i, w in enumerate(words[:-1]):
+                if re.sub(r"[^a-z]", "", w["word"].lower()) == "number" and \
+                   re.sub(r"[^a-z0-9]", "", words[i + 1]["word"].lower()) in targets and \
+                   (not starts or float(w["start"]) > starts[-1]):
+                    starts.append(float(w["start"]))
+                    break
+        return starts if len(starts) == num_facts else None
+    except Exception as e:
+        print(f"[Warning] Could not align facts to voice timestamps: {e}")
+        return None
+
+fact_beat_timestamps = None
 if mode == "FACTS":
-    # 3 facts, 3 segments
-    seg_len = total_bg_duration / 3
+    # 3 facts, 3 segments - each background starts when its fact is spoken (hook rides on the first)
+    fact_starts = find_fact_start_times(subs_path, len(facts_data))
+    seg_bounds = ([0.0] + fact_starts[1:] + [total_bg_duration]) if fact_starts else None
     for i, fact in enumerate(facts_data):
         bg_filename = os.path.join(session_dir, f"bg_fact_{i+1}.mp4")
-        paths = get_bg_path(fact['fact'], bg_filename, target_duration=seg_len)
+        seg_len = (seg_bounds[i + 1] - seg_bounds[i]) if seg_bounds else total_bg_duration / len(facts_data)
+        paths = get_bg_path(fact.get('visual') or fact['fact'], bg_filename, target_duration=seg_len, force_literal=True)
         bg_video_paths.extend(paths)
+    if seg_bounds and len(bg_video_paths) == len(facts_data):
+        fact_beat_timestamps = seg_bounds[:-1]
 elif mode == "STORY":
     # 2 segments
     seg_len = total_bg_duration / 2
@@ -1974,12 +2001,16 @@ if args.use_remotion and mode in remotion_supported_modes:
         render_title = top5_data.get("title", "Top 5 Countdown")
     elif mode == "CHAT_STORY" and 'chat_data' in locals() and isinstance(chat_data, dict):
         render_title = chat_data.get("title", "Chat Story")
+    elif mode == "FACTS":
+        render_title = "SPOT THE LIE"
     elif args.recap_title:
         render_title = args.recap_title
     elif args.category and args.category.lower() not in ["general", "movies", "ghost of tsushima"]:
         render_title = args.category.title()
+    elif category and category.lower() != "general":
+        render_title = category.replace("_", " ").title()
     else:
-        render_title = "ShortsFlow Studio"
+        render_title = None
 
     final_video = render_with_remotion(
         audio_path=audio_path,
@@ -1994,7 +2025,9 @@ if args.use_remotion and mode in remotion_supported_modes:
         funny_explainer=funny_explainer_data,
         teach_card=teach_card_data,
         avatar_path=avatar_path,
-        caption_style=getattr(args, "caption_style", "HORMOZI")
+        caption_style=getattr(args, "caption_style", "HORMOZI"),
+        beat_timestamps=fact_beat_timestamps if mode == "FACTS" else None,
+        captions=[f"FACT {i+1} / {len(bg_video_paths)}" for i in range(len(bg_video_paths))] if fact_beat_timestamps else None
     )
 else:
     if mode == "FIND_IT" or mode == "FIND_CAT":
@@ -2159,6 +2192,13 @@ def ensure_dict(data):
 
 if mode == "FACTS":
     metadata = ensure_dict(generate_viral_metadata(facts_data, category=category))
+    # Put the answer below the fold so commenters can check themselves
+    lie_idx = next((i for i, f in enumerate(facts_data) if f.get("truth") is False), None)
+    if lie_idx is not None:
+        facts_source = globals().get("facts_res")
+        explanation = facts_source.get("lie_explanation", "") if isinstance(facts_source, dict) else ""
+        metadata["description"] = (metadata.get("description", "") +
+            f"\n\n\n\n⚠️ SPOILER - the lie was #{lie_idx + 1}. {explanation}").strip()
 elif mode == "FIND_IT" or mode == "FIND_CAT":
     metadata = ensure_dict(generate_viral_metadata({"target_name": target_name}, mode="FIND_IT"))
 elif mode == "WYR":

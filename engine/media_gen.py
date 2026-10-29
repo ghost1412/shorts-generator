@@ -95,14 +95,14 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
         video_data = random.choice(videos)
         video_files = video_data.get("video_files", [])
         
-        best_link = None
-        for vfile in video_files:
-            if vfile.get("quality") == "hd" and vfile.get("width") == 1080:
-                best_link = vfile.get("link")
-                break
-        
-        if not best_link and video_files:
-            best_link = video_files[0].get("link")
+        # Prefer exactly 1080 wide; otherwise the sharpest file up to 1440 wide (skip 4K - slow to
+        # download, no visible gain at 1080x1920); otherwise the smallest larger one.
+        sized = [vf for vf in video_files if vf.get("width") and vf.get("link")]
+        exact = [vf for vf in sized if vf["width"] == 1080]
+        under = sorted((vf for vf in sized if vf["width"] <= 1440), key=lambda vf: vf["width"], reverse=True)
+        over = sorted((vf for vf in sized if vf["width"] > 1440), key=lambda vf: vf["width"])
+        pick = (exact or under or over or video_files or [{}])[0]
+        best_link = pick.get("link")
             
         if best_link:
             print(f"Downloading video: {best_link}")

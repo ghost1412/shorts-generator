@@ -230,7 +230,7 @@ def _call_anthropic(api_key, model, prompt, system_prompt, max_tokens=4096, temp
         "anthropic-version": "2023-06-01"
     }
     payload = {
-        "model": model or "claude-3-5-haiku-20241022",
+        "model": model or "claude-haiku-5-5",
         "max_tokens": max_tokens,
         "system": system_prompt or "",
         "messages": [{"role": "user", "content": prompt}],
@@ -272,7 +272,7 @@ def get_llm_response(
             print(f"[Warning] OpenAI LLM failed: {e}. Proceeding to fallbacks...")
 
     if target_provider in ["anthropic", "claude"] and (ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY")):
-        m = target_model or "claude-3-5-haiku-20241022"
+        m = target_model or "claude-haiku-5-5"
         print(f"[Log] 🤖 Executing requested Anthropic Claude LLM ({m})...")
         try:
             return _call_anthropic(
@@ -498,7 +498,18 @@ def with_best_of_n(func, validator, n=3):
 # --- Specific Validators ---
 
 def validate_mixed_facts(data):
-    return isinstance(data, dict) and ("hook" in data or "facts" in data)
+    """Exactly 3 short facts with exactly one lie - otherwise the 'spot the lie' premise breaks."""
+    if not isinstance(data, dict) or not data.get("hook"):
+        return False
+    facts = data.get("facts")
+    if not isinstance(facts, list) or len(facts) != 3:
+        return False
+    for f in facts:
+        if not isinstance(f, dict) or not isinstance(f.get("fact"), str) or not isinstance(f.get("truth"), bool):
+            return False
+        if not 4 <= len(f["fact"].split()) <= 30:
+            return False
+    return sum(1 for f in facts if f["truth"] is False) == 1
 
 def validate_story(data):
     if not isinstance(data, dict): return False
@@ -672,45 +683,45 @@ def generate_mixed_facts(category="science"):
     Generates a curiosity-driven 'True or False' fact list.
     Returns: {"hook": str, "facts": [{"fact": str, "truth": bool}]}
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    if not HF_API_KEY:
-        print("DEBUG: HF_API_KEY is missing!")
-        raise RuntimeError("HF_API_KEY is missing. Cannot generate facts.")
-
-    model = "meta-llama/Llama-3.1-8B-Instruct"
     selected_sub = get_sub_topic(category)
     print(f"[Log] FACTS: Selected sub-topic: {selected_sub}")
-    
-    prompt = f"""Generate EXACTLY 3 SHOCKING and BIZARRE facts about {selected_sub}.
-    One of them MUST be a plausible-sounding LIE (False), the others must be TRUE.
-    
-    RULES:
-    1. Focus on OBSCURE, weird, or mind-blowing topics.
-    2. The LIE must be hard to distinguish from the truth (don't make it obvious like 'cats are aliens').
-    3. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
-    4. Format as JSON ONLY:
-    
-    {{
-      "hook": "99% of people fail this... Can you spot the lie about {selected_sub}?",
-      "facts": [
-        {{"fact": "shocking fact text", "truth": true}},
-        {{"fact": "another shocking fact", "truth": true}},
-        {{"fact": "plausible lie text", "truth": false}}
-      ],
-      "loop_lead": "Wait, did you catch the first one?"
-    }}
-    """
+
+    prompt = f"""Write a "spot the lie" YouTube Short about {selected_sub}: 2 true facts and 1 lie.
+
+RULES:
+1. TRUE facts must be real, well-documented and verifiable (encyclopedia-level, not rumours or disputed claims). They should still sound unbelievable.
+2. The LIE must sound just as plausible as the truths: same tone, same level of detail, same length. No obvious tells like absolute words ("always", "never") only in the lie.
+3. Each fact is ONE spoken sentence of 8-20 words. No URLs, numbering, emojis or JSON keys inside the text.
+4. "hook" is spoken in the first 2 seconds: max 12 words, a curiosity gap or challenge specific to {selected_sub}. Write a fresh one - do NOT reuse stock phrases like "99% of people fail this".
+5. "lie_explanation" is one short sentence giving the real fact behind the lie (used in the video description).
+6. "loop_lead" is a short line that makes viewers rewatch, e.g. asking which number felt too real.
+7. "visual" for each fact is a 2-4 word stock-footage search term showing its subject (e.g. "roman soldiers marching"). Concrete, filmable nouns only.
+
+Return JSON ONLY:
+{{
+  "hook": "...",
+  "facts": [
+    {{"fact": "...", "truth": true, "visual": "..."}},
+    {{"fact": "...", "truth": true, "visual": "..."}},
+    {{"fact": "...", "truth": false, "visual": "..."}}
+  ],
+  "lie_explanation": "...",
+  "loop_lead": "..."
+}}
+"""
 
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.8, max_tokens=512)
-        return robust_json_parse(response_text)
+        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=1024)
+        data = robust_json_parse(response_text)
+        for f in (data.get("facts") or []) if isinstance(data, dict) else []:
+            if isinstance(f, dict) and isinstance(f.get("truth"), str):
+                f["truth"] = f["truth"].strip().lower() == "true"
+        return data
 
-    return with_best_of_n(llm_call, validate_mixed_facts, n=3)
+    data = with_best_of_n(llm_call, validate_mixed_facts, n=3)
+    # LLMs almost always put the lie last; shuffle so the answer position is unpredictable.
+    random.shuffle(data["facts"])
+    return data
 
 def generate_story(category="general", hero=None, hero_name=None, companion=None, quest=None, setting=None):
     """

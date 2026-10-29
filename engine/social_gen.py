@@ -201,6 +201,7 @@ Content Details:
 CRITICAL ACCURACY & SEO RULES:
 1. Title: Must be pattern-interrupting, under 60 chars, and STRICTLY match the game/topic specified in Content Details.
    - For GAMING / ACTION: Mention the exact game or topic name (e.g. "Ghost of Tsushima Insane Katana Duel! ⚔️" or "Need for Speed Drift Master! 🏎️"). DO NOT hallucinate generic "1v4 clutch" titles unless it is an FPS shooter.
+   - For '2 Truths and 1 Lie' / FACTS: Name the specific topic and the challenge, e.g. "Spot The Lie: Ancient Rome Edition 🤥". NEVER reveal which fact is the lie in the title, description or tags.
    - For RIDDLE: Use hooks like "99% FAIL THIS RIDDLE! 🧠" or "ONLY A GENIUS GETS THIS! 🤯".
    - For EXPLAINER / SCIENCE: Use hooks like "How [Topic] ACTUALLY Works! 🤯".
    - For NEWS: Start with "BREAKING: [Topic] 🚨".
@@ -250,8 +251,8 @@ Format as JSON ONLY:
             
         except Exception as e:
             print(f"[Warning] Metadata attempt {attempt+1} failed ({e}).")
-            if attempt == 2:
-                print(f"[Log] Metadata API failed after 3 attempts. Using generic fallback.")
+            if attempt == 1:
+                print(f"[Log] Metadata API failed after 2 attempts. Using generic fallback.")
         
     # Improved fallback based on mode
     if mode == "FIND_IT":

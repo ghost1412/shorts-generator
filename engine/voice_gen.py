@@ -152,6 +152,8 @@ def generate_voice_elevenlabs(text, output_audio="assets/voice.mp3", output_subs
     with open(output_subs, "w", encoding="utf-8") as f:
         json.dump(subtitles, f, indent=2)
 
+    return output_audio, output_subs
+
 def generate_voice_voicestudio(text, output_audio="assets/voice.mp3", output_subs="assets/subs.json", voice_name=None, clone_voice=None, voice_studio_url=None):
     """
     Generates voice via VoiceStudio / Local OpenAI-compatible TTS API (e.g. Kokoro, F5-TTS, XTTSv2).
@@ -263,7 +265,7 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     if sel_provider in ["elevenlabs", "auto"] and os.getenv("ELEVENLABS_API_KEY"):
         try:
             return generate_voice_elevenlabs(
-                text=clean_for_tts(text),
+                text=clean_for_tts(text) + (" ... Comment your answer now." if add_cta else ""),
                 output_audio=output_audio,
                 output_subs=output_subs
             )
