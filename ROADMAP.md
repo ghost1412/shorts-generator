@@ -3,8 +3,6 @@
 Living task board for Claude Code, Cursor, Copilot and other agents (and humans) working on this repo,
 alone or in parallel. Read [AGENTS.md](AGENTS.md) first for architecture and commands.
 
-> Picking this up after a break? Start with [docs/HANDOFF.md](docs/HANDOFF.md) - owner to-dos, recent changes, gotchas.
-
 **Goals**
 1. Grow GitHub stars: make the project easy to try and clearly better than paid clippers.
 2. Keep the production channel ([@spottheliee](https://www.youtube.com/@spottheliee)) healthy. It is

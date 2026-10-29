@@ -54,3 +54,5 @@ PROMOTION_GUIDE.md
 frame_*.jpg
 temp_edge_cookies.sqlite
 scratch/
+# Local session hand-off notes (not published)
+docs/HANDOFF.md
