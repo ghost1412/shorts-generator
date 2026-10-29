@@ -14,23 +14,30 @@
   <a href="https://remotion.dev"><img src="https://img.shields.io/badge/Remotion-React_Video-61DAFB?style=flat&logo=react" alt="Remotion" /></a>
   <a href="https://nvidia.com"><img src="https://img.shields.io/badge/CUDA-GPU_Accelerated-76B900?style=flat&logo=nvidia" alt="CUDA" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
+  <a href="https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" /></a>
+  <a href="https://github.com/ghost1412/shorts-generator/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shorts-generator?style=flat&logo=github" alt="GitHub stars" /></a>
 </p>
+
+<p align="center"><b>⭐ If ShortsFlow saves you an Opus Clip subscription, please star the repo - it helps more creators find it.</b></p>
 
 ---
 
-## ⚡ Quick Start (60 Seconds)
+## ⚡ Quick Start - pick one
+
+| Option | Command | Best for |
+|---|---|---|
+| ☁️ **Google Colab** (free GPU, zero install) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb) | Trying it in 5 minutes |
+| 🐳 **Docker** (browser WebUI) | `docker compose up -d` → open http://localhost:7860 | Servers, Linux, no Python setup |
+| 🌐 **Browser WebUI** | `pip install -r requirements-full.txt && python webui.py` | Local use with a GPU |
+| 🖥️ **Desktop Studio GUI** (Windows) | `setup.bat && launch.bat` | Windows desktop |
+| 🤖 **AI agents** | `python mcp_server.py` or point your agent at [`SKILL.md`](SKILL.md) | Claude Code, Cursor, n8n |
 
 ```bash
-# 1. Clone Repo & Navigate
 git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
 cd shorts-generator
-
-# 2. 1-Click Setup & Launch Desktop Studio GUI
-setup.bat && launch.bat
 ```
 
-> 🐧 **Linux / macOS**: `chmod +x setup.sh && ./setup.sh && python3 gui_app.py`  
-> 🐳 **Docker**: `docker compose up -d`
+> 🐧 **Linux / macOS**: `chmod +x setup.sh && ./setup.sh && python3 webui.py`
 
 ---
 
@@ -70,7 +77,6 @@ setup.bat && launch.bat
 | 💡 **AI Facts** | High-energy trivia & mystery facts with scene stock loops | `py main.py --mode FACTS --category "space"` |
 | 📖 **AI Story** | Narrative story voiceover with visual scene stitching | `py main.py --mode STORY --category "sci-fi"` |
 | 🤔 **This or That (WYR)** | Split-screen dilemma challenge with VS central badge | `py main.py --mode WYR --category "superpowers"` |
-| 🏆 **Rank It** | Sequential Tier List (S, A, B, C, D) item ranking reveal | `py main.py --mode RANK_IT --category "supercars"` |
 | 🧩 **Emoji Guess** | Interactive emoji puzzle game with animated reveal | `py main.py --mode EMOJI_GUESS --category "movies"` |
 | 📰 **News Breakdown** | RSS news headline summary with cartoon personas | `py main.py --mode NEWS --cartoon --persona mafia_cat` |
 
@@ -111,7 +117,7 @@ python mcp_server.py
 
 ### Available MCP Tools:
 * `generate_short`: Create AI shorts from topics or prompts.
-* `extract_clips`: Slice long YouTube videos with smart face-tracking or dual-speaker split layout (`--layout split`).
+* `extract_clips`: Slice long YouTube videos into vertical shorts with smart face-tracking.
 * `generate_social_package`: Generate platform metadata (`.meta.json`) for YouTube Shorts, TikTok, and Reels.
 * `get_render_status`: Query live rendering job progress.
 
@@ -120,8 +126,8 @@ python mcp_server.py
 ## 💡 Top Command Recipes
 
 ```bash
-# 1. Extract Dual-Speaker Podcast Shorts (Top & Bottom Split Layout)
-py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_mode shorts --layout split --tighten --use_remotion
+# 1. Extract Podcast Shorts with Face Tracking & Silence Removal
+py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_mode shorts --smart_crop --tighten --use_remotion
 
 # 2. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
 py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion
@@ -159,6 +165,12 @@ AUTO_DUCKING=true
 ## 🤖 AI Agent Onboarding
 
 If you are an AI Coding Agent (Cursor, Antigravity, Claude Code, Copilot, AutoGPT) onboarding into this codebase, see **[AGENTS.md](AGENTS.md)** for structured architectural context, module maps, CLI skills, and execution rules.
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=ghost1412/shorts-generator&type=Date)](https://star-history.com/#ghost1412/shorts-generator&Date)
 
 ---
 

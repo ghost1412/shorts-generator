@@ -1,0 +1,17 @@
+# Everything in requirements.txt plus the optional heavy extras:
+# clipping long videos (Whisper transcription, face tracking, audio analysis),
+# the Desktop Studio GUI, the browser WebUI and the Flask worker server.
+#
+#   pip install -r requirements-full.txt
+#
+# For NVIDIA GPU transcription, install the CUDA build of torch first:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124
+-r requirements.txt
+torch
+stable-ts
+opencv-python
+librosa
+gtts
+customtkinter
+flask
+gradio>=5,<6

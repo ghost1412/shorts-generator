@@ -1,0 +1,34 @@
+# Secrets - pass these at runtime via env_file / volumes, never bake them into the image
+.env
+.env.*
+!.env.example
+token*.json
+client_secrets*.json
+*.sqlite
+
+# Large local artefacts
+*.mp4
+*.mp3
+*.mp4.txt
+*.meta.json
+!assets/avatars/*.mp4
+!music/*.mp3
+frame_*.jpg
+actions-runner/
+build/
+dist/
+sessions*/
+scratch/
+test_manim_output/
+test_tonemap/
+assets/backgrounds/local/
+
+# Tooling
+.git/
+.github/
+.claude/
+.vscode/
+__pycache__/
+.pytest_cache/
+**/node_modules/
+web/

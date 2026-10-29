@@ -33,7 +33,7 @@ ffmpeg -version | head -n 1
 # 4. Install Python dependencies
 echo "[4/5] Installing Python requirements..."
 python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements.txt
+python3 -m pip install -r requirements-full.txt
 
 # 5. Install Remotion npm dependencies
 echo "[5/5] Installing Remotion React dependencies..."
@@ -43,8 +43,8 @@ if [ -d "remotion-video" ]; then
     cd ..
 fi
 
-if [ ! -f ".env" ] && [ -f ".env.example" ]; then
-    cp .env.example .env
+if [ ! -f ".env" ] && [ -f "env.example" ]; then
+    cp env.example .env
     echo "💡 Created .env file from template."
 fi
 

@@ -61,7 +61,7 @@ if %errorlevel% neq 0 (
 echo.
 echo [5/6] Installing Python requirements...
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-full.txt
 if %errorlevel% neq 0 (
     echo  [31m[Error] Failed to install Python dependencies! [0m
     pause
@@ -85,10 +85,10 @@ if exist "remotion-video\package.json" (
     echo  [33m[Warning] remotion-video folder not found! Skipping Remotion setup. [0m
 )
 
-:: 5. Copy .env.example if .env does not exist
+:: 5. Copy env.example if .env does not exist
 if not exist ".env" (
-    if exist ".env.example" (
-        copy .env.example .env
+    if exist "env.example" (
+        copy env.example .env
         echo [Info] Created .env configuration file from template.
     )
 )
