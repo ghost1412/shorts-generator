@@ -2533,28 +2533,35 @@ def apply_influencer_subtitles(clip, transcript_data, start_offset, end_offset, 
     viral_colors = ["yellow", "#00FF00", "cyan", "white", "orange"]
     relevant_words = []
     
-    # Heuristic transcript parsing
+    # Prefer Whisper word timestamps; otherwise spread each segment's words evenly
     segments = transcript_data.get('segments', [])
     for segment in segments:
-        text = segment.get('text', '')
         start = segment.get('start', 0)
         end = segment.get('end', 0)
         if start >= end_offset or end <= start_offset:
             continue
-        words = text.split()
-        if not words: continue
-        seg_dur = max(0.1, end - start)
-        w_dur = seg_dur / len(words)
-        for idx, w in enumerate(words):
-            w_start = start + (idx * w_dur)
-            w_end = w_start + w_dur
-            if w_start >= start_offset and w_end <= end_offset:
+        timed = [(w['word'], w['start'], w['end']) for w in segment.get('words', []) if 'start' in w and 'end' in w]
+        if not timed:
+            words = segment.get('text', '').split()
+            if not words: continue
+            w_dur = max(0.1, end - start) / len(words)
+            timed = [(w, start + idx * w_dur, start + (idx + 1) * w_dur) for idx, w in enumerate(words)]
+        for w, w_start, w_end in timed:
+            if w_start >= start_offset and w_end <= end_offset and w.strip():
                 relevant_words.append({
-                    'word': w,
+                    'word': w.strip(),
                     'start': w_start - start_offset,
                     'end': w_end - start_offset
                 })
-    return clip
+
+    # One centred punch-word overlay per spoken word. This used to return the input clip,
+    # which crashed every non-Remotion clip render at CompositeVideoClip([sub] + overlays).
+    for i, w in enumerate(relevant_words):
+        next_start = relevant_words[i + 1]['start'] if i + 1 < len(relevant_words) else w['end']
+        duration = max(0.05, min(next_start, w['end'] + 0.3) - w['start'])
+        img = create_stylish_text_image([w['word'].upper()], highlight_index=0, size=size, y_pos=y_pos)
+        word_clips.append(ImageClip(img).with_start(w['start']).with_duration(duration).with_position("center"))
+    return word_clips
 
 def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     """Adds a dynamic animated progress bar to the bottom of the video."""

@@ -26,7 +26,7 @@ _Last updated: 2026-10-29_
 ### Shared hot-spot files (coordinate before big edits)
 | File | Why it's risky |
 |---|---|
-| `main.py` (~2.4k lines, module-level script) | Every mode's dispatch, background selection and the Remotion call live here |
+| `main.py` (~1.6k lines, module-level script) | Generate-path dispatch, background selection and the Remotion call live here; standalone pipelines are in `engine/modes/` |
 | `engine/script_gen.py` | All LLM prompts and the provider fallback chain (Gemini → Ollama → HuggingFace) |
 | `remotion-video/src/ShortFlow.tsx` | Single 1.6k-line composition used by every Remotion mode |
 | `.github/workflows/daily_generate.yml` | Runs the live channel |
@@ -37,8 +37,9 @@ _Last updated: 2026-10-29_
 
 | What | Command |
 |---|---|
-| Python syntax | `python -m py_compile main.py engine/*.py webui.py mcp_server.py` |
-| Remotion types | `cd remotion-video && npx tsc --noEmit -p .` (3 pre-existing errors, see Known issues) |
+| Tests | `python -m pytest` (offline, ~1 s) |
+| Python syntax | `python -m py_compile main.py engine/*.py engine/modes/*.py webui.py mcp_server.py` |
+| Remotion types | `cd remotion-video && npx tsc --noEmit -p .` (must be 0 errors - CI enforces it) |
 | Full FACTS render **without an LLM key** | `python scripts/offline_facts_render.py` → `sessions/offline_test/*.mp4` (needs `PEXELS_API_KEY`, Node, FFmpeg) |
 | Real FACTS render | `python main.py --mode FACTS --use_remotion --skip-upload` (needs an LLM key) |
 | Inspect frames | `ffmpeg -ss 9 -i <video>.mp4 -frames:v 1 frame.jpg` |
@@ -105,23 +106,22 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 |---|---|---|---|
 | [ ] | E1. Kokoro (local, free) TTS provider with word timestamps | | |
 | [ ] | E2. Fish Audio TTS provider | | |
-| [ ] | E3. Fix the 3 TypeScript errors (`loop` on `OffthreadVideo` in THIS_OR_THAT and avatar) using `<Loop>` like `BackgroundSegment` | | Short clips currently end early there |
+| [x] | E3. 0 tsc errors: `Html5Video` with `loop` for split/avatar clips | Claude | |
 | [ ] | E4. Bundle an OFL caption font (e.g. Anton) via `staticFile` so captions don't depend on system Impact | | |
 
 ### F. Code health (any)
 | | Task | Owner | Notes |
 |---|---|---|---|
-| [ ] | F1. Pin dependency versions (lock file) | | Upstream releases have broken CI before |
-| [ ] | F2. Pre-flight CI step: import engine modules + 2 s test render before generating | | |
-| [ ] | F3. Turn `scripts/test_*.py` into real pytest tests and run them on PRs | | |
-| [ ] | F4. Split `main.py` mode dispatch into `engine/modes/*.py` | | Conflicts with almost everything - do last, alone |
+| [x] | F1. Bounded dependency versions in `requirements*.txt` | Claude | Lower bound = known-good, cap below next major; yt-dlp uncapped |
+| [x] | F2. Pre-flight in `daily_generate.yml`: engine imports + pytest | Claude | No test render yet (needs Remotion + Pexels in CI) |
+| [~] | F3. `tests/` pytest suite (31 tests) + `tests.yml` on 3.11/3.12 + Remotion tsc | Claude | Next: tests for social_gen metadata, remotion_renderer props, clip scoring |
+| [~] | F4. Split `main.py`: standalone pipelines moved to `engine/modes/`, shared helpers to `engine/pipeline.py` (2.4k -> 1.6k lines) | Claude | Remaining: the generate path (script -> voice -> backgrounds -> render -> metadata -> upload) is still one module-level script with per-mode if/elif chains |
 | [ ] | F5. Merge `.env.example` / `env.example` (only `env.example` is tracked) | | |
 
 ---
 
 ## Known issues
 
-- 3 pre-existing `tsc` errors in `ShortFlow.tsx` (E3).
 - Remotion props are not schema-validated at render time; `null` is passed for optional fields and works today.
 - `get_video_duration` in `main.py` returns 10.0 on ffprobe failure, which can mis-size backgrounds silently.
 
