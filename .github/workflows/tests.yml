@@ -37,6 +37,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Lint (syntax errors and undefined names only)
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.git,web,remotion-video,scratch,sessions
+
       - name: Compile all Python
         run: python -m compileall -q main.py webui.py mcp_server.py server.py engine tests
 
