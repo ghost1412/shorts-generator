@@ -4,10 +4,16 @@
 > Turn YouTube Links, Long Videos, or Text Ideas into High-Retention Shorts & Reels on Autopilot.
 
 <div align="center">
-  <img src="demos/demo_short.gif" width="250" alt="Viral Short Preview" />
-  <img src="demos/demo_facts.gif" width="250" alt="AI Facts Preview" />
-  <img src="demos/demo_explainer.gif" width="250" alt="Manim Explainer Preview" />
+  <img src="demos/demo_spot_the_lie.gif" width="220" alt="Spot the Lie short rendered by ShortsFlow" />
+  <img src="demos/demo_short.gif" width="220" alt="Viral Short Preview" />
+  <img src="demos/demo_facts.gif" width="220" alt="AI Facts Preview" />
+  <img src="demos/demo_explainer.gif" width="220" alt="Manim Explainer Preview" />
 </div>
+
+<p align="center">
+  🎬 <b>Running in production:</b> the YouTube channel <a href="https://www.youtube.com/@spottheliee">@spottheliee</a> is generated and posted
+  entirely by ShortsFlow - 6 "spot the lie" Shorts a day from <a href=".github/workflows/daily_generate.yml">one GitHub Actions workflow</a>.
+</p>
 
 <p align="center">
   <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.12+-blue?style=flat&logo=python" alt="Python" /></a>
@@ -16,6 +22,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
   <a href="https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" /></a>
   <a href="https://github.com/ghost1412/shorts-generator/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shorts-generator?style=flat&logo=github" alt="GitHub stars" /></a>
+  <a href="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
 </p>
 
 <p align="center"><b>⭐ If ShortsFlow saves you an Opus Clip subscription, please star the repo - it helps more creators find it.</b></p>
