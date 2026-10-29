@@ -1,0 +1,100 @@
+name: E2E Render
+
+# Renders a real FACTS short (canned LLM response, real Edge TTS + Pexels + Remotion)
+# and checks the output, so pipeline/render regressions are caught before the channel hits them.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'main.py'
+      - 'engine/**'
+      - 'remotion-video/**'
+      - 'requirements*.txt'
+      - 'scripts/offline_facts_render.py'
+      - '.github/workflows/e2e.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '30 2 * * 1' # weekly, catches upstream breakage (Edge TTS, Pexels, Remotion)
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  facts-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip when the Pexels secret is unavailable (e.g. fork PRs)
+        if: env.PEXELS_API_KEY == ''
+        run: echo "::warning::PEXELS_API_KEY secret not set - skipping end-to-end render"
+
+      - uses: actions/setup-python@v5
+        if: env.PEXELS_API_KEY != ''
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - uses: actions/setup-node@v4
+        if: env.PEXELS_API_KEY != ''
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: remotion-video/package-lock.json
+
+      - name: System packages (FFmpeg, Pango, Chromium libs, MS core fonts)
+        if: env.PEXELS_API_KEY != ''
+        run: |
+          sudo apt-get update
+          echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+          sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config libglib2.0-dev \
+            libnss3 libatk-bridge2.0-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 \
+            libpangocairo-1.0-0 libgtk-3-0 ttf-mscorefonts-installer
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+
+      - name: Install
+        if: env.PEXELS_API_KEY != ''
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          cd remotion-video && npm ci
+
+      - name: Render FACTS short (no upload)
+        if: env.PEXELS_API_KEY != ''
+        run: python scripts/offline_facts_render.py
+
+      - name: Check output
+        if: env.PEXELS_API_KEY != ''
+        run: |
+          python - <<'EOF'
+          import glob, json, subprocess, sys
+          videos = sorted(glob.glob("sessions/offline_test/interactive_short_*.mp4"))
+          assert videos, "no video rendered"
+          v = videos[-1]
+          probe = json.loads(subprocess.run(
+              ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", v],
+              capture_output=True, text=True, check=True).stdout)
+          video = next(s for s in probe["streams"] if s["codec_type"] == "video")
+          duration = float(probe["format"]["duration"])
+          print(f"{v}: {video['width']}x{video['height']}, {duration:.1f}s, audio={any(s['codec_type']=='audio' for s in probe['streams'])}")
+          assert (video["width"], video["height"]) == (1080, 1920), "wrong resolution"
+          assert 15 < duration < 90, "unexpected duration"
+          assert any(s["codec_type"] == "audio" for s in probe["streams"]), "no audio track"
+          meta = json.load(open(v + ".meta.json", encoding="utf-8"))
+          assert "SPOILER" in meta["youtube"]["description"], "answer missing from description"
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        if: always() && env.PEXELS_API_KEY != ''
+        with:
+          name: facts-render
+          path: |
+            sessions/offline_test/*.mp4
+            sessions/offline_test/*.json
+          retention-days: 7

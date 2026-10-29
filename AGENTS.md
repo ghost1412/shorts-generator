@@ -106,7 +106,7 @@ python gui_app.py
 
 | File Path | Functional Role |
 | :--- | :--- |
-| `main.py` | Primary CLI entry point & global pipeline orchestrator |
+| `main.py` | CLI entry point: argument parsing, quality presets and dispatch to `engine/modes/` |
 | `gui_app.py` | Single-window 3-column CustomTkinter Desktop Studio application |
 | `engine/media_gen.py` | Stock media downloader (Pexels API fallback), AI image generation |
 | `engine/video_gen.py` | FFmpeg filters, face-tracking EMA, silence removal (`--tighten`) |
@@ -114,7 +114,7 @@ python gui_app.py
 | `engine/voice_gen.py` | Text-to-Speech synthesizer (ElevenLabs / EdgeTTS) |
 | `engine/script_gen.py` | Multi-LLM prompt orchestration (Gemini -> Ollama -> HuggingFace fallback) |
 | `engine/pipeline.py` | Shared helpers used by `main.py` and mode pipelines (status reporting, SRT export, voice maps) |
-| `engine/modes/*.py` | Standalone pipelines split out of `main.py`, each with `run(args, target_bitrate, target_preset)`: `clip_extract`, `music`, `explainer`, `photo_reel`, `video_filter` |
+| `engine/modes/*.py` | Pipelines, each with `run(args, target_bitrate, target_preset)`: `generate` (idea-to-video, all content modes), `clip_extract`, `music`, `explainer`, `photo_reel`, `video_filter` |
 | `engine/speaker_focus.py` | Active-speaker shot planning for `--layout active` |
 | `tests/` | Offline pytest suite (`python -m pytest`), run in CI on every push/PR |
 | `remotion-video/src/` | React video components & animated subtitle spring physics |

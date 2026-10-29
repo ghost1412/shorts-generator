@@ -26,7 +26,7 @@ _Last updated: 2026-10-29_
 ### Shared hot-spot files (coordinate before big edits)
 | File | Why it's risky |
 |---|---|
-| `main.py` (~1.6k lines, module-level script) | Generate-path dispatch, background selection and the Remotion call live here; standalone pipelines are in `engine/modes/` |
+| `engine/modes/generate.py` (~1.3k lines) | The idea-to-video path the live channel runs: per-mode script, backgrounds, Remotion call, metadata, upload |
 | `engine/script_gen.py` | All LLM prompts and the provider fallback chain (Gemini → Ollama → HuggingFace) |
 | `remotion-video/src/ShortFlow.tsx` | Single 1.6k-line composition used by every Remotion mode |
 | `.github/workflows/daily_generate.yml` | Runs the live channel |
@@ -40,6 +40,7 @@ _Last updated: 2026-10-29_
 | Tests | `python -m pytest` (offline, ~1 s) |
 | Python syntax | `python -m py_compile main.py engine/*.py engine/modes/*.py webui.py mcp_server.py` |
 | Remotion types | `cd remotion-video && npx tsc --noEmit -p .` (must be 0 errors - CI enforces it) |
+| CI | `tests.yml` (pytest + tsc + lint, every push/PR), `e2e.yml` (real FACTS render) |
 | Full FACTS render **without an LLM key** | `python scripts/offline_facts_render.py` → `sessions/offline_test/*.mp4` (needs `PEXELS_API_KEY`, Node, FFmpeg) |
 | Real FACTS render | `python main.py --mode FACTS --use_remotion --skip-upload` (needs an LLM key) |
 | Inspect frames | `ffmpeg -ss 9 -i <video>.mp4 -frames:v 1 frame.jpg` |
@@ -113,9 +114,9 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 | | Task | Owner | Notes |
 |---|---|---|---|
 | [x] | F1. Bounded dependency versions in `requirements*.txt` | Claude | Lower bound = known-good, cap below next major; yt-dlp uncapped |
-| [x] | F2. Pre-flight in `daily_generate.yml`: engine imports + pytest | Claude | No test render yet (needs Remotion + Pexels in CI) |
+| [x] | F2. Pre-flight in `daily_generate.yml` (imports + pytest) and `e2e.yml`: real FACTS render on engine changes + weekly, output checked with ffprobe | Claude | Needs `PEXELS_API_KEY` secret (already used by the channel) |
 | [~] | F3. `tests/` pytest suite (31 tests) + `tests.yml` on 3.11/3.12 + Remotion tsc | Claude | Next: tests for social_gen metadata, remotion_renderer props, clip scoring |
-| [~] | F4. Split `main.py`: standalone pipelines moved to `engine/modes/`, shared helpers to `engine/pipeline.py` (2.4k -> 1.6k lines) | Claude | Remaining: the generate path (script -> voice -> backgrounds -> render -> metadata -> upload) is still one module-level script with per-mode if/elif chains |
+| [x] | F4. Split `main.py` (2.4k -> 270 lines: args + dispatch). Idea-to-video path in `engine/modes/generate.py`, standalone pipelines in `engine/modes/`, shared helpers in `engine/pipeline.py` | Claude | Next: break `generate.run` per mode (it still has per-mode if/elif chains and `'x' in locals()` checks) |
 | [ ] | F5. Merge `.env.example` / `env.example` (only `env.example` is tracked) | | |
 
 ---
