@@ -1,6 +1,7 @@
 import {
   Audio,
   OffthreadVideo,
+  Html5Video, // supports `loop` (OffthreadVideo does not)
   Img,
   useCurrentFrame,
   useVideoConfig,
@@ -904,7 +905,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           {/* Top Panel (Option A) */}
           <div style={{ flex: 1, position: "relative", overflow: "hidden", borderBottom: "8px solid #ff007f" }}>
             {isVideoAsset(thisOrThat.imageA) ? (
-              <OffthreadVideo
+              <Html5Video
                 src={getAssetUrl(thisOrThat.imageA)}
                 muted
                 loop
@@ -920,7 +921,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             <div
               style={{
                 position: "absolute",
-                bottom: "40px",
+                bottom: "150px", // clear of the centre VS badge
                 left: "50%",
                 transform: "translateX(-50%)",
                 background: "rgba(0, 0, 0, 0.7)",
@@ -948,7 +949,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           {/* Bottom Panel (Option B) */}
           <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
             {isVideoAsset(thisOrThat.imageB) ? (
-              <OffthreadVideo
+              <Html5Video
                 src={getAssetUrl(thisOrThat.imageB)}
                 muted
                 loop
@@ -1274,7 +1275,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           }}
         >
           {isVideoAsset(avatarUrl) ? (
-            <OffthreadVideo
+            <Html5Video
               src={getAssetUrl(avatarUrl)}
               muted
               loop

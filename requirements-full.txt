@@ -7,11 +7,11 @@
 # For NVIDIA GPU transcription, install the CUDA build of torch first:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu124
 -r requirements.txt
-torch
-stable-ts
-opencv-python
-librosa
-gtts
-customtkinter
-flask
+torch>=2.4,<3
+stable-ts>=2.17,<3
+opencv-python>=4.10,<5
+librosa>=0.10,<0.12
+gtts>=2.5,<3
+customtkinter>=5.2,<7
+flask>=3.0,<4
 gradio>=5,<6

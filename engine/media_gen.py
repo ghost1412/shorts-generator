@@ -41,6 +41,17 @@ def extract_keywords(text):
     keywords = [w for w in words if w not in stopwords and len(w) > 3]
     return keywords[:3] # Return top 3 keywords
 
+def pick_video_file(video_files):
+    """
+    Pexels download link: exactly 1080 wide if available, otherwise the sharpest file up to
+    1440 wide (4K is slow to download with no visible gain at 1080x1920), otherwise the smallest larger one.
+    """
+    sized = [vf for vf in video_files if vf.get("width") and vf.get("link")]
+    exact = [vf for vf in sized if vf["width"] == 1080]
+    under = sorted((vf for vf in sized if vf["width"] <= 1440), key=lambda vf: vf["width"], reverse=True)
+    over = sorted((vf for vf in sized if vf["width"] > 1440), key=lambda vf: vf["width"])
+    return (exact or under or over or video_files or [{}])[0].get("link")
+
 def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4", orientation="portrait", custom_bg=None, force_literal=False):
     """
     downloads a background video based on keywords from the fact or custom background media.
@@ -95,14 +106,7 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
         video_data = random.choice(videos)
         video_files = video_data.get("video_files", [])
         
-        # Prefer exactly 1080 wide; otherwise the sharpest file up to 1440 wide (skip 4K - slow to
-        # download, no visible gain at 1080x1920); otherwise the smallest larger one.
-        sized = [vf for vf in video_files if vf.get("width") and vf.get("link")]
-        exact = [vf for vf in sized if vf["width"] == 1080]
-        under = sorted((vf for vf in sized if vf["width"] <= 1440), key=lambda vf: vf["width"], reverse=True)
-        over = sorted((vf for vf in sized if vf["width"] > 1440), key=lambda vf: vf["width"])
-        pick = (exact or under or over or video_files or [{}])[0]
-        best_link = pick.get("link")
+        best_link = pick_video_file(video_files)
             
         if best_link:
             print(f"Downloading video: {best_link}")

@@ -185,27 +185,39 @@ def plan_speaker_shots(video_path, start, end, ffmpeg_exe=None):
             decisions.append(None)  # silence / no faces: keep whatever is on screen
 
     # 2. Shots with minimum dwell and switch persistence
-    duration = end - start
+    shots = shots_from_decisions([s["t"] for s in samples], decisions, end - start)
+    for shot in shots:
+        shot["cx"] = cx
+    return shots
+
+
+def shots_from_decisions(times, decisions, duration, min_dwell=MIN_DWELL, switch_persist=SWITCH_PERSIST):
+    """
+    Turn per-sample speaker decisions ("L" / "R" / "split" / None = no opinion) into shots.
+    Every shot lasts at least min_dwell seconds, and a new target must be seen consistently
+    for switch_persist seconds before the camera cuts to it.
+    """
     first = next((d for d in decisions if d), "split")
     shots = [{"start": 0.0, "target": first}]
     candidate, candidate_since = None, None
-    for s, d in zip(samples, decisions):
+    for t, d in zip(times, decisions):
         current = shots[-1]
         if d is None or d == current["target"]:
             candidate = None
             continue
         if d != candidate:
-            candidate, candidate_since = d, s["t"]
-        if s["t"] - current["start"] >= MIN_DWELL and s["t"] - candidate_since >= SWITCH_PERSIST:
-            shots.append({"start": candidate_since, "target": d})
-            candidate = None
+            candidate, candidate_since = d, t
+        if t - candidate_since >= switch_persist:
+            cut = max(candidate_since, current["start"] + min_dwell)
+            if cut <= t:
+                shots.append({"start": cut, "target": d})
+                candidate = None
 
     # Merge a too-short final shot into the previous one
-    if len(shots) > 1 and duration - shots[-1]["start"] < MIN_DWELL:
+    if len(shots) > 1 and duration - shots[-1]["start"] < min_dwell:
         shots.pop()
     for i, shot in enumerate(shots):
         shot["end"] = shots[i + 1]["start"] if i + 1 < len(shots) else duration
-        shot["cx"] = cx
     return shots
 
 

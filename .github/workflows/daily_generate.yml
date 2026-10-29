@@ -126,7 +126,12 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements.txt -r requirements-dev.txt
+
+    - name: Pre-flight checks (fail fast before spending a run)
+      run: |
+        python -c "import engine.script_gen, engine.voice_gen, engine.media_gen, engine.remotion_renderer, engine.social_gen, engine.video_gen, engine.utils"
+        python -m pytest -q
 
     - name: Setup Environment Variables (Linux)
       if: runner.os == 'Linux'
