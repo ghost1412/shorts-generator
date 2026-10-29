@@ -127,3 +127,6 @@ python gui_app.py
    * Maintain the Multi-LLM fallback order: **Gemini API -> Local Ollama -> HuggingFace**.
 3. **Subtitles & Caption Positioning**:
    * Remotion captions use vertical `y_pos` offset defaulting to `1150` for 9:16 vertical resolution (1080x1920).
+4. **Task Board & Parallel Work**:
+   * Open work, workstream ownership, hot-spot files and verification steps live in **[ROADMAP.md](ROADMAP.md)**. Claim a task there before starting.
+   * Verify rendering without an LLM key: `python scripts/offline_facts_render.py`.

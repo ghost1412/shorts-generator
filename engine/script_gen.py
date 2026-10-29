@@ -953,9 +953,9 @@ def get_sub_topic(category, is_explainer=False):
     if category.lower() in sub_topics:
         return random.choice(sub_topics[category.lower()])
     
-    # Fallback to random if not found
-    all_subs = [item for sublist in sub_topics.values() for item in sublist]
-    return random.choice(all_subs)
+    # Unknown category: use it as the topic itself. Picking from every list here used to turn
+    # e.g. "tech" into a bedtime story or an intimacy topic.
+    return category.replace("_", " ")
 
 def generate_wyr(category="general"):
     """

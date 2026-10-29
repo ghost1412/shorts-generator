@@ -1136,6 +1136,10 @@ else:
             category = random.choice(["movies", "pop_culture", "superheroes", "disney", "anime", "video_games"])
         elif mode in ("NEWS", "NEWS_SERIOUS"):
             category = random.choice(["world", "tech", "celebrities", "sports", "science", "politics"])
+        elif mode == "FACTS":
+            # FACTS deliberately states one false claim - keep it away from real people, politics and kids
+            category = random.choice(["science", "space", "animals", "history", "physics", "world",
+                                      "tech", "human_body", "ocean", "ancient_civilizations", "food", "geography"])
         else:
             category = random.choice(categories)
     else:
@@ -1283,7 +1287,7 @@ else:
             else:
                 story_data = generate_story(topic if topic else category)
 
-            if not story_data: sys.exit(0)
+            if not story_data: sys.exit(1)
             
             # Construct script with strategic viral pauses
             full_script = f"{story_data['story']} ... {story_data.get('loop_lead', 'Hit the plus if you want more.')}"
@@ -1375,7 +1379,7 @@ else:
         elif mode == "TREND":
             from engine.script_gen import generate_trend_script
             trend_data = generate_trend_script(category)
-            if not trend_data: sys.exit(0)
+            if not trend_data: sys.exit(1)
             full_script = trend_data.get("script") or trend_data.get("story", "")
             facts_data = []
             print(f"[Log] TREND Data: {trend_data}")
@@ -1513,8 +1517,8 @@ else:
             print(f"[Log] 🚀 UGC Data: {ugc_data}")
     except RuntimeError as e:
         print(f"[Error] Generation failed: {e}")
-        print("[Log] Gracefully skipping this video to maintain channel diversity.")
-        sys.exit(0)
+        print("[Log] Skipping this video - exiting non-zero so the scheduled run is flagged.")
+        sys.exit(1)
 
 print(f"[Log] Full Script: \"{full_script}\"", flush=True)
 
@@ -1569,7 +1573,7 @@ if args.video_id and args.user_id:
 
 if not audio_path or not subs_path:
     print("[Error] Voice generation failed.")
-    sys.exit(0)
+    sys.exit(1)
     
 # 3. Source Media (Dynamic Backgrounds)
 print("[Log] Searching for relevant background videos...")
@@ -1689,7 +1693,7 @@ elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
     num_targets = game_assets["num_targets"]
     if not target_path or not os.path.exists(target_path):
         print(f"[Error] Failed to load {target_name} sticker image.", flush=True)
-        sys.exit(0)
+        sys.exit(1)
     static_bg_path = os.path.join(session_dir, "bg_puzzle_scenic_static.png")
     scenic_queries = [
         "scenic landscape rice terraces nature mountains",
@@ -1731,7 +1735,7 @@ elif mode == "ODD_ONE_OUT":
     target_name = game_assets["target_name"]
     if not target_path:
         print(f"[Error] Failed to download {target_name} image for ODD_ONE_OUT.", flush=True)
-        sys.exit(0)
+        sys.exit(1)
 elif mode in ("NEWS", "NEWS_SERIOUS"):
     search_query = news_data.get('search_term', 'breaking news broadcast') if 'news_data' in locals() else 'breaking news broadcast'
     bg_filename = os.path.join(session_dir, "bg_news.mp4")
@@ -1912,7 +1916,7 @@ else:
 
 if mode not in ["FIND_IT", "FIND_CAT", "ODD_ONE_OUT"] and not any(bg_video_paths):
     print("[Error] Failed to download any background videos.")
-    sys.exit(0)
+    sys.exit(1)
 
 if args.video_id and args.user_id:
     report_status(args.video_id, args.user_id, "In-Progress Video", "Processing", None, mode)
