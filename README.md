@@ -167,6 +167,9 @@ curl localhost:8080/v1/jobs/a1b2c3 -H "Authorization: Bearer change-me"   # stat
 # 1. Podcast Shorts that cut to whoever is talking (stacked split when unsure) + silence removal
 py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_mode shorts --layout active --tighten --use_remotion
 
+# 1b. Prompt-based clipping: only the moments that match your request (LLM search, keyword fallback offline)
+py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --find "where they discuss pricing" --clip_count 3 --use_remotion
+
 # 2. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
 py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion
 

@@ -1349,7 +1349,7 @@ def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     kept.sort(key=lambda x: float(x['start']))
     return kept
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1362,7 +1362,16 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
 
     highlights_cache_path = os.path.join(output_dir, "highlights.json")
     highlights = None
-    if use_cache and os.path.exists(highlights_cache_path):
+    if find_query:
+        from engine.find_moments import find_moments, llm_ask
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            segments = json.load(f).get('segments', [])
+        print(f"[Log] Searching transcript for: {find_query!r}")
+        highlights = find_moments(segments, find_query, clip_count=clip_count,
+                                  target_duration=target_duration or 45, min_duration=min_duration, ask=llm_ask())
+        if not highlights:
+            raise RuntimeError(f"No moments matching {find_query!r} were found in the transcript.")
+    elif use_cache and os.path.exists(highlights_cache_path):
         try:
             with open(highlights_cache_path, "r", encoding="utf-8") as f:
                 highlights = json.load(f)

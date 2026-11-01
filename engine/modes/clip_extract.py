@@ -56,7 +56,8 @@ def run(args, target_bitrate, target_preset):
         use_audio_detect=args.use_audio_detect, style=args.style,
         user_context=args.user_context, style_context=args.style_context,
         smart_crop=args.smart_crop, tighten=args.tighten, use_cache=args.use_cache,
-        chapters_path=chapters_path, use_llm_scoring=True
+        chapters_path=chapters_path, use_llm_scoring=True,
+        find_query=getattr(args, 'find', None),
     )
     
     # 🟢 Print the beautiful new score table

@@ -59,6 +59,7 @@ class ClipRequest(Common):
     layout: Literal["single", "split", "active"] = "single"
     smart_crop: bool = True
     tighten: bool = False
+    find: Optional[str] = Field(None, description='Only clip moments matching this request, e.g. "where they discuss pricing"')
 
 
 def _common_args(r: Common):
@@ -84,6 +85,8 @@ def create_clips(r: ClipRequest):
     args = ["--source_video", r.source_video, "--extract_mode", "shorts", "--clip_count", str(r.clip_count),
             "--target_duration", str(r.target_duration), "--layout", r.layout]
     args += [f for f, on in (("--smart_crop", r.smart_crop), ("--tighten", r.tighten)) if on]
+    if r.find:
+        args += ["--find", r.find]
     return _accepted(manager.submit(args + _common_args(r), r.webhook_url))
 
 
