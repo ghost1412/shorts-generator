@@ -59,3 +59,6 @@ docs/HANDOFF.md
 
 # Local MCP client config (absolute paths)
 .mcp.json
+
+# Bundled background music ships with the package
+!music/*.mp3
