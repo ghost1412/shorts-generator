@@ -129,7 +129,7 @@ def parse_args():
     parser.add_argument("--youtube_secrets_file", help="Path to custom YouTube client_secrets.json file.")
 
     # Voice, Production & Aspect Ratio Flags
-    parser.add_argument("--tts_provider", choices=["auto", "elevenlabs", "voicestudio", "edgetts", "local"], default="auto", help="Specify Text-to-Speech synthesis provider.")
+    parser.add_argument("--tts_provider", choices=["auto", "elevenlabs", "voicestudio", "edgetts", "local", "kokoro"], default="auto", help="Specify Text-to-Speech synthesis provider.")
     parser.add_argument("--clone_voice", help="Path to custom audio sample file (.wav, .mp3) for zero-shot voice cloning.")
     parser.add_argument("--aspect_ratio", choices=["9:16", "16:9", "1:1", "4:5"], default="9:16", help="Select output video aspect ratio (default 9:16 vertical).")
     parser.add_argument("--target_lang", help="Target language code for automatic video translation and dubbing (e.g. es, hi, de, fr, ja, pt).")

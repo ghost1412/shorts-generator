@@ -493,7 +493,9 @@ def run(args, target_bitrate, target_preset):
         voice_name=selected_voice, 
         rate=selected_rate, 
         pitch=selected_pitch, 
-        add_cta=add_cta
+        add_cta=add_cta,
+        provider=getattr(args, "tts_provider", None),
+        clone_voice=getattr(args, "clone_voice", None)
     )
 
     if args.video_id and args.user_id:

@@ -30,6 +30,6 @@ CANNED = {
 sg.get_llm_response = lambda prompt, **kw: json.dumps(CANNED)
 
 os.makedirs("sessions/offline_test", exist_ok=True)
-sys.argv = ["main.py", "--mode", "FACTS", "--category", "history", "--use_remotion",
+sys.argv = ["main.py", *os.environ.get("OFFLINE_EXTRA_ARGS", "").split(), "--mode", "FACTS", "--category", "history", "--use_remotion",
             "--caption_style", "HORMOZI", "--skip-upload", "--session_dir", "sessions/offline_test"]
 runpy.run_path(os.path.join(ROOT, "main.py"), run_name="__main__")

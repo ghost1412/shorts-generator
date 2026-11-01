@@ -261,6 +261,15 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
         except Exception as e:
             print(f"[Warning] VoiceStudio local synthesis failed ({e}). Falling back to next provider.")
 
+    # 1b. Kokoro: free local TTS (pip install kokoro-onnx soundfile)
+    if sel_provider == "kokoro":
+        try:
+            from engine.kokoro_tts import generate_voice_kokoro
+            text_k = clean_for_tts(text) + (" Comment your answer now." if add_cta else "")
+            return generate_voice_kokoro(text_k, output_audio, output_subs, voice_name=voice_name)
+        except Exception as e:
+            print(f"[Warning] Kokoro failed ({e}). Falling back to next provider.")
+
     # 2. Route to ElevenLabs if API key available
     if sel_provider in ["elevenlabs", "auto"] and os.getenv("ELEVENLABS_API_KEY"):
         try:
@@ -370,7 +379,14 @@ def generate_voice(text, output_audio="assets/voice.mp3", output_subs="assets/su
     t.join()
     
     if result["error"]:
-        print(f"[Warning] edge-tts failed ({result['error']}). Attempting gTTS fallback...")
+        print(f"[Warning] edge-tts failed ({result['error']}). Trying local Kokoro, then gTTS...")
+        try:
+            from engine import kokoro_tts
+            if kokoro_tts.is_available():  # only when already installed + downloaded; never auto-downloads here
+                return kokoro_tts.generate_voice_kokoro(clean_for_tts(text), output_audio, output_subs,
+                                                        voice_name=voice_name, download=False)
+        except Exception as ke:
+            print(f"[Warning] Kokoro fallback failed ({ke}).")
         try:
             from gtts import gTTS
             tts = gTTS(text=clean_for_tts(text), lang='en')

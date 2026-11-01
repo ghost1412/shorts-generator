@@ -105,7 +105,7 @@ _Honest take: the paid tools have a nicer editor and scheduling. ShortsFlow wins
 
 | Capability | Supported Technologies & Flags |
 | :--- | :--- |
-| 🎙️ **Voice Synthesis & Cloning** | Zero-Shot Voice Cloning (`--clone_voice "sample.wav"`), VoiceStudio Local REST (`--tts_provider voicestudio`), ElevenLabs, EdgeTTS |
+| 🎙️ **Voice Synthesis & Cloning** | Local Kokoro TTS (`--tts_provider kokoro`, no key), Zero-Shot Voice Cloning (`--clone_voice "sample.wav"`), VoiceStudio Local REST (`--tts_provider voicestudio`), ElevenLabs, EdgeTTS |
 | 📐 **Aspect Ratios** | `9:16` (Vertical), `16:9` (Landscape), `1:1` (Square), `4:5` (Social Feed) via `--aspect_ratio` |
 | 🔊 **Audio Mastering & SFX** | Auto SFX (`whoosh`, `pop`, `riser`, `boom`), Dynamic BGM Audio Ducking (`--auto_ducking`), Studio Master Filter (`--enhance_audio`) |
 | 🎥 **Motion & Visual Filters** | Dynamic Camera Push-In Zoom (`--enable_zoom`), 12 Color Grade Presets (`--video_filter cyberpunk`, `kurosawa`, `teal_orange`) |
@@ -197,6 +197,9 @@ py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --find "whe
 
 # 1c. Emoji pop on keywords in HORMOZI/BOUNCE captions (needs an emoji font; included in the Docker image)
 py main.py --source_video "URL" --use_remotion --caption_style HORMOZI --caption_emoji
+
+# 1d. Fully local, zero-cost voice: Kokoro TTS (no API key; ~120 MB model downloads once)
+py main.py --mode FACTS --category "space" --tts_provider kokoro --voice af_heart --use_remotion
 
 # 2. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
 py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion
