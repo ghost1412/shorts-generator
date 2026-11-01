@@ -7,6 +7,7 @@
 **Or generate from an idea** with 30+ formats (facts quizzes, explainers, top-5 lists, stories) and drive everything from a browser UI, the CLI, Docker, Colab or an MCP agent.
 
 <div align="center">
+  <img src="demos/demo_clipping_active.gif" width="220" alt="Podcast clip: the crop cuts to whoever is speaking" />
   <img src="demos/demo_spot_the_lie.gif" width="220" alt="Spot the Lie short rendered by ShortsFlow" />
   <img src="demos/demo_short.gif" width="220" alt="Viral Short Preview" />
   <img src="demos/demo_facts.gif" width="220" alt="AI Facts Preview" />
@@ -30,6 +31,15 @@
 </p>
 
 <p align="center"><b>⭐ If ShortsFlow saves you an Opus Clip subscription, please star the repo - it helps more creators find it.</b></p>
+
+---
+
+## ✂️ Clipping demo: the crop follows whoever is talking
+
+The first GIF above is a real run of `py main.py --source_video interview.mp4 --layout active --use_remotion` on a 4:3, 480p two-person
+interview: the shot cuts to the speaker, found by voice pitch plus face detection, and Whisper word captions are burned in.
+Source footage: [Aida Thomas Interviews Nancy Many - Part 1](https://commons.wikimedia.org/wiki/File:Aida_Thomas_Interviews_Nancy_Many_-_Part_1.ogv)
+by Aida Thomas, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0); the demo GIF is a derivative and is shared under the same licence.
 
 ---
 
