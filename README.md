@@ -196,6 +196,9 @@ py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_m
 # 1b. Prompt-based clipping: only the moments that match your request (LLM search, keyword fallback offline)
 py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --find "where they discuss pricing" --clip_count 3 --use_remotion
 
+# 1a. Cut the ums and uhs (and silences) out of clips
+py main.py --source_video "URL" --tighten --remove_fillers --use_remotion
+
 # 1c. Emoji pop on keywords in HORMOZI/BOUNCE captions (needs an emoji font; included in the Docker image)
 py main.py --source_video "URL" --use_remotion --caption_style HORMOZI --caption_emoji
 

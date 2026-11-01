@@ -683,7 +683,7 @@ def compress_transcript(segments, window=15.0):
     merged.append(curr)
     return merged
 
-def transcribe_video(video_path, output_dir):
+def transcribe_video(video_path, output_dir, keep_fillers=False):
     """
     Lazy-loads Whisper and transcribes the video.
     Returns path to transcript.json.
@@ -714,7 +714,11 @@ def transcribe_video(video_path, output_dir):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # 🟢 UPGRADE: 'medium' model provides significantly better punctuation and nuance
     model = whisper.load_model("medium", device=device) 
-    result = model.transcribe(video_path, language="en")
+    if keep_fillers:
+        from engine.fillers import WHISPER_PROMPT
+        result = model.transcribe(video_path, language="en", initial_prompt=WHISPER_PROMPT)
+    else:
+        result = model.transcribe(video_path, language="en")
     
     # Save the full result with source metadata
     print(f"[Log] Saving transcript to {transcript_path}...")
@@ -1349,11 +1353,11 @@ def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     kept.sort(key=lambda x: float(x['start']))
     return kept
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
-    transcript_path = transcribe_video(video_path, output_dir)
+    transcript_path = transcribe_video(video_path, output_dir, keep_fillers=keep_fillers)
 
     # Load YouTube chapters if available
     chapters = []

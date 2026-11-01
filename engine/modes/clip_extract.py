@@ -58,6 +58,7 @@ def run(args, target_bitrate, target_preset):
         smart_crop=args.smart_crop, tighten=args.tighten, use_cache=args.use_cache,
         chapters_path=chapters_path, use_llm_scoring=True,
         find_query=getattr(args, 'find', None),
+        keep_fillers=getattr(args, 'remove_fillers', False),
     )
     
     # 🟢 Print the beautiful new score table
@@ -89,6 +90,24 @@ def run(args, target_bitrate, target_preset):
     # Filter signals based on user flags
     final_interest = interest_points if args.smart_crop else None
     final_silence = silence_intervals if args.tighten else None
+    if getattr(args, "remove_fillers", False):
+        from engine.fillers import remove_fillers
+        with open(transcript_path, 'r', encoding='utf-8') as f:
+            t_segments = json.load(f).get('segments', [])
+        total = max([s.get('end', 0) for s in t_segments] or [0]) + 1.0
+        rms = None
+        try:  # loudness envelope (100 fps) so cuts land on the real "um", not Whisper's rough timestamp
+            import librosa
+            from engine.analysis import extract_audio_mono
+            audio_path = os.path.join(session_dir, "audio_mono.wav")
+            if not os.path.exists(audio_path):
+                audio_path = extract_audio_mono(args.source_video, session_dir)
+            audio, _sr = librosa.load(audio_path, sr=16000)
+            rms = librosa.feature.rms(y=audio, frame_length=640, hop_length=160)[0]
+        except Exception as e:
+            print(f"[Warning] Could not refine filler cuts from audio ({e}); using Whisper timestamps.")
+        final_silence, n_fillers = remove_fillers(silence_intervals if args.tighten else [], t_segments, total, rms=rms)
+        print(f"[Log] Removing {n_fillers} filler word(s) (um/uh/er...)")
     
     if not highlights:
         print("[Error] No highlights identified.")
@@ -120,7 +139,8 @@ def run(args, target_bitrate, target_preset):
         caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos,
         video_filter=active_video_filter, user_context=args.user_context,
         max_workers=getattr(args, 'max_workers', None),
-        layout=args.layout
+        layout=args.layout,
+        remove_fillers=getattr(args, 'remove_fillers', False)
     )
     
     # Brand kit: logo watermark, @handle and end card

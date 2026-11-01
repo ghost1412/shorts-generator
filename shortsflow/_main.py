@@ -69,6 +69,7 @@ def parse_args():
     parser.add_argument("--logo", help="Logo PNG watermark for finished clips.")
     parser.add_argument("--handle", help="@handle shown next to the logo and on the end card.")
     parser.add_argument("--end_card", help="Text for a closing end card (last 2 seconds), e.g. 'Follow for more'.")
+    parser.add_argument("--remove_fillers", action="store_true", help="Cut \"um\" / \"uh\" / \"er\" out of clips (uses Whisper word timestamps; combines with --tighten).")
     parser.add_argument("--find", help="Clip only moments matching this request, e.g. \"where they discuss pricing\" (clipping mode).")
     parser.add_argument("--user_context", help="Extra context to guide AI extraction (specific scenes/styles).")
     parser.add_argument("--style_context", help="Context for editing style and pacing (e.g. 'fast cuts', 'cinematic').")

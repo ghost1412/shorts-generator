@@ -253,7 +253,7 @@ def insert_broll_cutaways(clip, silence_intervals, broll_dir, fps=30):
         
     return clip
 
-def tighten_clip(clip, keep_intervals, mode="cut", speed=None):
+def tighten_clip(clip, keep_intervals, mode="cut", speed=None, padding=0.08, min_gap=0.25):
     """
     Tightens a clip by removing non-keep intervals (Auto-Editor style).
     Includes interval merging, safety padding, and micro-cut filtering to prevent flickering/blinking artifacts.
@@ -264,8 +264,6 @@ def tighten_clip(clip, keep_intervals, mode="cut", speed=None):
     sorted_intervals = sorted(keep_intervals, key=lambda x: x[0])
     
     # 2. Add safety padding (80ms buffer) and merge close gaps (< 250ms)
-    padding = 0.08
-    min_gap = 0.25
     min_clip_duration = 0.25
 
     padded_intervals = []
@@ -2573,7 +2571,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single"):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2792,7 +2790,9 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 
                 if local_silence:
                     print(f"[Log] Tightening Short {i+1} (Removing silences)")
-                    sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None)
+                    # Filler words are short (~0.3 s): the default 80 ms padding / 250 ms gap merge would stitch them back in
+                    fine = {"padding": 0.02, "min_gap": 0.06} if remove_fillers else {}
+                    sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None, **fine)
                     # 🟢 NEW: Insert B-roll over silences for visual retention
                     sub = insert_broll_cutaways(sub, local_silence, broll_dir="assets/broll")
             
