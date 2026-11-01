@@ -229,3 +229,57 @@ def prepare_edited_source(source, session_dir, phrases=None, edit_path=None, kee
     with open(os.path.join(session_dir, "transcript.json"), "w", encoding="utf-8") as f:
         json.dump(remapped, f, indent=2)
     return out_path
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Per-clip tightening for the Remotion path (--tighten / --remove_fillers): cut the extracted segment to its keep
+# intervals and give Remotion a clip-local transcript whose word times match the shortened clip.
+# ---------------------------------------------------------------------------------------------------------------
+
+def plan_keeps(local, duration, padding=0.08, min_gap=0.25, min_len=0.25):
+    """Pad each keep interval, drop slivers and merge near gaps (same rules as video_gen.tighten_clip)."""
+    padded = []
+    for s, e in sorted(local):
+        ps, pe = max(0.0, s - padding), min(duration, e + padding)
+        if pe - ps >= min_len:
+            padded.append((ps, pe))
+    merged = []
+    for s, e in padded:
+        if merged and s - merged[-1][1] <= min_gap:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+    return merged
+
+
+def clip_transcript(transcript_data, start, end, keeps):
+    """Transcript limited to [start, end] with times relative to the clip, then moved onto the tightened timeline."""
+    duration = end - start
+    shifted = {"segments": []}
+    for seg in transcript_data.get("segments", []):
+        words = [dict(w, start=float(w["start"]) - start, end=float(w["end"]) - start)
+                 for w in seg.get("words") or [] if float(w["end"]) > start and float(w["start"]) < end]
+        if words:
+            shifted["segments"].append(dict(seg, words=words, start=words[0]["start"], end=words[-1]["end"]))
+    cut = [(a, b) for a, b in zip([0.0] + [k[1] for k in keeps], [k[0] for k in keeps] + [duration]) if b - a > 1e-6]
+    return remap_transcript(shifted, cut)
+
+
+def tighten_segment(task_path, hi, silence_intervals, transcript_data, out_dir, idx, padding=0.08, min_gap=0.25):
+    """
+    Cut segment `task_path` (source range hi['start']..hi['end']) down to the keep intervals in `silence_intervals`
+    (source seconds). Returns (video_path, transcript_path, duration), or None when there is nothing worth cutting.
+    """
+    import os
+    start, end = float(hi["start"]), float(hi["end"])
+    local = [(max(s, start) - start, min(e, end) - start) for s, e in silence_intervals if min(e, end) > max(s, start)]
+    keeps = plan_keeps(local, end - start, padding=padding, min_gap=min_gap)
+    kept = sum(b - a for a, b in keeps)
+    if not keeps or (end - start) - kept < 0.15:
+        return None
+    video = os.path.join(out_dir, f"seg_{idx}_tight.mp4")
+    render_edited_video(task_path, keeps, video, out_dir)
+    sub = os.path.join(out_dir, f"transcript_clip_{idx}.json")
+    with open(sub, "w", encoding="utf-8") as f:
+        json.dump(clip_transcript(transcript_data, start, end, keeps), f)
+    return video, sub, kept

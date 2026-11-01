@@ -1,6 +1,6 @@
 from engine.fillers import carve
 from engine.transcript_edit import (
-    keep_intervals, remap_transcript, render_edited_video,
+    clip_transcript, keep_intervals, plan_keeps, remap_transcript, render_edited_video, tighten_segment,
     PAD_END, PAD_START, cut_spans, export_text, flatten_words, norm, spans_from_edit, spans_from_phrases,
 )
 
@@ -114,3 +114,43 @@ def test_render_edited_video_cuts_audio_and_video(tmp_path):
     probe = subprocess.run([ff, "-i", str(out), "-map", "0:a", "-f", "null", "-"], capture_output=True, text=True).stderr
     h, m, s = re.findall(r"time=(\d+):(\d+):([\d.]+)", probe)[-1]
     assert abs(int(h) * 3600 + int(m) * 60 + float(s) - 4.0) < 0.3  # the audio track is cut too, not just the video
+
+
+def test_plan_keeps_pads_merges_and_drops_slivers():
+    keeps = plan_keeps([(1.0, 2.0), (2.2, 3.0), (5.0, 5.02), (7.0, 8.0)], 10.0, padding=0.1, min_gap=0.25)
+    assert keeps == [(0.9, 3.1), (6.9, 8.1)]  # first two merge once padded, the 0.02 s sliver is dropped
+
+
+def test_clip_transcript_is_clip_relative_and_retimed():
+    data = {"segments": SEGMENTS}
+    # clip = 0.9..3.6 of the source; keep 0-0.6 (basically/you) and 1.5-2.7 (cats are ... great) in clip time
+    out = clip_transcript(data, 0.9, 3.6, [(0.0, 0.6), (1.5, 2.7)])
+    words = [(w["word"].strip(), w["start"]) for s in out["segments"] for w in s["words"]]
+    assert words[0][0] == "you" and words[0][1] == 0.1
+    assert [w for w, _ in words] == ["you", "know,", "you", "know", "great."]  # cats/are sit in the cut gap 0.6-1.5
+    assert words[2][1] == 0.6  # "you" (clip time 1.5) moves up by the 0.9 s gap
+    assert all(t >= 0 for _, t in words)
+    times = [t for s in out["segments"] for w in s["words"] for t in (w["start"], w["end"])]
+    assert times == sorted(times)
+
+
+def test_tighten_segment_cuts_video_and_writes_retimed_transcript(tmp_path):
+    import json
+    import shutil
+    import subprocess
+    import pytest
+    ff = shutil.which("ffmpeg")
+    if not ff:
+        pytest.skip("ffmpeg not installed")
+    seg = tmp_path / "seg_0.mp4"
+    subprocess.run([ff, "-y", "-f", "lavfi", "-i", "testsrc=size=160x120:rate=25:duration=3.6",
+                    "-f", "lavfi", "-i", "sine=frequency=440:duration=3.6", "-shortest", str(seg)],
+                   check=True, capture_output=True)
+    hi = {"start": 0.0, "end": 3.6}
+    res = tighten_segment(str(seg), hi, [(0.0, 1.0), (2.5, 3.6)], {"segments": SEGMENTS}, str(tmp_path), 0,
+                          padding=0.0, min_gap=0.0)
+    video, subs, dur = res
+    assert abs(dur - 2.1) < 0.01
+    words = [w["word"].strip() for s in json.load(open(subs))["segments"] for w in s["words"]]
+    assert "cats" not in words and "So" in words  # 1.6-2.0 was in the cut gap
+    assert tighten_segment(str(seg), hi, [(0.0, 3.6)], {"segments": SEGMENTS}, str(tmp_path), 1) is None

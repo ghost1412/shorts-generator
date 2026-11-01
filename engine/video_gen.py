@@ -2754,17 +2754,30 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             if use_remotion:
                 out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
                 print(f"[Log] Rendering Final Short {i+1} via Remotion...")
+                r_subs, r_dur, r_offset = transcript_path, hi['end'] - hi['start'], hi['start']
+                if silence_intervals:  # --tighten / --remove_fillers: cut the segment, retime the captions to match
+                    try:
+                        from engine.transcript_edit import tighten_segment
+                        fine = {"padding": 0.02, "min_gap": 0.06} if remove_fillers else {}
+                        tight = tighten_segment(task_path, hi, silence_intervals, transcript_data,
+                                                os.path.join(output_dir, "temp_segments"), i, **fine)
+                        if tight:
+                            task_path, r_subs, r_dur = tight[0], tight[1], tight[2]
+                            r_offset = 0.0
+                            print(f"[Log] Tightened Short {i+1}: {hi['end'] - hi['start']:.1f}s -> {r_dur:.1f}s")
+                    except Exception as e:
+                        print(f"[Warning] Could not tighten Short {i+1} ({e}); rendering it untightened.")
                 try:
                     from engine.remotion_renderer import render_with_remotion
                     render_with_remotion(
                         audio_path=task_path,
-                        subs_path=transcript_path,
+                        subs_path=r_subs,
                         output_path=out,
                         mode="FACTS",
                         title_text=None,
                         background_paths=[task_path],
-                        duration=hi['end'] - hi['start'],
-                        start_offset=hi['start'],
+                        duration=r_dur,
+                        start_offset=r_offset,
                         caption_style=caption_style,
                         subtitle_y_pos=subtitle_y_pos
                     )
