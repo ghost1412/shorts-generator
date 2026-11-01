@@ -123,6 +123,19 @@ def run(args, target_bitrate, target_preset):
         layout=args.layout
     )
     
+    # Brand kit: logo watermark, @handle and end card
+    if any(getattr(args, k, None) for k in ("brand", "logo", "handle", "end_card")) and extracted_files:
+        from engine.branding import apply_brand, load_brand
+        brand = load_brand(getattr(args, "brand", None), getattr(args, "logo", None),
+                           getattr(args, "handle", None), getattr(args, "end_card", None))
+        if brand:
+            print(f"[Log] Applying brand kit to {len(extracted_files)} clip(s)...")
+            for clip_file in extracted_files:
+                try:
+                    apply_brand(clip_file, brand)
+                except Exception as e:
+                    print(f"[Warning] Branding failed for {os.path.basename(clip_file)}: {e}")
+
     # Export SRT for each extracted file
     if getattr(args, 'srt', False) and extracted_files and os.path.exists(transcript_path):
         print(f"[Log] Exporting SRT files for {len(extracted_files)} clips...")

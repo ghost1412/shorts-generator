@@ -174,6 +174,18 @@ python -m engine.publish sessions/extraction_123/metadata.json --platforms tikto
 
 ---
 
+## 🏷️ Brand Kit
+
+Burn your logo, `@handle` and a closing end card into every clip (placed clear of the Shorts/Reels UI):
+
+```bash
+py main.py --source_video "URL" --logo logo.png --handle @mychannel --end_card "Follow for more"
+py main.py --source_video "URL" --brand examples/brand.json      # same thing as a preset file
+python -m engine.branding existing_clip.mp4 --logo logo.png --handle @mychannel   # any finished video
+```
+
+---
+
 ## 💡 Top Command Recipes
 
 ```bash
