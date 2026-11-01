@@ -334,25 +334,26 @@ def detect_motion_intervals(video_path, threshold=0.03, skip_frames=15, candidat
 
 def detect_interest_points(video_path, skip_frames=10, segments=None):
     """
-    Detects the 'center of interest' (e.g., face position) using OpenCV Haar Cascades.
-    Uses IoU-based speaker identity lock so the camera doesn't jump between multiple faces.
+    Detects the 'center of interest' (the speaker's face) with YuNet (Haar fallback).
+    An IoU speaker lock keeps the camera from hopping between faces, and hard cuts in the source
+    (multi-camera podcasts) snap the crop to the new face instead of gliding across an empty wall.
     Returns dict of {timestamp: x_center_percentage}.
     """
     import cv2
+    from engine.speaker_focus import _make_detector, _detect_faces
 
-    face_cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-    face_cascade = cv2.CascadeClassifier(face_cascade_path)
-
+    detector = _make_detector()
     cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     interest_points = {}
 
     frame_idx = 0
     last_x = 0.5
     ema_alpha = 0.15
+    CUT_JUMP = 0.2  # a face this far (fraction of frame width) from the last position is a new shot, not a pan
 
-    # IoU speaker lock — track the primary speaker's bounding box between frames
-    locked_face = None  # (x, y, w, h) in small_frame coordinates
+    # IoU speaker lock - track the primary speaker's bounding box between frames
+    locked_face = None  # (x, y, w, h)
     iou_reset_threshold = 0.10  # Below this, assume new scene and pick largest face
 
     def compute_iou(a, b):
@@ -365,63 +366,64 @@ def detect_interest_points(video_path, skip_frames=10, segments=None):
         return inter / union if union > 0 else 0.0
 
     def pick_primary_face(faces, locked):
+        """(face, is_new_shot)"""
         if len(faces) == 0:
-            return None
+            return None, False
+        largest = max(faces, key=lambda f: f[2] * f[3])
         if locked is None:
-            return max(faces, key=lambda f: f[2] * f[3])
+            return largest, True
         best, best_iou = None, 0.0
         for face in faces:
             iou = compute_iou(locked, tuple(face))
             if iou > best_iou:
-                best_iou = iou
-                best = face
-        # If match is too poor, reset to largest face (new scene or cut)
+                best_iou, best = iou, face
         if best_iou < iou_reset_threshold:
-            return max(faces, key=lambda f: f[2] * f[3])
-        return best
+            return largest, True  # new scene or cut
+        return best, False
 
     def process_frame(frame):
         nonlocal last_x, locked_face
-        small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
-        gray = cv2.cvtColor(small_frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+        h, w = frame.shape[:2]
+        if w > 960:  # YuNet is fast, but keep CPU use predictable on 4K sources
+            frame = cv2.resize(frame, (960, int(h * 960 / w)))
+            w, h = frame.shape[1], frame.shape[0]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = _detect_faces(frame, gray, detector)
         if len(faces) > 0:
-            primary = pick_primary_face(list(faces), locked_face)
+            primary, new_shot = pick_primary_face(list(faces), locked_face)
             if primary is not None:
                 locked_face = tuple(primary)
-                x_center = (primary[0] + primary[2] / 2) / small_frame.shape[1]
-                last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
-        else:
-            last_x = last_x * (1 - ema_alpha) + 0.5 * ema_alpha
+                x_center = (primary[0] + primary[2] / 2) / w
+                if new_shot or abs(x_center - last_x) > CUT_JUMP:
+                    last_x = x_center  # cut: jump, don't glide
+                else:
+                    last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
+        # no face this sample: hold the last position (drifting to the centre showed empty wall)
 
-    if segments:
-        for start, end in segments:
-            cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
-            frame_idx = int(start * fps)
-            locked_face = None  # Reset lock at each new segment
-            while frame_idx / fps < end:
-                for _ in range(skip_frames):
-                    cap.grab()
-                    frame_idx += 1
-                ret, frame = cap.read()
-                frame_idx += 1
-                if not ret: break
-                process_frame(frame)
-                interest_points[round(frame_idx / fps, 2)] = round(last_x, 3)
-    else:
-        while True:
+    def run(start_frame, end_time):
+        nonlocal frame_idx, locked_face
+        frame_idx = start_frame
+        while end_time is None or frame_idx / fps < end_time:
             for _ in range(skip_frames):
                 cap.grab()
                 frame_idx += 1
             ret, frame = cap.read()
             frame_idx += 1
-            if not ret: break
+            if not ret:
+                break
             process_frame(frame)
             interest_points[round(frame_idx / fps, 2)] = round(last_x, 3)
 
+    if segments:
+        for start, end in segments:
+            cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
+            locked_face = None  # Reset lock at each new segment
+            run(int(start * fps), end)
+    else:
+        run(0, None)
+
     cap.release()
     return interest_points
-
 
 
 def extract_video_outline(transcript_path):
