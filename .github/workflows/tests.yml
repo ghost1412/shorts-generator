@@ -43,10 +43,24 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.git,web,remotion-video,scratch,sessions
 
       - name: Compile all Python
-        run: python -m compileall -q main.py webui.py mcp_server.py server.py engine tests
+        run: python -m compileall -q main.py webui.py mcp_server.py server.py engine shortsflow tests
 
       - name: Pytest
         run: python -m pytest -q
+
+      - name: Build wheel and check the bundled data
+        run: |
+          pip install build
+          python -m build --wheel --outdir dist-check
+          python - <<'EOF'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist-check/*.whl")[0]).namelist()
+          for needed in ("shortsflow/cli.py", "engine/speaker_focus.py", "shortsflow/_bundle/remotion-video/src/ShortFlow.tsx",
+                         "shortsflow/_bundle/assets/models/face_detection_yunet_2023mar.onnx", "shortsflow/api/app.py"):
+              assert needed in names, f"missing from wheel: {needed}"
+          assert not any("node_modules" in n for n in names), "node_modules leaked into the wheel"
+          print(len(names), "files OK")
+          EOF
 
   remotion:
     runs-on: ubuntu-latest

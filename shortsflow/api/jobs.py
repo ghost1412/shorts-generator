@@ -1,4 +1,4 @@
-"""In-process job queue: runs main.py as a subprocess, one job per render, bounded concurrency."""
+"""In-process job queue: runs the shortsflow pipeline as a subprocess, one job per render, bounded concurrency."""
 import glob
 import hashlib
 import hmac
@@ -13,14 +13,15 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from engine.paths import project_root
+
 LOG_TAIL = 20000
 
 
 def _snapshot_videos():
-    """Rendered .mp4 files main.py may write (project root and sessions/)."""
+    """Rendered .mp4 files main.py may write (workspace root and sessions/)."""
     files = {}
-    for pattern in (os.path.join(ROOT, "*.mp4"), os.path.join(ROOT, "sessions*", "**", "*.mp4")):
+    for pattern in (os.path.join(project_root(), "*.mp4"), os.path.join(project_root(), "sessions*", "**", "*.mp4")):
         for path in glob.glob(pattern, recursive=True):
             if "TEMP_MPY" in path or os.path.basename(path).startswith(("preview_", "scene_clip_", "temp_")):
                 continue
@@ -58,11 +59,11 @@ class JobManager:
     def _run(self, job):
         job["status"] = "running"
         before = _snapshot_videos()
-        out_json = os.path.join(ROOT, f"api_job_{job['id']}.json")
-        cmd = [sys.executable, "main.py", *job["args"], "--skip-upload", "--output_json", out_json]
+        out_json = os.path.join(project_root(), f"api_job_{job['id']}.json")
+        cmd = [sys.executable, "-m", "shortsflow", *job["args"], "--skip-upload", "--output_json", out_json]
         env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
         try:
-            proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            proc = subprocess.Popen(cmd, cwd=project_root(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     text=True, encoding="utf-8", errors="replace", env=env)
             for line in proc.stdout:
                 job["log"] = (job["log"] + line)[-LOG_TAIL:]

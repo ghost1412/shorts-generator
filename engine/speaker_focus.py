@@ -15,6 +15,7 @@ import os
 import subprocess
 
 import numpy as np
+from engine.paths import project_root
 
 MIN_DWELL = 2.5          # seconds a shot must last before the camera may cut
 SWITCH_PERSIST = 0.6     # seconds a new speaker must be consistently detected before cutting to them
@@ -47,8 +48,7 @@ ANALYSIS_WIDTH = 1280   # podcast wide shots have small faces; detect near full 
 ANCHOR_TOLERANCE = 0.12 # max horizontal distance (fraction of width) from a speaker's anchor position
 
 
-YUNET_MODEL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "assets", "models", "face_detection_yunet_2023mar.onnx")  # MIT, 230 KB
+YUNET_MODEL = os.path.join(project_root(), "assets", "models", "face_detection_yunet_2023mar.onnx")  # MIT, 230 KB
 YUNET_MIN_SCORE = 0.6
 
 

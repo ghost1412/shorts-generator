@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from api.jobs import JobManager, public_view
+from shortsflow.api.jobs import JobManager, public_view
 
 app = FastAPI(title="ShortsFlow API", version="1.0.0",
               description="Self-hosted Opus Clip alternative. Submit a job, poll it or receive a webhook.")

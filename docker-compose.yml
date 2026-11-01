@@ -21,7 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    command: ["python", "-m", "api"]
+    command: ["python", "-m", "shortsflow.api"]
     ports:
       - "8080:8080"
     environment:

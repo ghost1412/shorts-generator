@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "shortsflow"
+dynamic = ["version"]
+description = "Self-hosted Opus Clip alternative: long videos to captioned 9:16 Shorts (Whisper, face tracking, active-speaker cuts, Remotion captions). CLI, REST API and MCP server."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["shorts", "reels", "tiktok", "opus-clip", "video", "whisper", "remotion", "mcp"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Video",
+]
+# Core pipeline (idea-to-video modes). Mirrors requirements.txt.
+dependencies = [
+  "requests>=2.32,<3",
+  "python-dotenv>=1.0,<2",
+  "moviepy>=2.1,<3",
+  "Pillow>=10.4,<12",
+  "numpy>=1.26,<3",
+  "edge-tts>=7.3.1",
+  "google-api-python-client>=2.150,<3",
+  "google-auth-oauthlib>=1.2,<2",
+  "google-auth-httplib2>=0.2,<1",
+  "nest_asyncio>=1.6,<2",
+  "cryptography>=43,<47",
+  "supabase>=2.10,<3",
+  "yt-dlp>=2026.8.19",
+  "imageio-ffmpeg>=0.5",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+]
+
+[project.optional-dependencies]
+# Clipping long videos: local Whisper + face/speaker analysis
+clip = ["stable-ts>=2.17,<3", "opencv-python>=4.10,<5", "librosa>=0.10,<0.12", "soundfile>=0.12,<1"]
+local-voice = ["kokoro-onnx>=0.4,<1", "soundfile>=0.12,<1"]
+explainer = ["manim>=0.19,<0.22", "manimpango<0.6.0"]
+webui = ["gradio>=5,<6"]
+full = ["shortsflow[clip,local-voice,explainer,webui]", "gtts>=2.5,<3"]
+
+[project.scripts]
+shortsflow = "shortsflow.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ghost1412/shorts-generator"
+Issues = "https://github.com/ghost1412/shorts-generator/issues"
+
+[tool.hatch.version]
+path = "shortsflow/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["shortsflow", "engine"]
+
+# Data the pipeline expects next to it; shortsflow/workspace.py copies it into the user's workspace.
+[tool.hatch.build.targets.wheel.force-include]
+"assets/avatars" = "shortsflow/_bundle/assets/avatars"
+"assets/branding" = "shortsflow/_bundle/assets/branding"
+"assets/models" = "shortsflow/_bundle/assets/models"
+"music" = "shortsflow/_bundle/music"
+"env.example" = "shortsflow/_bundle/env.example"
+"remotion-video/src" = "shortsflow/_bundle/remotion-video/src"
+"remotion-video/public/fonts" = "shortsflow/_bundle/remotion-video/public/fonts"
+"remotion-video/package.json" = "shortsflow/_bundle/remotion-video/package.json"
+"remotion-video/package-lock.json" = "shortsflow/_bundle/remotion-video/package-lock.json"
+"remotion-video/tsconfig.json" = "shortsflow/_bundle/remotion-video/tsconfig.json"
+"remotion-video/remotion.config.ts" = "shortsflow/_bundle/remotion-video/remotion.config.ts"
+
+[tool.hatch.build.targets.sdist]
+include = ["shortsflow", "engine", "assets/avatars", "assets/branding", "assets/models", "music", "env.example",
+           "remotion-video/src", "remotion-video/public/fonts", "remotion-video/package.json",
+           "remotion-video/package-lock.json", "remotion-video/tsconfig.json", "remotion-video/remotion.config.ts",
+           "README.md", "LICENSE", "pyproject.toml"]

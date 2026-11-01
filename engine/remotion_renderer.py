@@ -99,8 +99,8 @@ def render_with_remotion(
     print(f"\n[RemotionRenderer] Initiating modern render pipeline for mode: {mode} (Caption Preset: {caption_style})...")
     
     # 1. Establish directory paths
-    current_dir = os.path.abspath(os.path.dirname(__file__))
-    project_root = os.path.abspath(os.path.join(current_dir, ".."))
+    from engine.paths import project_root as _project_root
+    project_root = _project_root()
     remotion_dir = os.path.join(project_root, "remotion-video")
     public_dir = os.path.join(remotion_dir, "public")
     
@@ -387,6 +387,7 @@ def render_with_remotion(
             if os.path.exists(abs_output_path):
                 try: os.remove(abs_output_path)
                 except: pass
+            os.makedirs(os.path.dirname(abs_output_path), exist_ok=True)
             shutil.move(render_output, abs_output_path)
             print(f"[RemotionRenderer] SUCCESS! Rendered video saved to: {abs_output_path}")
             return abs_output_path

@@ -3,8 +3,8 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from api import app as api_app
-from api import jobs as api_jobs
+from shortsflow.api import app as api_app
+from shortsflow.api import jobs as api_jobs
 
 
 @pytest.fixture
