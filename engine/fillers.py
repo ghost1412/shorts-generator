@@ -38,32 +38,32 @@ def merge_spans(spans):
 def refine_spans(spans, rms, fps, reach=0.25, floor=0.2):
     """
     Snap each span to the real sound in the audio. Whisper's timestamps for short words are often 0.1-0.2 s
-    off, which leaves half an "uh" behind. `rms` is the loudness envelope at `fps` samples per second. From the
-    loudest point near the span we walk outward until the sound drops below `floor` x its peak or stops
-    falling (a valley between words), by at most `reach` seconds either way.
+    off, which leaves half an "uh" behind. `rms` is the loudness envelope at `fps` samples per second. A span
+    grows to cover the continuous run of sound (above `floor` x the local peak) that overlaps it, by at most
+    `reach` seconds either way; a separate word on the other side of a pause is never touched.
     """
     import numpy as np
     rms = np.asarray(rms, dtype=float)
     n = len(rms)
     out = []
     for s, e in spans:
-        lo, hi = max(0, int(s * fps)), min(n, int(e * fps))
-        if hi - lo < 3:
+        i0, i1 = max(0, int(s * fps)), min(n, int(e * fps) + 1)
+        wlo, whi = max(0, i0 - int(0.15 * fps)), min(n, i1 + int(0.05 * fps))
+        peak = rms[wlo:whi].max() if whi > wlo else 0.0
+        if peak <= 0 or i1 <= i0:
             out.append((s, e))
             continue
-        peak = lo + int(np.argmax(rms[lo:hi]))
-        level = rms[peak] * floor
-        if rms[peak] <= 0:
+        active = rms > peak * floor
+        if not active[i0:i1].any():
             out.append((s, e))
             continue
-        limit = int(reach * fps)
-        i = peak
-        while i > max(0, peak - limit) and rms[i - 1] > level and rms[i - 1] <= rms[i] * 1.05:
-            i -= 1
-        j = peak
-        while j < min(n - 1, peak + limit) and rms[j + 1] > level and rms[j + 1] <= rms[j] * 1.05:
-            j += 1
-        out.append((min(s, i / fps), max(e, (j + 1) / fps)))
+        lo = i0
+        while lo > max(0, i0 - int(reach * fps)) and active[lo - 1]:
+            lo -= 1
+        hi = i1 - 1
+        while hi < min(n - 1, i1 + int(reach * fps)) and active[hi + 1]:
+            hi += 1
+        out.append((min(s, lo / fps), max(e, (hi + 1) / fps)))
     return merge_spans(out)
 
 

@@ -48,9 +48,9 @@ def test_refine_spans_snaps_to_the_real_sound():
 
 
 def test_refine_spans_stops_at_a_valley_between_words():
-    env = _envelope(100, 6, [(1.0, 1.4, 0.3), (1.5, 1.8, 0.2), (1.8, 2.5, 0.4)])
+    env = _envelope(100, 6, [(1.0, 1.4, 0.3), (1.5, 1.8, 0.2), (1.86, 2.5, 0.4)])  # 60 ms dip before the next word
     (s, e), = fillers.refine_spans([(1.5, 1.8)], env, 100)
-    assert s >= 1.45 and e <= 1.85  # the louder word right after it is left alone
+    assert s >= 1.45 and e <= 1.85  # stops at the dip; the louder word after it is left alone
 
 
 def test_refine_spans_without_audio_energy_keeps_original():
