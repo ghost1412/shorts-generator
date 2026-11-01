@@ -140,24 +140,26 @@ def generate_thumbnail_with_badge(video_path, output_path, badge_text="VIRAL MOM
                 
             # Render rounded badge pill box at upper middle
             badge_str = badge_text.strip().upper()[:28]
-            font_size = max(24, int(w * 0.055))
-            try:
-                font = ImageFont.truetype("arial.ttf", font_size)
-            except Exception:
-                font = ImageFont.load_default()
-                
-            text_bbox = draw.textbbox((0, 0), badge_str, font=font)
-            tw = text_bbox[2] - text_bbox[0]
-            th = text_bbox[3] - text_bbox[1]
-            
+            font_size = max(24, int(w * 0.08))
+            while True:
+                try:
+                    font = ImageFont.truetype("arial.ttf", font_size)
+                except Exception:
+                    font = ImageFont.load_default()
+                text_bbox = draw.textbbox((0, 0), badge_str, font=font)
+                tw, th = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
+                if tw <= w * 0.86 or font_size <= 24:
+                    break
+                font_size -= 4
+
             px, py = (w - tw) // 2, int(h * 0.22)
-            pad_x, pad_y = 20, 12
+            pad_x, pad_y = 20, 14
             rect_shape = [px - pad_x, py - pad_y, px + tw + pad_x, py + th + pad_y]
-            
-            # Pill background fill (Yellow/Neon with dark border)
+
+            # Pill background fill (Yellow/Neon with dark border); offset by the bbox origin so glyphs sit inside the pill
             draw.rounded_rectangle(rect_shape, radius=12, fill=(255, 234, 0, 240), outline=(0, 0, 0, 255), width=3)
-            draw.text((px, py), badge_str, font=font, fill=(10, 10, 10, 255))
-            
+            draw.text((px - text_bbox[0], py - text_bbox[1]), badge_str, font=font, fill=(10, 10, 10, 255))
+
             composite = Image.alpha_composite(img, overlay).convert("RGB")
             composite.save(output_path, "JPEG", quality=95)
             print(f"[Log] Viral thumbnail badge generated: {output_path}")

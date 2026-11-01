@@ -252,6 +252,13 @@ def run(args, target_bitrate, target_preset):
         })
     else:
         from concurrent.futures import ThreadPoolExecutor
+        from engine.social_gen import clip_transcript_text
+        try:
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                transcript_segments = json.load(f).get('segments', [])
+        except (OSError, ValueError):
+            transcript_segments = []
+
         def fetch_meta(idx_h):
             i, h = idx_h
             if i >= len(extracted_files): return None
@@ -305,7 +312,12 @@ def run(args, target_bitrate, target_preset):
                 "styles": args.style if isinstance(args.style, list) else ([args.style] if args.style else [])
             }
             
-            meta = generate_viral_metadata(content_info, mode="STORY", category=active_cat, user_context=args.user_context)
+            if active_cat != "gaming" and topic_name == "Viral Highlight":
+                from engine.social_gen import generate_clip_metadata
+                meta = generate_clip_metadata(clip_transcript_text(transcript_segments, h['start'], h['end']),
+                                              hook=h.get('hook_text'), user_context=args.user_context)
+            else:
+                meta = generate_viral_metadata(content_info, mode="STORY", category=active_cat, user_context=args.user_context)
             return {
                 "file": os.path.basename(extracted_files[i]),
                 "title": meta.get('title', 'Viral Moment'),
@@ -317,6 +329,22 @@ def run(args, target_bitrate, target_preset):
             results = list(executor.map(fetch_meta, enumerate(highlights)))
             highlights_meta = [r for r in results if r is not None]
         
+    # Thumbnail per clip: a frame near the start with the hook as a badge
+    from engine.video_gen import generate_thumbnail_with_badge
+    reel_mode = args.extract_mode == "long" or getattr(args, "mashup", False)
+    for i, clip_file in enumerate([] if reel_mode else extracted_files):
+        if i >= len(highlights):
+            break
+        meta_item = highlights_meta[i] if i < len(highlights_meta) else {}
+        badge = highlights[i].get('hook_text') or meta_item.get('title') or "MUST WATCH"
+        thumb = clip_file.rsplit('.', 1)[0] + ".jpg"
+        try:
+            generate_thumbnail_with_badge(clip_file, thumb, badge_text=badge, at_time=1.5)
+            if os.path.exists(thumb) and i < len(highlights_meta):
+                highlights_meta[i]["thumbnail"] = os.path.basename(thumb)
+        except Exception as e:
+            print(f"[Warning] Thumbnail failed for clip #{i+1}: {e}")
+
     with open(os.path.join(session_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(highlights_meta, f, indent=4)
         
@@ -340,7 +368,9 @@ def run(args, target_bitrate, target_preset):
                 "hook": h.get("hook_text", meta_item.get("title", "")),
                 "reason": h.get("reason", "High-engagement segment"),
                 "title": meta_item.get("title", f"Clip #{i+1}"),
-                "tags": meta_item.get("tags", [])
+                "description": meta_item.get("description", ""),
+                "tags": meta_item.get("tags", []),
+                "thumbnail": os.path.join(os.path.dirname(clip_path), meta_item["thumbnail"]) if meta_item.get("thumbnail") and clip_path else None
             })
         with open(args.output_json, "w", encoding="utf-8") as f_out:
             json.dump(output_json_data, f_out, indent=4)

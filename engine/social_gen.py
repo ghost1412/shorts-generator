@@ -134,6 +134,51 @@ Examples:
         print(f"[Warning] Prompt expansion failed: {e}. Using original user prompt.")
         return user_prompt
 
+def clip_transcript_text(segments, start, end, limit=1500):
+    """Spoken words of the transcript segments overlapping [start, end]."""
+    parts = [seg.get("text", "").strip() for seg in segments
+             if seg.get("end", 0) > start and seg.get("start", 0) < end]
+    return " ".join(p for p in parts if p)[:limit]
+
+
+def _fallback_clip_metadata(text, hook):
+    first = (hook or text.split(".")[0] or "Must-watch moment").strip()
+    return {
+        "title": first[:80],
+        "description": f"{text[:200].strip()}\n\nFollow for more. #shorts",
+        "tags": ["shorts", "clips", "viral"],
+    }
+
+
+def generate_clip_metadata(transcript_text, hook=None, user_context=None):
+    """Title, description and tags for a clip cut from a long video, written from what is actually said."""
+    text = (transcript_text or "").strip()
+    if not text:
+        return _fallback_clip_metadata("", hook)
+    from engine.script_gen import get_llm_response, robust_json_parse
+    ctx = f"\nExtra context: {user_context}" if user_context else ""
+    prompt = (
+        "You write titles for YouTube Shorts / TikTok / Reels clips cut from longer videos (podcasts, interviews, talks).\n"
+        f"What is said in the clip:\n\"{text}\"\n{ctx}\n"
+        f"Suggested hook: {hook or 'none'}\n\n"
+        "Write metadata that is TRUE to the clip. Do not invent facts, names or games that are not in the transcript.\n"
+        "- title: under 60 chars, a curiosity-driven hook taken from the clip's core claim, at most one emoji\n"
+        "- description: 2 short lines, the first a question or hook, then 3-5 relevant hashtags\n"
+        "- tags: 10-15 SEO keywords drawn from the topics actually discussed\n"
+        'Return ONLY JSON: {"title": "...", "description": "...", "tags": ["..."]}'
+    )
+    try:
+        parsed = robust_json_parse(get_llm_response(prompt, temperature=0.7, max_tokens=800, timeout=30))
+        if isinstance(parsed, dict) and parsed.get("title"):
+            parsed["title"] = str(parsed["title"])[:95]
+            parsed.setdefault("description", "")
+            parsed.setdefault("tags", [])
+            return parsed
+    except Exception as e:
+        print(f"[Warning] Clip metadata generation failed ({e}); using transcript-based fallback.")
+    return _fallback_clip_metadata(text, hook)
+
+
 def generate_viral_metadata(content_info, mode="FACTS", category="science", user_context=None):
     """
     Generates viral, content-accurate metadata for YouTube Shorts as a "Channel Manager".
