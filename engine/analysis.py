@@ -401,7 +401,7 @@ def detect_interest_points(video_path, skip_frames=10, segments=None):
         # no face this sample: hold the last position (drifting to the centre showed empty wall)
 
     def run(start_frame, end_time):
-        nonlocal frame_idx, locked_face
+        nonlocal frame_idx
         frame_idx = start_frame
         while end_time is None or frame_idx / fps < end_time:
             for _ in range(skip_frames):
