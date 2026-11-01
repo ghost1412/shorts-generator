@@ -55,3 +55,41 @@ def test_filter_renders_with_ffmpeg(tmp_path):
     probe = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-i", str(out)],
                            capture_output=True, text=True).stderr
     assert "1080x1920" in probe
+
+
+def _visual(n, speakers):
+    """Face motion where the real speaker's face is busier."""
+    return [{"L": 2.0 if sp == "L" else 0.8, "R": 2.0 if sp == "R" else 0.8} for sp in speakers]
+
+
+def test_diarize_by_pitch_separates_two_voices():
+    import numpy as np
+    from engine.speaker_focus import diarize_by_pitch
+    truth = ["R"] * 15 + ["L"] * 15 + ["R"] * 10   # R = low voice (120 Hz), L = high voice (210 Hz)
+    f0 = [120.0 if t == "R" else 210.0 for t in truth]
+    f0[3] = float("nan")  # one unvoiced blip
+    out = diarize_by_pitch(f0, [1.0] * len(truth), _visual(len(truth), truth))
+    assert out[10] == "R" and out[20] == "L" and out[35] == "R"
+    assert out[3] is None or out[3] == "R"
+    assert np.mean([a == b for a, b in zip(out, truth) if a]) > 0.95
+
+
+def test_diarize_by_pitch_maps_voices_to_the_other_faces_too():
+    from engine.speaker_focus import diarize_by_pitch
+    truth = ["L"] * 15 + ["R"] * 15   # now the LEFT face has the low voice
+    f0 = [120.0 if t == "L" else 210.0 for t in truth]
+    out = diarize_by_pitch(f0, [1.0] * 30, _visual(30, truth))
+    assert out[5] == "L" and out[25] == "R"
+
+
+def test_diarize_by_pitch_declines_similar_voices_and_silence():
+    from engine.speaker_focus import diarize_by_pitch
+    assert diarize_by_pitch([130.0 + (i % 3) for i in range(40)], [1.0] * 40, [{}] * 40) is None
+    assert diarize_by_pitch([float("nan")] * 40, [1.0] * 40, [{}] * 40) is None
+
+
+def test_quiet_samples_have_no_opinion():
+    from engine.speaker_focus import diarize_by_pitch
+    f0 = [120.0] * 12 + [210.0] * 12
+    out = diarize_by_pitch(f0, [0.05] * 4 + [1.0] * 20, _visual(24, ["L"] * 12 + ["R"] * 12))
+    assert out[:4] == [None] * 4

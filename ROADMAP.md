@@ -90,7 +90,7 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 | | Task | Owner | Notes |
 |---|---|---|---|
 | [ ] | C1. Show virality score + hook title per clip in the WebUI (scores already exist; use `--output_json`) | | Opus Clip's headline feature |
-| [x] | C2. `--layout single/split/active`; active = speaker switching (issue #27) in `engine/speaker_focus.py` | Claude | Haar frontal+profile faces, mouth motion x audio envelope, 2.5 s dwell, stacked fallback. Tested on silent stock footage only - needs a check on a real podcast with speech |
+| [x] | C2. `--layout single/split/active`; active = speaker switching (issue #27) in `engine/speaker_focus.py` | Claude | YuNet face detector (bundled, Haar fallback); who-is-speaking from voice pitch when the two voices differ (92 % of speaking time right on a real interview vs 45 % for mouth motion), mouth motion x audio otherwise (weak on real footage). Same-gender pairs are unverified |
 | [ ] | C4. Active speaker: try MediaPipe Face Mesh lip landmarks instead of Haar + frame difference (more accurate, needs Python <= 3.12) | | Analysis takes ~0.8x clip length at 1280 px |
 | [ ] | C3. In-browser preview + re-render a single clip with a different caption style | | |
 
