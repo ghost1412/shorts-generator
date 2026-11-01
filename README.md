@@ -66,7 +66,7 @@ cd shorts-generator
 | **Idea-to-video (facts, explainers, stories)** | ✅ 30+ modes | ❌ clipping only |
 | **Automation** | ✅ CLI, MCP server, Docker, GitHub Actions | API usually on higher tiers |
 | **Polished timeline editor** | ❌ not yet | ✅ |
-| **Multi-platform scheduling** | YouTube upload only | ✅ |
+| **Multi-platform scheduling** | ✅ TikTok / Instagram / YouTube via Upload-Post (`python -m engine.publish`) | ✅ |
 
 _Honest take: the paid tools have a nicer editor and scheduling. ShortsFlow wins on cost, privacy, and being scriptable._
 
@@ -158,6 +158,19 @@ curl localhost:8080/v1/jobs/a1b2c3 -H "Authorization: Bearer change-me"   # stat
 `POST /v1/shorts` generates from an idea (`mode`, `category`, `prompt`...). Webhooks are signed with
 `X-ShortsFlow-Signature: sha256=<HMAC of body>` when `SHORTSFLOW_WEBHOOK_SECRET` is set. Jobs run one at a time by default
 (`SHORTSFLOW_MAX_CONCURRENT`). With Docker: `SHORTSFLOW_API_KEY=change-me docker compose --profile api up api` (refuses to start without a key). A ready-made n8n flow lives in [`examples/n8n/`](examples/n8n/shortsflow-clip-workflow.json).
+
+---
+
+## 📤 Publish & Schedule (TikTok, Instagram Reels, YouTube Shorts)
+
+Clip extraction writes `metadata.json` (title, description, tags) and a badge thumbnail next to every clip. Post them with
+[Upload-Post](https://upload-post.com), which holds the platform logins (set `UPLOAD_POST_API_KEY` and `UPLOAD_POST_USER`):
+
+```bash
+# preview what would be posted, then post now or stagger one clip every 3 hours
+python -m engine.publish sessions/extraction_123/metadata.json --platforms tiktok,instagram,youtube --dry-run
+python -m engine.publish sessions/extraction_123/metadata.json --platforms tiktok,instagram --start 2026-11-02T10:00 --every 180 --timezone Europe/Madrid
+```
 
 ---
 
