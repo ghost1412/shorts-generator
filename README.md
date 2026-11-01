@@ -1,7 +1,10 @@
 # ⚡ ShortsFlow AI Studio
 
-> **The Open-Source Opus Clip Alternative**  
-> Turn YouTube Links, Long Videos, or Text Ideas into High-Retention Shorts & Reels on Autopilot.
+> **The self-hosted Opus Clip alternative.**  
+> Paste a podcast or YouTube link, get captioned 9:16 Shorts that cut to whoever is talking. Free, local, no watermark, no credit caps.
+
+**Clip long videos** with local Whisper, an LLM that scores the hooks, face-tracked 9:16 crops, a stacked two-speaker split or active-speaker switching, and Remotion spring captions.
+**Or generate from an idea** with 30+ formats (facts quizzes, explainers, top-5 lists, stories) and drive everything from a browser UI, the CLI, Docker, Colab or an MCP agent.
 
 <div align="center">
   <img src="demos/demo_spot_the_lie.gif" width="220" alt="Spot the Lie short rendered by ShortsFlow" />
@@ -48,15 +51,24 @@ cd shorts-generator
 
 ---
 
-## ⚡ ShortsFlow vs Paid SaaS Tools
+## ⚡ ShortsFlow vs Opus Clip, Klap & Vizard
 
-| Feature | ⚡ ShortsFlow AI Studio (Open Source) | 💳 Paid SaaS ($20–$50/mo) |
+| | ⚡ ShortsFlow | Paid clippers |
 |---|---|---|
-| **Monthly Cost** | **$0 / 100% Free Forever** | $19 – $49 / month |
-| **Data Privacy** | **100% Local GPU / Private** | Uploaded to 3rd party cloud |
-| **Creation Modes** | **Clipping + Explainers + Facts + Riddles + Top 5 + Dubbing** | Video clipping only |
-| **Subtitle Quality** | **Remotion React Spring Physics (Hormozi, Glow Box, Bounce)** | Basic cloud subtitles |
-| **Limits & Watermarks** | **Unlimited Exports & Zero Watermarks** | Credit caps & paid watermarks |
+| **Price** | Free (MIT). You pay only for the LLM key you choose, or $0 with Ollama | ~$19-49 / month with minute or credit caps |
+| **Where your video goes** | Stays on your machine; Whisper runs locally | Uploaded to their cloud |
+| **Watermark / export limits** | None | Watermark and caps on lower tiers |
+| **Face-tracked 9:16 reframing** | ✅ | ✅ |
+| **Podcast layouts** | ✅ single, stacked split, active-speaker switching | ✅ varies by tool |
+| **Word-level animated captions** | ✅ Remotion (Hormozi, Glow Box, Bounce, Minimal) | ✅ |
+| **Virality / hook score per clip** | ✅ in `--output_json` (WebUI view planned) | ✅ |
+| **Dubbing** | ✅ | Often a paid add-on |
+| **Idea-to-video (facts, explainers, stories)** | ✅ 30+ modes | ❌ clipping only |
+| **Automation** | ✅ CLI, MCP server, Docker, GitHub Actions | API usually on higher tiers |
+| **Polished timeline editor** | ❌ not yet | ✅ |
+| **Multi-platform scheduling** | YouTube upload only | ✅ |
+
+_Honest take: the paid tools have a nicer editor and scheduling. ShortsFlow wins on cost, privacy, and being scriptable._
 
 ---
 

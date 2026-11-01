@@ -56,3 +56,6 @@ temp_edge_cookies.sqlite
 scratch/
 # Local session hand-off notes (not published)
 docs/HANDOFF.md
+
+# Local MCP client config (absolute paths)
+.mcp.json
