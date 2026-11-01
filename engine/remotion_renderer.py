@@ -268,6 +268,7 @@ def render_with_remotion(
           "titleText": title_text,
           "subtitleYPos": subtitle_y_pos,
           "captionStyle": caption_style,
+          "captionEmoji": os.getenv("SHORTSFLOW_CAPTION_EMOJI", "") == "1",
           "avatarUrl": rel_avatar_path if rel_avatar_path else None,
           "backgrounds": remotion_bg
         }

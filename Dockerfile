@@ -16,7 +16,7 @@ RUN sed -i 's/^Components: main$/Components: main contrib/' /etc/apt/sources.lis
         ffmpeg curl ca-certificates gnupg build-essential pkg-config \
         libcairo2-dev libpango1.0-dev libglib2.0-dev \
         libnss3 libatk-bridge2.0-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
-        libasound2 libpangocairo-1.0-0 libgtk-3-0 fonts-dejavu fonts-liberation \
+        libasound2 libpangocairo-1.0-0 libgtk-3-0 fonts-dejavu fonts-liberation fonts-noto-color-emoji \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*

@@ -183,6 +183,9 @@ py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extract_m
 # 1b. Prompt-based clipping: only the moments that match your request (LLM search, keyword fallback offline)
 py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --find "where they discuss pricing" --clip_count 3 --use_remotion
 
+# 1c. Emoji pop on keywords in HORMOZI/BOUNCE captions (needs an emoji font; included in the Docker image)
+py main.py --source_video "URL" --use_remotion --caption_style HORMOZI --caption_emoji
+
 # 2. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
 py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion
 

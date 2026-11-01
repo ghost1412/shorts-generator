@@ -1,3 +1,4 @@
+import { emojiForWord } from "./captionEmoji";
 import {
   Audio,
   OffthreadVideo,
@@ -113,6 +114,7 @@ export const shortFlowSchema = z.object({
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
   captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]).default("HORMOZI"),
+  captionEmoji: z.boolean().default(false), // needs an emoji font on the render machine (fonts-noto-color-emoji on Linux)
   avatarUrl: z.string().optional(),
   backgrounds: z.array(backgroundSchema).default([]),
   thisOrThat: thisOrThatSchema.optional(),
@@ -138,7 +140,8 @@ const Subtitles: React.FC<{
   yPos: number;
   fps: number;
   captionStyle?: "HORMOZI" | "GLOW_BOX" | "BOUNCE" | "MINIMAL";
-}> = ({ words, currentTime, yPos, fps, captionStyle = "HORMOZI" }) => {
+  captionEmoji?: boolean;
+}> = ({ words, currentTime, yPos, fps, captionStyle = "HORMOZI", captionEmoji = false }) => {
   // Find current word index
   let currentWordIdx = words.findIndex(
     (w) => currentTime >= w.start && currentTime <= w.end
@@ -234,6 +237,7 @@ const Subtitles: React.FC<{
               }}
             >
               {w.word}
+              {isActive && captionEmoji ? emojiForWord(w.word) : ""}
             </span>
           );
         }
@@ -308,6 +312,7 @@ const Subtitles: React.FC<{
               }}
             >
               {w.word}
+              {isActive && captionEmoji ? emojiForWord(w.word) : ""}
             </span>
           );
         }
@@ -865,6 +870,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   titleText,
   subtitleYPos,
   captionStyle = "HORMOZI",
+  captionEmoji = false,
   avatarUrl,
   backgrounds,
   thisOrThat,
@@ -1254,6 +1260,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         yPos={subtitleYPos}
         fps={fps}
         captionStyle={captionStyle}
+        captionEmoji={captionEmoji}
       />
 
       {/* 6. CARTOON AVATAR OVERLAY (Big & Centered News Anchor / TV Window) */}

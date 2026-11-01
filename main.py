@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
     parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
     parser.add_argument("--style", choices=["sarcastic", "meme", "funny", "action", "stylish"], action="append", help="Optional viral editing styles (can be used multiple times).")
+    parser.add_argument("--caption_emoji", action="store_true", help="Pop an emoji next to keywords in HORMOZI/BOUNCE captions (needs an emoji font, e.g. fonts-noto-color-emoji on Linux).")
     parser.add_argument("--find", help="Clip only moments matching this request, e.g. \"where they discuss pricing\" (clipping mode).")
     parser.add_argument("--user_context", help="Extra context to guide AI extraction (specific scenes/styles).")
     parser.add_argument("--style_context", help="Context for editing style and pacing (e.g. 'fast cuts', 'cinematic').")
@@ -134,6 +135,8 @@ def parse_args():
     parser.add_argument("--enhance_audio", action="store_true", help="Apply studio audio mastering (highpass, noise gate, compressor, EBU R128 loudnorm).")
 
     args = parser.parse_args()
+    if args.caption_emoji:
+        os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
     return args
 
 
