@@ -71,7 +71,9 @@ packages = ["shortsflow", "engine"]
 "remotion-video/remotion.config.ts" = "shortsflow/_bundle/remotion-video/remotion.config.ts"
 
 [tool.hatch.build.targets.sdist]
-include = ["shortsflow", "engine", "assets/avatars", "assets/branding", "assets/models", "music", "env.example",
-           "remotion-video/src", "remotion-video/public/fonts", "remotion-video/package.json",
-           "remotion-video/package-lock.json", "remotion-video/tsconfig.json", "remotion-video/remotion.config.ts",
-           "README.md", "LICENSE", "pyproject.toml"]
+# Leading slashes anchor each pattern to the repo root (otherwise "engine" also matches node_modules/**/engine).
+include = ["/shortsflow", "/engine", "/assets/avatars", "/assets/branding", "/assets/models", "/music", "/env.example",
+           "/remotion-video/src", "/remotion-video/public/fonts", "/remotion-video/package.json",
+           "/remotion-video/package-lock.json", "/remotion-video/tsconfig.json", "/remotion-video/remotion.config.ts",
+           "/README.md", "/LICENSE", "/pyproject.toml"]
+exclude = ["node_modules", "__pycache__", "*.pyc"]
