@@ -108,7 +108,7 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 | [ ] | E1. Kokoro (local, free) TTS provider with word timestamps | | |
 | [ ] | E2. Fish Audio TTS provider | | |
 | [x] | E3. 0 tsc errors: `Html5Video` with `loop` for split/avatar clips | Claude | |
-| [ ] | E4. Bundle an OFL caption font (e.g. Anton) via `staticFile` so captions don't depend on system Impact | | |
+| [x] | E4. Bundled OFL caption font (Anton) via `staticFile`; Impact stays as fallback | Claude | |
 
 ### F. Code health (any)
 | | Task | Owner | Notes |
