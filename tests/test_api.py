@@ -76,3 +76,13 @@ def test_webhook_signature():
     sig = api_jobs.sign("k", body)
     assert sig.startswith("sha256=") and len(sig) == 71
     assert sig == api_jobs.sign("k", body) != api_jobs.sign("other", body)
+
+
+def test_brand_find_and_tts_fields_reach_the_cli(client):
+    r = client.post("/v1/clips", json={"source_video": "x", "find": "pricing", "logo": "l.png",
+                                       "handle": "@me", "end_card": "Follow", "tts_provider": "kokoro"})
+    _wait(client, r.json()["id"])
+    args = client.calls[-1]
+    for pair in (("--find", "pricing"), ("--logo", "l.png"), ("--handle", "@me"),
+                 ("--end_card", "Follow"), ("--tts_provider", "kokoro")):
+        assert args[args.index(pair[0]) + 1] == pair[1]

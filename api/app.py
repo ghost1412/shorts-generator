@@ -42,6 +42,7 @@ class Common(BaseModel):
     use_remotion: bool = True
     llm_provider: str = "auto"
     webhook_url: Optional[str] = Field(None, description="POSTed once when the job finishes")
+    tts_provider: Literal["auto", "elevenlabs", "voicestudio", "edgetts", "local", "kokoro"] = "auto"
 
 
 class ShortRequest(Common):
@@ -59,11 +60,15 @@ class ClipRequest(Common):
     layout: Literal["single", "split", "active"] = "single"
     smart_crop: bool = True
     tighten: bool = False
+    logo: Optional[str] = Field(None, description="Logo PNG path on the server")
+    handle: Optional[str] = Field(None, description="@handle shown with the logo and on the end card")
+    end_card: Optional[str] = Field(None, description="Closing end card text")
     find: Optional[str] = Field(None, description='Only clip moments matching this request, e.g. "where they discuss pricing"')
 
 
 def _common_args(r: Common):
-    args = ["--caption_style", r.caption_style, "--aspect_ratio", r.aspect_ratio, "--llm_provider", r.llm_provider]
+    args = ["--caption_style", r.caption_style, "--aspect_ratio", r.aspect_ratio, "--llm_provider", r.llm_provider,
+            "--tts_provider", r.tts_provider]
     return args + (["--use_remotion"] if r.use_remotion else [])
 
 
@@ -87,6 +92,9 @@ def create_clips(r: ClipRequest):
     args += [f for f, on in (("--smart_crop", r.smart_crop), ("--tighten", r.tighten)) if on]
     if r.find:
         args += ["--find", r.find]
+    for flag, value in (("--logo", r.logo), ("--handle", r.handle), ("--end_card", r.end_card)):
+        if value:
+            args += [flag, value]
     return _accepted(manager.submit(args + _common_args(r), r.webhook_url))
 
 
