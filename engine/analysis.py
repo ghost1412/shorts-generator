@@ -1355,6 +1355,36 @@ def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     kept.sort(key=lambda x: float(x['start']))
     return kept
 
+def probe_duration(video_path):
+    """Length of a video in seconds (OpenCV), or None when it cannot be read."""
+    try:
+        import cv2
+        cap = cv2.VideoCapture(video_path)
+        fps, frames = cap.get(cv2.CAP_PROP_FPS), cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        cap.release()
+        return frames / fps if fps and frames else None
+    except Exception:
+        return None
+
+
+def clamp_highlights(highlights, duration, min_len=3.0):
+    """Keep every highlight inside [0, duration]. Transcript timestamps and LLM windows can run past the end of the
+    file, which used to give a near-empty clip (0.08 s). Highlights left shorter than `min_len` are dropped."""
+    if not duration:
+        return highlights
+    out = []
+    for h in highlights:
+        start, end = max(0.0, float(h["start"])), min(float(h["end"]), float(duration))
+        if end - start < min_len:
+            print(f"[Warning] Dropping highlight {h['start']:.1f}-{h['end']:.1f}s: only {max(0.0, end - start):.1f}s "
+                  f"fits inside the {duration:.1f}s video.")
+            continue
+        if (start, end) != (float(h["start"]), float(h["end"])):
+            print(f"[Log] Clamped highlight {h['start']:.1f}-{h['end']:.1f}s to {start:.1f}-{end:.1f}s (video is {duration:.1f}s).")
+        out.append(dict(h, start=start, end=end))
+    return out
+
+
 def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
@@ -1421,6 +1451,8 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             print(f"[Log] Saved highlights to cache: {highlights_cache_path}")
         except Exception as e:
             print(f"[Warning] Failed to cache highlights: {e}")
+
+    highlights = clamp_highlights(highlights, probe_duration(video_path))
 
     interest_points_cache_path = os.path.join(output_dir, "interest_points.json")
     interest_points = {}
