@@ -142,6 +142,25 @@ python mcp_server.py
 
 ---
 
+## 🔌 REST API & Webhooks
+
+```bash
+pip install -r requirements-full.txt
+SHORTSFLOW_API_KEY=change-me python -m api        # http://127.0.0.1:8080/docs
+```
+
+```bash
+curl -X POST localhost:8080/v1/clips -H "Authorization: Bearer change-me" -H "Content-Type: application/json"   -d '{"source_video": "https://youtu.be/VIDEO_ID", "layout": "active", "clip_count": 3, "webhook_url": "https://example.com/hook"}'
+# -> {"id": "a1b2c3", "status": "queued", "url": "/v1/jobs/a1b2c3"}
+curl localhost:8080/v1/jobs/a1b2c3 -H "Authorization: Bearer change-me"   # status + files[] download links
+```
+
+`POST /v1/shorts` generates from an idea (`mode`, `category`, `prompt`...). Webhooks are signed with
+`X-ShortsFlow-Signature: sha256=<HMAC of body>` when `SHORTSFLOW_WEBHOOK_SECRET` is set. Jobs run one at a time by default
+(`SHORTSFLOW_MAX_CONCURRENT`). A ready-made n8n flow lives in [`examples/n8n/`](examples/n8n/shortsflow-clip-workflow.json).
+
+---
+
 ## 💡 Top Command Recipes
 
 ```bash
