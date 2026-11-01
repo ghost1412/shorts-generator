@@ -14,3 +14,24 @@ services:
       - ./music:/app/music
       - ./sessions:/app/sessions
     restart: unless-stopped
+
+  # Opt-in REST API: SHORTSFLOW_API_KEY=change-me docker compose --profile api up api
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "api"]
+    ports:
+      - "8080:8080"
+    environment:
+      HOST: "0.0.0.0"
+      SHORTSFLOW_API_KEY: "${SHORTSFLOW_API_KEY:?set SHORTSFLOW_API_KEY to expose the API}"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./assets:/app/assets
+      - ./music:/app/music
+      - ./sessions:/app/sessions
+    restart: unless-stopped

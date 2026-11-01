@@ -33,5 +33,5 @@ RUN cd remotion-video && npm install
 
 COPY . .
 
-EXPOSE 7860 5000
+EXPOSE 7860 8080
 CMD ["python", "webui.py"]
