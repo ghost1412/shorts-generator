@@ -36,6 +36,13 @@ def run(args, target_bitrate, target_preset):
         args.source_video = download_source_video_from_url(args.source_video, session_dir, cookies_from_browser=getattr(args, 'cookies_from_browser', None), cookies_file=getattr(args, 'cookies', None))
         print(f"[Log] Video downloaded locally to: {args.source_video}")
 
+    # Transcript-based trimming: --cut "phrase" / --edit_transcript FILE. Renders an edited source and continues with it.
+    if getattr(args, "cut", None) or getattr(args, "edit_transcript", None):
+        from engine.transcript_edit import prepare_edited_source
+        args.source_video = prepare_edited_source(
+            args.source_video, session_dir, phrases=getattr(args, "cut", None),
+            edit_path=getattr(args, "edit_transcript", None), keep_fillers=getattr(args, "remove_fillers", False))
+
     print("[Log] Running Transcript-based Highlight Analysis...")
     # 🟢 EXPERT GUARD: Prevention of Mode Confusion
     if args.extract_mode == "shorts" and args.target_duration > 60:

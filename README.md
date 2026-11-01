@@ -210,6 +210,11 @@ py main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --find "whe
 # 1a. Cut the ums and uhs (and silences) out of clips
 py main.py --source_video "URL" --tighten --remove_fillers --use_remotion
 
+# 1e. Edit by transcript: cut phrases, or delete words from the transcript text file and re-run
+py main.py --source_video "URL" --session_dir sessions/talk --cut "you know" --cut "so basically"
+#   -> writes sessions/talk/transcript.txt; delete words/lines in a copy, then:
+py main.py --source_video "URL" --session_dir sessions/talk --edit_transcript my_edit.txt
+
 # 1c. Emoji pop on keywords in HORMOZI/BOUNCE captions (needs an emoji font; included in the Docker image)
 py main.py --source_video "URL" --use_remotion --caption_style HORMOZI --caption_emoji
 
