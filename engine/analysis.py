@@ -1165,6 +1165,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         
         if isinstance(highlights, list) and highlights:
             for h in highlights:
+                if isinstance(h, dict):
+                    h = normalize_highlight(h)
                 if isinstance(h, dict) and 'start' in h and 'end' in h:
                     try:
                         h['start'] = float(h['start'])
@@ -1252,6 +1254,9 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                         if current_total >= target_duration * 1.05: break
                     print(f"[Log] After backfill: {current_total:.0f}s, {len(valid_highlights)} segments")
             
+            # Drop too-short clips BEFORE backfilling, so backfill can replace them (it used to run first and the
+            # floor filter then left the run one clip short)
+            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= max(8.0, min_duration - 5.0)]
             if mode == "shorts" and len(valid_highlights) < clip_count:
                 print(f"[Log] 🎬 Highlight count ({len(valid_highlights)}) is below requested count ({clip_count}). Backfilling top signal peaks...")
                 used_ranges = [(h['start'], h['end']) for h in valid_highlights]
@@ -1367,6 +1372,53 @@ def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     # Re-sort chronologically by start time for natural playback order
     kept.sort(key=lambda x: float(x['start']))
     return kept
+
+_START_KEYS = ("start", "clip_start", "start_time", "start_seconds", "start_sec", "begin", "from", "startTime")
+_END_KEYS = ("end", "clip_end", "end_time", "end_seconds", "end_sec", "stop", "to", "endTime")
+_HOOK_KEYS = ("hook_text", "hook", "title", "headline")
+
+
+def _to_seconds(value):
+    """30, 30.5, "30.5", "01:30" or "1:02:03" -> seconds (float); anything else -> None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip().lower().rstrip("s").strip()
+        try:
+            parts = [float(p) for p in text.split(":")]
+        except ValueError:
+            return None
+        if not 1 <= len(parts) <= 3:
+            return None
+        seconds = 0.0
+        for p in parts:
+            seconds = seconds * 60 + p
+        return seconds
+    return None
+
+
+def normalize_highlight(h):
+    """Small local models name the keys differently (clip_start/clip_end, start_time/end_time, "mm:ss" strings).
+    Returns a copy with canonical `start` / `end` (seconds) and `hook_text`; leaves the input alone."""
+    out = dict(h)
+    for canon, keys in (("start", _START_KEYS), ("end", _END_KEYS)):
+        if canon not in out or _to_seconds(out.get(canon)) is None:
+            for k in keys:
+                sec = _to_seconds(h.get(k))
+                if sec is not None:
+                    out[canon] = sec
+                    break
+        elif isinstance(out[canon], str):
+            out[canon] = _to_seconds(out[canon])
+    if not out.get("hook_text"):
+        for k in _HOOK_KEYS:
+            if isinstance(h.get(k), str) and h[k].strip():
+                out["hook_text"] = h[k].strip()
+                break
+    return out
+
 
 def probe_duration(video_path):
     """Length of a video in seconds (OpenCV), or None when it cannot be read."""
