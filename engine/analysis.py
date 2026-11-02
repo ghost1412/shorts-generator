@@ -1259,22 +1259,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= max(8.0, min_duration - 5.0)]
             if mode == "shorts" and len(valid_highlights) < clip_count:
                 print(f"[Log] 🎬 Highlight count ({len(valid_highlights)}) is below requested count ({clip_count}). Backfilling top signal peaks...")
-                used_ranges = [(h['start'], h['end']) for h in valid_highlights]
                 fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0), reverse=True)
-                for seg in fallback_candidates:
-                    seg_dur = seg['end'] - seg['start']
-                    if seg_dur < 10.0: continue
-                    overlaps = any(not (seg['end'] < u[0] or seg['start'] > u[1]) for u in used_ranges)
-                    if overlaps: continue
-                    valid_highlights.append({
-                        'start': seg['start'], 'end': seg['end'],
-                        'viral_score': int((seg['norm_score'] + seg.get('norm_audio', 0)) * 50),
-                        'final_score': int((seg['norm_score'] + seg.get('norm_audio', 0)) * 50),
-                        'reason': 'Energy Peak (Backfill)'
-                    })
-                    used_ranges.append((seg['start'], seg['end']))
-                    if len(valid_highlights) >= clip_count:
-                        break
+                valid_highlights += pick_backfill(fallback_candidates, valid_highlights, clip_count - len(valid_highlights))
 
             # 🟢 MANDATORY: Re-sort chronologically to ensure narrative flow and fix timing mismatch
             # This ensures that even if we picked top scores, they play back in order.
@@ -1372,6 +1358,29 @@ def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     # Re-sort chronologically by start time for natural playback order
     kept.sort(key=lambda x: float(x['start']))
     return kept
+
+def pick_backfill(candidates, chosen, need, min_gap=30.0, min_len=10.0):
+    """Highlights to add when the LLM under-delivers. `candidates` are scored segments, best first. Takes the best ones
+    that do not overlap anything chosen and sit at least `min_gap` seconds away from it, so two clips are not the same
+    scene cut in half; only if that cannot fill `need` does it accept near neighbours (still never overlapping)."""
+    used = [(float(h['start']), float(h['end'])) for h in chosen]
+    out = []
+
+    def far_enough(seg, gap):
+        return all(seg['end'] + gap <= u[0] or seg['start'] >= u[1] + gap for u in used)
+
+    for gap in (min_gap, 0.0):
+        for seg in candidates:
+            if len(out) >= need:
+                break
+            if seg['end'] - seg['start'] < min_len or not far_enough(seg, gap):
+                continue
+            score = int((seg['norm_score'] + seg.get('norm_audio', 0)) * 50)
+            out.append({'start': seg['start'], 'end': seg['end'], 'viral_score': score, 'final_score': score,
+                        'reason': 'Energy Peak (Backfill)'})
+            used.append((seg['start'], seg['end']))
+    return out
+
 
 _START_KEYS = ("start", "clip_start", "start_time", "start_seconds", "start_sec", "begin", "from", "startTime")
 _END_KEYS = ("end", "clip_end", "end_time", "end_seconds", "end_sec", "stop", "to", "endTime")
