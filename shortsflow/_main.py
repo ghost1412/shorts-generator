@@ -241,24 +241,8 @@ if getattr(args, "batch_file", None):
         print(f"\n==========================================")
         print(f"[Batch {idx}/{len(urls)}] Processing: {item}")
         print(f"==========================================")
-        cmd = [sys.executable, "main.py", "--source_video", item]
-        if args.extract_mode: cmd.extend(["--extract_mode", args.extract_mode])
-        if args.clip_count: cmd.extend(["--clip_count", str(args.clip_count)])
-        if args.target_duration: cmd.extend(["--target_duration", str(args.target_duration)])
-        if args.smart_crop: cmd.append("--smart_crop")
-        if args.tighten: cmd.append("--tighten")
-        if args.use_audio_detect: cmd.append("--use_audio_detect")
-        if args.hq: cmd.append("--hq")
-        if args.superres: cmd.append("--superres")
-        if args.mashup: cmd.append("--mashup")
-        if args.mashup_mode: cmd.extend(["--mashup_mode", args.mashup_mode])
-        if args.user_context: cmd.extend(["--user_context", args.user_context])
-        if args.style_context: cmd.extend(["--style_context", args.style_context])
-        if args.style:
-            styles = args.style if isinstance(args.style, list) else [args.style]
-            for s in styles: cmd.extend(["--style", s])
-        if args.output_json: cmd.extend(["--output_json", f"batch_out_{idx}.json"])
-        
+        from engine.pipeline import batch_item_command
+        cmd = batch_item_command(sys.argv[1:], item, idx, python=sys.executable)
         res = subprocess.run(cmd)
         if res.returncode != 0:
             print(f"[Warning] Batch item {idx} failed with return code {res.returncode}. Continuing...")

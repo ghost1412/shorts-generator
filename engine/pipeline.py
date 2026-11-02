@@ -127,3 +127,24 @@ def print_clip_score_table(highlights):
         reason = str(h.get('reason', h.get('llm_reason', h.get('hook_text', 'Viral Moment'))))
         print(f"#{i+1:<4} | {h['start']:<7.1f}s | {h['end']:<7.1f}s | {score_str:<10} | {reason[:40]}")
     print("="*85 + "\n")
+
+
+def batch_item_command(argv, item, index, python="python", entry=("-m", "shortsflow")):
+    """Command line for one batch item: the user's own arguments (so --use_remotion, --layout, --find, --cut, --brand,
+    ... all carry over), minus the batch/per-item options, plus this item's source and output file."""
+    drop_with_value = {"--batch_file", "--source_video", "--output_json", "--session_dir"}
+    out, skip = [], False
+    for a in argv:
+        if skip:
+            skip = False
+            continue
+        name = a.split("=", 1)[0]
+        if name in drop_with_value:
+            skip = "=" not in a
+            continue
+        out.append(a)
+    cmd = [python, *entry, *out, "--source_video", item]
+    if "--output_json" in argv or any(a.startswith("--output_json=") for a in argv):
+        cmd += ["--output_json", f"batch_out_{index}.json"]
+    return cmd
+

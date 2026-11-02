@@ -82,6 +82,7 @@ def test_generate_funny_news_end_to_end_offline(monkeypatch, tmp_path):
 
     monkeypatch.setattr(sg.requests, "get", lambda *a, **k: Resp())
     monkeypatch.setattr(nf, "history_path", lambda: str(tmp_path / "hist.json"))
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])  # tie between equally covered stories -> first one
     answers = iter([
         json.dumps({"title": "x", "hook": "h", "story": "The cat won 300 votes in a landslide that stunned the whole town today.", "search_term": "cat"}),
         json.dumps({"title": "x", "hook": "h", "story": "The cat won 3 of 5 votes in a landslide that stunned the whole town today.", "search_term": "cat"}),
