@@ -2571,7 +2571,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2724,12 +2724,32 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             if not os.path.exists(task_path) or os.path.getsize(task_path) < 1000: continue
             try:
                 clip = VideoFileClip(task_path)
+                if reel_captions:
+                    try:
+                        words = apply_influencer_subtitles(clip, transcript_data, hi['start'], hi['end'], size=clip.size, y_pos=int(clip.h * 0.78))
+                        if words:
+                            clip = CompositeVideoClip([clip] + list(words), size=clip.size).with_duration(clip.duration)
+                    except Exception as e:
+                        print(f"[Warning] Reel captions skipped for segment {i+1}: {e}")
                 clips.append(clip)
-            except: continue
+            except Exception as e:
+                print(f"[Warning] Segment {i+1} could not be loaded for the reel: {e}")
+                continue
             
         if not clips: return []
-            
-        final_reel = concatenate_videoclips(clips, method="chain")
+
+        # Soft transitions: short audio fades stop the pops at every cut, and a crossfade replaces the hard jump
+        xf = 0.25
+        if len(clips) > 1:
+            faded = []
+            for k, c in enumerate(clips):
+                fx = [afx.AudioFadeIn(0.12), afx.AudioFadeOut(0.12)]
+                if k > 0:
+                    fx.append(vfx.CrossFadeIn(xf))
+                faded.append(c.with_effects(fx))
+            final_reel = concatenate_videoclips(faded, method="compose", padding=-xf)
+        else:
+            final_reel = concatenate_videoclips(clips, method="chain")
         out = os.path.join(output_dir, "highlight_reel.mp4")
         encode_codec = 'h264_nvenc' if use_gpu else codec
         final_threads = 1 if use_gpu else 8
@@ -2737,6 +2757,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         final_reel.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params)
         extracted_files.append(out)
         for clip in clips: clip.close()
+        return extracted_files  # without this, a fresh long-form run returned None and the CLI reported "No videos were generated"
     else:
         # Shorts mode: Add subtitles and effects
         from concurrent.futures import ThreadPoolExecutor

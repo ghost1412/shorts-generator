@@ -147,7 +147,8 @@ def run(args, target_bitrate, target_preset):
         video_filter=active_video_filter, user_context=args.user_context,
         max_workers=getattr(args, 'max_workers', None),
         layout=args.layout,
-        remove_fillers=getattr(args, 'remove_fillers', False)
+        remove_fillers=getattr(args, 'remove_fillers', False),
+        reel_captions=getattr(args, 'reel_captions', False)
     )
     
     # Brand kit: logo watermark, @handle and end card
