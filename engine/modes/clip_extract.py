@@ -41,7 +41,8 @@ def run(args, target_bitrate, target_preset):
         from engine.transcript_edit import prepare_edited_source
         args.source_video = prepare_edited_source(
             args.source_video, session_dir, phrases=getattr(args, "cut", None),
-            edit_path=getattr(args, "edit_transcript", None), keep_fillers=getattr(args, "remove_fillers", False))
+            edit_path=getattr(args, "edit_transcript", None), keep_fillers=getattr(args, "remove_fillers", False),
+            language=getattr(args, "language", "en"))
 
     print("[Log] Running Transcript-based Highlight Analysis...")
     # 🟢 EXPERT GUARD: Prevention of Mode Confusion
@@ -66,6 +67,7 @@ def run(args, target_bitrate, target_preset):
         chapters_path=chapters_path, use_llm_scoring=True,
         find_query=getattr(args, 'find', None),
         keep_fillers=getattr(args, 'remove_fillers', False),
+        language=getattr(args, 'language', 'en'),
     )
     
     # 🟢 Print the beautiful new score table

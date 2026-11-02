@@ -177,7 +177,7 @@ def render_edited_video(source, keeps, out_path, workdir):
     return out_path
 
 
-def prepare_edited_source(source, session_dir, phrases=None, edit_path=None, keep_fillers=False):
+def prepare_edited_source(source, session_dir, phrases=None, edit_path=None, keep_fillers=False, language="en"):
     """
     Apply `--cut` / `--edit_transcript` to `source`. Returns the path of the edited video (the pipeline should use
     it from here on), or `source` unchanged when nothing needs cutting. Writes in `session_dir`:
@@ -197,7 +197,7 @@ def prepare_edited_source(source, session_dir, phrases=None, edit_path=None, kee
         if cached.get("source_video_path") != source_abs:
             cached = None
     if cached is None:
-        path = transcribe_video(source, session_dir, keep_fillers=keep_fillers)
+        path = transcribe_video(source, session_dir, keep_fillers=keep_fillers, language=language)
         shutil.copyfile(path, original)
         with open(original, "r", encoding="utf-8") as f:
             cached = json.load(f)
