@@ -977,17 +977,6 @@ def generate_wyr(category="general"):
     Generates a 'Would You Rather' scenario with fake percentages.
     Returns: {"option_a": str, "option_b": str, "percent_a": int, "percent_b": int}
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    if not HF_API_KEY:
-        print("DEBUG: HF_API_KEY is missing for WYR!")
-        raise RuntimeError("HF_API_KEY is missing. Cannot generate WYR.")
-
-    model = "meta-llama/Llama-3.1-8B-Instruct"
     selected_sub = get_sub_topic(category)
     print(f"[Log] WYR: Selected sub-topic: {selected_sub}")
     
@@ -1027,17 +1016,6 @@ def generate_reddit_story(category="general"):
     Generates a dramatic, first-person Reddit-style story (e.g. AITA).
     Returns: {"title": str, "story": str}
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    if not HF_API_KEY:
-        print("DEBUG: HF_API_KEY is missing for REDDIT!")
-        raise RuntimeError("HF_API_KEY is missing. Cannot generate REDDIT story.")
-
-    model = "meta-llama/Llama-3.1-8B-Instruct"
     selected_sub = get_sub_topic(category)
     print(f"[Log] REDDIT: Selected sub-topic: {selected_sub}")
     
@@ -1075,17 +1053,6 @@ def generate_trivia(category="general knowledge"):
     Generates a Trivia question with 3 options and the correct answer index.
     Returns: {"question": str, "opt_a": str, "opt_b": str, "opt_c": str, "answer": str}
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    if not HF_API_KEY:
-        print("DEBUG: HF_API_KEY is missing for TRIVIA!")
-        raise RuntimeError("HF_API_KEY is missing. Cannot generate TRIVIA.")
-
-    model = "meta-llama/Llama-3.1-8B-Instruct"
     selected_sub = get_sub_topic(category)
     print(f"[Log] TRIVIA: Selected sub-topic: {selected_sub}")
     
@@ -1123,17 +1090,6 @@ def generate_quote(category="stoic"):
     Generates a deep, motivational, or philosophical quote.
     Returns: {"quote": str, "author": str}
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    if not HF_API_KEY:
-        print("DEBUG: HF_API_KEY is missing for QUOTE!")
-        raise RuntimeError("HF_API_KEY is missing. Cannot generate QUOTE.")
-
-    model = "meta-llama/Llama-3.1-8B-Instruct"
     selected_sub = get_sub_topic(category)
     print(f"[Log] QUOTE: Selected sub-topic: {selected_sub}")
     
