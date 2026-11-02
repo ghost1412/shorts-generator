@@ -2788,12 +2788,29 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
 
             # Track all clips for explicit cleanup to prevent WinError 6 on Windows
             loop_clips = []
+            cap_data, cap_start, cap_end = transcript_data, hi['start'], hi['end']
+            cut_done = False
+            if silence_intervals and tighten_mode == "cut":
+                # Cut the segment first and retime the captions to the shortened clip (same step as the Remotion path)
+                try:
+                    from engine.transcript_edit import tighten_segment
+                    fine = {"padding": 0.02, "min_gap": 0.06} if remove_fillers else {}
+                    tight = tighten_segment(task_path, hi, silence_intervals, transcript_data,
+                                            os.path.join(output_dir, "temp_segments"), i, **fine)
+                    if tight:
+                        task_path = tight[0]
+                        with open(tight[1], 'r', encoding='utf-8') as f:
+                            cap_data = json.load(f)
+                        cap_start, cap_end, cut_done = 0.0, tight[2], True
+                        print(f"[Log] Tightened Short {i+1}: {hi['end'] - hi['start']:.1f}s -> {tight[2]:.1f}s")
+                except Exception as e:
+                    print(f"[Warning] Could not tighten Short {i+1} ({e}); rendering it untightened.")
             sub = VideoFileClip(task_path)
             
             # 🟢 UPGRADE: AI-Powered Smart Editing (AutoClip & Auto-Editor)
             # Note: Smart Crop is now handled via FFmpeg filters during initial extraction for speed.
             
-            if silence_intervals:
+            if silence_intervals and not cut_done and tighten_mode != "cut":
                 local_silence = []
                 for s_start, s_end in silence_intervals:
                     overlap_s = max(s_start, hi['start'])
@@ -2821,10 +2838,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             # Caption selection based on style
             if "stylish" in styles:
                 print(f"[Log] Applying STYLISH Captions (Word-level highlights + Pop)")
-                subs = apply_stylish_captions(transcript_data, hi['start'], hi['end'], size=(1080, 1920), y_pos=960)
+                subs = apply_stylish_captions(cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=960)
             else:
                 # Simple word overlays (Default)
-                subs = apply_influencer_subtitles(sub, transcript_data, hi['start'], hi['end'], size=(1080, 1920), y_pos=960)
+                subs = apply_influencer_subtitles(sub, cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=960)
             
             overlays = subs
             
