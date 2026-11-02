@@ -55,6 +55,23 @@ def copy_to_public(src_path, dest_dir, public_base="temp_assets"):
     rel_path = os.path.join(public_base, os.path.basename(dest_dir), filename).replace("\\", "/")
     return rel_path
 
+def asset_aspect(path):
+    """width / height of an image or video file, or None when it cannot be read."""
+    try:
+        import cv2
+        if os.path.splitext(path)[1].lower() in (".mp4", ".mov", ".webm", ".mkv"):
+            cap = cv2.VideoCapture(path)
+            w, h = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            cap.release()
+        else:
+            from PIL import Image
+            with Image.open(path) as im:
+                w, h = im.size
+        return round(w / h, 4) if w and h else None
+    except Exception:
+        return None
+
+
 def render_with_remotion(
     audio_path,
     subs_path,
@@ -130,6 +147,7 @@ def render_with_remotion(
         # Copy background music
         rel_music_path = copy_to_public(bg_music_path, run_assets_dir) if bg_music_path else None
         rel_avatar_path = copy_to_public(avatar_path, run_assets_dir) if avatar_path else None
+        avatar_aspect = asset_aspect(avatar_path) if avatar_path else None
         
         # 3. Parse words from subtitles file
         words = []
@@ -270,6 +288,7 @@ def render_with_remotion(
           "captionStyle": caption_style,
           "captionEmoji": os.getenv("SHORTSFLOW_CAPTION_EMOJI", "") == "1",
           "avatarUrl": rel_avatar_path if rel_avatar_path else None,
+          "avatarAspect": avatar_aspect,
           "backgrounds": remotion_bg
         }
         

@@ -870,6 +870,9 @@ def run(args, target_bitrate, target_preset):
             if os.path.exists(p_path):
                 avatar_path = p_path
                 break
+        if avatar_path is None:
+            print(f"[Warning] Persona '{selected_persona}' has no avatar file in assets/avatars/ (looked for "
+                  f"{selected_persona.lower()}.mp4/.png/...). The script uses the persona's voice, but no character is shown.")
 
     remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS", "FUNNY_EXPLAINER", "TEACH", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC"]
     if args.use_remotion and mode in remotion_supported_modes:

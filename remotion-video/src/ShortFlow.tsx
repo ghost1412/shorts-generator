@@ -116,6 +116,7 @@ export const shortFlowSchema = z.object({
   captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]).default("HORMOZI"),
   captionEmoji: z.boolean().default(false), // needs an emoji font on the render machine (fonts-noto-color-emoji on Linux)
   avatarUrl: z.string().optional(),
+  avatarAspect: z.number().optional(), // width / height of the avatar asset; square art is not cropped to 16:9
   backgrounds: z.array(backgroundSchema).default([]),
   thisOrThat: thisOrThatSchema.optional(),
   rankIt: rankItSchema.optional(),
@@ -872,6 +873,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   captionStyle = "HORMOZI",
   captionEmoji = false,
   avatarUrl,
+  avatarAspect,
   backgrounds,
   thisOrThat,
   rankIt,
@@ -1272,7 +1274,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             left: "50%",
             zIndex: 45,
             width: "900px",
-            height: "506px",
+            height: `${Math.round(900 / Math.min(Math.max(avatarAspect ?? 16 / 9, 0.75), 16 / 9))}px`,
             borderRadius: "32px",
             overflow: "hidden",
             border: "6px solid #ffffff",
@@ -1286,7 +1288,8 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
               src={getAssetUrl(avatarUrl)}
               muted
               loop
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              // generated clips carry a small watermark in the bottom-right corner; scale from the top-left to push it out of frame
+              style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.07)", transformOrigin: "0 0" }}
             />
           ) : (
             <Img
