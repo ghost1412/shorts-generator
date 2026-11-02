@@ -221,7 +221,7 @@ const Subtitles: React.FC<{
             <span
               key={index}
               style={{
-                fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                 fontSize: "100px",
                 color: isActive ? getHormoziColor(w.word) : "#FFFFFF",
                 opacity: isActive ? 1.0 : 0.60,
@@ -258,7 +258,7 @@ const Subtitles: React.FC<{
             <span
               key={index}
               style={{
-                fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                 fontSize: "82px",
                 color: isActive ? "#FFFFFF" : "#CBD5E1",
                 background: isActive
@@ -297,7 +297,7 @@ const Subtitles: React.FC<{
             <span
               key={index}
               style={{
-                fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                 fontSize: "92px",
                 color: isActive ? "#FFD700" : "#FFFFFF",
                 opacity: isActive ? 1.0 : 0.7,
@@ -450,7 +450,7 @@ const BackgroundSegment: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, Impact, Arial Black, sans-serif",
+              fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
               fontSize: "54px",
               color: "#000000",
               background: "#FFEA00",
@@ -679,7 +679,7 @@ const PhotoReelSegment: React.FC<{
           >
             <span
               style={{
-                fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                 fontSize: "36px",
                 color: "#ffffff",
                 letterSpacing: "1.5px",
@@ -745,7 +745,7 @@ const EmojiGuessOverlay: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, Impact, Arial Black, sans-serif",
+              fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
               fontSize: "48px",
               color: "#ffffff",
               letterSpacing: "2px",
@@ -798,7 +798,7 @@ const EmojiGuessOverlay: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, Impact, Arial Black, sans-serif",
+              fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
               fontSize: "36px",
               color: "#ff0055",
               textTransform: "uppercase",
@@ -809,7 +809,7 @@ const EmojiGuessOverlay: React.FC<{
           </span>
           <span
             style={{
-              fontFamily: "Anton, Impact, Arial Black, sans-serif",
+              fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
               fontSize: "100px",
               color: "#ffffff",
               textShadow: "0 0 20px #ff0055",
@@ -835,7 +835,7 @@ const EmojiGuessOverlay: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, Impact, Arial Black, sans-serif",
+              fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
               fontSize: "44px",
               color: "#ffff00",
               textTransform: "uppercase",
@@ -846,7 +846,7 @@ const EmojiGuessOverlay: React.FC<{
           </span>
           <span
             style={{
-              fontFamily: "Anton, Impact, Arial Black, sans-serif",
+              fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
               fontSize: "55px",
               color: "#ffffff",
               textShadow: "2px 4px 10px rgba(0,0,0,0.5)",
@@ -941,7 +941,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             >
               <h2
                 style={{
-                  fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                  fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                   fontSize: "65px",
                   color: "#ffffff",
                   margin: 0,
@@ -985,7 +985,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             >
               <h2
                 style={{
-                  fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                  fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                   fontSize: "65px",
                   color: "#ffffff",
                   margin: 0,
@@ -1015,7 +1015,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           >
             <span
               style={{
-                fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                 fontSize: "100px",
                 color: "#000000",
                 fontWeight: "bold",
@@ -1061,7 +1061,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   >
                     <span
                       style={{
-                        fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                        fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                         fontSize: "120px",
                         color: "#000000",
                         textShadow: "2px 2px 0px rgba(255,255,255,0.4)",
@@ -1083,7 +1083,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   >
                     <h2
                       style={{
-                        fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                        fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                         fontSize: "65px",
                         color: "#ffffff",
                         margin: 0,
@@ -1123,7 +1123,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           >
             <span
               style={{
-                fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                 fontSize: "80px",
                 color: "#000000",
                 textTransform: "uppercase",
@@ -1240,7 +1240,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           >
             <h1
               style={{
-                fontFamily: "Anton, Impact, Arial Black, sans-serif",
+                fontFamily: "Anton, NotoDevanagari, Impact, Arial Black, sans-serif",
                 fontSize: "75px",
                 color: "#ffff00",
                 margin: 0,
