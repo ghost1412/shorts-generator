@@ -3,52 +3,72 @@
 Post from your own accounts. Edit freely - keep the honest tone; HN and Reddit punish hype.
 Best timing: Show HN on a weekday morning US Eastern; stay around for the first 2 hours to answer comments.
 
+## Before you post (checklist)
+
+- [ ] `pip install shortsflow` works in a fresh venv; `shortsflow doctor` is green
+- [ ] GHCR package `ghcr.io/ghost1412/shorts-generator` is public and `docker run` starts the WebUI
+- [ ] Colab notebook runs top to bottom
+- [ ] `pip install -U edge-tts` (Edge TTS breaks when Microsoft rotates its token)
+- [ ] CI badge on the README is green
+- [ ] README demo GIFs load; the clipping GIF credits its CC BY-SA source
+
+## What is new since the first drafts (use these as the hook)
+
+- `pip install shortsflow`, then `shortsflow init` / `shortsflow doctor`
+- Prompt-based clipping: `--find "where they discuss pricing"` clips only the moments that match
+- Edit the video by editing its transcript: `--cut "you know"` or delete words in `transcript.txt` and re-run with `--edit_transcript`
+- `--remove_fillers` cuts um/uh/er; `--tighten` removes silences
+- Active-speaker layout now uses a face detector (YuNet) plus voice-pitch diarisation instead of mouth motion alone
+- REST API with a job queue, API keys and signed webhooks (`shortsflow api`), plus an n8n example
+- Brand kit: `--logo`, `--handle`, `--end_card`
+- Fully local: Whisper on your GPU, Ollama for the LLM, Kokoro for the voice (`--tts_provider kokoro`); only stock footage needs a key
+
 ---
 
 ## 1. Show HN
 
 **Title** (max 80 chars):
-Show HN: ShortsFlow – open-source, self-hosted alternative to Opus Clip
+Show HN: ShortsFlow – open-source, local-first alternative to Opus Clip
 
 **URL:** https://github.com/ghost1412/shorts-generator
 
 **Text:**
-I built ShortsFlow to make vertical Shorts/Reels without paying per-minute for clipping SaaS.
+I built ShortsFlow to make vertical Shorts/Reels without paying per minute for clipping SaaS, and without uploading footage anywhere.
 
-Two things it does:
+`pip install shortsflow` (or Docker, or Colab), then point it at a YouTube link or a file:
 
-1. Clip long videos: paste a YouTube link or file. Whisper transcribes it locally, an LLM scores hooks, and FFmpeg cuts 9:16 clips with face tracking. For podcasts, `--layout active` cuts to whoever is talking (mouth motion weighted by audio loudness, 2.5 s minimum shot length, stacked split when it's unsure). Captions are rendered with Remotion (React).
+- Whisper transcribes locally with word timestamps and an LLM scores the hooks. FFmpeg cuts 9:16 clips with face tracking, and captions are rendered with Remotion.
+- `--find "where they discuss pricing"` clips only the moments that match your request.
+- You can edit the video by editing its transcript: `--cut "you know"`, or delete words in the exported `transcript.txt` and re-run. The cuts are rendered into an edited copy and the captions are retimed to it.
+- For podcasts, `--layout active` cuts to whoever is talking. It combines a face detector with voice-pitch clustering, because mouth motion alone was weak on real footage (on one real two-person interview, pitch got the speaker right for 92% of speaking time versus 45% for mouth motion).
+- It can also generate from an idea (30+ formats: facts quizzes, Manim explainers, stories). That mode runs a YouTube channel, @spottheliee, from one GitHub Actions workflow.
 
-2. Generate from an idea: 30+ formats (facts quizzes, explainers rendered with Manim, Reddit-style stories, top-5 lists). The LLM writes the script, Edge TTS or ElevenLabs voices it, and Pexels supplies the footage.
+It can run fully locally: Whisper on your GPU, Ollama for the LLM, Kokoro for the voice. There is a REST API with webhooks for automation (an n8n example is included) and an MCP server for agents. MIT licensed.
 
-It runs in production: the YouTube channel @spottheliee is generated and posted entirely by one GitHub Actions workflow, 6 videos a day.
+Honest limitations: it started as a script and grew, so parts are still being refactored. The pitch-based speaker switching needs the two voices to differ by roughly 20%, and I have only checked it on a few interviews. Filler removal and the publishing integration (Upload-Post) have had little testing on real footage, so treat them as experimental. Rendering a short takes a few minutes, and a GPU helps a lot.
 
-Ways to run it: a browser UI (Gradio), Docker, a Colab notebook with a free GPU, a CLI, and an MCP server so Claude/Cursor can drive it. The LLM falls back from Gemini to Ollama to Hugging Face, so it can run fully locally. MIT licensed.
-
-Honest limitations: it's a Python script that grew organically and is mid-refactor. Active-speaker detection uses OpenCV Haar cascades, not a learned model. Rendering a short takes a few minutes on CPU.
-
-I'd love feedback on the clipping quality and on which formats are worth keeping.
+I'd love feedback on clipping quality and on which features are worth keeping.
 
 ---
 
 ## 2. r/selfhosted
 
-**Title:** ShortsFlow – self-hosted Opus Clip alternative: turn long videos into captioned Shorts (Docker, local Whisper, MIT)
+**Title:** ShortsFlow – self-hosted Opus Clip alternative: long videos to captioned Shorts (pip/Docker, local Whisper, MIT)
 
 **Body:**
 Hi r/selfhosted! I've been building an open-source tool for making vertical short-form video without uploading footage to a SaaS.
 
-- **Clipping**: YouTube link or local file → local Whisper transcription → hook scoring → 9:16 clips with face tracking and animated captions
+- **Clipping**: YouTube link or local file → local Whisper → hook scoring → 9:16 clips with face tracking and animated captions
+- **Ask for moments**: `--find "where they discuss pricing"`
+- **Edit by transcript**: delete words from a text file and the video follows
 - **Podcast mode**: cuts to the active speaker, or shows both stacked when it's unsure
-- **Generate from a topic**: script → TTS → stock footage → render (30+ formats)
-- **Fully local**: Ollama is supported for the LLM step and Whisper runs on your GPU; only stock footage (Pexels) needs an API key
-- **Deploy**: `docker run -p 7860:7860 ghcr.io/ghost1412/shorts-generator` → browser UI at :7860
-
-It runs my own YouTube channel unattended (6 videos/day from GitHub Actions).
+- **Fully local**: Whisper on your GPU, Ollama for the LLM, Kokoro for the voice; only stock footage (Pexels) needs an API key, and only for the generate-from-a-topic mode
+- **Automate it**: REST API with API keys and signed webhooks, n8n example included
+- **Install**: `pip install shortsflow`, `docker run -p 7860:7860 ghcr.io/ghost1412/shorts-generator`, or open the Colab
 
 Repo: https://github.com/ghost1412/shorts-generator
 
-Feedback and issues welcome. ROADMAP.md lists what I'm working on, and there are a few `good first issue` tickets.
+Feedback and issues welcome. ROADMAP.md lists what's open, and there are a few `good first issue` tickets.
 
 *(Check the subreddit's self-promotion rules first; some require mod approval or a flair like "Release".)*
 
@@ -56,9 +76,9 @@ Feedback and issues welcome. ROADMAP.md lists what I'm working on, and there are
 
 ## 3. r/LocalLLaMA (angle: runs on local models)
 
-**Title:** Made a Shorts generator that runs end-to-end on local models (Ollama + Whisper), with an MCP server for agents
+**Title:** Open-source Shorts clipper that runs end-to-end on local models (Whisper + Ollama + Kokoro), with a REST API and MCP server
 
-**Body:** Same as above, but lead with the Ollama fallback, local Whisper and the MCP server. Keep stock footage as the only cloud dependency.
+**Body:** Lead with the local stack: Whisper on the GPU, Ollama for hook scoring and `--find`, Kokoro for the voice. Mention the Gemini → Ollama → Hugging Face fallback order, and that a 7B model is enough for scoring but sometimes invents details in clip titles, so check them. Keep stock footage as the only cloud dependency.
 
 ---
 
@@ -76,5 +96,5 @@ Short description (reuse everywhere):
 
 ## 5. Product Hunt (optional, later)
 
-Tagline: "Open-source Opus Clip - self-hosted Shorts from any video or idea"
+Tagline: "Open-source Opus Clip - local Shorts from any video or idea"
 Wait until the Colab notebook and Docker image are confirmed working; PH visitors won't install from source.
