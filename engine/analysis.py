@@ -1308,7 +1308,9 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 30, "final_score": 30, "fallback": True, "hook_text": "Check this out!", "reason": "Draft Extraction (Failsafe)"}]
         
         # Final deduplication check
-        valid_highlights = deduplicate_highlights(valid_highlights)
+        valid_highlights = deduplicate_highlights(valid_highlights)  # returns best-score-first
+        if mode != "shorts":
+            valid_highlights.sort(key=lambda x: float(x['start']))  # a narrative reel plays in story order
         print(f"[Log] Curation complete: Selected {len(valid_highlights)} high-viral deduplicated segments.")
         return valid_highlights
     except Exception as e:

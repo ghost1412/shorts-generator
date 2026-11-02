@@ -2719,24 +2719,44 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             return extracted_files
         print(f"[Log] Merging {len(highlights)} clips into Highlight Reel...")
         clips = []
+        parts = []  # (source start, source end, rendered length) of every segment that made it into the reel
+        seg_paths = []
         for i, hi in enumerate(highlights):
             task_path = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
             if not os.path.exists(task_path) or os.path.getsize(task_path) < 1000: continue
             try:
                 clip = VideoFileClip(task_path)
-                if reel_captions:
-                    try:
-                        words = apply_influencer_subtitles(clip, transcript_data, hi['start'], hi['end'], size=clip.size, y_pos=int(clip.h * 0.78))
-                        if words:
-                            clip = CompositeVideoClip([clip] + list(words), size=clip.size).with_duration(clip.duration)
-                    except Exception as e:
-                        print(f"[Warning] Reel captions skipped for segment {i+1}: {e}")
                 clips.append(clip)
+                parts.append((hi['start'], hi['end'], clip.duration))
+                seg_paths.append(task_path)
             except Exception as e:
                 print(f"[Warning] Segment {i+1} could not be loaded for the reel: {e}")
                 continue
             
         if not clips: return []
+
+        # Fast path: FFmpeg joins the segments, crossfades them and (optionally) burns the captions in one encode.
+        # MoviePy's per-frame compositing needed ~14 minutes for a 5 minute reel. MoviePy stays as the fallback below.
+        try:
+            from engine.reel_captions import ass_document, reel_words, render_reel
+            ff_xf = 0.25 if len(parts) > 1 else 0.0
+            ass_path = None
+            if reel_captions:
+                words = reel_words(parts, transcript_data, ff_xf)
+                ass_path = os.path.join(output_dir, "reel_captions.ass")
+                with open(ass_path, "w", encoding="utf-8") as f:
+                    f.write(ass_document(words, size=clips[0].size))
+            ff_codec = 'h264_nvenc' if use_gpu else codec
+            ff_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
+            if render_reel(seg_paths, [p[2] for p in parts], out, xf=ff_xf, ass_path=ass_path, codec=ff_codec,
+                           quality_params=ff_params, workdir=output_dir):
+                for clip in clips: clip.close()
+                print(f"[Log] Highlight reel rendered with FFmpeg: {out}")
+                extracted_files.append(out)
+                return extracted_files
+            print("[Warning] FFmpeg reel render failed; falling back to MoviePy.")
+        except Exception as e:
+            print(f"[Warning] FFmpeg reel render error ({e}); falling back to MoviePy.")
 
         # Soft transitions: short audio fades stop the pops at every cut, and a crossfade replaces the hard jump
         xf = 0.25
@@ -2754,9 +2774,27 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         encode_codec = 'h264_nvenc' if use_gpu else codec
         final_threads = 1 if use_gpu else 8
         quality_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
-        final_reel.write_videofile(out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params)
-        extracted_files.append(out)
+        plain_out = os.path.join(output_dir, "highlight_reel_plain.mp4") if reel_captions else out
+        final_reel.write_videofile(plain_out, fps=30, preset=preset, threads=final_threads, codec=encode_codec, ffmpeg_params=quality_params)
         for clip in clips: clip.close()
+        if reel_captions:
+            # Words go in with one FFmpeg pass (an ASS file) instead of a MoviePy layer per word, which took ~24 min per 4 min
+            try:
+                from engine.reel_captions import ass_document, burn_captions, reel_words
+                words = reel_words(parts, transcript_data, xf if len(parts) > 1 else 0.0)
+                ass_path = os.path.join(output_dir, "reel_captions.ass")
+                with open(ass_path, "w", encoding="utf-8") as f:
+                    f.write(ass_document(words, size=final_reel.size))
+                print(f"[Log] Burning {len(words)} caption words into the reel (FFmpeg)...")
+                if burn_captions(plain_out, ass_path, out, codec=encode_codec, quality_params=quality_params):
+                    os.remove(plain_out)
+                else:
+                    raise RuntimeError("ffmpeg could not burn the captions")
+            except Exception as e:
+                print(f"[Warning] Reel captions failed ({e}); keeping the reel without captions.")
+                if os.path.exists(plain_out) and plain_out != out:
+                    os.replace(plain_out, out)
+        extracted_files.append(out)
         return extracted_files  # without this, a fresh long-form run returned None and the CLI reported "No videos were generated"
     else:
         # Shorts mode: Add subtitles and effects
