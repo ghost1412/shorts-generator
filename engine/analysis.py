@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import time
 import subprocess
@@ -560,6 +561,11 @@ def compute_audio_score(chunk, sr, prev_energy=None, global_features=None, start
     score = (norm_energy * 2.0) + (norm_delta * 3.0) + (norm_pitch * 1.5) - (silence_ratio * 2.0)
     return max(0, score), raw_energy, silence_ratio, valid_silence
 
+def _kw(text_lower, phrase):
+    """Whole-word / whole-phrase match, so "then" does not fire inside "athena" or "what" inside "whatever"."""
+    return re.search(r"\b" + re.escape(phrase) + r"\b", text_lower) is not None
+
+
 def score_segment(text, mode="shorts", start=None, end=None, target_duration=None):
     """
     Heuristic scoring to identify high-potential highlights.
@@ -578,12 +584,20 @@ def score_segment(text, mode="shorts", start=None, end=None, target_duration=Non
         # Viral keywords
         keywords = ["no way", "wait", "what", "crazy", "insane", "oh my god", "unbelievable", "shocking", "finally"]
         for k in keywords:
-            if k in text_lower: score += 12
+            if _kw(text_lower, k): score += 12
+
+        # Signals that actually occur in Whisper transcripts (it rarely writes "!" or ALL-CAPS words)
+        score += min(3, len(re.findall(r"\d[\d,.]*%?", text))) * 6  # numbers / statistics
+        score += min(3, text.count("?")) * 5
+        curiosity = ["turns out", "actually", "secret", "mistake", "nobody", "biggest", "worst", "the truth",
+                     "here's why", "the reason", "you need to", "the problem", "i was wrong", "never"]
+        score += sum(10 for k in curiosity if _kw(text_lower, k))
+        score += min(5, len(re.findall(r"\byou\b", text_lower))) * 2  # talking to the viewer
 
         # Hook Boosting (First 3 Seconds / First few words)
         first_few_words = text_lower.split()[:8]
         hook_words = ["what", "why", "how", "imagine", "did you know", "secret", "never", "always"]
-        if any(h in " ".join(first_few_words) for h in hook_words):
+        if any(_kw(" ".join(first_few_words), h) for h in hook_words):
             score += 20
         if "?" in text[:30]:
             score += 15
@@ -615,11 +629,10 @@ def score_segment(text, mode="shorts", start=None, end=None, target_duration=Non
         # 🟢 EXPERT REFINEMENT: Narrative Arc & Story Beats
         narrative_keywords = [
             "finally", "however", "consequently", "resolved", "conclusion", 
-            "ending", "solved", "discovered", "because", "revealed",
-            "kratos", "athena", "zeus", "pandora", "god", "revenge", "hope" # Content specific but effective
+            "ending", "solved", "discovered", "because", "revealed", "revenge", "hope"
         ]
         for k in narrative_keywords:
-            if k in text_lower: score += 15
+            if _kw(text_lower, k): score += 15
 
         # Dialogue density (Short sentences often imply back-and-forth narrative)
         if word_count > 10:
@@ -632,18 +645,18 @@ def score_segment(text, mode="shorts", start=None, end=None, target_duration=Non
             score += 10
         conflict_words = ["but", "however", "problem", "issue", "failed", "wrong", "mistake", "challenge", "unbelievable"]
         for k in conflict_words:
-            if k in text_lower: score += 10
+            if _kw(text_lower, k): score += 10
             
         story_keys = ["because", "then", "after", "finally", "decided", "discovered", "realized"]
         for k in story_keys:
-            if k in text_lower: score += 8
+            if _kw(text_lower, k): score += 8
             
         if 20 < word_count < 60: score += 10
         
         # 🟢 EXPERT REFINEMENT: Payoff Keywords (Narrative Weight)
         story_peaks = ["finally", "in the end", "turns out", "the result", "this is why", "because of that"]
         for k in story_peaks:
-            if k in text_lower:
+            if _kw(text_lower, k):
                 score += 20
                 
         # 🟢 EXPERT REFINEMENT: Duration Penalty/Bonus
@@ -954,7 +967,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             seg['norm_audio_delta'] * 0.10
         )
         pos = round(seg['start'] / total_duration, 2) if total_duration > 0 else 0
-        seg['pruning_score'] = combined_signal * (0.8 + 0.4 * pos)
+        seg['pruning_score'] = combined_signal * (0.8 if pos < 0.03 else 1.0)  # skip cold-open/intro, otherwise neutral
             
     # 🟢 PHASE 15: Peak Sharpening (Local Maxima Boost)
     for i in range(1, len(compressed_segments)-1):
@@ -1052,7 +1065,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         3. Audio Spikes (a_signal): Emotional peaks even if text is neutral.
         
         CRITICAL RULES FOR WATCHABILITY:
-        - **CLIP COUNT**: You MUST identify and extract exactly {clip_count} distinct viral clips (or as close to {clip_count} as possible, aiming for at least 12-15) covering different parts of the video. If the USER EXTRA CONTEXT mentions multiple scenes, timestamps, or parts, you MUST extract multiple separate, distinct clips for EACH requested scene/timestamp to meet the requested count. Do not be overly selective; include all moments of action, humor, or banter.
+        - **CLIP COUNT**: You MUST identify and extract exactly {clip_count} distinct viral clips (or as close to {clip_count} as the video allows) covering different parts of the video. If the USER EXTRA CONTEXT mentions multiple scenes, timestamps, or parts, you MUST extract multiple separate, distinct clips for EACH requested scene/timestamp to meet the requested count. Do not be overly selective; include all moments of action, humor, or banter.
         - **HOOK FIRST**: The first 2 seconds of each clip MUST have a visual or audio 'hook'. Look for segments where 'ad' (audio delta) or 'd' (text delta) is high right at the 'start' timestamp.
         - **VIRALITY**: Prioritize high-energy, funny, or shocking moments. {style_instructions}
         - **ENGAGEMENT**: Each moment MUST be between {max(5, (target_duration or 15)-15)} and {min(59, (target_duration or 45)+15)} seconds long.
@@ -1301,7 +1314,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             # 🟢 ABSOLUTE FAILSAFE: Simple duration-based slice
             fallback_start = min(45.0, total_duration * 0.1)
             fallback_duration = 35.0 if mode == "shorts" else (target_duration or 180.0)
-            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 85, "hook_text": "Check this out!", "reason": "Draft Extraction (Failsafe)"}]
+            return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 30, "final_score": 30, "fallback": True, "hook_text": "Check this out!", "reason": "Draft Extraction (Failsafe)"}]
         
         # Final deduplication check
         valid_highlights = deduplicate_highlights(valid_highlights)
@@ -1311,7 +1324,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         print(f"[Error] Highlight identification failed: {e}")
         import traceback
         traceback.print_exc()
-        return [{"start": 10.0, "end": 40.0, "viral_score": 80, "hook_text": "Epic Moment", "reason": "Epic Highlight"}]
+        return [{"start": 10.0, "end": 40.0, "viral_score": 30, "final_score": 30, "fallback": True, "hook_text": "Epic Moment", "reason": "Epic Highlight (fallback: analysis failed)"}]
 
 def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     """

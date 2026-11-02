@@ -63,3 +63,16 @@ def test_group_subtitles_breaks_on_punctuation_and_length():
     grouped = group_subtitles(words)
     assert grouped[0]["word"].endswith("it.")
     assert group_subtitles([]) == []
+
+
+# --- scoring signals that survive Whisper output ----------------------------------------------
+def test_shorts_score_rewards_numbers_curiosity_and_direct_address():
+    plain = score_segment("the committee met on tuesday and discussed the schedule", "shorts", 0, 20, 30)
+    sticky = score_segment("turns out nobody tells you this, 95% of people make the same mistake", "shorts", 0, 20, 30)
+    assert sticky > plain + 20
+    assert score_segment("you you you", "shorts", 0, 20, 30) > score_segment("they they they", "shorts", 0, 20, 30)
+    assert score_segment("yourself", "shorts", 0, 20, 30) == score_segment("herself", "shorts", 0, 20, 30)  # whole word only
+
+
+def test_long_scoring_has_no_content_specific_boosters():
+    assert score_segment("zeus athena kratos pandora", "long", 0, 30) == score_segment("lorem ipsum dolor sit", "long", 0, 30)

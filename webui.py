@@ -137,7 +137,7 @@ def build_ui():
                             tighten = gr.Checkbox(value=True, label="Remove silences")
                             broll = gr.Checkbox(label="Auto B-roll")
                             srt = gr.Checkbox(label="Export .srt")
-                        target_lang = gr.Textbox(label="Dub to language (optional, e.g. es, hi, de)")
+                        target_lang = gr.Textbox(label="Dub to language (not implemented yet, ignored)")
                         clip_settings = _render_settings()
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                     with gr.Column():

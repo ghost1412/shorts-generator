@@ -102,8 +102,8 @@ _Honest take: the paid tools have a nicer editor and scheduling. ShortsFlow wins
 | ✂️ **AI Clipping** | Slices long YouTube/local videos into high-scoring vertical shorts | `py main.py --source_video "URL" --smart_crop` |
 | 🔢 **Top 5 Countdown** | Numbered listicle countdown shorts (#5 ➔ #1) with rank badges | `py main.py --mode TOP_5 --category "inventions"` |
 | 💬 **Chat Story** | Animated text message conversation shorts (iMessage format) | `py main.py --mode CHAT_STORY --category "mystery"` |
-| 👥 **Podcast** | 2-speaker debate shorts with alternating multi-voice synthesis | `py main.py --mode PODCAST --prompt "AI future"` |
-| 🌐 **Video Dubbing** | Multilingual video translation & voice re-synthesis | `py main.py --mode DUB --source_video "clip.mp4" --target_lang es` |
+| 👥 **Podcast** *(planned, not implemented yet)* | 2-speaker debate shorts with alternating multi-voice synthesis | - |
+| 🌐 **Video Dubbing** *(planned, not implemented yet)* | Multilingual video translation & voice re-synthesis | - |
 | 🧮 **Manim Explainer** | Programmatic 2D/3D math, CS, and science animations | `py main.py --mode EXPLAINER --prompt "Gravity"` |
 | 💡 **AI Facts** | High-energy trivia & mystery facts with scene stock loops | `py main.py --mode FACTS --category "space"` |
 | 📖 **AI Story** | Narrative story voiceover with visual scene stitching | `py main.py --mode STORY --category "sci-fi"` |
@@ -227,8 +227,7 @@ py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --c
 # 3. Render Landscape 16:9 YouTube Video with SFX
 py main.py --mode EXPLAINER --prompt "Quantum physics" --aspect_ratio 16:9 --sfx_preset whoosh
 
-# 4. Translate and Dub Video into Spanish
-py main.py --mode DUB --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --target_lang es --use_remotion
+# 4. Translate and dub video: planned, not implemented yet (--mode DUB / --target_lang are ignored)
 
 # 5. Process Batch Content Calendar Queue
 py main.py --batch_file "topics.txt" --mode FACTS --aspect_ratio 9:16 --use_remotion

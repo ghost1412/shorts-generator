@@ -152,6 +152,14 @@ def parse_args():
 
 args = parse_args()
 
+NOT_IMPLEMENTED_MODES = ("DUB", "PODCAST", "SPLIT_SCREEN")
+if getattr(args, "mode", None) in NOT_IMPLEMENTED_MODES:
+    print(f"[Error] Mode {args.mode} is listed but not implemented yet, so it would not do what its name says. "
+          "Use clipping (--source_video ...) or one of the generate modes (FACTS, STORY, NEWS, ...).")
+    sys.exit(2)
+if getattr(args, "target_lang", None):
+    print("[Warning] --target_lang is not implemented yet (video dubbing is planned); the option is ignored.")
+
 if getattr(args, "use_ollama", False):
     os.environ["FORCE_OLLAMA"] = "true"
     os.environ["LLM_PROVIDER"] = "ollama"

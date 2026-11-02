@@ -34,7 +34,7 @@ python main.py --mode FACTS --category "space mysteries" --vibe suspense --use_r
 python main.py --mode EXPLAINER --prompt "Explain how gravity works visually" --skip-upload
 ```
 
-Modes: FACTS, STORY, EXPLAINER, WYR, TOP_5, CHAT_STORY, HORROR, TRUE_CRIME, REDDIT, TRIVIA, QUOTE, RIDDLE, EMOJI_GUESS, NEWS, ARTICLE, UGC, PODCAST, DUB, AUTO.
+Modes: FACTS, STORY, EXPLAINER, WYR, TOP_5, CHAT_STORY, HORROR, TRUE_CRIME, REDDIT, TRIVIA, QUOTE, RIDDLE, EMOJI_GUESS, NEWS, ARTICLE, UGC, AUTO. (DUB and PODCAST are planned, not implemented.)
 
 ## Rules
 

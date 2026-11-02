@@ -31,7 +31,7 @@ TOOLS_DEFINITIONS = [
             "properties": {
                 "mode": {
                     "type": "string",
-                    "description": "Content mode: FACTS, EXPLAINER, STORY, WYR, TOP_5, CHAT_STORY, PODCAST, HORROR, TRUE_CRIME, BIBLE, ARTICLE, UGC, DUB, EMOJI_GUESS, REDDIT, TRIVIA, QUOTE",
+                    "description": "Content mode: FACTS, EXPLAINER, STORY, WYR, TOP_5, CHAT_STORY, HORROR, TRUE_CRIME, BIBLE, ARTICLE, UGC, EMOJI_GUESS, REDDIT, TRIVIA, QUOTE",
                     "default": "FACTS"
                 },
                 "category": {
@@ -342,8 +342,8 @@ def handle_tool_call(tool_name: str, args: dict) -> dict:
     elif tool_name == "list_supported_modes":
         info = {
             "content_modes": [
-                "FACTS", "EXPLAINER", "STORY", "WYR", "TOP_5", "CHAT_STORY", "PODCAST",
-                "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC", "DUB", "EMOJI_GUESS",
+                "FACTS", "EXPLAINER", "STORY", "WYR", "TOP_5", "CHAT_STORY",
+                "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC", "EMOJI_GUESS",
                 "REDDIT", "TRIVIA", "QUOTE", "NEWS", "RIDDLE"
             ],
             "caption_styles": ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"],
