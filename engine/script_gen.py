@@ -464,6 +464,18 @@ def get_llm_response(
         except Exception as e:
             print(f"[Info] Local LLM failed: {e}")
 
+    # 5b. Groq (free tier, OpenAI-compatible) as an automatic fallback when a key is configured
+    groq_key = GROQ_API_KEY or os.getenv("GROQ_API_KEY")
+    if groq_key and target_provider != "groq":
+        try:
+            print("[Log] Fallback: Attempting Groq API...")
+            return _call_openai_compatible(
+                api_key=groq_key, base_url="https://api.groq.com/openai/v1/chat/completions",
+                model=(os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"), prompt=prompt, system_prompt=system_prompt,
+                max_tokens=min(max_tokens, 8000), temperature=temperature, timeout=min(timeout, 60))
+        except Exception as e:
+            print(f"[Warning] Groq API failed: {e}")
+
     # 6. HuggingFace fallback
     if HF_API_KEY:
         try:
@@ -476,6 +488,9 @@ def get_llm_response(
             return response.json()["choices"][0]["message"]["content"]
         except Exception as e:
             print(f"[Warning] HuggingFace API failed: {e}")
+            if "402" in str(e):
+                print("[Warning] HuggingFace says this token has no Inference Providers credits left (separate from other HF "
+                      "quotas). Check huggingface.co/settings/billing, or add a free GROQ_API_KEY / a local Ollama as a fallback.")
 
     raise RuntimeError("All configured LLM providers failed. Check API keys or local Ollama service status.")
 
