@@ -1225,38 +1225,28 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                 valid_highlights = valid_highlights[:clip_count]
             elif mode == "long" and target_duration:
                 # 🟢 EXPERT REFINEMENT: Soft Duration Capping for Highlight Reels
-                valid_highlights.sort(key=lambda x: x.get('final_score', 0), reverse=True)
-                capped_highlights = []
-                current_total = 0
-                for h in valid_highlights:
-                    dur = h['end'] - h['start']
-                    if current_total < target_duration * 1.3: # Allow 30% overage for impact
-                        capped_highlights.append(h)
-                        current_total += dur
-                    else:
-                        break
-                valid_highlights = capped_highlights
-                
+                valid_highlights = fit_to_target(valid_highlights, target_duration)
+
                 # 🟢 FILL-UP: Backfill from pruned segments if LLM under-delivered
                 current_total = sum(h['end'] - h['start'] for h in valid_highlights)
                 if current_total < target_duration * 0.95:
                     print(f"[Log] Duration shortfall ({current_total:.0f}s < {target_duration}s). Backfilling from signal peaks...")
                     used_ranges = [(h['start'], h['end']) for h in valid_highlights]
+                    candidates = []
                     for seg in sorted(compressed_segments, key=lambda x: x['pruning_score'], reverse=True):
                         overlaps = any(not (seg['end'] < u[0] or seg['start'] > u[1]) for u in used_ranges)
-                        seg_dur = seg['end'] - seg['start']
-                        if overlaps or seg_dur < 15: continue
-                        valid_highlights.append({'start': seg['start'], 'end': seg['end'],
+                        if overlaps or seg['end'] - seg['start'] < 15: continue
+                        candidates.append({'start': seg['start'], 'end': seg['end'],
                             'viral_score': int(seg['pruning_score'] * 100),
                             'final_score': int(seg['pruning_score'] * 100), 'reason': 'Signal Peak (Backfill)'})
-                        used_ranges.append((seg['start'], seg['end']))
-                        current_total += seg_dur
-                        if current_total >= target_duration * 1.05: break
+                    valid_highlights += fit_to_target(candidates, target_duration, already=current_total)
+                    current_total = sum(h['end'] - h['start'] for h in valid_highlights)
                     print(f"[Log] After backfill: {current_total:.0f}s, {len(valid_highlights)} segments")
             
             # Drop too-short clips BEFORE backfilling, so backfill can replace them (it used to run first and the
             # floor filter then left the run one clip short)
-            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= max(8.0, min_duration - 5.0)]
+            floor = max(8.0, min_duration - 5.0) if mode == "shorts" else max(15.0, min_duration - 5.0)
+            valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= floor]
             if mode == "shorts" and len(valid_highlights) < clip_count:
                 print(f"[Log] 🎬 Highlight count ({len(valid_highlights)}) is below requested count ({clip_count}). Backfilling top signal peaks...")
                 fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0), reverse=True)
@@ -1360,6 +1350,33 @@ def deduplicate_highlights(highlights, min_overlap_sec=5.0):
     # Re-sort chronologically by start time for natural playback order
     kept.sort(key=lambda x: float(x['start']))
     return kept
+
+def order_for_mode(highlights, mode):
+    """Shorts stay best-score-first (clip 1 is the best one); long-form reels play in the order things happen."""
+    if mode == "shorts" or not highlights:
+        return highlights
+    return sorted(highlights, key=lambda h: float(h["start"]))
+
+
+def fit_to_target(highlights, target, already=0.0, tolerance=0.08, min_len=15.0):
+    """Best-scoring highlights whose total length lands within `tolerance` of `target` seconds (`already` seconds are
+    taken by clips chosen earlier). A segment that would overshoot is trimmed from its end if at least `min_len` of room
+    is left, otherwise skipped. The old rule allowed 30% overage, so a 240 s target gave a 320 s reel."""
+    ceiling, enough = target * (1 + tolerance), target * (1 - tolerance)
+    total, picked = float(already), []
+    for h in sorted(highlights, key=lambda x: x.get('final_score', 0), reverse=True):
+        if total >= enough:
+            break
+        dur = h['end'] - h['start']
+        room = ceiling - total
+        if dur <= room:
+            picked.append(h)
+            total += dur
+        elif room >= min_len:
+            picked.append(dict(h, end=h['start'] + room, trimmed=True))
+            total += room
+    return picked
+
 
 def pick_backfill(candidates, chosen, need, min_gap=30.0, min_len=10.0):
     """Highlights to add when the LLM under-delivers. `candidates` are scored segments, best first. Takes the best ones
@@ -1528,6 +1545,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
         except Exception as e:
             print(f"[Warning] Failed to cache highlights: {e}")
 
+    highlights = order_for_mode(highlights, mode)  # scoring re-sorts best-first; a narrative reel plays in story order
     highlights = clamp_highlights(highlights, probe_duration(video_path))
 
     interest_points_cache_path = os.path.join(output_dir, "interest_points.json")
