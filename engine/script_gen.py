@@ -1254,8 +1254,6 @@ def generate_funny_news(category="general", tone="funny", persona=None):
     persona: "rabbit", "robot", "squirrel", "superhero" etc.
     Returns: {"title": str, "hook": str, "story": str, "source": str, "search_term": str, "tone": str}
     """
-    import xml.etree.ElementTree as ET
-    import email.utils
     from datetime import datetime, timedelta, timezone
 
     # --- STEP 1: Fetch real news from RSS feeds based on tone and category ---
@@ -1321,87 +1319,34 @@ def generate_funny_news(category="general", tone="funny", persona=None):
         else:
             persona_prompt = f"ACT AS A {persona.upper()}: Use appropriate slang, interjections, and personality traits."
     
+    from engine import news_feed
     headlines = []
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=48)
-    
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
     for feed_url in rss_feeds:
         try:
-            resp = requests.get(feed_url, timeout=10, headers={
-                "User-Agent": "ShortsFlow/1.0 (News Aggregator)"
-            })
+            resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "ShortsFlow/1.0 (News Aggregator)"})
             if resp.status_code != 200:
+                print(f"[Warning] Feed {feed_url} answered HTTP {resp.status_code}; skipping it.")
                 continue
-            
-            root = ET.fromstring(resp.text)
-            
-            # Handle Atom feeds (Reddit)
-            atom_ns = {"atom": "http://www.w3.org/2005/Atom"}
-            for entry in root.findall("atom:entry", atom_ns):
-                title_el = entry.find("atom:title", atom_ns)
-                link_el = entry.find("atom:link", atom_ns)
-                updated_el = entry.find("atom:updated", atom_ns)
-                
-                if title_el is not None and title_el.text:
-                    # Date check for recency
-                    is_fresh = True
-                    if updated_el is not None and updated_el.text:
-                        try:
-                            updated_text = str(updated_el.text).strip()
-                            updated_dt = datetime.fromisoformat(updated_text.replace("Z", "+00:00"))
-                            if updated_dt < cutoff: is_fresh = False
-                        except: pass
-                    
-                    if is_fresh:
-                        link = link_el.get("href", feed_url) if link_el is not None else feed_url
-                        headlines.append({
-                            "headline": title_el.text.strip(),
-                            "source": link,
-                            "feed": feed_url
-                        })
-            
-            # Handle RSS 2.0 feeds (BBC, Google News)
-            for item in root.findall(".//item"):
-                title_el = item.find("title")
-                link_el = item.find("link")
-                source_el = item.find("source")
-                pubDate_el = item.find("pubDate")
-                
-                if title_el is not None and title_el.text:
-                    # Date check for recency
-                    is_fresh = True
-                    if pubDate_el is not None and pubDate_el.text:
-                        try:
-                            pub_text = str(pubDate_el.text).strip()
-                            pub_dt = email.utils.parsedate_to_datetime(pub_text)
-                            if pub_dt < cutoff: is_fresh = False
-                        except: pass
-                    
-                    if is_fresh:
-                        source_name = source_el.text if source_el is not None else "News"
-                        link = link_el.text if link_el is not None else feed_url
-                        headlines.append({
-                            "headline": title_el.text.strip(),
-                            "source": f"{source_name} ({link})",
-                            "feed": feed_url
-                        })
-                    
+            headlines += news_feed.parse_feed(resp.text, feed_url, cutoff)
         except Exception as e:
             print(f"[Warning] RSS fetch failed for {feed_url}: {e}")
-            continue
-    
-    if not headlines:
-        print(f"[Warning] No fresh headlines for {category}. Using fallback.")
-        headlines = [{
+
+    # Funny/persona retellings must not joke about deaths, violence, disasters or court cases.
+    chosen = news_feed.pick(headlines, history=news_feed.load_history(),
+                            avoid_sensitive=(tone == "funny" or bool(persona)))
+    if chosen is None:
+        print(f"[Warning] No fresh, unused, suitable headlines for {category}. Using fallback.")
+        chosen = {
             "headline": f"Breaking development in {category} today" if tone == "serious" else f"Unbelievable {category} story catches everyone off guard",
-            "source": "Global News Network",
-            "feed": "fallback"
-        }]
-    
-    # Pick a random fresh headline
-    chosen = random.choice(headlines)
+            "source": "Global News Network", "feed": "fallback", "description": "",
+        }
     real_headline = chosen["headline"]
+    real_description = chosen.get("description", "")
     real_source = chosen["source"]
+    if chosen.get("feed") != "fallback":
+        news_feed.remember(real_headline)
+    print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     
     # --- STEP 2: Use LLM to rewrite based on tone/persona ---
@@ -1419,9 +1364,10 @@ def generate_funny_news(category="general", tone="funny", persona=None):
     prompt = f"""Rewrite this REAL news headline as a YouTube Shorts script:
     
 REAL HEADLINE: "{real_headline}"
+{("SOURCE SUMMARY (use only facts from this and the headline): " + real_description[:600]) if real_description else ""}
 
 RULES:
-1. DO NOT change the facts. Keep it accurate to the headline.
+1. DO NOT change the facts. Use ONLY facts in the headline/summary; do not add numbers, names, quotes or places that are not there.
 2. ANCHOR PERSONA: Start with a professional news intro AND your character intro if applicable. 
 3. STORY: Retell it in under 45 words. Fast-paced. Use '...' for dramatic pauses.
 4. If persona is set, integrate it into EVERY line. 
@@ -1457,7 +1403,12 @@ Format as JSON ONLY:
         }
 
     try:
-        return with_best_of_n(llm_call, validate_news, n=3)
+        def grounded(data):
+            extra = news_feed.ungrounded_numbers(data.get("story", ""), f"{real_headline} {real_description}")
+            if extra:
+                print(f"[Log] Rejecting retelling with numbers not in the source: {extra}")
+            return validate_news(data) and not extra
+        return with_best_of_n(llm_call, grounded, n=3)
     except Exception as e:
         print(f"[Warning] News LLM failed ({e}). Using emergency fallback.")
         return fallback()
