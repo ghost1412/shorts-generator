@@ -21,6 +21,18 @@ if sys.stdout.encoding != 'utf-8':
 # Active jobs tracking
 JOBS: Dict[str, Dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
+# AI tools start this server from any working directory, so find main.py (and run it) relative to this file, not to the caller
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _server_version():
+    """The ShortsFlow version (so the MCP handshake does not report a stale number)."""
+    try:
+        import re
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "shortsflow", "__init__.py"), encoding="utf-8") as f:
+            return re.search(r'__version__\s*=\s*"([^"]+)"', f.read()).group(1)
+    except Exception:
+        return "0.2.0"
 
 TOOLS_DEFINITIONS = [
     {
@@ -183,12 +195,13 @@ def run_main_command(job_id: str, args_list: list):
     with JOBS_LOCK:
         JOBS[job_id] = {"status": "processing", "progress": 0, "logs": [], "output": None}
 
-    cmd = [sys.executable, "main.py", "--video_id", job_id, "--skip_upload"] + args_list
+    cmd = [sys.executable, os.path.join(ROOT_DIR, "main.py"), "--video_id", job_id, "--skip_upload"] + args_list
     print(f"[MCP Worker] Starting command: {' '.join(cmd)}", file=sys.stderr)
 
     try:
         process = subprocess.Popen(
             cmd,
+            cwd=ROOT_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -395,7 +408,7 @@ def main():
                         },
                         "serverInfo": {
                             "name": "ShortsFlow AI Studio MCP Server",
-                            "version": "2.5.0"
+                            "version": _server_version()
                         }
                     }
                 }

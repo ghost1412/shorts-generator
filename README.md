@@ -186,11 +186,28 @@ ShortsFlow AI Studio provides a native **MCP Server** (`mcp_server.py`) allowing
 python mcp_server.py
 ```
 
+### Add it to your AI tool
+
+The MCP server runs from a checkout of this repo (it starts `main.py` next to it):
+
+```bash
+git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
+cd shorts-generator && pip install -r requirements.txt
+claude mcp add shortsflow -- python /full/path/to/shorts-generator/mcp_server.py      # Claude Code
+```
+
+Claude Desktop / Cursor: add this under `mcpServers` in the tool's config JSON (use the full path):
+
+```json
+{ "mcpServers": { "shortsflow": { "command": "python", "args": ["/full/path/to/shorts-generator/mcp_server.py"] } } }
+```
+
 ### Available MCP Tools:
 * `generate_short`: Create AI shorts from topics or prompts.
 * `extract_clips`: Slice long YouTube videos into vertical shorts with face tracking, a stacked two-speaker split (`layout: split`) or active-speaker switching (`layout: active`).
 * `generate_social_package`: Generate platform metadata (`.meta.json`) for YouTube Shorts, TikTok, and Reels.
 * `get_render_status`: Query live rendering job progress.
+* `list_supported_modes`: List the content modes, caption styles and options the server accepts.
 
 ---
 
