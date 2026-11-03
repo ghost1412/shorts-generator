@@ -120,7 +120,9 @@ try {
     } else {
         $spec = "shortsflow[clip,webui]"
     }
-    Run $Uv @("pip", "install", "--python", $Py, "--upgrade-package", "shortsflow", "--extra-index-url", $torchIndex, $spec)
+    # No extra index here: torch is already installed and satisfies the requirement, and the PyTorch index only carries stale copies
+    # of ordinary packages (requests 2.28) that would shadow PyPI's.
+    Run $Uv @("pip", "install", "--python", $Py, "--upgrade-package", "shortsflow", $spec)
     if ($cudaTag) {
         & $Py -c "import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)"
         if ($LASTEXITCODE -ne 0) {
