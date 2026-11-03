@@ -31,11 +31,15 @@ def load_results(json_path):
     except (OSError, ValueError):
         return []
     base = os.path.dirname(os.path.abspath(json_path))
+    settings = data.get("settings") or {}
     cards = []
     for i, c in enumerate(data.get("clips") or [], start=1):
         video = c.get("video_path") or ""
         if video and not os.path.isabs(video):
-            candidates = [os.path.join(base, video), os.path.join(os.path.dirname(base), video)]
+            # the command line writes paths relative to where it ran (and may mix / and \): try the likely bases, then the bare name
+            name = os.path.basename(video.replace("\\", "/"))
+            candidates = [os.path.join(base, video), os.path.join(os.path.dirname(base), video), os.path.abspath(video),
+                          os.path.join(base, name)]
             video = next((p for p in candidates if os.path.exists(p)), candidates[0])
         if not video or not os.path.exists(video):
             continue
@@ -57,6 +61,11 @@ def load_results(json_path):
             "start": c.get("start"),
             "end": c.get("end"),
             "duration": c.get("duration"),
+            "session_dir": base,
+            "results_path": os.path.abspath(json_path),
+            "caption_style": c.get("caption_style") or settings.get("caption_style") or "HORMOZI",
+            "animated_captions": bool(settings.get("use_remotion")),
+            "can_rerender": bool(settings and data.get("source_video")),
         })
     return cards
 

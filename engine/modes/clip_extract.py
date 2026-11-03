@@ -396,6 +396,13 @@ def run(args, target_bitrate, target_preset):
             "source_video": args.source_video,
             "session_dir": session_dir,
             "total_clips": len(highlights),
+            # what this run used, so a single clip can be re-rendered later with the same settings (engine/rerender.py)
+            "settings": {
+                "extract_mode": args.extract_mode, "layout": getattr(args, "layout", "single"),
+                "smart_crop": bool(args.smart_crop), "tighten": bool(args.tighten), "tighten_mode": args.tighten_mode,
+                "use_remotion": bool(args.use_remotion), "caption_style": args.caption_style,
+                "subtitle_y_pos": args.subtitle_y_pos, "brand": getattr(args, "brand", None),
+            },
             "clips": []
         }
         for i, h in enumerate(highlights):

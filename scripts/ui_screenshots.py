@@ -38,7 +38,10 @@ for i, (title, score, color) in enumerate([("Why the sky is blue (and sunsets ar
                   "title": title, "description": "A short, clear explanation viewers can follow in half a minute.",
                   "tags": ["science", "light", "explained"], "thumbnail": None})
 with open(os.path.join(session, "results.json"), "w", encoding="utf-8") as f:
-    json.dump({"source_video": "demo.mp4", "session_dir": session, "total_clips": 2, "clips": clips}, f)
+    json.dump({"source_video": "demo.mp4", "session_dir": session, "total_clips": 2,
+               "settings": {"extract_mode": "shorts", "layout": "single", "smart_crop": True, "tighten": True, "tighten_mode": "cut",
+                            "use_remotion": True, "caption_style": "HORMOZI", "subtitle_y_pos": 1150, "brand": None},
+               "clips": clips}, f)
 
 # the workspace of a real install gets these copied in from the package; mirror that
 import shutil
@@ -86,6 +89,11 @@ try:
             raise
         page.wait_for_timeout(2500)
         page.screenshot(path=os.path.join(out_dir, "02_review.png"), full_page=True)
+        page.get_by_text("Edit this short: style, start and end").first.click()
+        page.wait_for_selector("text=Re-render this short", timeout=15000)
+        assert page.get_by_label("Start (seconds in the original video)").first.input_value() in ("12", "12.0")
+        page.screenshot(path=os.path.join(out_dir, "02b_edit_panel.png"), full_page=True)
+        page.get_by_text("Edit this short: style, start and end").first.click()
 
         page.get_by_role("button", name="Remove this short").first.click()
         page.wait_for_timeout(1500)

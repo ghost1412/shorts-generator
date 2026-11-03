@@ -252,6 +252,56 @@ def earlier_runs():
     return gr.update(choices=[(name, path) for name, path in review.recent_runs(ROOT)])
 
 
+def rerender_card(cards, index, style, start, end):
+    """Re-render one short (new caption style and/or start/end) with the run's cached analysis, then refresh its card."""
+    from shortsflow import review
+    card = next((c for c in cards or [] if c["index"] == index), None)
+    if not card or not card.get("can_rerender"):
+        raise gr.Error("This short cannot be edited (the data of its run is missing).")
+    skip = getattr(gr, "skip", None)
+    yield (skip() if skip else gr.update()), f"⏳ Re-rendering short {index}... this takes about a minute."
+    cmd = [sys.executable, "-m", "engine.rerender", card["session_dir"], str(index)]
+    if start is not None:
+        cmd += ["--start", str(start)]
+    if end is not None:
+        cmd += ["--end", str(end)]
+    if style and card.get("animated_captions"):
+        cmd += ["--style", style]
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+    r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    if r.returncode != 0:
+        reason = next((ln[len("[Error] "):] for ln in reversed((r.stdout or "").splitlines()) if ln.startswith("[Error] ")),
+                      "The re-render failed. Open 'Technical details' or run the same steps again.")
+        raise gr.Error(reason)
+    fresh = next((c for c in review.load_results(card["results_path"]) if c["index"] == index), None)
+    if fresh is None:
+        raise gr.Error("The re-rendered short could not be loaded.")
+    yield [fresh if c["index"] == index else c for c in cards], f"✅ Short {index} re-rendered."
+
+
+def rerender_handler(index):
+    """A real generator function for one card (a lambda that returns a generator is not treated as streaming by Gradio)."""
+    def handler(cards, style, start, end):
+        yield from rerender_card(cards, index, style, start, end)
+    return handler
+
+
+def undo_handler(index):
+    def handler(cards):
+        return undo_card(cards, index)
+    return handler
+
+
+def undo_card(cards, index):
+    from engine.rerender import undo_rerender
+    from shortsflow import review
+    card = next((c for c in cards or [] if c["index"] == index), None)
+    if not card or not undo_rerender(card["session_dir"], index):
+        raise gr.Error("There is no earlier version of this short to go back to.")
+    fresh = next((c for c in review.load_results(card["results_path"]) if c["index"] == index), None)
+    return [fresh if c["index"] == index else c for c in cards], f"↩ Short {index} is back to its earlier version."
+
+
 def zip_cards(cards):
     from shortsflow import review
     if not cards:
@@ -335,6 +385,21 @@ def build_ui():
                                            placeholder="No title or description was written (it needs an AI key or Ollama).")
                                 rm = gr.Button("Remove this short", size="sm")
                                 rm.click(lambda cs, i=c["index"]: [x for x in cs if x["index"] != i], q_cards, q_cards)
+                                if c.get("can_rerender"):
+                                    with gr.Accordion("Edit this short: style, start and end", open=False):
+                                        if c.get("animated_captions"):
+                                            st = gr.Dropdown(CAPTION_CHOICES, value=c.get("caption_style") or "HORMOZI", label="Caption style", interactive=True)
+                                        else:
+                                            st = gr.State(None)
+                                            gr.Markdown("_Caption styles apply when animated captions are on. You can still change the start and end._")
+                                        with gr.Row():
+                                            t0 = gr.Number(value=c.get("start"), label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
+                                            t1 = gr.Number(value=c.get("end"), label="End (seconds)", precision=1, minimum=0, interactive=True)
+                                        with gr.Row():
+                                            go = gr.Button("Re-render this short", size="sm", variant="secondary")
+                                            back = gr.Button("Undo last change", size="sm")
+                                        go.click(rerender_handler(c["index"]), [q_cards, st, t0, t1], [q_cards, q_status])
+                                        back.click(undo_handler(c["index"]), q_cards, [q_cards, q_status])
 
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")

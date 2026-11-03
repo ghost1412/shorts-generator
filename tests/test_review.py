@@ -39,6 +39,22 @@ def test_load_results_resolves_paths_and_skips_missing_videos(tmp_path):
     assert cards[1]["title"] == "Clip 3" and cards[1]["thumbnail"] is None and cards[1]["label"] == "unrated"
 
 
+def test_load_results_finds_clips_written_with_relative_paths(tmp_path, monkeypatch):
+    session = tmp_path / "sessions" / "run_cli"
+    session.mkdir(parents=True)
+    (session / "video_clip_1.mp4").write_bytes(b"v")
+    (session / "results.json").write_text(json.dumps({"settings": {"use_remotion": True, "caption_style": "BOUNCE"},
+                                                      "source_video": "x.mp4",
+                                                      "clips": [{"clip_index": 1, "video_path": "sessions/run_cli\\video_clip_1.mp4"}]}))
+    monkeypatch.chdir(tmp_path)               # the command line ran from here, so the stored path is relative to it
+    card = review.load_results(str(session / "results.json"))[0]
+    assert os.path.exists(card["video"]) and card["caption_style"] == "BOUNCE"
+    assert card["animated_captions"] is True and card["can_rerender"] is True
+    assert card["session_dir"] == str(session) and card["results_path"].endswith("results.json")
+    monkeypatch.chdir(tmp_path / "sessions")  # even from elsewhere, the bare file name next to results.json is found
+    assert review.load_results(str(session / "results.json"))
+
+
 def test_load_results_tolerates_bad_files(tmp_path):
     assert review.load_results(str(tmp_path / "nope.json")) == []
     bad = tmp_path / "bad.json"
