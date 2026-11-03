@@ -45,6 +45,15 @@ by Aida Thomas, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0); 
 
 ## ⚡ Quick Start - pick one
 
+## 🪟 Windows: one-click install
+
+**[⬇ Download ShortsFlow-Setup from the latest release](https://github.com/ghost1412/shorts-generator/releases/latest)**, run it, then open **ShortsFlow** from your Desktop. A browser page opens where you paste a video link or upload a file and press one button. No Python, Node or API key to install first.
+
+- The installer downloads roughly 2 GB the first time (about 5 GB with an NVIDIA card, because of the GPU libraries; it fetches its own private Python, the speech-recognition components and Node), so it needs an internet connection and a few minutes. It does not need admin rights.
+- It is not code-signed yet, so Windows may show a blue "Windows protected your PC" box: click **More info**, then **Run anyway**.
+- With an NVIDIA graphics card it uses the GPU (fast). Without one it still works on the CPU, but transcribing a long video takes much longer, and the first run also downloads the speech model.
+- Uninstall from Windows Settings > Apps. Your videos and settings in `%LOCALAPPDATA%\ShortsFlow\workspace` are kept.
+
 ## 🚀 Your first shorts in 3 steps (no API key needed)
 
 Clipping a long video into vertical shorts works **without any account or API key**. A key (or a free local Ollama) only adds AI titles and descriptions, and is needed for the idea-to-video modes.
