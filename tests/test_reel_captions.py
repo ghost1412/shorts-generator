@@ -103,3 +103,9 @@ def test_render_reel_rejects_mismatched_inputs(tmp_path):
     from engine.reel_captions import render_reel
     assert render_reel([], [], str(tmp_path / "x.mp4")) is False
     assert render_reel(["a.mp4"], [1.0, 2.0], str(tmp_path / "x.mp4")) is False
+
+
+def test_devanagari_words_name_the_bundled_font():
+    doc = ass_document([(0.0, 0.5, "hello"), (0.5, 1.0, "नमस्ते")], size=(1920, 1080))
+    assert ",,HELLO\n" in doc
+    assert ",,{\\fnNoto Sans Devanagari}नमस्ते\n" in doc

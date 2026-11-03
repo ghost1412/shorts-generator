@@ -40,8 +40,29 @@ def _ts(seconds):
     return f"{cs // 360000}:{cs // 6000 % 60:02d}:{cs // 100 % 60:02d}.{cs % 100:02d}"
 
 
+_DEVANAGARI = re.compile("[ऀ-ॿ]")
+DEVANAGARI_FONT = "Noto Sans Devanagari"
+_FONT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "remotion-video", "public", "fonts", "NotoSansDevanagari.ttf")
+
+
 def _clean(word):
-    return re.sub(r"[{}\\]", "", word).upper()
+    word = re.sub(r"[{}\\]", "", word).upper()
+    if _DEVANAGARI.search(word):
+        # Impact has no Devanagari glyphs; name the bundled font so it does not depend on a system fallback
+        word = "{\\fn" + DEVANAGARI_FONT + "}" + word
+    return word
+
+
+def _stage_fonts(folder):
+    """Copy the bundled Devanagari font next to the .ass file so `ass=...:fontsdir=.` finds it on any machine."""
+    try:
+        if os.path.exists(_FONT_FILE):
+            dest = os.path.join(folder, os.path.basename(_FONT_FILE))
+            if not os.path.exists(dest):
+                shutil.copyfile(_FONT_FILE, dest)
+    except OSError:
+        pass
 
 
 def ass_document(words, size=(1920, 1080), font="Impact", font_size=None, bottom_margin=None):
@@ -69,8 +90,9 @@ def burn_captions(video_in, ass_path, video_out, codec="libx264", quality_params
         import imageio_ffmpeg
         exe = imageio_ffmpeg.get_ffmpeg_exe()
     folder, name = os.path.split(os.path.abspath(ass_path))
+    _stage_fonts(folder)
     params = quality_params or (["-crf", "18"] if codec == "libx264" else ["-rc", "vbr", "-cq", "18", "-b:v", "0"])
-    cmd = [exe, "-y", "-i", os.path.abspath(video_in), "-vf", f"ass={name}", "-c:v", codec, *params,
+    cmd = [exe, "-y", "-i", os.path.abspath(video_in), "-vf", f"ass={name}:fontsdir=.", "-c:v", codec, *params,
            "-pix_fmt", "yuv420p", "-c:a", "copy", os.path.abspath(video_out)]
     # relative file name + cwd: avoids Windows drive-letter escaping problems inside the filter string
     r = subprocess.run(cmd, cwd=folder, capture_output=True, text=True)
@@ -106,7 +128,8 @@ def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx2
     cwd = None
     if ass_path:
         cwd, name = os.path.split(os.path.abspath(ass_path))
-        parts.append(f"[{vcur}]ass={name}[vout]")
+        _stage_fonts(cwd)
+        parts.append(f"[{vcur}]ass={name}:fontsdir=.[vout]")
         vcur = "vout"
     folder = workdir or cwd or os.path.dirname(os.path.abspath(out_path))
     script = os.path.join(folder, "reel_filter.txt")
