@@ -286,3 +286,5 @@ If you are an AI Coding Agent (Cursor, Antigravity, Claude Code, Copilot, AutoGP
 
 ## 📄 License
 ShortsFlow AI Studio is open-source software licensed under the MIT License.
+
+The optional animated-caption renderer uses [Remotion](https://www.remotion.dev), which has its own source-available licence (free for individuals and small teams; see [remotion.dev/license](https://www.remotion.dev/license) if you are a larger company). Without Node.js/Remotion you still get clips, just without the animated captions.

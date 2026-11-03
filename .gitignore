@@ -62,3 +62,6 @@ docs/HANDOFF.md
 
 # Bundled background music ships with the package
 !music/*.mp3
+
+# staged launch posts (local only until posted)
+docs/launch_ready/
