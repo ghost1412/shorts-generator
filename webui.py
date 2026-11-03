@@ -117,7 +117,7 @@ def _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_pr
 
 
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
-               target_lang, caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider):
+               caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
@@ -127,8 +127,6 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     for flag, on in (("--smart_crop", smart_crop), ("--tighten", tighten), ("--broll", broll), ("--srt", srt)):
         if on:
             cmd.append(flag)
-    if target_lang:
-        cmd += ["--target_lang", target_lang.strip()]
     cmd += _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider)
     yield from _run(cmd)
 
@@ -443,7 +441,6 @@ def build_ui():
                             tighten = gr.Checkbox(value=True, label="Remove silences")
                             broll = gr.Checkbox(label="Auto B-roll")
                             srt = gr.Checkbox(label="Export .srt")
-                        target_lang = gr.Textbox(label="Dub to language (not implemented yet, ignored)")
                         clip_settings = _render_settings()
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                     with gr.Column():
@@ -451,7 +448,7 @@ def build_ui():
                         clip_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
                 clip_btn.click(
                     clip_video,
-                    [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, target_lang, *clip_settings],
+                    [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings],
                     [clip_log, clip_videos],
                 )
 
