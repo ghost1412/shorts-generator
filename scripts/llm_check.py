@@ -41,7 +41,19 @@ def groq_models(key):
 
 def main():
     groq = os.getenv("GROQ_API_KEY", "")
-    ask("Groq", "https://api.groq.com/openai/v1/chat/completions", groq, os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile")
+    if groq:
+        # the same code path the pipeline uses (picks a working model by itself)
+        from engine import groq_llm
+        try:
+            text = groq_llm.call_groq(groq, 'Return only this JSON: {"ok": true, "n": 3}', max_tokens=300)
+            print(f"{'Groq':12} OK  (model used: {groq_llm._working_model}) answer: {text.strip()[:80]!r}")
+        except Exception as e:
+            print(f"{'Groq':12} FAILED: {e}")
+            hint = explain_http_error(e, "Groq")
+            if hint:
+                print(f"{'':12} -> {hint}")
+    else:
+        print(f"{'Groq':12} no key set")
     if groq:
         try:
             ids = [m for m in groq_models(groq) if not any(x in m for x in ("whisper", "guard", "tts", "orpheus"))]

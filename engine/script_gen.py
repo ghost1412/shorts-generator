@@ -195,7 +195,10 @@ or for dynamic shifts:
     print(f"[Log] 🧠 Dynamic Timeline generated ({len(cuts)} phases over {total_duration:.1f}s): {cuts}")
     return cuts
 
-def _call_openai_compatible(api_key, base_url, model, prompt, system_prompt, max_tokens=4096, temperature=0.3, timeout=120, extra_headers=None):
+from engine.groq_llm import call_groq  # noqa: E402
+
+
+def _call_openai_compatible(api_key, base_url, model, prompt, system_prompt, max_tokens=4096, temperature=0.3, timeout=120, extra_headers=None, extra_payload=None):
     import requests
     headers = {
         "Content-Type": "application/json",
@@ -215,6 +218,8 @@ def _call_openai_compatible(api_key, base_url, model, prompt, system_prompt, max
         "temperature": temperature,
         "max_tokens": max_tokens
     }
+    if extra_payload:
+        payload.update(extra_payload)
 
     resp = requests.post(base_url, headers=headers, json=payload, timeout=timeout)
     resp.raise_for_status()
@@ -295,14 +300,10 @@ def get_llm_response(
             print(f"[Warning] DeepSeek LLM failed: {e}. Proceeding to fallbacks...")
 
     if target_provider == "groq" and (GROQ_API_KEY or os.getenv("GROQ_API_KEY")):
-        m = target_model or "llama-3.3-70b-versatile"
-        print(f"[Log] 🤖 Executing requested Groq LLM ({m})...")
+        print(f"[Log] 🤖 Executing requested Groq LLM ({target_model or 'auto-selected model'})...")
         try:
-            return _call_openai_compatible(
-                api_key=GROQ_API_KEY or os.getenv("GROQ_API_KEY"),
-                base_url="https://api.groq.com/openai/v1/chat/completions",
-                model=m, prompt=prompt, system_prompt=system_prompt, max_tokens=max_tokens, temperature=temperature, timeout=timeout
-            )
+            return call_groq(GROQ_API_KEY or os.getenv("GROQ_API_KEY"), prompt, system_prompt, preferred=target_model,
+                              max_tokens=max_tokens, temperature=temperature, timeout=timeout)
         except Exception as e:
             print(f"[Warning] Groq LLM failed: {e}. Proceeding to fallbacks...")
 
@@ -477,10 +478,8 @@ def get_llm_response(
     if groq_key and target_provider != "groq":
         try:
             print("[Log] Fallback: Attempting Groq API...")
-            return _call_openai_compatible(
-                api_key=groq_key, base_url="https://api.groq.com/openai/v1/chat/completions",
-                model=(os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"), prompt=prompt, system_prompt=system_prompt,
-                max_tokens=min(max_tokens, 8000), temperature=temperature, timeout=min(timeout, 60))
+            return call_groq(groq_key, prompt, system_prompt, max_tokens=min(max_tokens, 8000), temperature=temperature,
+                              timeout=min(timeout, 60))
         except Exception as e:
             print(f"[Warning] Groq API failed: {e}")
             from engine.friendly_errors import explain_http_error
