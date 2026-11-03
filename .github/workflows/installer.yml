@@ -192,6 +192,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${{ github.ref_name }}"
+          # release notes: this version's section of CHANGELOG.md when there is one, otherwise GitHub's generated notes
+          $ver = $tag.TrimStart("v")
+          $notes = ""
+          if (Test-Path CHANGELOG.md) {
+            $text = Get-Content CHANGELOG.md -Raw
+            if ($text -match "(?ms)^## $([regex]::Escape($ver))\b[^\r\n]*\r?\n(.*?)(?=^## |\z)") { $notes = $Matches[1].Trim() }
+          }
           gh release view $tag 2>$null
-          if ($LASTEXITCODE -ne 0) { gh release create $tag --title $tag --generate-notes }
+          if ($LASTEXITCODE -ne 0) {
+            if ($notes) {
+              Set-Content -Path release-notes.md -Value $notes -Encoding utf8
+              gh release create $tag --title $tag --notes-file release-notes.md
+            } else {
+              gh release create $tag --title $tag --generate-notes
+            }
+          }
           gh release upload $tag (Get-ChildItem installer\output\*.exe).FullName --clobber

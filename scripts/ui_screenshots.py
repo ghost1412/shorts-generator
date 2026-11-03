@@ -2,7 +2,9 @@
 
 Builds a canned finished run (two tiny 9:16 clips + a results.json) so the review screen can be shown without running the pipeline.
 
-    python scripts/ui_screenshots.py OUT_DIR
+    python scripts/ui_screenshots.py OUT_DIR [README_IMAGES_DIR]
+
+With a second directory it also writes tight, resized crops of the review, edit and style/brand screens for the README.
 """
 import json
 import os
@@ -14,7 +16,10 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 out_dir = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "ui-screenshots")
+readme_dir = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 os.makedirs(out_dir, exist_ok=True)
+if readme_dir:
+    os.makedirs(readme_dir, exist_ok=True)
 PORT = 7871
 
 # 1. a workspace with one finished run
@@ -27,16 +32,21 @@ try:
 except Exception:
     ffmpeg = "ffmpeg"
 clips = []
-for i, (title, score, color) in enumerate([("Why the sky is blue (and sunsets are red)", 86, "0x2b5876"),
-                                           ("The one trick nobody tells you about light", 63, "0x4e4376")], start=1):
+GIFS = [os.path.join(ROOT, "demos", "demo_spot_the_lie.gif"), os.path.join(ROOT, "demos", "demo_facts.gif")]
+for i, (title, score, color) in enumerate([("Which of these three facts is the lie?", 86, "0x2b5876"),
+                                           ("The sea god a Roman emperor declared war on", 63, "0x4e4376")], start=1):
     video = os.path.join(session, f"video_clip_{i}.mp4")
-    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"color=c={color}:s=360x640:r=25:d=3",
-                    "-f", "lavfi", "-i", "sine=frequency=330:d=3", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", video], check=True)
+    if os.path.exists(GIFS[i - 1]):      # sample clips from the repo's own demo GIFs, so the screenshots look like the real thing
+        subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", GIFS[i - 1], "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=25",
+                        "-pix_fmt", "yuv420p", "-an", "-movflags", "+faststart", video], check=True)
+    else:
+        subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"color=c={color}:s=360x640:r=25:d=3",
+                        "-f", "lavfi", "-i", "sine=frequency=330:d=3", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", video], check=True)
     clips.append({"clip_index": i, "video_path": video, "start": 12.0 * i, "end": 12.0 * i + 24, "duration": 24.0,
                   "viral_score": score, "hook": title, "reason": "Strong opening line and a clear payoff" if score > 80 else "Decent moment, slower start",
-                  "title": title, "description": "A short, clear explanation viewers can follow in half a minute.",
-                  "tags": ["science", "light", "explained"], "thumbnail": None})
+                  "title": title, "description": "A quick quiz short: spot the lie before the answer comes up.",
+                  "tags": ["facts", "quiz", "spotthelie"], "thumbnail": None})
 with open(os.path.join(session, "results.json"), "w", encoding="utf-8") as f:
     json.dump({"source_video": "demo.mp4", "session_dir": session, "total_clips": 2,
                "settings": {"extract_mode": "shorts", "layout": "single", "smart_crop": True, "tighten": True, "tighten_mode": "cut",
@@ -62,6 +72,24 @@ try:
         raise SystemExit("the app did not start")
 
     from playwright.sync_api import sync_playwright
+
+    def crop(page, name, top, bottom, pad=14, width=1280, max_w=1000):
+        """Save page[top.y - pad : bottom.bottom + pad] as a resized JPEG for the README (only when a README dir was given)."""
+        if not readme_dir:
+            return
+        from PIL import Image
+        page.evaluate("window.scrollTo(0, 0)")
+        a, z = top.bounding_box(), bottom.bounding_box()
+        y0 = max(0, a["y"] - pad)
+        h = (z["y"] + z["height"]) - y0 + pad
+        tmp = os.path.join(out_dir, f"_crop_{name}.png")
+        page.screenshot(path=tmp, full_page=True, clip={"x": 0, "y": y0, "width": width, "height": h})
+        im = Image.open(tmp).convert("RGB")
+        if im.width > max_w:
+            im = im.resize((max_w, round(im.height * max_w / im.width)), Image.LANCZOS)
+        im.save(os.path.join(readme_dir, name), quality=84, optimize=True)
+        os.remove(tmp)
+
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1280, "height": 900})
@@ -89,10 +117,12 @@ try:
             raise
         page.wait_for_timeout(2500)
         page.screenshot(path=os.path.join(out_dir, "02_review.png"), full_page=True)
+        crop(page, "webui_review.jpg", page.get_by_text("Your shorts", exact=True), page.get_by_role("button", name="Download all as .zip"))
         page.get_by_text("Edit this short: style, start and end").first.click()
         page.wait_for_selector("text=Re-render this short", timeout=15000)
         assert page.get_by_label("Start (seconds in the original video)").first.input_value() in ("12", "12.0")
         page.screenshot(path=os.path.join(out_dir, "02b_edit_panel.png"), full_page=True)
+        crop(page, "webui_edit.jpg", page.get_by_text("Your shorts", exact=True), page.get_by_role("button", name="Undo last change").first)
         page.get_by_text("Edit this short: style, start and end").first.click()
 
         page.get_by_role("button", name="Remove this short").first.click()
@@ -106,7 +136,19 @@ try:
         # style picker + brand kit: choose a style, fill the brand, upload a logo, save, then reload to prove it persisted
         from PIL import Image
         logo = os.path.join(home, "my_logo.png")
-        Image.new("RGBA", (300, 300), (255, 80, 120, 255)).save(logo)
+        from PIL import ImageDraw, ImageFont
+        mark = Image.new("RGBA", (300, 300), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(mark)
+        draw.ellipse([10, 10, 290, 290], fill=(255, 80, 120, 255))
+        try:
+            font = ImageFont.truetype("arialbd.ttf", 120)
+        except OSError:
+            try:
+                font = ImageFont.truetype("DejaVuSans-Bold.ttf", 120)
+            except OSError:
+                font = ImageFont.load_default()
+        draw.text((150, 150), "SF", fill=(255, 255, 255, 255), font=font, anchor="mm")
+        mark.save(logo)
         page.goto(f"http://127.0.0.1:{PORT}")
         page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
         page.get_by_text("Pink glow box").click()
@@ -119,6 +161,8 @@ try:
         page.get_by_role("button", name="Save my brand").click()
         page.wait_for_selector("text=Saved your brand", timeout=30000)
         page.screenshot(path=os.path.join(out_dir, "05_style_and_brand.png"), full_page=True)
+        crop(page, "webui_style_brand.jpg", page.get_by_text("Caption style", exact=True).first, page.get_by_role("button", name="Remove brand"),
+             width=700, max_w=700)
         saved = os.path.join(home, "brand", "brand.json")
         assert os.path.exists(saved), "brand.json was not written"
         assert json.load(open(saved, encoding="utf-8"))["handle"] == "@lightexplained"

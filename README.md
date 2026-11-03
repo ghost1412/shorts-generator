@@ -43,6 +43,27 @@ by Aida Thomas, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0); 
 
 ---
 
+## 🎛️ Review, restyle and brand your shorts
+
+After **Make my shorts**, the browser app (`shortsflow webui`) shows every short as a card instead of a bare file list:
+
+<div align="center">
+  <img src="demos/webui_review.jpg" width="720" alt="Review screen: preview, score, copy-ready title and hashtags for each short" />
+</div>
+
+- **Review:** a preview player, a *strong / good / okay / weak* label with the reason, and a title, description and hashtags ready to copy. Remove what you do not want, then **Download all as .zip**. Earlier runs can be reopened.
+- **Edit one short:** pick another caption style or change its start and end, and only that short is re-rendered (about a minute). **Undo** puts the previous version back.
+- **Caption styles** come with a preview, and your **brand** (logo, @handle, end card, accent colour) is saved once and added to every short.
+
+<div align="center">
+  <img src="demos/webui_edit.jpg" width="440" alt="Edit panel: caption style, start and end, re-render and undo" />
+  <img src="demos/webui_style_brand.jpg" width="280" alt="Caption style picker with preview and the brand kit panel" />
+</div>
+
+<sub>Screenshots use sample clips made from the demo GIFs above.</sub>
+
+---
+
 ## ⚡ Quick Start - pick one
 
 ## 🪟 Windows: one-click install
