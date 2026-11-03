@@ -116,6 +116,14 @@ def _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_pr
     return args
 
 
+def _minutes(value):
+    """Highlights video length in whole minutes, at least 1 (the box can be left empty)."""
+    try:
+        return max(1, int(float(value)))
+    except (TypeError, ValueError):
+        return 4
+
+
 def _count(value):
     """How many shorts: a whole number, at least 1 (the box can be left empty)."""
     try:
@@ -235,7 +243,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         lang_args += ["--caption_lang", caption_lang]
     if long_form:   # one highlights video made of the best moments, in story order (landscape, like the source)
         cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "long",
-               "--target_duration", str(int(float(minutes) * 60)), "--skip-upload",
+               "--target_duration", str(_minutes(minutes) * 60), "--skip-upload",
                "--session_dir", session, "--output_json", results]
         if captions:
             cmd += ["--reel_captions"]
@@ -271,7 +279,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         for c in cards:
             c["title"] = "Highlights video"
         if cards:
-            yield f"✅ Done! Your highlights video is ready below ({int(float(minutes))} minutes or less).", log, cards
+            yield f"✅ Done! Your highlights video is ready below ({_minutes(minutes)} minutes or less).", log, cards
             return
         yield "❌ No highlights video was made. Open 'Technical details' below for the reason.", log, []
         return
@@ -392,8 +400,8 @@ def build_ui():
                                           value="shorts", label="What do you want?")
                         q_count = gr.Number(value=3, minimum=1, precision=0, label="How many shorts?",
                                             info="No limit. If the video does not have that many good moments you get fewer.")
-                        q_minutes = gr.Slider(1, 30, value=4, step=1, label="Highlights video length (minutes)", visible=False,
-                                             info="Never longer than your video. Long reels take longer to make and the file gets big (about 2 GB for 15 minutes).")
+                        q_minutes = gr.Number(value=4, minimum=1, precision=0, label="Highlights video length (minutes)", visible=False,
+                                              info="No limit, but never longer than your video. Long reels take longer to make and the file gets big (about 2 GB for 15 minutes).")
                         with gr.Accordion("Pick the moments (optional)", open=False):
                             q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
                                                 info="Describe the part you want. Leave empty to let the AI pick the best moments.")

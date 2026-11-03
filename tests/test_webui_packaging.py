@@ -145,3 +145,18 @@ def test_clip_count_has_no_upper_limit_and_survives_an_empty_box(monkeypatch, tm
     for given, expected in ((40, "40"), (None, "3"), (0, "1"), (2.0, "2")):
         list(webui.quick_clip("https://example.com/v", None, given, False, "HORMOZI", False))
         assert seen["cmd"][seen["cmd"].index("--clip_count") + 1] == expected
+
+
+def test_highlights_length_has_no_upper_limit_and_survives_an_empty_box(monkeypatch, tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_run(cmd):
+        seen["cmd"] = cmd
+        yield "", []
+    monkeypatch.setattr(webui, "_run", fake_run)
+    for given, expected in ((90, "5400"), (None, "240"), (0, "60")):
+        list(webui.quick_clip("https://example.com/v", None, 3, False, "HORMOZI", False, mode="long", minutes=given))
+        assert seen["cmd"][seen["cmd"].index("--target_duration") + 1] == expected
