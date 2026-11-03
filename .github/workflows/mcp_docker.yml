@@ -1,0 +1,36 @@
+name: MCP Docker image
+
+# Builds Dockerfile.mcp (the image MCP directories such as Glama use) and checks that it starts and answers introspection.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "mcp_server.py"
+      - "Dockerfile.mcp"
+      - ".github/workflows/mcp_docker.yml"
+
+jobs:
+  introspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -f Dockerfile.mcp -t shortsflow-mcp .
+      - name: Start it and ask for the tool list over stdio
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | timeout 60 docker run -i --rm shortsflow-mcp > reply.txt || true
+          cat reply.txt
+          python3 - <<'EOF'
+          import json
+          rows = [json.loads(l) for l in open("reply.txt") if l.strip().startswith("{")]
+          by_id = {r["id"]: r for r in rows if "id" in r}
+          assert by_id[1]["result"]["serverInfo"]["name"], "no initialize reply"
+          tools = [t["name"] for t in by_id[2]["result"]["tools"]]
+          assert len(tools) == 5, tools
+          print("OK, tools:", tools)
+          EOF
