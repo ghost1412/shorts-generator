@@ -1,0 +1,9 @@
+# Minimal image for MCP directories (Glama etc.): it only has to START and ANSWER introspection (initialize, tools/list).
+# mcp_server.py needs nothing but the Python standard library for that. Actually rendering a short needs the full ShortsFlow
+# checkout (main.py + requirements); without it a tool call returns a clear "needs the full checkout" error.
+FROM python:3.12-slim
+WORKDIR /app
+COPY mcp_server.py ./
+COPY shortsflow/__init__.py shortsflow/__init__.py
+ENV PYTHONUNBUFFERED=1 PYTHONIOENCODING=utf-8
+CMD ["python", "mcp_server.py"]

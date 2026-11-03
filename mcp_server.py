@@ -195,7 +195,14 @@ def run_main_command(job_id: str, args_list: list):
     with JOBS_LOCK:
         JOBS[job_id] = {"status": "processing", "progress": 0, "logs": [], "output": None}
 
-    cmd = [sys.executable, os.path.join(ROOT_DIR, "main.py"), "--video_id", job_id, "--skip_upload"] + args_list
+    main_py = os.path.join(ROOT_DIR, "main.py")
+    if not os.path.exists(main_py):
+        # e.g. a minimal container that only serves tools/list: say so plainly instead of failing with a Python error
+        with JOBS_LOCK:
+            JOBS[job_id].update({"status": "failed", "error": "Rendering needs the full ShortsFlow checkout (main.py and its "
+                                 "requirements). Clone https://github.com/ghost1412/shorts-generator and run mcp_server.py from it."})
+        return
+    cmd = [sys.executable, main_py, "--video_id", job_id, "--skip_upload"] + args_list
     print(f"[MCP Worker] Starting command: {' '.join(cmd)}", file=sys.stderr)
 
     try:
