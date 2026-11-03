@@ -319,6 +319,10 @@ If you are an AI Coding Agent (Cursor, Antigravity, Claude Code, Copilot, AutoGP
 
 ---
 
+## 🐞 Report a problem
+
+Something broke? [Open an issue](../../issues/new/choose) and paste the output of `shortsflow doctor` (it prints no keys). For installer problems also attach `install.log` from the install folder.
+
 ## ⭐ Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=ghost1412/shorts-generator&type=Date)](https://star-history.com/#ghost1412/shorts-generator&Date)

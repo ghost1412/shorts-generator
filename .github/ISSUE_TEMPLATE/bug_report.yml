@@ -1,0 +1,39 @@
+name: Something went wrong
+description: A short did not render, the installer failed, or the app behaved oddly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The two things that help most are the `shortsflow doctor` output and, for installer problems, `install.log`.
+  - type: dropdown
+    id: how
+    attributes:
+      label: How did you install ShortsFlow?
+      options:
+        - Windows one-click installer (ShortsFlow-Setup.exe)
+        - pip install shortsflow
+        - Cloned the repository
+        - Docker
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you do, and what happened?
+      description: The video type (link or file, rough length), what you clicked or typed, and the message you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `shortsflow doctor`
+      description: Open "ShortsFlow Terminal" (or any terminal) and run `shortsflow doctor`. It prints no keys.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: install.log or the "Technical details" log
+      description: For installer problems attach `install.log` from the install folder. Remove anything private first.
+      render: text
