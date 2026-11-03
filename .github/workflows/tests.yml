@@ -57,7 +57,8 @@ jobs:
           names = zipfile.ZipFile(glob.glob("dist-check/*.whl")[0]).namelist()
           for needed in ("shortsflow/cli.py", "engine/speaker_focus.py", "shortsflow/_bundle/remotion-video/src/ShortFlow.tsx",
                          "shortsflow/_bundle/assets/models/face_detection_yunet_2023mar.onnx", "shortsflow/api/app.py",
-                         "shortsflow/webui.py", "shortsflow/onboarding.py"):
+                         "shortsflow/webui.py", "shortsflow/onboarding.py", "shortsflow/review.py", "shortsflow/brand.py",
+                         "engine/rerender.py", "shortsflow/_bundle/assets/caption_previews/HORMOZI.jpg"):
               assert needed in names, f"missing from wheel: {needed}"
           assert not any("node_modules" in n for n in names), "node_modules leaked into the wheel"
           print(len(names), "files OK")
