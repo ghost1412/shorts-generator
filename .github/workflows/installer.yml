@@ -13,7 +13,7 @@ permissions:
 jobs:
   installer:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 110
     steps:
       - uses: actions/checkout@v4
 
@@ -85,6 +85,21 @@ jobs:
           if (-not $ok) { Get-Content "$work\webui.err" -ErrorAction SilentlyContinue | Select-Object -Last 30; throw "the browser app did not start" }
           Write-Host "Browser app answered on port 7861"
 
+      - name: Animated captions on a clean Windows PC (Node + Remotion + Chromium download)
+        shell: pwsh
+        timeout-minutes: 30
+        run: |
+          $sf = "$env:RUNNER_TEMP\sf"
+          $work = "$env:RUNNER_TEMP\e2e"
+          $env:SHORTSFLOW_HOME = "$sf\workspace"
+          $env:SHORTSFLOW_WHISPER_MODEL = "tiny"
+          $env:PATH = "$sf\ffmpeg\bin;$sf\node;$env:PATH"
+          & "$sf\venv\Scripts\shortsflow.exe" clip "$work\sample.mp4" --count 1 --captions --session_dir "$work\out_captions"
+          if ($LASTEXITCODE -ne 0) { throw "shortsflow clip --captions failed on a clean PC" }
+          $clip = Get-Item "$work\out_captions\video_clip_1.mp4" -ErrorAction Stop
+          if ($clip.Length -lt 50000) { throw "the captioned short is suspiciously small ($($clip.Length) bytes)" }
+          Write-Host "Captioned short made: $($clip.Length) bytes"
+
       - name: Wait for this version on PyPI (the installer downloads it from there)
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -102,6 +117,49 @@ jobs:
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.ver.outputs.version }}" installer\shortsflow.iss
           Copy-Item "installer\output\ShortsFlow-Setup-${{ steps.ver.outputs.version }}.exe" installer\output\ShortsFlow-Setup.exe   # stable name for releases/latest/download/
           Get-ChildItem installer\output
+
+      - name: Run the real installer (.exe) silently, open the app, then uninstall
+        shell: pwsh
+        timeout-minutes: 45
+        run: |
+          $exe = (Get-ChildItem installer\output\ShortsFlow-Setup-*.exe | Select-Object -First 1).FullName
+          $dir = "$env:RUNNER_TEMP\sf-exe"
+          $inno = "$env:RUNNER_TEMP\inno.log"
+          $p = Start-Process -FilePath $exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dir`"", "/LOG=`"$inno`"" -Wait -PassThru
+          Write-Host "installer exit code: $($p.ExitCode)"
+          if ($p.ExitCode -ne 0 -or -not (Test-Path "$dir\venv\Scripts\shortsflow.exe")) {
+            if (Test-Path "$dir\install.log") { Get-Content "$dir\install.log" -Tail 60 }
+            if (Test-Path $inno) { Get-Content $inno -Tail 40 }
+            throw "the .exe installer did not finish a working install"
+          }
+          foreach ($f in @("ShortsFlow.cmd", "ffmpeg\bin\ffprobe.exe", "node\node.exe")) {
+            if (-not (Test-Path "$dir\$f")) { throw "missing after install: $f" }
+          }
+          $desktopLink = Join-Path ([Environment]::GetFolderPath("Desktop")) "ShortsFlow.lnk"
+          if (-not (Test-Path $desktopLink)) { throw "no Desktop shortcut was created" }
+          New-Item -ItemType Directory -Force -Path "$dir\workspace" | Out-Null
+          Set-Content "$dir\workspace\my-videos-marker.txt" "keep me"
+
+          # what the shortcut runs: the browser app must come up
+          $app = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "`"$dir\ShortsFlow.cmd`"" -PassThru -WindowStyle Hidden
+          $ok = $false
+          for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
+            Start-Sleep -Seconds 2
+            try { $ok = (Invoke-WebRequest -Uri "http://127.0.0.1:7860" -UseBasicParsing).StatusCode -eq 200 } catch {}
+          }
+          taskkill /PID $app.Id /T /F | Out-Null
+          if (-not $ok) { throw "ShortsFlow.cmd did not bring up the browser app" }
+          Write-Host "ShortsFlow.cmd started the browser app"
+
+          # uninstall: program files go, the user's workspace stays
+          $un = Get-ChildItem $dir -Filter "unins*.exe" | Select-Object -First 1
+          if (-not $un) { throw "no uninstaller was installed" }
+          Start-Process -FilePath $un.FullName -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path "$dir\venv"); $i++) { Start-Sleep -Seconds 2 }   # Inno's uninstaller hands off to a temp copy
+          if (Test-Path "$dir\venv") { throw "uninstall left the Python environment behind" }
+          if (-not (Test-Path "$dir\workspace\my-videos-marker.txt")) { throw "uninstall deleted the user's workspace" }
+          if (Test-Path $desktopLink) { throw "uninstall left the Desktop shortcut" }
+          Write-Host "Uninstall removed the program and kept the workspace"
 
       - uses: actions/upload-artifact@v4
         with:
