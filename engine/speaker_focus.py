@@ -64,15 +64,15 @@ def _make_detector():
                      cv2.CascadeClassifier(os.path.join(cv2.data.haarcascades, "haarcascade_profileface.xml"))))
 
 
-def _detect_faces(frame, gray, detector):
-    """Face boxes [(x, y, w, h)] in `frame` pixels."""
+def _detect_faces(frame, gray, detector, min_score=None):
+    """Face boxes [(x, y, w, h)] in `frame` pixels. `min_score` (YuNet only) drops weaker detections."""
     import cv2
     kind, impl = detector
     if kind == "yunet":
         h, w = frame.shape[:2]
         impl.setInputSize((w, h))
         _, faces = impl.detect(frame)
-        return [] if faces is None else [tuple(int(v) for v in f[:4]) for f in faces]
+        return [] if faces is None else [tuple(int(v) for v in f[:4]) for f in faces if min_score is None or f[-1] >= min_score]
     # Haar: frontal + profile (both directions) - people in podcasts face each other
     frontal, profile = impl
     w = gray.shape[1]

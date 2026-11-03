@@ -36,3 +36,25 @@ def test_missing_ffprobe_does_not_break_the_video_player(monkeypatch):
         assert webui.tolerate_missing_ffprobe() is False and processing_utils.video_is_playable is original
     finally:
         processing_utils.video_is_playable = original
+
+
+def test_quick_clip_applies_the_brand_typed_in_the_form_even_if_save_was_not_pressed(monkeypatch, tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    from shortsflow import brand
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_run(cmd):
+        seen["cmd"] = cmd
+        yield "", []
+    monkeypatch.setattr(webui, "_run", fake_run)
+    list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", True,
+                          logo=None, handle="mychannel", end_card="", color="#FFEA00", position="top-right"))
+    assert brand.load(str(tmp_path))["handle"] == "@mychannel"
+    assert "--brand" in seen["cmd"]
+    # brand switched off: nothing is saved or applied
+    seen.clear()
+    list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False, handle="other"))
+    assert "--brand" not in seen["cmd"]
+    assert brand.load(str(tmp_path))["handle"] == "@mychannel"

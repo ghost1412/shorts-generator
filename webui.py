@@ -199,7 +199,8 @@ def clear_brand():
     return "", "", brand.DEFAULT_COLOR, "top-right", None, "Brand removed."
 
 
-def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True):
+def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
+               logo=None, handle="", end_card="", color=None, position="top-right"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -217,6 +218,8 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
     if use_brand:
         from shortsflow import brand
+        if logo or (handle or "").strip() or (end_card or "").strip():
+            save_brand(logo, handle, end_card, color, position)   # what is typed in the form counts, even if "Save" was not pressed
         cmd += brand.cli_args(ROOT)
     progress, seen = onboarding.Progress(), 0
     status = progress.message
@@ -421,7 +424,8 @@ def build_ui():
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on], [q_status, q_log, q_cards])
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos],
+                            [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
                 demo.load(earlier_runs, None, q_runs)

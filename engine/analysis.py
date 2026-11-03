@@ -333,11 +333,89 @@ def detect_motion_intervals(video_path, threshold=0.03, skip_frames=15, candidat
     
     return keep_intervals
 
+TRACK_MIN_FACE_SCORE = 0.8  # YuNet confidence needed to move the crop (false faces in games score 0.6-0.75)
+
+
+def _box_iou(a, b):
+    ax1, ay1, ax2, ay2 = a[0], a[1], a[0] + a[2], a[1] + a[3]
+    bx1, by1, bx2, by2 = b[0], b[1], b[0] + b[2], b[1] + b[3]
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+    union = a[2] * a[3] + b[2] * b[3] - inter
+    return inter / union if union > 0 else 0.0
+
+
+class CropTracker:
+    """Turns per-sample face detections into a smooth horizontal crop centre (0..1).
+
+    - A face must be seen in two consecutive samples at about the same place before the crop moves, so a one-off
+      false detection (game footage, textures) cannot drag the crop to the frame edge.
+    - A speaker lock (IoU) keeps the crop on one face; a far jump or a lost lock counts as a cut and snaps.
+    - With no face the crop holds for `hold_seconds`, then eases back to the centre (so a stale position cannot stick
+      for the rest of a faceless scene such as gameplay).
+    """
+    CUT_JUMP = 0.2          # fraction of frame width: further than this is a new shot, not a pan
+    IOU_RESET = 0.10
+    CONFIRM_DIST = 0.12     # two samples this close (fraction of width) confirm a face
+    EMA = 0.3
+
+    def __init__(self, hold_seconds=4.0, ease_per_second=0.35):
+        self.hold_seconds = hold_seconds
+        self.ease_per_second = ease_per_second
+        self.confirmed_samples = 0
+        self.reset()
+
+    def reset(self):
+        self.x = 0.5
+        self.locked = None
+        self.pending = None
+        self.no_face_for = 0.0
+
+    def _primary(self, faces):
+        largest = max(faces, key=lambda f: f[2] * f[3])
+        if self.locked is None:
+            return largest, True
+        best, best_iou = None, 0.0
+        for face in faces:
+            iou = _box_iou(self.locked, tuple(face))
+            if iou > best_iou:
+                best_iou, best = iou, face
+        if best_iou < self.IOU_RESET:
+            return largest, True
+        return best, False
+
+    def update(self, faces, width, dt):
+        """faces: [(x, y, w, h)] in a frame `width` px wide; dt: seconds since the previous sample. Returns the centre."""
+        if not faces:
+            self.pending = None
+            self.no_face_for += dt
+            if self.no_face_for > self.hold_seconds:
+                self.x += (0.5 - self.x) * min(1.0, self.ease_per_second * dt)
+            return self.x
+        primary, new_shot = self._primary(list(faces))
+        cx = (primary[0] + primary[2] / 2) / width
+        if new_shot and (self.pending is None or abs(cx - self.pending) > self.CONFIRM_DIST):
+            self.pending = cx          # first sighting of a face (or of a different one): wait for a second one
+            self.no_face_for += dt
+            return self.x
+        self.pending = None
+        self.locked = tuple(primary)
+        self.no_face_for = 0.0
+        self.confirmed_samples += 1
+        if new_shot or abs(cx - self.x) > self.CUT_JUMP:
+            self.x = cx                # cut: jump, don't glide
+        else:
+            self.x += (cx - self.x) * self.EMA
+        return self.x
+
+
 def detect_interest_points(video_path, skip_frames=10, segments=None):
     """
-    Detects the 'center of interest' (the speaker's face) with YuNet (Haar fallback).
-    An IoU speaker lock keeps the camera from hopping between faces, and hard cuts in the source
-    (multi-camera podcasts) snap the crop to the new face instead of gliding across an empty wall.
+    Detects the 'center of interest' (the speaker's face) with YuNet (Haar fallback), see CropTracker.
+    Hard cuts in the source (multi-camera podcasts) snap the crop to the new face instead of gliding across an empty wall.
+    Footage without faces (gameplay, scenery) keeps the crop centred; when under 8% of the samples show a confirmed
+    face the whole result is centred, because those few detections are almost certainly false.
     Returns dict of {timestamp: x_center_percentage}.
     """
     import cv2
@@ -347,83 +425,45 @@ def detect_interest_points(video_path, skip_frames=10, segments=None):
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     interest_points = {}
-
-    frame_idx = 0
-    last_x = 0.5
-    ema_alpha = 0.15
-    CUT_JUMP = 0.2  # a face this far (fraction of frame width) from the last position is a new shot, not a pan
-
-    # IoU speaker lock - track the primary speaker's bounding box between frames
-    locked_face = None  # (x, y, w, h)
-    iou_reset_threshold = 0.10  # Below this, assume new scene and pick largest face
-
-    def compute_iou(a, b):
-        ax1, ay1, ax2, ay2 = a[0], a[1], a[0]+a[2], a[1]+a[3]
-        bx1, by1, bx2, by2 = b[0], b[1], b[0]+b[2], b[1]+b[3]
-        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
-        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
-        inter = max(0, ix2-ix1) * max(0, iy2-iy1)
-        union = a[2]*a[3] + b[2]*b[3] - inter
-        return inter / union if union > 0 else 0.0
-
-    def pick_primary_face(faces, locked):
-        """(face, is_new_shot)"""
-        if len(faces) == 0:
-            return None, False
-        largest = max(faces, key=lambda f: f[2] * f[3])
-        if locked is None:
-            return largest, True
-        best, best_iou = None, 0.0
-        for face in faces:
-            iou = compute_iou(locked, tuple(face))
-            if iou > best_iou:
-                best_iou, best = iou, face
-        if best_iou < iou_reset_threshold:
-            return largest, True  # new scene or cut
-        return best, False
+    tracker = CropTracker()
+    sample_dt = (skip_frames + 1) / fps
+    state = {"frame_idx": 0, "samples": 0}
 
     def process_frame(frame):
-        nonlocal last_x, locked_face
         h, w = frame.shape[:2]
         if w > 960:  # YuNet is fast, but keep CPU use predictable on 4K sources
             frame = cv2.resize(frame, (960, int(h * 960 / w)))
-            w, h = frame.shape[1], frame.shape[0]
+            w = frame.shape[1]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = _detect_faces(frame, gray, detector)
-        if len(faces) > 0:
-            primary, new_shot = pick_primary_face(list(faces), locked_face)
-            if primary is not None:
-                locked_face = tuple(primary)
-                x_center = (primary[0] + primary[2] / 2) / w
-                if new_shot or abs(x_center - last_x) > CUT_JUMP:
-                    last_x = x_center  # cut: jump, don't glide
-                else:
-                    last_x = last_x * (1 - ema_alpha * 2) + x_center * (ema_alpha * 2)
-        # no face this sample: hold the last position (drifting to the centre showed empty wall)
+        faces = _detect_faces(frame, gray, detector, min_score=TRACK_MIN_FACE_SCORE)
+        tracker.update(faces, w, sample_dt)
 
     def run(start_frame, end_time):
-        nonlocal frame_idx
-        frame_idx = start_frame
-        while end_time is None or frame_idx / fps < end_time:
+        state["frame_idx"] = start_frame
+        while end_time is None or state["frame_idx"] / fps < end_time:
             for _ in range(skip_frames):
                 cap.grab()
-                frame_idx += 1
+                state["frame_idx"] += 1
             ret, frame = cap.read()
-            frame_idx += 1
+            state["frame_idx"] += 1
             if not ret:
                 break
             process_frame(frame)
-            interest_points[round(frame_idx / fps, 2)] = round(last_x, 3)
+            state["samples"] += 1
+            interest_points[round(state["frame_idx"] / fps, 2)] = round(tracker.x, 3)
 
     if segments:
         for start, end in segments:
             cap.set(cv2.CAP_PROP_POS_MSEC, start * 1000)
-            locked_face = None  # Reset lock at each new segment
+            tracker.reset()  # nothing carries over from the previous window
             run(int(start * fps), end)
     else:
         run(0, None)
 
     cap.release()
+    if state["samples"] and tracker.confirmed_samples < 0.08 * state["samples"]:
+        print("[Log] Faces were rare in this video; keeping the crop centred.")
+        return {t: 0.5 for t in interest_points}
     return interest_points
 
 
