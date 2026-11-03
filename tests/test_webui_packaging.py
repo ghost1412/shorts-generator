@@ -77,3 +77,23 @@ def test_quick_clip_highlights_video_uses_long_mode_and_shows_the_reel(monkeypat
     assert "--reel_captions" in cmd and "--smart_crop" not in cmd and "--brand" not in cmd
     status, _, cards = out[-1]
     assert status.startswith("✅") and cards[0]["title"] == "Highlights video"
+
+
+def test_quick_clip_passes_find_and_cut_phrases_to_the_pipeline(monkeypatch, tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_run(cmd):
+        seen["cmd"] = cmd
+        yield "", []
+    monkeypatch.setattr(webui, "_run", fake_run)
+    list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False, find=" where they discuss pricing ",
+                          cut="you know\n\n so basically \n"))
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--find") + 1] == "where they discuss pricing"
+    assert [cmd[i + 1] for i, a in enumerate(cmd) if a == "--cut"] == ["you know", "so basically"]
+    seen.clear()
+    list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False))
+    assert "--find" not in seen["cmd"] and "--cut" not in seen["cmd"]

@@ -200,7 +200,7 @@ def clear_brand():
 
 
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
-               logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4):
+               logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut=""):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -224,6 +224,11 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                "--session_dir", session, "--output_json", results]
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
+        if (find or "").strip():
+            cmd += ["--find", find.strip()]
+        for phrase in (cut or "").splitlines():
+            if phrase.strip():
+                cmd += ["--cut", phrase.strip()]
     if use_brand and not long_form:
         from shortsflow import brand
         if logo or (handle or "").strip() or (end_card or "").strip():
@@ -249,7 +254,9 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         yield "❌ No highlights video was made. Open 'Technical details' below for the reason.", log, []
         return
     cards = review.load_results(results) or _cards_from_videos(videos)
-    if not cards and not status.startswith("⚠️"):
+    if not cards and (find or "").strip() and "No moments matching" in log:
+        status = f"❌ Nothing in this video matched \"{find.strip()}\". Try other words, or clear that box to let the AI pick the best moments."
+    elif not cards and not status.startswith("⚠️"):
         status = "❌ No shorts were made. Open 'Technical details' below for the reason, or check the setup list above."
     elif cards:
         status = f"✅ Done! {len(cards)} short{'s' if len(cards) != 1 else ''} ready: review them below."
@@ -362,6 +369,11 @@ def build_ui():
                                           value="shorts", label="What do you want?")
                         q_count = gr.Slider(1, 10, value=3, step=1, label="How many shorts?")
                         q_minutes = gr.Slider(1, 10, value=4, step=1, label="Highlights video length (minutes)", visible=False)
+                        with gr.Accordion("Pick the moments (optional)", open=False):
+                            q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
+                                                info="Describe the part you want. Leave empty to let the AI pick the best moments.")
+                            q_cut = gr.Textbox(label="Cut these words or phrases out (one per line)", lines=3, placeholder="you know, so basically",
+                                               info="Every time it is said, that bit is removed from the short.")
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
@@ -446,7 +458,7 @@ def build_ui():
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes],
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut],
                             [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
