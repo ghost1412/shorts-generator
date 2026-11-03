@@ -44,7 +44,9 @@ jobs:
           & "$env:RUNNER_TEMP\sf\venv\Scripts\shortsflow.exe" --version
           & "$env:RUNNER_TEMP\sf\venv\Scripts\shortsflow.exe" clip --help
           & "$env:RUNNER_TEMP\sf\venv\Scripts\shortsflow.exe" doctor
+          Set-Location $env:RUNNER_TEMP   # not the checkout, or `shortsflow` would import from the repo instead of the install
           & "$env:RUNNER_TEMP\sf\venv\Scripts\python.exe" -c "from shortsflow import webui; print('webui module OK')"
+          if ($LASTEXITCODE -ne 0) { throw "installed package has no webui module" }
 
       - name: Wait for this version on PyPI (the installer downloads it from there)
         if: startsWith(github.ref, 'refs/tags/v')
