@@ -22,6 +22,118 @@ from engine.video_gen import create_shorts_video
 from engine.storage import upload_to_storage
 
 
+def ensure_dict(data):
+    if isinstance(data, list) and len(data) > 0:
+        data = data[0]
+    if not isinstance(data, dict):
+        return {"title": "Viral Short", "description": "", "tags": []}
+
+    # Ensure description is a string
+    desc = data.get("description", "")
+    if isinstance(desc, list):
+        data["description"] = "\n".join([str(i) for i in desc])
+    elif not isinstance(desc, str):
+        data["description"] = str(desc)
+
+    # Ensure title is a string
+    title = data.get("title", "")
+    if not isinstance(title, str):
+        data["title"] = str(title) if title else "Viral Short"
+
+    return data
+
+
+def resolve_avatar(args, mode):
+    """Persona name and avatar file path (None when the persona has no art in assets/avatars/)."""
+    avatar_path = None
+    selected_persona = args.persona if args.persona else ("mafia_cat" if (args.cartoon or mode in ("NEWS", "NEWS_SERIOUS")) else None)
+    if selected_persona:
+        for ext in [".mp4", ".mov", ".webm", ".png", ".jpg", ".jpeg", ".webp"]:
+            p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
+            if os.path.exists(p_path):
+                avatar_path = p_path
+                break
+        if avatar_path is None:
+            print(f"[Warning] Persona '{selected_persona}' has no avatar file in assets/avatars/ (looked for "
+                  f"{selected_persona.lower()}.mp4/.png/...). The script uses the persona's voice, but no character is shown.")
+    return selected_persona, avatar_path
+
+
+def persist_and_export(args, mode, category, metadata, final_video, output_filename, session_id, youtube_video_id):
+    """Upload the finished video + thumbnail to storage and report to the dashboard (job runs), then write the .txt / .meta.json sidecars."""
+    # 7. Permanent Storage Persistence (New Step)
+    if args.video_id and args.user_id:
+        os.environ["USER_ID"] = args.user_id
+        print(f"[Log] Persisting video and thumbnail to cloud storage for user {args.user_id}...")
+
+        # 7a. Extract thumbnail first
+        thumbnail_file = f"thumb_{session_id}.jpg"
+        thumbnail_path = None
+        try:
+            print(f"[Log] Extracting thumbnail from {final_video}...")
+            subprocess.run([
+                'ffmpeg', '-y', '-i', final_video, 
+                '-ss', '00:00:01', '-vframes', '1', 
+                thumbnail_file
+            ], check=True, capture_output=True)
+            thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
+            try: os.remove(thumbnail_file)
+            except: pass
+        except Exception as te:
+            print(f"[Warning] Thumbnail extraction/upload failed: {te}")
+
+        # 7b. Upload video
+        storage_path = upload_to_storage(final_video, args.video_id, is_video=True)
+
+        # 8. Report Success to Dashboard
+        print(f"[Log] Reporting success to dashboard for Job {args.video_id}...")
+        report_status(
+            args.video_id, 
+            args.user_id, 
+            metadata['title'], 
+            "Published", 
+            None, 
+            args.mode or mode,
+            youtube_video_id,
+            storage_path,
+            thumbnail_path
+        )
+
+    with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
+        f.write(f"Title: {metadata.get('title', 'Viral Short')}\n")
+        f.write(f"Description: {metadata.get('description', '')}\n")
+        tags_list = metadata.get('tags', [])
+        tags_str = ", ".join(tags_list) if isinstance(tags_list, list) else str(tags_list)
+        f.write(f"Tags: {tags_str}\n")
+
+    # Multi-Platform Social Metadata Package Export (.meta.json)
+    meta_package = {
+        "video_path": output_filename,
+        "title": metadata.get('title', 'Viral Short'),
+        "mode": mode,
+        "youtube": {
+            "title": metadata.get('title', ''),
+            "description": metadata.get('description', ''),
+            "tags": metadata.get('tags', [])
+        },
+        "tiktok": {
+            "caption": f"{metadata.get('title', '')} 😱 #fyp #viral #trending #{category.replace(' ', '')}",
+            "hashtags": ["#fyp", "#viral", "#trending", f"#{category.replace(' ', '')}"]
+        },
+        "instagram": {
+            "caption": f"{metadata.get('title', '')}\n\nTag someone who needs to see this! 👇\n\n{metadata.get('description', '')}",
+            "hashtags": ["#reels", "#explore", "#viral", f"#{category.replace(' ', '')}"]
+        }
+    }
+    try:
+        meta_json_path = f"{output_filename}.meta.json"
+        with open(meta_json_path, "w", encoding="utf-8") as mf:
+            json.dump(meta_package, mf, indent=2, ensure_ascii=False)
+        print(f"[Log] 📦 Social Media Metadata Package exported to: {meta_json_path}")
+    except Exception as me:
+        print(f"[Warning] Failed to export .meta.json: {me}")
+
+
 def run(args, target_bitrate, target_preset):
     print("--- Starting Shorts Generator ---", flush=True)
 
@@ -862,17 +974,7 @@ def run(args, target_bitrate, target_preset):
             print("[Warning] AI Music generation failed, falling back to stock music.")
 
     # Resolve cartoon avatar path if active
-    avatar_path = None
-    selected_persona = args.persona if args.persona else ("mafia_cat" if (args.cartoon or mode in ("NEWS", "NEWS_SERIOUS")) else None)
-    if selected_persona:
-        for ext in [".mp4", ".mov", ".webm", ".png", ".jpg", ".jpeg", ".webp"]:
-            p_path = f"assets/avatars/{selected_persona.lower()}{ext}"
-            if os.path.exists(p_path):
-                avatar_path = p_path
-                break
-        if avatar_path is None:
-            print(f"[Warning] Persona '{selected_persona}' has no avatar file in assets/avatars/ (looked for "
-                  f"{selected_persona.lower()}.mp4/.png/...). The script uses the persona's voice, but no character is shown.")
+    selected_persona, avatar_path = resolve_avatar(args, mode)
 
     remotion_supported_modes = ["FACTS", "STORY", "NEWS", "NEWS_SERIOUS", "RIDDLE", "WYR", "EMOJI_GUESS", "FUNNY_EXPLAINER", "TEACH", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC"]
     if args.use_remotion and mode in remotion_supported_modes:
@@ -1085,26 +1187,6 @@ def run(args, target_bitrate, target_preset):
     print("[Log] Generating viral metadata...")
     from engine.social_gen import generate_viral_metadata, generate_pinterest_metadata, YouTubeUploader, InstagramUploader, PinterestUploader
 
-    def ensure_dict(data):
-        if isinstance(data, list) and len(data) > 0:
-            data = data[0]
-        if not isinstance(data, dict):
-            return {"title": "Viral Short", "description": "", "tags": []}
-
-        # Ensure description is a string
-        desc = data.get("description", "")
-        if isinstance(desc, list):
-            data["description"] = "\n".join([str(i) for i in desc])
-        elif not isinstance(desc, str):
-            data["description"] = str(desc)
-
-        # Ensure title is a string
-        title = data.get("title", "")
-        if not isinstance(title, str):
-            data["title"] = str(title) if title else "Viral Short"
-
-        return data
-
     if mode == "FACTS":
         metadata = ensure_dict(generate_viral_metadata(facts_data, category=category))
         # Put the answer below the fold so commenters can check themselves
@@ -1254,74 +1336,4 @@ def run(args, target_bitrate, target_preset):
     if actually_skip_upload:
         print("[Log] Skip Upload flag detected (or forced). Social media steps ignored.")
 
-    # 7. Permanent Storage Persistence (New Step)
-    if args.video_id and args.user_id:
-        os.environ["USER_ID"] = args.user_id
-        print(f"[Log] Persisting video and thumbnail to cloud storage for user {args.user_id}...")
-
-        # 7a. Extract thumbnail first
-        thumbnail_file = f"thumb_{session_id}.jpg"
-        thumbnail_path = None
-        try:
-            print(f"[Log] Extracting thumbnail from {final_video}...")
-            subprocess.run([
-                'ffmpeg', '-y', '-i', final_video, 
-                '-ss', '00:00:01', '-vframes', '1', 
-                thumbnail_file
-            ], check=True, capture_output=True)
-            thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
-            try: os.remove(thumbnail_file)
-            except: pass
-        except Exception as te:
-            print(f"[Warning] Thumbnail extraction/upload failed: {te}")
-
-        # 7b. Upload video
-        storage_path = upload_to_storage(final_video, args.video_id, is_video=True)
-
-        # 8. Report Success to Dashboard
-        print(f"[Log] Reporting success to dashboard for Job {args.video_id}...")
-        report_status(
-            args.video_id, 
-            args.user_id, 
-            metadata['title'], 
-            "Published", 
-            None, 
-            args.mode or mode,
-            youtube_video_id,
-            storage_path,
-            thumbnail_path
-        )
-
-    with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
-        f.write(f"Title: {metadata.get('title', 'Viral Short')}\n")
-        f.write(f"Description: {metadata.get('description', '')}\n")
-        tags_list = metadata.get('tags', [])
-        tags_str = ", ".join(tags_list) if isinstance(tags_list, list) else str(tags_list)
-        f.write(f"Tags: {tags_str}\n")
-
-    # Multi-Platform Social Metadata Package Export (.meta.json)
-    meta_package = {
-        "video_path": output_filename,
-        "title": metadata.get('title', 'Viral Short'),
-        "mode": mode,
-        "youtube": {
-            "title": metadata.get('title', ''),
-            "description": metadata.get('description', ''),
-            "tags": metadata.get('tags', [])
-        },
-        "tiktok": {
-            "caption": f"{metadata.get('title', '')} 😱 #fyp #viral #trending #{category.replace(' ', '')}",
-            "hashtags": ["#fyp", "#viral", "#trending", f"#{category.replace(' ', '')}"]
-        },
-        "instagram": {
-            "caption": f"{metadata.get('title', '')}\n\nTag someone who needs to see this! 👇\n\n{metadata.get('description', '')}",
-            "hashtags": ["#reels", "#explore", "#viral", f"#{category.replace(' ', '')}"]
-        }
-    }
-    try:
-        meta_json_path = f"{output_filename}.meta.json"
-        with open(meta_json_path, "w", encoding="utf-8") as mf:
-            json.dump(meta_package, mf, indent=2, ensure_ascii=False)
-        print(f"[Log] 📦 Social Media Metadata Package exported to: {meta_json_path}")
-    except Exception as me:
-        print(f"[Warning] Failed to export .meta.json: {me}")
+    persist_and_export(args, mode, category, metadata, final_video, output_filename, session_id, youtube_video_id)
