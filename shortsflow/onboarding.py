@@ -4,7 +4,8 @@ import re
 
 # Ordered milestones: (regex, message). A tracker only ever moves forward through this list.
 _STEPS = [
-    (r"Starting AI Extraction|Downloading|Download", "📥 Getting your video ready..."),
+    (r"Starting AI Extraction|Downloading(?! the speech model)", "📥 Getting your video ready..."),
+    (r"Downloading the speech model", "📥 Downloading the speech model (first time only, a few minutes)..."),
     (r"Transcrib", "👂 Listening to the video (turning speech into text)..."),
     (r"outline|Analyzing visual motion|Merging adjacent|Virality Scoring|rating top", "🔎 Finding the best moments..."),
     (r"Extracting \d+ segments|Queueing extraction|Tightened|Remotion", "🎬 Cutting, framing and captioning your shorts..."),

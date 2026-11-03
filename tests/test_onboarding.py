@@ -49,3 +49,10 @@ def test_checklist_text_for_desktop_dialogs():
 def test_checklist_markdown_shows_ticks_and_fixes():
     md = ob.checklist_markdown([("FFmpeg", True, ""), ("Node.js", False, "install Node 18+")])
     assert "✅ FFmpeg" in md and "⚠️ Node.js" in md and "install Node 18+" in md
+
+
+def test_progress_shows_the_first_run_model_download_then_moves_on():
+    p = ob.Progress()
+    assert "speech model" in p.feed("[Log] Downloading the speech model 'small' (about 465 MB), first time only.")
+    assert "Listening" in p.feed("Transcribe:   0%|          | 0/30")
+    assert "Getting your video" in ob.Progress().feed("[Log] Downloading video from the link")

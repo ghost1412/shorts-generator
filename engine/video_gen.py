@@ -2519,13 +2519,30 @@ def apply_standalone_video_filter(source_video, output_video, filter_name="kuros
     print(f"[Success] Standalone filter applied successfully: {output_video}")
     return output_video
 
+_nvenc_probe = None
+
+
 def _check_nvenc():
-    """Checks if NVIDIA hardware acceleration is available."""
+    """True only when NVIDIA hardware encoding really works on this machine.
+
+    Listing `h264_nvenc` in `ffmpeg -encoders` is not enough: Windows FFmpeg builds include it on every PC, with or without
+    an NVIDIA card, and then every encode fails ("No videos were generated"). So do a tiny real test encode, once per run.
+    """
+    global _nvenc_probe
+    if _nvenc_probe is not None:
+        return _nvenc_probe
     try:
         ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-        res = subprocess.run([ffmpeg_exe, '-encoders'], capture_output=True, text=True, timeout=5)
-        return 'h264_nvenc' in res.stdout
-    except: return False
+        listed = 'h264_nvenc' in subprocess.run([ffmpeg_exe, '-encoders'], capture_output=True, text=True, timeout=10).stdout
+        if not listed:
+            _nvenc_probe = False
+        else:
+            test = subprocess.run([ffmpeg_exe, '-v', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=256x256:d=0.2:r=25',
+                                   '-c:v', 'h264_nvenc', '-f', 'null', '-'], capture_output=True, timeout=30)
+            _nvenc_probe = test.returncode == 0
+    except Exception:
+        _nvenc_probe = False
+    return _nvenc_probe
 
 def apply_influencer_subtitles(clip, transcript_data, start_offset, end_offset, size=(1920, 1080), y_pos=850):
     """Simple overlay subtitles for extracted segments."""

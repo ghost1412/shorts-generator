@@ -723,13 +723,20 @@ def transcribe_video(video_path, output_dir, keep_fillers=False, language="en"):
     import stable_whisper as whisper
     import torch
         
-    print(f"[Log] Starting AI Transcription (GPU Optimized - MEDIUM Model)...")
+    print(f"[Log] Starting AI Transcription...")
     start_time = time.time()
     
     lang = None if str(language or "en").lower() in ("auto", "detect", "") else str(language).lower()  # None = Whisper detects it
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # 🟢 UPGRADE: 'medium' model provides significantly better punctuation and nuance
-    model = whisper.load_model("medium", device=device) 
+    from engine.speech_model import pick_model, download_notice
+    model_name = pick_model(device)
+    notice = download_notice(model_name)
+    if notice:
+        print(notice, flush=True)
+    if device != "cuda" and model_name != "medium":
+        print(f"[Log] No NVIDIA GPU: using the '{model_name}' speech model (faster on CPU). Set SHORTSFLOW_WHISPER_MODEL=medium for best accuracy.", flush=True)
+    model = whisper.load_model(model_name, device=device)
     if keep_fillers:
         from engine.fillers import WHISPER_PROMPT
         result = model.transcribe(video_path, language=lang, initial_prompt=WHISPER_PROMPT)
