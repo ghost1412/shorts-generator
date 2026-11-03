@@ -117,6 +117,7 @@ export const shortFlowSchema = z.object({
   captionEmoji: z.boolean().default(false), // needs an emoji font on the render machine (fonts-noto-color-emoji on Linux)
   avatarUrl: z.string().optional(),
   avatarAspect: z.number().optional(), // width / height of the avatar asset; square art is not cropped to 16:9
+  avatarKeyed: z.boolean().optional(), // transparent cut-out (green screen removed): drawn without the framed window
   backgrounds: z.array(backgroundSchema).default([]),
   thisOrThat: thisOrThatSchema.optional(),
   rankIt: rankItSchema.optional(),
@@ -874,6 +875,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   captionEmoji = false,
   avatarUrl,
   avatarAspect,
+  avatarKeyed,
   backgrounds,
   thisOrThat,
   rankIt,
@@ -1275,10 +1277,14 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             zIndex: 45,
             width: "900px",
             height: `${Math.round(900 / Math.min(Math.max(avatarAspect ?? 16 / 9, 0.75), 16 / 9))}px`,
-            borderRadius: "32px",
-            overflow: "hidden",
-            border: "6px solid #ffffff",
-            boxShadow: "0 25px 60px rgba(0,0,0,0.85), 0 0 35px rgba(251,191,36,0.3)",
+            ...(avatarKeyed
+              ? { filter: "drop-shadow(0 20px 28px rgba(0,0,0,0.75))" }
+              : {
+                  borderRadius: "32px",
+                  overflow: "hidden",
+                  border: "6px solid #ffffff",
+                  boxShadow: "0 25px 60px rgba(0,0,0,0.85), 0 0 35px rgba(251,191,36,0.3)",
+                }),
             transform: `translate(-50%, -50%) scale(${isSpeaking ? 1.03 + Math.sin(frame * 0.4) * 0.02 : 1.0})`,
             transition: "transform 0.05s ease-out",
           }}
@@ -1297,7 +1303,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
               style={{
                 width: "100%",
                 height: "100%",
-                objectFit: "cover",
+                objectFit: avatarKeyed ? "contain" : "cover",
               }}
             />
           )}

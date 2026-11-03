@@ -257,7 +257,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
         ctk.CTkLabel(ai_card, text="🧙 Cartoon Persona / Avatar:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
         self.persona_menu = ctk.CTkOptionMenu(
             ai_card,
-            values=["none (Standard Host)", "mafia_cat (Mafia Boss Cat)", "superhero (Hero Narrator)", "robot (Robotic Commentary)", "rabbit (Squeaky Cartoon)", "old_man (Grumpy Old Man)", "orange_cat (Energetic Cat)"],
+            values=["none (Standard Host)", "mafia_cat (Mafia Boss Cat)", "superhero (Hero voice, no character art)", "robot (Robotic Commentary)", "rabbit (Squeaky Cartoon)", "squirrel (News Squirrel)", "old_man (Grumpy voice, no character art)", "orange_cat (Energetic Cat)"],
             height=28,
             fg_color="#0F172A",
             button_color="#334155"

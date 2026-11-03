@@ -146,7 +146,20 @@ def render_with_remotion(
             
         # Copy background music
         rel_music_path = copy_to_public(bg_music_path, run_assets_dir) if bg_music_path else None
-        rel_avatar_path = copy_to_public(avatar_path, run_assets_dir) if avatar_path else None
+        rel_avatar_path, avatar_keyed = None, False
+        if avatar_path:
+            # still avatars are drawn on a green backdrop: write a transparent copy instead of showing the green screen
+            if os.path.splitext(avatar_path)[1].lower() in (".png", ".jpg", ".jpeg", ".webp"):
+                try:
+                    from engine.avatar_key import key_green_screen
+                    keyed_name = f"{uuid.uuid4().hex[:6]}_avatar_keyed.png"
+                    if key_green_screen(avatar_path, os.path.join(run_assets_dir, keyed_name)):
+                        rel_avatar_path = os.path.join("temp_assets", os.path.basename(run_assets_dir), keyed_name).replace("\\", "/")
+                        avatar_keyed = True
+                except Exception as e:
+                    print(f"[Warning] Avatar green-screen keying failed ({e}); using the image as is.")
+            if rel_avatar_path is None:
+                rel_avatar_path = copy_to_public(avatar_path, run_assets_dir)
         avatar_aspect = asset_aspect(avatar_path) if avatar_path else None
         
         # 3. Parse words from subtitles file
@@ -289,6 +302,7 @@ def render_with_remotion(
           "captionEmoji": os.getenv("SHORTSFLOW_CAPTION_EMOJI", "") == "1",
           "avatarUrl": rel_avatar_path if rel_avatar_path else None,
           "avatarAspect": avatar_aspect,
+          "avatarKeyed": avatar_keyed,
           "backgrounds": remotion_bg
         }
         
