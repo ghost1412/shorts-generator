@@ -64,7 +64,8 @@ try:
         page.screenshot(path=os.path.join(out_dir, "01_start_here.png"), full_page=True)
 
         page.get_by_text("Open an earlier run").click()
-        page.get_by_label("Earlier runs").click()
+        page.locator('input[aria-label="Earlier runs"]').click()      # the input itself: clicking the label does not open the list in Gradio 5
+        page.wait_for_timeout(500)
         page.screenshot(path=os.path.join(out_dir, "01b_dropdown.png"), full_page=True)
         page.get_by_role("option", name="3 Nov 2026, 12:00 - 2 shorts").click()
         page.get_by_role("button", name="Open", exact=True).click()
