@@ -1,8 +1,11 @@
 name: LLM check
 
-# Manual: shows which AI providers answer with the repository secrets (keys are never printed).
+# Shows which AI providers answer with the repository secrets (keys are never printed). Runs weekly and fails
+# (GitHub emails the owner) when none answers, so a retired model or a dead key is caught before the daily channel fails.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
 
 jobs:
   check:
@@ -17,4 +20,4 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           HF_API_KEY: ${{ secrets.HF_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python scripts/llm_check.py
+        run: python scripts/llm_check.py --strict
