@@ -20,3 +20,19 @@ def test_cli_webui_without_gradio_explains_what_to_install(monkeypatch, capsys):
     with pytest.raises(SystemExit):
         cli.main(["webui"])
     assert 'shortsflow[webui]' in capsys.readouterr().out
+
+
+def test_missing_ffprobe_does_not_break_the_video_player(monkeypatch):
+    pytest.importorskip("gradio")
+    import webui
+    from gradio import processing_utils
+    original = processing_utils.video_is_playable
+    try:
+        monkeypatch.setattr(webui.shutil, "which", lambda name: None)
+        assert webui.tolerate_missing_ffprobe() is True
+        assert processing_utils.video_is_playable("anything.mp4") is True
+        monkeypatch.setattr(webui.shutil, "which", lambda name: "/usr/bin/ffprobe")
+        processing_utils.video_is_playable = original
+        assert webui.tolerate_missing_ffprobe() is False and processing_utils.video_is_playable is original
+    finally:
+        processing_utils.video_is_playable = original

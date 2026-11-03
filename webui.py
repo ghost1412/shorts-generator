@@ -23,6 +23,20 @@ except Exception:
     ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
+def tolerate_missing_ffprobe():
+    """Gradio's video player runs `ffprobe` to check playability whenever `ffmpeg` is on the PATH, and crashes the page if only
+    ffmpeg is there (pip installs expose the bundled ffmpeg but have no ffprobe). Our clips are plain H.264 MP4, which browsers
+    play, so skip that check when ffprobe is missing."""
+    if shutil.which("ffprobe"):
+        return False
+    try:
+        from gradio import processing_utils
+        processing_utils.video_is_playable = lambda *args, **kwargs: True
+        return True
+    except Exception:
+        return False
+
+
 def _gradio_major():
     try:
         return int(gr.__version__.split(".")[0])
@@ -222,6 +236,7 @@ def _render_settings():
 
 
 def build_ui():
+    tolerate_missing_ffprobe()
     with gr.Blocks(title="ShortsFlow AI Studio", **_blocks_theme()) as demo:
         gr.Markdown(
             "# ⚡ ShortsFlow AI Studio\n"
@@ -253,7 +268,10 @@ def build_ui():
                     gr.Markdown("### Your shorts")
                     for c in cards:
                         with gr.Row(equal_height=False):
-                            gr.Video(value=c["video"], height=420, interactive=False, show_label=False, scale=1, min_width=240)
+                            try:
+                                gr.Video(value=c["video"], height=420, interactive=False, show_label=False, scale=1, min_width=240)
+                            except Exception:   # no preview (unusual video setup): offer the file instead of breaking the page
+                                gr.File(value=c["video"], label="Download this short", interactive=False, scale=1, min_width=240)
                             with gr.Column(scale=2):
                                 score = f"{c['label'].title()} ({int(c['score'])}/100)" if c.get("score") is not None else "Not rated"
                                 dur = f" · {c['duration']:.0f}s" if c.get("duration") else ""
