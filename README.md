@@ -28,6 +28,7 @@
   <a href="https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" /></a>
   <a href="https://github.com/ghost1412/shorts-generator/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shorts-generator?style=flat&logo=github" alt="GitHub stars" /></a>
   <a href="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
+  <a href="https://glama.ai/mcp/servers/ghost1412/shorts-generator"><img src="https://glama.ai/mcp/servers/ghost1412/shorts-generator/badges/score.svg" alt="ShortsFlow MCP server on Glama" /></a>
 </p>
 
 <p align="center"><b>⭐ If ShortsFlow saves you an Opus Clip subscription, please star the repo - it helps more creators find it.</b></p>
@@ -180,6 +181,8 @@ _Honest take: the paid tools have a nicer editor and scheduling. ShortsFlow wins
 ## 🤖 Model Context Protocol (MCP) & AI Agent Server
 
 ShortsFlow AI Studio provides a native **MCP Server** (`mcp_server.py`) allowing AI assistants (Claude Desktop, Cursor, Antigravity, n8n, AutoGPT) to create shorts autonomously:
+
+Listed in the [Glama MCP directory](https://glama.ai/mcp/servers/ghost1412/shorts-generator) (its quality score is the Glama badge at the top of this page).
 
 ```bash
 # Launch MCP Server over standard I/O for AI IDEs & Workflow Engines
