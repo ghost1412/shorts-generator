@@ -200,7 +200,7 @@ def clear_brand():
 
 
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
-               logo=None, handle="", end_card="", color=None, position="top-right"):
+               logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -211,12 +211,20 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     session = os.path.join(ROOT, "sessions", time.strftime("web_%Y%m%d_%H%M%S"))
     results = os.path.join(session, "results.json")
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
-           "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload",
-           "--session_dir", session, "--output_json", results]
-    if captions:
-        cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
-    if use_brand:
+    long_form = mode == "long"
+    if long_form:   # one highlights video made of the best moments, in story order (landscape, like the source)
+        cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "long",
+               "--target_duration", str(int(float(minutes) * 60)), "--skip-upload",
+               "--session_dir", session, "--output_json", results]
+        if captions:
+            cmd += ["--reel_captions"]
+    else:
+        cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
+               "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload",
+               "--session_dir", session, "--output_json", results]
+        if captions:
+            cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
+    if use_brand and not long_form:
         from shortsflow import brand
         if logo or (handle or "").strip() or (end_card or "").strip():
             save_brand(logo, handle, end_card, color, position)   # what is typed in the form counts, even if "Save" was not pressed
@@ -231,6 +239,15 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             status = progress.feed(line)
         seen = len(lines)
         yield status, log, []
+    if long_form:
+        cards = _cards_from_videos([v for v in videos if os.path.basename(v).startswith(("highlight_reel", "mashup"))] or videos[:1])
+        for c in cards:
+            c["title"] = "Highlights video"
+        if cards:
+            yield f"✅ Done! Your highlights video is ready below ({int(float(minutes))} minutes or less).", log, cards
+            return
+        yield "❌ No highlights video was made. Open 'Technical details' below for the reason.", log, []
+        return
     cards = review.load_results(results) or _cards_from_videos(videos)
     if not cards and not status.startswith("⚠️"):
         status = "❌ No shorts were made. Open 'Technical details' below for the reason, or check the setup list above."
@@ -340,7 +357,11 @@ def build_ui():
                     with gr.Column():
                         q_url = gr.Textbox(label="Video link (YouTube or other)", placeholder="https://www.youtube.com/watch?v=...")
                         q_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
+                        q_mode = gr.Radio([("Short vertical clips (TikTok, Reels, Shorts)", "shorts"),
+                                           ("One highlights video (long-form, landscape)", "long")],
+                                          value="shorts", label="What do you want?")
                         q_count = gr.Slider(1, 10, value=3, step=1, label="How many shorts?")
+                        q_minutes = gr.Slider(1, 10, value=4, step=1, label="Highlights video length (minutes)", visible=False)
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
@@ -420,11 +441,12 @@ def build_ui():
                 with gr.Accordion("Technical details", open=False):
                     q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 q_style.change(style_preview, q_style, q_style_img)
+                q_mode.change(lambda m: (gr.update(visible=m == "shorts"), gr.update(visible=m == "long")), q_mode, [q_count, q_minutes])
                 brand_form = [q_handle, q_endcard, q_color, q_pos, q_logo, q_brand_msg]
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos],
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes],
                             [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])

@@ -58,3 +58,22 @@ def test_quick_clip_applies_the_brand_typed_in_the_form_even_if_save_was_not_pre
     list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False, handle="other"))
     assert "--brand" not in seen["cmd"]
     assert brand.load(str(tmp_path))["handle"] == "@mychannel"
+
+
+def test_quick_clip_highlights_video_uses_long_mode_and_shows_the_reel(monkeypatch, tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_run(cmd):
+        seen["cmd"] = cmd
+        yield "", [str(tmp_path / "highlight_reel.mp4")]
+    monkeypatch.setattr(webui, "_run", fake_run)
+    out = list(webui.quick_clip("https://example.com/v", None, 3, True, "HORMOZI", True, handle="x", mode="long", minutes=3))
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--extract_mode") + 1] == "long"
+    assert cmd[cmd.index("--target_duration") + 1] == "180"
+    assert "--reel_captions" in cmd and "--smart_crop" not in cmd and "--brand" not in cmd
+    status, _, cards = out[-1]
+    assert status.startswith("✅") and cards[0]["title"] == "Highlights video"
