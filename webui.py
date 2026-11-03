@@ -16,7 +16,34 @@ import sys
 
 import gradio as gr
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+try:  # checkout: the repo; pip install: the workspace folder `shortsflow` sets in SHORTSFLOW_HOME
+    from engine.paths import project_root
+    ROOT = project_root()
+except Exception:
+    ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+def _gradio_major():
+    try:
+        return int(gr.__version__.split(".")[0])
+    except Exception:
+        return 5
+
+
+def _blocks_theme():
+    """Gradio 5 takes the theme in gr.Blocks(); Gradio 6 moved it to launch()."""
+    return {} if _gradio_major() >= 6 else {"theme": gr.themes.Soft()}
+
+
+def _launch_theme():
+    return {"theme": gr.themes.Soft()} if _gradio_major() >= 6 else {}
+
+
+def _pipeline_cmd():
+    """Command prefix that runs the pipeline: main.py in a checkout, `python -m shortsflow` in a pip install."""
+    if os.path.exists(os.path.join(ROOT, "main.py")):
+        return [sys.executable, "main.py"]
+    return [sys.executable, "-m", "shortsflow"]
 
 GENERATE_MODES = [
     "AUTO", "FACTS", "STORY", "EXPLAINER", "WYR", "TOP_5", "CHAT_STORY", "HORROR",
@@ -80,7 +107,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
-    cmd = [sys.executable, "main.py", "--source_video", source, "--extract_mode", "shorts",
+    cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
            "--clip_count", str(int(clip_count)), "--target_duration", str(int(target_duration)),
            "--layout", layout]
     for flag, on in (("--smart_crop", smart_crop), ("--tighten", tighten), ("--broll", broll), ("--srt", srt)):
@@ -94,7 +121,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
 
 def generate_short(mode, category, prompt, script, vibe, voice, caption_style, aspect_ratio,
                    use_remotion, llm_provider, tts_provider):
-    cmd = [sys.executable, "main.py", "--mode", mode, "--vibe", vibe]
+    cmd = [*_pipeline_cmd(), "--mode", mode, "--vibe", vibe]
     for flag, value in (("--category", category), ("--prompt", prompt), ("--script", script), ("--voice", voice)):
         if value and value.strip():
             cmd += [flag, value.strip()]
@@ -124,7 +151,7 @@ def quick_clip(url, upload, clip_count, captions):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a video link or upload a video file first.")
-    cmd = [sys.executable, "main.py", "--source_video", source, "--extract_mode", "shorts",
+    cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
            "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload"]
     if captions:
         cmd += ["--use_remotion", "--caption_style", "HORMOZI"]
@@ -157,7 +184,7 @@ def _render_settings():
 
 
 def build_ui():
-    with gr.Blocks(title="ShortsFlow AI Studio", theme=gr.themes.Soft()) as demo:
+    with gr.Blocks(title="ShortsFlow AI Studio", **_blocks_theme()) as demo:
         gr.Markdown(
             "# ⚡ ShortsFlow AI Studio\n"
             "Open-source, local-first Opus Clip alternative. "
@@ -245,12 +272,13 @@ def build_ui():
     return demo
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser(description="ShortsFlow AI Studio WebUI")
     parser.add_argument("--host", default=os.getenv("WEBUI_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("WEBUI_PORT", "7860")))
     parser.add_argument("--share", action="store_true", help="Create a public gradio.live link (useful on Colab).")
-    cli = parser.parse_args()
+    parser.add_argument("--open", action="store_true", help="Open the page in your browser once it is ready.")
+    cli = parser.parse_args(argv)
 
     try:
         from dotenv import load_dotenv
@@ -259,5 +287,9 @@ if __name__ == "__main__":
         pass
 
     build_ui().queue(default_concurrency_limit=1).launch(
-        server_name=cli.host, server_port=cli.port, share=cli.share
+        server_name=cli.host, server_port=cli.port, share=cli.share, inbrowser=cli.open, **_launch_theme()
     )
+
+
+if __name__ == "__main__":
+    main()

@@ -40,7 +40,7 @@ dependencies = [
 clip = ["stable-ts>=2.17,<3", "opencv-python>=4.10,<5", "librosa>=0.10,<0.12", "soundfile>=0.12,<1"]
 local-voice = ["kokoro-onnx>=0.4,<1", "soundfile>=0.12,<1"]
 explainer = ["manim>=0.19,<0.22", "manimpango<0.6.0"]
-webui = ["gradio>=5,<6"]
+webui = ["gradio>=5,<7"]
 full = ["shortsflow[clip,local-voice,explainer,webui]", "gtts>=2.5,<3"]
 
 [project.scripts]
@@ -69,6 +69,7 @@ packages = ["shortsflow", "engine"]
 "remotion-video/package-lock.json" = "shortsflow/_bundle/remotion-video/package-lock.json"
 "remotion-video/tsconfig.json" = "shortsflow/_bundle/remotion-video/tsconfig.json"
 "remotion-video/remotion.config.ts" = "shortsflow/_bundle/remotion-video/remotion.config.ts"
+"webui.py" = "shortsflow/webui.py"
 
 [tool.hatch.build.targets.sdist]
 # Leading slashes anchor each pattern to the repo root (otherwise "engine" also matches node_modules/**/engine).

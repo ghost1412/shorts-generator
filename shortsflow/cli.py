@@ -3,6 +3,7 @@
     shortsflow init                     create the workspace, install Remotion
     shortsflow doctor                   check FFmpeg / Node / API keys
     shortsflow clip VIDEO_OR_URL        cut a long video into vertical shorts (no API key needed; --count N, --captions)
+    shortsflow webui [--open]           browser app: paste a link or upload a video, press one button (needs `pip install "shortsflow[webui]"`)
     shortsflow api                      REST API on :8080 (SHORTSFLOW_API_KEY recommended)
     shortsflow --source_video URL ...   anything else goes to the pipeline (same flags as `python main.py`)
 """
@@ -66,6 +67,17 @@ def main(argv=None):
         return _init(home)
     if cmd == "doctor":
         sys.exit(_doctor(home))
+    if cmd == "webui":
+        try:
+            import gradio  # noqa: F401
+        except ImportError:
+            print('[shortsflow] The browser app needs one more package. Run:  pip install "shortsflow[webui]"')
+            sys.exit(1)
+        try:
+            import webui  # a git checkout keeps it next to main.py
+        except ImportError:
+            from shortsflow import webui
+        return webui.main(argv[1:])
     if cmd == "api":
         import uvicorn
         uvicorn.run("shortsflow.api.app:app", host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", "8080")))
