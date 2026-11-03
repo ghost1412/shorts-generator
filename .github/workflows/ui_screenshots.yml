@@ -15,15 +15,19 @@ jobs:
   shots:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        gradio: ["gradio>=5,<6", "gradio>=6,<7"]     # the Docker image pins 5.x, pip installs get 6.x
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "gradio>=5,<7" python-dotenv requests imageio-ffmpeg playwright
+      - run: pip install "${{ matrix.gradio }}" python-dotenv requests imageio-ffmpeg playwright
       - run: python -m playwright install --with-deps chromium
       - run: python scripts/ui_screenshots.py ui-screenshots
       - uses: actions/upload-artifact@v4
         with:
-          name: ui-screenshots
+          name: ui-screenshots-${{ strategy.job-index }}
           path: ui-screenshots/*.png

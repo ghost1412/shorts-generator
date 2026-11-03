@@ -65,9 +65,15 @@ try:
 
         page.get_by_text("Open an earlier run").click()
         page.get_by_label("Earlier runs").click()
-        page.get_by_role("option", name="web_20261103_120000").click()
+        page.screenshot(path=os.path.join(out_dir, "01b_dropdown.png"), full_page=True)
+        page.get_by_role("option", name="3 Nov 2026, 12:00 - 2 shorts").click()
         page.get_by_role("button", name="Open", exact=True).click()
-        page.wait_for_selector("text=Your shorts", timeout=60000)
+        try:
+            page.wait_for_selector("text=Your shorts", timeout=30000)
+        except Exception:
+            page.screenshot(path=os.path.join(out_dir, "02_FAILED.png"), full_page=True)
+            print("PAGE TEXT:", page.inner_text("body")[:1500])
+            raise
         page.wait_for_timeout(2500)
         page.screenshot(path=os.path.join(out_dir, "02_review.png"), full_page=True)
 

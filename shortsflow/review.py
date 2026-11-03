@@ -88,6 +88,26 @@ def build_zip(cards, dest_zip):
     return dest_zip
 
 
+def run_label(folder_name, results_path):
+    """Readable name for a run folder like web_20261103_120000: '3 Nov 2026, 12:00 - 2 shorts' (falls back to the folder name)."""
+    import re
+    import time
+    m = re.search(r"(\d{8})_(\d{6})", folder_name)
+    when = folder_name
+    if m:
+        try:
+            t = time.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S")
+            when = f"{t.tm_mday} {time.strftime('%b %Y, %H:%M', t)}"
+        except ValueError:
+            pass
+    try:
+        with open(results_path, encoding="utf-8") as f:
+            n = len(json.load(f).get("clips") or [])
+        return f"{when} - {n} short{'s' if n != 1 else ''}"
+    except (OSError, ValueError):
+        return when
+
+
 def recent_runs(root, limit=15):
     """[(label, results_json_path)] for earlier runs under <root>/sessions, newest first."""
     out = []
@@ -99,4 +119,4 @@ def recent_runs(root, limit=15):
         if os.path.exists(path):
             out.append((os.path.getmtime(path), name, path))
     out.sort(reverse=True)
-    return [(name, path) for _, name, path in out[:limit]]
+    return [(run_label(name, path), path) for _, name, path in out[:limit]]

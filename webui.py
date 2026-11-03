@@ -205,7 +205,7 @@ def zip_cards(cards):
     if not cards:
         raise gr.Error("There are no shorts to download yet.")
     import time
-    return review.build_zip(cards, os.path.join(ROOT, "sessions", time.strftime("shorts_%Y%m%d_%H%M%S.zip")))
+    return gr.update(value=review.build_zip(cards, os.path.join(ROOT, "sessions", time.strftime("shorts_%Y%m%d_%H%M%S.zip"))), visible=True)
 
 
 def _render_settings():
@@ -252,21 +252,20 @@ def build_ui():
                         return
                     gr.Markdown("### Your shorts")
                     for c in cards:
-                        with gr.Group():
-                            with gr.Row():
-                                gr.Video(value=c["video"], height=440, interactive=False, show_label=False, scale=1)
-                                with gr.Column(scale=2):
-                                    score = f"{c['label'].title()} ({int(c['score'])}/100)" if c.get("score") is not None else "Not rated"
-                                    dur = f" · {c['duration']:.0f}s" if c.get("duration") else ""
-                                    gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else ""))
-                                    gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
-                                               placeholder="No title or description was written (it needs an AI key or Ollama).")
-                                    rm = gr.Button("Remove this short", size="sm")
-                                    rm.click(lambda cs, i=c["index"]: [x for x in cs if x["index"] != i], q_cards, q_cards)
+                        with gr.Row(equal_height=False):
+                            gr.Video(value=c["video"], height=420, interactive=False, show_label=False, scale=1, min_width=240)
+                            with gr.Column(scale=2):
+                                score = f"{c['label'].title()} ({int(c['score'])}/100)" if c.get("score") is not None else "Not rated"
+                                dur = f" · {c['duration']:.0f}s" if c.get("duration") else ""
+                                gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else ""))
+                                gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
+                                           placeholder="No title or description was written (it needs an AI key or Ollama).")
+                                rm = gr.Button("Remove this short", size="sm")
+                                rm.click(lambda cs, i=c["index"]: [x for x in cs if x["index"] != i], q_cards, q_cards)
 
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
-                    q_zip = gr.File(label="Your download", interactive=False)
+                    q_zip = gr.File(label="Your download", interactive=False, visible=False)
                 with gr.Accordion("Open an earlier run", open=False):
                     q_runs = gr.Dropdown(label="Earlier runs", choices=[], interactive=True)
                     q_open = gr.Button("Open")

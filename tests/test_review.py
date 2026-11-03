@@ -66,13 +66,15 @@ def test_build_zip_bundles_videos_thumbnails_and_text(tmp_path):
     assert review.build_zip([], str(tmp_path / "empty.zip")) is None
 
 
-def test_recent_runs_lists_newest_first(tmp_path):
-    for name, mtime in (("old", 1000), ("new", 2000)):
+def test_recent_runs_lists_newest_first_with_readable_labels(tmp_path):
+    for name, mtime, clips in (("web_20261101_083000", 1000, 1), ("web_20261103_120000", 2000, 2)):
         d = tmp_path / "sessions" / name
         d.mkdir(parents=True)
         f = d / "results.json"
-        f.write_text("{}")
+        f.write_text(json.dumps({"clips": [{}] * clips}))
         os.utime(f, (mtime, mtime))
     (tmp_path / "sessions" / "no_results").mkdir()
-    assert [n for n, _ in review.recent_runs(str(tmp_path))] == ["new", "old"]
+    labels = [n for n, _ in review.recent_runs(str(tmp_path))]
+    assert labels == ["3 Nov 2026, 12:00 - 2 shorts", "1 Nov 2026, 08:30 - 1 short"]
     assert review.recent_runs(str(tmp_path / "missing")) == []
+    assert review.run_label("custom_name", str(tmp_path / "nope.json")) == "custom_name"
