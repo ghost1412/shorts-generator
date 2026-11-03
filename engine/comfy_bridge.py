@@ -122,7 +122,7 @@ def generate_cinematic_backgrounds(prompt, count=1, output_dir="assets/comfy_out
             # Increased timeout to 120s to allow model caching
             for i in range(60):
                 time.sleep(2)
-                history_res = requests.get(f"{COMFY_URL}/history/{prompt_id}")
+                history_res = requests.get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
                 if history_res.status_code == 200:
                     history = history_res.json()
                     if prompt_id in history:
@@ -133,7 +133,7 @@ def generate_cinematic_backgrounds(prompt, count=1, output_dir="assets/comfy_out
                             subfolder = img_data.get('subfolder', '')
                             
                             view_url = f"{COMFY_URL}/view?filename={filename}&subfolder={subfolder}&type=output"
-                            img_res = requests.get(view_url)
+                            img_res = requests.get(view_url, timeout=60)
                             out_path = os.path.join(output_dir, f"ai_bg_{int(time.time())}.png")
                             with open(out_path, "wb") as f:
                                 f.write(img_res.content)
@@ -226,7 +226,7 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio", ckpt
         # Polling for audio result
         for i in range(120): # Audio takes longer (approx 2 mins timeout)
             time.sleep(2)
-            history_res = requests.get(f"{COMFY_URL}/history/{prompt_id}")
+            history_res = requests.get(f"{COMFY_URL}/history/{prompt_id}", timeout=30)
             if history_res.status_code == 200:
                 history = history_res.json()
                 if prompt_id in history:
@@ -248,7 +248,7 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio", ckpt
                         
                         # Download the result
                         view_url = f"{COMFY_URL}/view?filename={filename}&subfolder={subfolder}&type=output"
-                        audio_res = requests.get(view_url)
+                        audio_res = requests.get(view_url, timeout=60)
                         out_path = os.path.join(output_dir, f"ai_audio_{int(time.time())}.mp3")
                         with open(out_path, "wb") as f:
                             f.write(audio_res.content)
@@ -272,7 +272,7 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio", ckpt
 def get_available_checkpoints():
     """Tries to list available checkpoints from ComfyUI CheckpointLoaderSimple node info."""
     try:
-        response = requests.get(f"{COMFY_URL}/object_info/CheckpointLoaderSimple")
+        response = requests.get(f"{COMFY_URL}/object_info/CheckpointLoaderSimple", timeout=10)
         if response.status_code == 200:
             info = response.json()
             # The structure for inputs usually lists valid options in a list

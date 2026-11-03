@@ -32,7 +32,7 @@ def require_key(authorization: Optional[str] = Header(None), x_api_key: Optional
     if not expected:
         return
     supplied = x_api_key or (authorization or "").removeprefix("Bearer ").strip()
-    if not hmac.compare_digest(supplied, expected):
+    if not hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(401, "Invalid or missing API key")
 
 

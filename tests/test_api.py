@@ -71,6 +71,12 @@ def test_api_key_enforced(client, monkeypatch):
     assert ok.status_code == 202
 
 
+def test_api_key_with_non_ascii_header_is_401_not_500(client, monkeypatch):
+    monkeypatch.setenv("SHORTSFLOW_API_KEY", "s3cret")
+    r = client.post("/v1/shorts", json={}, headers={"X-API-Key": "sécret".encode("latin-1")})
+    assert r.status_code == 401
+
+
 def test_webhook_signature():
     body = b'{"id":"a"}'
     sig = api_jobs.sign("k", body)

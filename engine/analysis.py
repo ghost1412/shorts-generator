@@ -1152,8 +1152,9 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         {style_injection}
         
         Aim to identify approximately {segment_target} key segments to reach the target duration of {target_duration}s.
+        {dur_msg}
         Ensure you cover the story comprehensively. Do not be overly selective; include all meaningful story beats and reactions.
-        
+
         WATCHABILITY & RETENTION:
         - **REACTION HOOKS**: Include segments with high 'ad' (audio delta) as these often represent the most watchable reactions.
         - **NARRATIVE FLOW**: Ensure the 'start' of each segment feels like a fresh beat or hook.

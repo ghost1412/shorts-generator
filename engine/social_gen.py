@@ -561,7 +561,7 @@ class InstagramUploader:
                 "creation_id": container_id,
                 "access_token": self.access_token
             }
-            pub_res = requests.post(publish_url, data=publish_payload)
+            pub_res = requests.post(publish_url, data=publish_payload, timeout=60)
             
             if not pub_res.ok:
                 print(f"[Error] Instagram Publish failed: {pub_res.text}")
@@ -629,7 +629,7 @@ class PinterestUploader:
             import time
             print(f"[Log] Waiting for Pinterest to process video (media_id: {media_id})...")
             for _ in range(10): # Max 100s wait
-                status_res = requests.get(f"{self.base_url}/media/{media_id}", headers=headers)
+                status_res = requests.get(f"{self.base_url}/media/{media_id}", headers=headers, timeout=30)
                 if status_res.ok and status_res.json().get("status") == "succeeded":
                     print("[Log] Media processing complete.")
                     break
