@@ -70,7 +70,7 @@ def doctor(home):
         return importlib.util.find_spec(mod) is not None
 
     checks = [
-        ("FFmpeg", bool(shutil.which("ffmpeg")) or has("imageio_ffmpeg"), "install FFmpeg or `pip install imageio-ffmpeg`"),
+        ("FFmpeg", bool(shutil.which("ffmpeg")), "install FFmpeg (winget install Gyan.FFmpeg) or reinstall with the ShortsFlow installer"),
         ("Node.js (Remotion captions)", bool(shutil.which("node")), "install Node 18+ from nodejs.org"),
         ("Remotion installed", os.path.isdir(os.path.join(home, "remotion-video", "node_modules")), "run `shortsflow init`"),
         ("Clipping extras (Whisper, OpenCV)", has("stable_whisper") and has("cv2"), "pip install 'shortsflow[clip]'"),

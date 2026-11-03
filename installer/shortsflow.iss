@@ -41,6 +41,7 @@ Filename: "{app}\ShortsFlow.cmd"; Description: "Open ShortsFlow now"; Flags: pos
 Type: filesandordirs; Name: "{app}\venv"
 Type: filesandordirs; Name: "{app}\python"
 Type: filesandordirs; Name: "{app}\node"
+Type: filesandordirs; Name: "{app}\ffmpeg"
 Type: filesandordirs; Name: "{app}\tools"
 Type: filesandordirs; Name: "{app}\cache"
 Type: files; Name: "{app}\ShortsFlow.cmd"

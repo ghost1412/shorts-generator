@@ -59,6 +59,8 @@ def main(argv=None):
         return
 
     home = workspace.bootstrap()
+    from shortsflow.ffmpeg_path import ensure_ffmpeg_on_path
+    ensure_ffmpeg_on_path(home)   # Whisper & co. start `ffmpeg` by name; a clean PC has none on its PATH
     os.chdir(home)  # the pipeline reads/writes assets/, sessions/ and renders relative to here
     if home not in sys.path:
         sys.path.insert(0, home)

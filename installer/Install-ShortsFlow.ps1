@@ -7,6 +7,7 @@
     tools\uv.exe      small package manager that fetches Python itself
     python\, venv\    Python 3.12 and the ShortsFlow packages (CUDA torch on NVIDIA GPUs, CPU torch otherwise)
     node\             portable Node.js (animated captions)
+    ffmpeg\           FFmpeg + ffprobe (video tools)
     workspace\        your .env, outputs and the Remotion renderer
   Then it creates "ShortsFlow" shortcuts that open the browser app.
   Re-running it updates an existing install.
@@ -131,6 +132,29 @@ try {
         Step 4 "Skipping Node.js (-NoNode)"
     }
 
+    # FFmpeg: Whisper and several pipeline steps run `ffmpeg` / `ffprobe` by name, and a clean PC has neither.
+    $FfmpegDir = Join-Path $InstallDir "ffmpeg"
+    if (-not (Test-Path (Join-Path $FfmpegDir "bin\ffmpeg.exe"))) {
+        Write-Host "Getting FFmpeg (video tools)..."
+        $zip = Join-Path $InstallDir "ffmpeg.zip"
+        $ffUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+        Download $ffUrl $zip
+        $content = (Invoke-WebRequest -Uri "$ffUrl.sha256" -UseBasicParsing).Content
+        if ($content -is [byte[]]) { $content = [Text.Encoding]::ASCII.GetString($content) }
+        $expected = $content.Trim().Split(" ")[0].ToLower()
+        $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+        if ($expected -and $actual -ne $expected) { Remove-Item $zip; throw "FFmpeg download is corrupt (checksum mismatch). Run the installer again." }
+        $tmp = Join-Path $InstallDir "ffmpeg_tmp"
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+        Expand-Archive -Path $zip -DestinationPath $tmp -Force
+        $inner = Get-ChildItem $tmp -Directory | Select-Object -First 1
+        if (-not $inner -or -not (Test-Path (Join-Path $inner.FullName "bin\ffmpeg.exe"))) { throw "ffmpeg.exe was not found in the download." }
+        if (Test-Path $FfmpegDir) { Remove-Item -Recurse -Force $FfmpegDir }
+        Move-Item $inner.FullName $FfmpegDir
+        Remove-Item -Recurse -Force $tmp
+        Remove-Item $zip
+    }
+
     # 5. Workspace + launchers --------------------------------------------------------------------------------
     Step 5 "Preparing your workspace"
     $Workspace = Join-Path $InstallDir "workspace"
@@ -141,7 +165,7 @@ try {
 @echo off
 title ShortsFlow
 set "SF=%~dp0"
-set "PATH=%SF%node;%PATH%"
+set "PATH=%SF%ffmpeg\bin;%SF%node;%PATH%"
 set "SHORTSFLOW_HOME=%SF%workspace"
 echo Starting ShortsFlow... your browser opens in a moment.
 echo Keep this window open while you use it. Close it to stop ShortsFlow.
@@ -157,7 +181,7 @@ pause
 @echo off
 title ShortsFlow (command line)
 set "SF=%~dp0"
-set "PATH=%SF%venv\Scripts;%SF%node;%PATH%"
+set "PATH=%SF%venv\Scripts;%SF%ffmpeg\bin;%SF%node;%PATH%"
 set "SHORTSFLOW_HOME=%SF%workspace"
 echo ShortsFlow command line. Try:  shortsflow clip "C:\path\to\video.mp4"
 echo.
@@ -167,6 +191,7 @@ cmd /k
 
     $env:SHORTSFLOW_HOME = $Workspace
     if (Test-Path $NodeDir) { $env:PATH = "$NodeDir;$env:PATH" }
+    if (Test-Path $FfmpegDir) { $env:PATH = "$(Join-Path $FfmpegDir 'bin');$env:PATH" }
     Run $ShortsFlow @("--version")
     if (-not $SkipRemotion -and (Test-Path (Join-Path $NodeDir "node.exe"))) {
         Write-Host "Installing the caption renderer (one time, 1-2 minutes)..."

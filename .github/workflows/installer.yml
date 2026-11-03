@@ -54,6 +54,8 @@ jobs:
           $sf = "$env:RUNNER_TEMP\sf"
           $env:SHORTSFLOW_HOME = "$sf\workspace"
           $env:SHORTSFLOW_WHISPER_MODEL = "tiny"     # small download, this only proves the pipeline runs
+          $env:PATH = "$sf\ffmpeg\bin;$sf\node;$env:PATH"   # what ShortsFlow.cmd does for the desktop shortcut
+          if (-not (Test-Path "$sf\ffmpeg\bin\ffprobe.exe")) { throw "the installer did not provide ffprobe" }
           $work = "$env:RUNNER_TEMP\e2e"
           New-Item -ItemType Directory -Force -Path $work | Out-Null
           # a ~30 s video with real speech, made offline with Windows' built-in voice

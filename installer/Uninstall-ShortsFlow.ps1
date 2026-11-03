@@ -13,7 +13,7 @@ foreach ($lnk in @((Join-Path ([Environment]::GetFolderPath("Desktop")) "ShortsF
                    (Join-Path ([Environment]::GetFolderPath("Programs")) "ShortsFlow.lnk"))) {
     if (Test-Path $lnk) { Remove-Item $lnk -Force }
 }
-foreach ($name in @("venv", "python", "node", "tools", "cache")) {
+foreach ($name in @("venv", "python", "node", "ffmpeg", "tools", "cache")) {
     $p = Join-Path $InstallDir $name
     if (Test-Path $p) { Remove-Item -Recurse -Force $p }
 }

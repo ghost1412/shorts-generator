@@ -285,6 +285,11 @@ def main(argv=None):
         load_dotenv(os.path.join(ROOT, ".env"))
     except ImportError:
         pass
+    try:  # the pipeline starts `ffmpeg` by name; make the bundled one visible when the PC has none
+        from shortsflow.ffmpeg_path import ensure_ffmpeg_on_path
+        ensure_ffmpeg_on_path(ROOT)
+    except Exception:
+        pass
 
     build_ui().queue(default_concurrency_limit=1).launch(
         server_name=cli.host, server_port=cli.port, share=cli.share, inbrowser=cli.open, **_launch_theme()
