@@ -74,6 +74,11 @@ try:
         except Exception:
             page.screenshot(path=os.path.join(out_dir, "02_FAILED.png"), full_page=True)
             print("PAGE TEXT:", page.inner_text("body")[:1500])
+            app.terminate()
+            try:
+                print("APP LOG:", app.communicate(timeout=15)[0][-4000:])
+            except Exception as e:
+                print("could not read the app log:", e)
             raise
         page.wait_for_timeout(2500)
         page.screenshot(path=os.path.join(out_dir, "02_review.png"), full_page=True)
