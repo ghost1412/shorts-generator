@@ -10,6 +10,7 @@ Runs locally, in Docker, on Google Colab or on Hugging Face Spaces.
 import argparse
 import glob
 import os
+import shutil
 import subprocess
 import sys
 
@@ -34,7 +35,7 @@ def _snapshot_videos():
     files = {}
     for pattern in patterns:
         for path in glob.glob(pattern, recursive=True):
-            if "TEMP_MPY" in path or os.path.basename(path).startswith(("preview_", "scene_clip_", "temp_")):
+            if "TEMP_MPY" in path or "temp_segments" in path or os.path.basename(path).startswith(("preview_", "scene_clip_", "temp_", "seg_")):
                 continue
             files[path] = os.path.getmtime(path)
     return files
@@ -101,6 +102,47 @@ def generate_short(mode, category, prompt, script, vibe, voice, caption_style, a
     yield from _run(cmd)
 
 
+def setup_status():
+    """Markdown checklist of what is ready on this machine (same checks as `shortsflow doctor`)."""
+    from shortsflow import onboarding, workspace
+    try:
+        return onboarding.checklist_markdown(workspace.doctor(ROOT))
+    except Exception as e:  # never break the page over a diagnostics problem
+        return f"Could not check the setup automatically ({e})."
+
+
+def save_groq_key(key):
+    from shortsflow import onboarding
+    if onboarding.save_env_key(os.path.join(ROOT, ".env"), "GROQ_API_KEY", key):
+        return "✅ Saved. AI titles and descriptions will use your free Groq key from the next run."
+    return "⚠️ That does not look like a key. Copy it again from console.groq.com (no spaces)."
+
+
+def quick_clip(url, upload, clip_count, captions):
+    """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log."""
+    from shortsflow import onboarding
+    source = upload or (url or "").strip()
+    if not source:
+        raise gr.Error("Paste a video link or upload a video file first.")
+    cmd = [sys.executable, "main.py", "--source_video", source, "--extract_mode", "shorts",
+           "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload"]
+    if captions:
+        cmd += ["--use_remotion", "--caption_style", "HORMOZI"]
+    progress, seen = onboarding.Progress(), 0
+    status = progress.message
+    yield status, [], ""
+    log, videos = "", []
+    for log, videos in _run(cmd):
+        lines = log.splitlines()
+        for line in lines[seen:]:
+            status = progress.feed(line)
+        seen = len(lines)
+        yield status, videos, log
+    if not videos and not status.startswith("⚠️"):
+        status = "❌ No shorts were made. Open 'Technical details' below for the reason, or check the setup list above."
+    yield status, videos, log
+
+
 def _render_settings():
     with gr.Accordion("Render settings", open=False):
         with gr.Row():
@@ -122,7 +164,34 @@ def build_ui():
             "[GitHub](https://github.com/ghost1412/shorts-generator) · ⭐ Star if it helps!"
         )
         with gr.Tabs():
-            with gr.Tab("✂️ Clip a long video"):
+            with gr.Tab("🚀 Start here"):
+                gr.Markdown("### Make shorts from a video in one click\n"
+                            "No account or API key is needed for this. Paste a link or upload a video, then press the button.")
+                with gr.Row():
+                    with gr.Column():
+                        q_url = gr.Textbox(label="Video link (YouTube or other)", placeholder="https://www.youtube.com/watch?v=...")
+                        q_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
+                        q_count = gr.Slider(1, 10, value=3, step=1, label="How many shorts?")
+                        q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
+                                                 info="Needs Node.js (nodejs.org). Untick if it is not installed.")
+                        q_btn = gr.Button("✨ Make my shorts", variant="primary")
+                    with gr.Column():
+                        q_status = gr.Markdown("Waiting for a video...")
+                        q_videos = gr.Files(label="Your shorts")
+                with gr.Accordion("Is my computer ready?", open=False):
+                    q_check = gr.Markdown(setup_status())
+                    gr.Button("Check again").click(setup_status, None, q_check)
+                with gr.Accordion("Want AI-written titles and descriptions? (optional, free)", open=False):
+                    gr.Markdown("Get a free key at [console.groq.com](https://console.groq.com) (sign in, then *API Keys*), paste it here and save. "
+                                "You can skip this; your shorts are made either way.")
+                    q_key = gr.Textbox(label="Groq API key", type="password", placeholder="gsk_...")
+                    q_key_msg = gr.Markdown()
+                    gr.Button("Save key").click(save_groq_key, q_key, q_key_msg)
+                with gr.Accordion("Technical details", open=False):
+                    q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions], [q_status, q_videos, q_log])
+
+            with gr.Tab("✂️ Clip (advanced)"):
                 with gr.Row():
                     with gr.Column():
                         url = gr.Textbox(label="YouTube / video URL", placeholder="https://www.youtube.com/watch?v=...")

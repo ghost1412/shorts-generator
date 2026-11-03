@@ -42,6 +42,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.create_header()
         self.create_studio_layout()
         self.create_log_drawer()
+        self.after(700, self.maybe_show_welcome)  # first launch: friendly quick start
 
     def create_header(self):
         """Top Header Bar with Glassmorphic Accent and Status Badges"""
@@ -265,6 +266,8 @@ class ModernShortsGeneratorUI(ctk.CTk):
         self.persona_menu.pack(fill="x", padx=12, pady=(0, 10))
 
         # API Keys Accordion Drawer
+        quick_btn = ctk.CTkButton(scroll_left, text="🚀 Quick start guide", fg_color="transparent", text_color="#10B981", hover_color="#1E293B", anchor="w", command=self.show_welcome)
+        quick_btn.pack(fill="x", padx=10, pady=(4, 0))
         keys_btn = ctk.CTkButton(scroll_left, text="🔑 Edit API Keys (.env)", fg_color="transparent", text_color="#38BDF8", hover_color="#1E293B", anchor="w", command=self.toggle_keys_window)
         keys_btn.pack(fill="x", padx=10, pady=(4, 10))
 
@@ -548,6 +551,79 @@ class ModernShortsGeneratorUI(ctk.CTk):
             os.startfile(self.latest_output_file)
         else:
             self.open_output_dir()
+
+    WELCOME_MARKER = os.path.join("sessions", ".welcome_done")
+
+    def maybe_show_welcome(self):
+        if not os.path.exists(self.WELCOME_MARKER):
+            self.show_welcome()
+
+    def show_welcome(self):
+        """First-run quick start: setup check, one big button to make shorts from a video, optional free AI key."""
+        try:
+            from shortsflow import onboarding, workspace
+            checks = onboarding.checklist_text(workspace.doctor(os.getcwd()))
+        except Exception as e:
+            onboarding, checks = None, f"Could not check the setup automatically ({e})."
+
+        dlg = ctk.CTkToplevel(self)
+        dlg.title("Welcome to ShortsFlow")
+        dlg.geometry("640x700")
+        dlg.attributes("-topmost", True)
+        ctk.CTkLabel(dlg, text="Make your first shorts", font=ctk.CTkFont(size=22, weight="bold")).pack(pady=(18, 4))
+        ctk.CTkLabel(dlg, text="Pick a video and ShortsFlow cuts it into vertical shorts.\nNo account or API key is needed.",
+                     font=ctk.CTkFont(size=13), text_color="#94A3B8").pack(pady=(0, 10))
+
+        def choose_and_run():
+            filename = filedialog.askopenfilename(title="Choose a video", filetypes=[("Video Files", "*.mp4 *.mov *.avi *.mkv")])
+            if not filename:
+                return
+            self.source_entry.delete(0, "end")
+            self.source_entry.insert(0, filename)
+            for value in self.mode_dropdown.cget("values"):
+                if "Auto Clipping" in value:
+                    self.mode_dropdown.set(value)
+                    self.on_mode_dropdown_change(value)
+                    break
+            close()
+            self.start_generation()
+
+        def close():
+            if dont_show.get():
+                try:
+                    os.makedirs("sessions", exist_ok=True)
+                    open(self.WELCOME_MARKER, "w").close()
+                except OSError:
+                    pass
+            dlg.destroy()
+
+        ctk.CTkButton(dlg, text="🎬  Choose a video and make shorts", height=46, font=ctk.CTkFont(size=15, weight="bold"),
+                      fg_color="#10B981", hover_color="#059669", command=choose_and_run).pack(fill="x", padx=40, pady=8)
+
+        ctk.CTkLabel(dlg, text="Is my computer ready?", font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=40, pady=(14, 2))
+        box = ctk.CTkTextbox(dlg, height=190, wrap="word")
+        box.pack(fill="x", padx=40)
+        box.insert("1.0", checks)
+        box.configure(state="disabled")
+
+        ctk.CTkLabel(dlg, text="Optional: AI-written titles (free key from console.groq.com)",
+                     font=ctk.CTkFont(size=13, weight="bold")).pack(anchor="w", padx=40, pady=(14, 2))
+        key_row = ctk.CTkFrame(dlg, fg_color="transparent")
+        key_row.pack(fill="x", padx=40)
+        key_entry = ctk.CTkEntry(key_row, placeholder_text="gsk_...", show="*")
+        key_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        key_msg = ctk.CTkLabel(dlg, text="", text_color="#94A3B8")
+
+        def save_key():
+            ok = onboarding is not None and onboarding.save_env_key(os.path.join(os.getcwd(), ".env"), "GROQ_API_KEY", key_entry.get())
+            key_msg.configure(text="✅ Saved." if ok else "⚠️ That does not look like a key (copy it again, no spaces).")
+
+        ctk.CTkButton(key_row, text="Save", width=70, command=save_key).pack(side="left")
+        key_msg.pack(anchor="w", padx=40, pady=(2, 0))
+
+        dont_show = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(dlg, text="Don't show this again", variable=dont_show).pack(anchor="w", padx=40, pady=(14, 4))
+        ctk.CTkButton(dlg, text="Skip, I'll explore", fg_color="transparent", border_width=1, command=close).pack(pady=6)
 
     def toggle_keys_window(self):
         """Popup Dialog to Edit API Keys"""
