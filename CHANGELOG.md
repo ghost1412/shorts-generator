@@ -2,7 +2,7 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-11-03)
 
 ### New
 - **Review screen** in the browser app: every short as a card with a preview player, a strong / good / okay / weak label with the reason, and a copy-ready title, description and hashtags. Remove shorts, download all as a `.zip`, reopen earlier runs.
