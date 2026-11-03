@@ -63,6 +63,7 @@ jobs:
         run: |
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.ver.outputs.version }}" installer\shortsflow.iss
+          Copy-Item "installer\output\ShortsFlow-Setup-${{ steps.ver.outputs.version }}.exe" installer\output\ShortsFlow-Setup.exe   # stable name for releases/latest/download/
           Get-ChildItem installer\output
 
       - uses: actions/upload-artifact@v4

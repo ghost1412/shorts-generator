@@ -47,7 +47,7 @@ by Aida Thomas, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0); 
 
 ## 🪟 Windows: one-click install
 
-**[⬇ Download ShortsFlow-Setup from the latest release](https://github.com/ghost1412/shorts-generator/releases/latest)**, run it, then open **ShortsFlow** from your Desktop. A browser page opens where you paste a video link or upload a file and press one button. No Python, Node or API key to install first.
+**[⬇ Download ShortsFlow-Setup.exe](https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe)** (or see [all releases](https://github.com/ghost1412/shorts-generator/releases)), run it, then open **ShortsFlow** from your Desktop. A browser page opens where you paste a video link or upload a file and press one button. No Python, Node or API key to install first.
 
 - The installer downloads roughly 2 GB the first time (about 5 GB with an NVIDIA card, because of the GPU libraries; it fetches its own private Python, the speech-recognition components and Node), so it needs an internet connection and a few minutes. It does not need admin rights.
 - It is not code-signed yet, so Windows may show a blue "Windows protected your PC" box: click **More info**, then **Run anyway**.
