@@ -9,7 +9,6 @@ import json
 import re
 import subprocess
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from engine.utils import decrypt_secret, find_fact_start_times
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
@@ -66,7 +65,7 @@ def run(args, target_bitrate, target_preset):
                 try:
                     res = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", p], capture_output=True, text=True)
                     return float(res.stdout.strip())
-                except: return 0.1
+                except Exception: return 0.1
                 
             v_dur = get_dur(manim_output_path)
             a_dur = get_dur(audio_path)

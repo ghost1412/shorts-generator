@@ -2628,7 +2628,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
 
         # Reframing: Auto-Crop 16:9 to 9:16 for Shorts
         active_shots = None
-        if mode == "shorts" and layout == "active":
+        if mode == "shorts" and layout in ("active", "auto"):
             from engine.speaker_focus import plan_speaker_shots
             try:
                 active_shots = plan_speaker_shots(source_path, hi['start'], hi['end'], ffmpeg_exe=ffmpeg_exe)
@@ -2638,7 +2638,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 print(f"[Log] 🎙️ Clip {i+1}: active-speaker shots " +
                       ", ".join(f"{s['target']}@{s['start']:.1f}s" for s in active_shots))
             else:
-                print(f"[Log] Clip {i+1}: not a two-person shot, using the regular crop.")
+                print(f"[Log] Clip {i+1}: not a two-person shot, using the regular crop." +
+                      (" (auto layout: single)" if layout == "auto" else ""))
 
         if mode == "shorts":
             if active_shots:

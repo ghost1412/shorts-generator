@@ -115,3 +115,18 @@ def test_quick_clip_passes_languages(monkeypatch, tmp_path):
     list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False))
     cmd = seen["cmd"]
     assert cmd[cmd.index("--language") + 1] == "auto" and "--caption_lang" not in cmd
+
+
+def test_quick_clip_uses_auto_layout_for_shorts(monkeypatch, tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_run(cmd):
+        seen["cmd"] = cmd
+        yield "", []
+    monkeypatch.setattr(webui, "_run", fake_run)
+    list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False))
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--layout") + 1] == "auto"

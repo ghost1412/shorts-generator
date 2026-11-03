@@ -35,7 +35,7 @@ def run(args, target_bitrate, target_preset):
     # 🟢 EXPERT GUARD: Prevention of Mode Confusion
     if args.extract_mode == "shorts" and args.target_duration > 60:
         print(f"[Warning] Target duration {args.target_duration}s exceeds YouTube Shorts limit (60s).")
-        print(f"[Log] Capping short duration at 60s. For longer highlights, use --extract_mode long.")
+        print("[Log] Capping short duration at 60s. For longer highlights, use --extract_mode long.")
         args.target_duration = 60
         
     # Get chapters if requested

@@ -10,12 +10,15 @@ Webhooks: pass `webhook_url` in a request; set SHORTSFLOW_WEBHOOK_SECRET to get 
 `X-ShortsFlow-Signature: sha256=<hmac of body>` header.
 """
 import hmac
+import ipaddress
 import os
+import socket
+from urllib.parse import urlparse
 from typing import Literal, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from shortsflow.api.jobs import JobManager, public_view
 
@@ -36,6 +39,32 @@ def require_key(authorization: Optional[str] = Header(None), x_api_key: Optional
         raise HTTPException(401, "Invalid or missing API key")
 
 
+def _no_flag(v):
+    """A user string starting with '-' could be read as a CLI flag by main.py."""
+    if isinstance(v, str) and v.lstrip().startswith("-"):
+        raise ValueError("must not start with '-'")
+    return v
+
+
+def _check_webhook(url):
+    if url is None:
+        return url
+    parts = urlparse(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("webhook_url must be an http(s) URL")
+    if os.getenv("SHORTSFLOW_ALLOW_PRIVATE_WEBHOOKS") == "1":
+        return url
+    try:
+        infos = socket.getaddrinfo(parts.hostname, parts.port or 80, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise ValueError("webhook_url host does not resolve")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0].split("%")[0])
+        if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_unspecified or ip.is_multicast:
+            raise ValueError("webhook_url must not point to a private address (set SHORTSFLOW_ALLOW_PRIVATE_WEBHOOKS=1 to allow)")
+    return url
+
+
 class Common(BaseModel):
     caption_style: CaptionStyle = "HORMOZI"
     aspect_ratio: Literal["9:16", "16:9", "1:1", "4:5"] = "9:16"
@@ -43,6 +72,16 @@ class Common(BaseModel):
     llm_provider: str = "auto"
     webhook_url: Optional[str] = Field(None, description="POSTed once when the job finishes")
     tts_provider: Literal["auto", "elevenlabs", "voicestudio", "edgetts", "local", "kokoro"] = "auto"
+
+    @field_validator("webhook_url")
+    @classmethod
+    def _webhook_ok(cls, v):
+        return _check_webhook(v)
+
+    @field_validator("llm_provider")
+    @classmethod
+    def _provider_ok(cls, v):
+        return _no_flag(v)
 
 
 class ShortRequest(Common):
@@ -52,18 +91,28 @@ class ShortRequest(Common):
     script: Optional[str] = None
     vibe: Literal["suspense", "spooky", "cinematic", "upbeat", "sarcastic", "funny"] = "suspense"
 
+    @field_validator("mode", "category", "prompt", "script")
+    @classmethod
+    def _no_flag_ok(cls, v):
+        return _no_flag(v)
+
 
 class ClipRequest(Common):
     source_video: str = Field(..., description="YouTube URL or a path on the server")
     clip_count: int = Field(3, ge=1, le=15)
     target_duration: int = Field(45, ge=10, le=180)
-    layout: Literal["single", "split", "active"] = "single"
+    layout: Literal["single", "split", "active", "auto"] = "single"
     smart_crop: bool = True
     tighten: bool = False
     logo: Optional[str] = Field(None, description="Logo PNG path on the server")
     handle: Optional[str] = Field(None, description="@handle shown with the logo and on the end card")
     end_card: Optional[str] = Field(None, description="Closing end card text")
     find: Optional[str] = Field(None, description='Only clip moments matching this request, e.g. "where they discuss pricing"')
+
+    @field_validator("source_video", "logo", "handle", "end_card", "find")
+    @classmethod
+    def _no_flag_ok(cls, v):
+        return _no_flag(v)
 
 
 def _common_args(r: Common):

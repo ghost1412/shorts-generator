@@ -12,9 +12,9 @@ def is_comfy_available():
     """Returns True if the local ComfyUI server is reachable."""
     try:
         # Just check if the server is alive by calling /
-        response = requests.get(COMFY_URL, timeout=2)
+        requests.get(COMFY_URL, timeout=2)
         return True # Any response means the server is reachable
-    except:
+    except Exception:
         return False
 
 def get_comfy_error(job_info):
@@ -262,7 +262,7 @@ def generate_ai_audio(prompt, duration=15, output_dir="assets/comfy_audio", ckpt
             if i % 10 == 0 and i > 0:
                 print(f"[ComfyBridge] Still waiting for audio... ({i*2}s elapsed)")
             
-        print(f"[ComfyBridge] Audio generation timed out after 240 seconds.")
+        print("[ComfyBridge] Audio generation timed out after 240 seconds.")
             
     except Exception as e:
         print(f"[ComfyBridge] Audio generation exception: {e}")
@@ -281,6 +281,6 @@ def get_available_checkpoints():
             if ckpts and isinstance(ckpts[0], list):
                 return ckpts[0]
             return ckpts
-    except:
+    except Exception:
         pass
     return []

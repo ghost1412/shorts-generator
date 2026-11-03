@@ -9,7 +9,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-import pickle
 
 load_dotenv()
 HF_API_KEY = os.getenv("HF_API_KEY")
@@ -297,7 +296,7 @@ Format as JSON ONLY:
         except Exception as e:
             print(f"[Warning] Metadata attempt {attempt+1} failed ({e}).")
             if attempt == 1:
-                print(f"[Log] Metadata API failed after 2 attempts. Using generic fallback.")
+                print("[Log] Metadata API failed after 2 attempts. Using generic fallback.")
         
     # Improved fallback based on mode
     if mode == "FIND_IT":
@@ -310,15 +309,15 @@ Format as JSON ONLY:
     
     if mode == "STORY":
         return {
-            "title": f"You won't believe this STORY! 😱 #shorts #storytime",
-            "description": f"This is one of the most incredible stories I've ever heard. Stay until the end for the twist! 🗿\n\n#storytelling #mystery #trending",
+            "title": "You won't believe this STORY! 😱 #shorts #storytime",
+            "description": "This is one of the most incredible stories I've ever heard. Stay until the end for the twist! 🗿\n\n#storytelling #mystery #trending",
             "tags": [category, "shorts", "story", "mystery", "storytime", "wow"]
         }
 
     if mode.startswith("NEWS"):
         return {
             "title": f"BREAKING NEWS: {category.upper()} UPDATE! 🚨 #shorts #news",
-            "description": f"New developing story. Make sure you're following for more daily updates on this! 🚨\n\n#breakingnews #latest #updates",
+            "description": "New developing story. Make sure you're following for more daily updates on this! 🚨\n\n#breakingnews #latest #updates",
             "tags": [category, "shorts", "news", "breaking", "latest", "update"]
         }
     
@@ -331,8 +330,8 @@ Format as JSON ONLY:
     
     # Default for FACTS or unknown
     return {
-        "title": f"The SHOCKING truth! 😱 #shorts #facts",
-        "description": f"Can you spot the lie? One of these is a fake! \n\n#trivia #challenge #interesting",
+        "title": "The SHOCKING truth! 😱 #shorts #facts",
+        "description": "Can you spot the lie? One of these is a fake! \n\n#trivia #challenge #interesting",
         "tags": [category, "shorts", "challenge", "facts", "trivia", "didyouknow"]
     }
 
@@ -384,7 +383,7 @@ class YouTubeUploader:
 
         # 1. SAAS MODE: Use credentials provided from Supabase
         if creds_dict and all(k in creds_dict for k in ["client_id", "client_secret", "refresh_token"]):
-            print(f"[Log] Authenticating with user-provided credentials (BYOK Mode)")
+            print("[Log] Authenticating with user-provided credentials (BYOK Mode)")
             creds = Credentials(
                 None,  # access_token is None, will be refreshed
                 refresh_token=creds_dict["refresh_token"],
@@ -500,31 +499,31 @@ class InstagramUploader:
             print("[Log] Instagram credentials missing. Skipping IG upload.")
             return None
 
-        print(f"[Log] Preparing Instagram Reel (Temporary Hosting)...")
+        print("[Log] Preparing Instagram Reel (Temporary Hosting)...")
         
         try:
             # Step 0: Upload to Supabase Storage (Stable Hosting)
             from engine.storage import upload_to_storage, get_public_url
             import uuid
             
-            print(f"[Log] Uploading to Supabase Storage for stable hosting...")
+            print("[Log] Uploading to Supabase Storage for stable hosting...")
             temp_id = str(uuid.uuid4())[:8]
             storage_path = upload_to_storage(video_file_path, f"ig_temp_{temp_id}")
             
             if not storage_path:
-                print(f"[Error] Storage upload failed. Falling back to file.io (unreliable)...")
+                print("[Error] Storage upload failed. Falling back to file.io (unreliable)...")
                 with open(video_file_path, "rb") as f:
                     host_res = requests.post("https://file.io", files={"file": f}, timeout=60)
                     if host_res.ok:
                         video_url = host_res.json().get("link")
                     else:
-                        print(f"[Error] file.io fallback also failed.")
+                        print("[Error] file.io fallback also failed.")
                         return None
             else:
                 video_url = get_public_url(storage_path)
             
             if not video_url:
-                print(f"[Error] No public URL generated for Instagram.")
+                print("[Error] No public URL generated for Instagram.")
                 return None
 
             print(f"[Log] Stable URL generated: {video_url}")
@@ -538,7 +537,7 @@ class InstagramUploader:
                 "access_token": self.access_token
             }
             
-            print(f"[Log] Creating Instagram Media Container...")
+            print("[Log] Creating Instagram Media Container...")
             res = requests.post(container_url, data=payload, timeout=30)
             print(f"[Log] Container Creation Status: {res.status_code}")
             
@@ -597,7 +596,7 @@ class PinterestUploader:
 
         try:
             # Step 1: Register Media
-            print(f"[Log] Registering Pinterest Media...")
+            print("[Log] Registering Pinterest Media...")
             reg_res = requests.post(
                 f"{self.base_url}/media",
                 json={"media_type": "video"},
@@ -612,7 +611,7 @@ class PinterestUploader:
             upload_params = reg_data["upload_parameters"]
 
             # Step 2: Upload to S3
-            print(f"[Log] Uploading video to Pinterest S3 storage...")
+            print("[Log] Uploading video to Pinterest S3 storage...")
             with open(video_file_path, "rb") as f:
                 upload_res = requests.post(
                     upload_url,
@@ -650,7 +649,7 @@ class PinterestUploader:
             if link:
                 pin_payload["link"] = link
 
-            print(f"[Log] Creating Pinterest Pin...")
+            print("[Log] Creating Pinterest Pin...")
             pin_res = requests.post(
                 f"{self.base_url}/pins",
                 json=pin_payload,

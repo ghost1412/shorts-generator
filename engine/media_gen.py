@@ -256,7 +256,6 @@ def create_generic_target_sticker(out_path, label="Target", width=400, height=40
     img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     
-    cx, cy = width // 2, height // 2
     
     # Outer circle badge with dark outline
     draw.ellipse([(15, 15), (width - 15, height - 15)], fill=(255, 235, 210, 255), outline=(40, 30, 20, 255), width=6)
@@ -575,7 +574,7 @@ def fetch_jwst_images(num_images=5, output_dir="assets/jwst"):
         try:
             with open(history_file, "r") as f:
                 history = json.load(f)
-        except:
+        except Exception:
             history = []
 
     # JWESTAPI.com endpoint

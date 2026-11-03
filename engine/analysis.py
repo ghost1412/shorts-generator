@@ -248,7 +248,6 @@ def detect_motion_intervals(video_path, threshold=0.03, skip_frames=15, candidat
     motion_frames = []
     
     def scan_range(cap_obj, start_sec, end_sec):
-        res = []
         cap_obj.set(cv2.CAP_PROP_POS_MSEC, start_sec * 1000)
         start_frame = int(start_sec * fps)
         end_frame = int(end_sec * fps)
@@ -555,7 +554,7 @@ def compute_audio_score(chunk, sr, prev_energy=None, global_features=None, start
                 pitches, _ = librosa.piptrack(y=chunk, sr=sr, fmin=75, fmax=1600, n_fft=safe_n_fft)
                 pitches = pitches[pitches > 0]
                 pitch_var = np.var(pitches) if len(pitches) > 0 else 0
-        except:
+        except Exception:
             pitch_var = 0
         
     # 3. Silence Ratio
@@ -576,7 +575,7 @@ def compute_audio_score(chunk, sr, prev_energy=None, global_features=None, start
             non_silent = librosa.effects.split(y=chunk, top_db=25, frame_length=split_frame)
             active_len = sum(e - s for s, e in non_silent)
             silence_ratio = 1 - (active_len / len(chunk))
-        except:
+        except Exception:
             silence_ratio = 0.5
             valid_silence = False
         else:
@@ -757,13 +756,13 @@ def transcribe_video(video_path, output_dir, keep_fillers=False, language="en"):
                     return transcript_path
                 else:
                     print(f"[Warning] Session Cache Mismatch: Old={cached_source}, New={os.path.abspath(video_path)}. Re-transcribing...")
-        except:
+        except Exception:
             pass
 
     import stable_whisper as whisper
     import torch
         
-    print(f"[Log] Starting AI Transcription...")
+    print("[Log] Starting AI Transcription...")
     start_time = time.time()
     
     lang = None if str(language or "en").lower() in ("auto", "detect", "") else str(language).lower()  # None = Whisper detects it
@@ -794,7 +793,7 @@ def transcribe_video(video_path, output_dir, keep_fillers=False, language="en"):
     else:
         # Fallback if stable_whisper result is weird
         result.save_as_json(transcript_path)
-    print(f"[Log] Transcript saved successfully.")
+    print("[Log] Transcript saved successfully.")
     
     print(f"[Log] Transcription completed in {time.time() - start_time:.1f}s")
     return transcript_path
@@ -888,7 +887,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             try:
                 print("[Log] Generating video outline (Parallel)...")
                 return extract_video_outline(transcript_path)
-            except: return ""
+            except Exception: return ""
         return ""
 
     def get_audio():
@@ -896,7 +895,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         if use_audio_detect and video_path:
             try:
                 wav_path = extract_audio_mono(video_path, os.path.dirname(transcript_path))
-                print(f"[Log] Loading audio for analysis (Parallel)...")
+                print("[Log] Loading audio for analysis (Parallel)...")
                 import librosa
                 a, s = librosa.load(wav_path, sr=sr)
                 g = compute_global_audio_features(a, s)
@@ -1183,7 +1182,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
     try:
         # 🟢 HEARTBEAT: Clear logging for user visibility on long runs
         print(f"[Log] Sending {len(compressed_segments)} logic-filtered segments to LLM for viral curation...")
-        print(f"[Log] This may take up to 2-3 minutes for large 60+ min videos. Please wait...")
+        print("[Log] This may take up to 2-3 minutes for large 60+ min videos. Please wait...")
         
         # 🟢 PERFORMANCE: Set dynamic_max to 8192 to prevent Gemini token truncation
         dynamic_max = 8192
@@ -1210,7 +1209,6 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
 
         # 🟢 QUALITY FILTER, MERGING & SORTING
         valid_highlights = []
-        min_floor = 8.0 if mode == "shorts" else 15.0 # Lowered for narrative flexibility
         
         if isinstance(highlights, list) and highlights:
             for h in highlights:
@@ -1235,7 +1233,6 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                         avg_norm_motion = sum(s['norm_motion'] for s in relevant_segs) / len(relevant_segs)
                         avg_norm_delta = sum(s['norm_delta'] for s in relevant_segs) / len(relevant_segs)
                         avg_norm_ad    = sum(s['norm_audio_delta'] for s in relevant_segs) / len(relevant_segs)
-                        avg_norm_sd    = sum(s['norm_silence_delta'] for s in relevant_segs) / len(relevant_segs)
                         
                         combined_signal = (
                             avg_norm_score * 0.35 + 

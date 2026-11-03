@@ -9,7 +9,6 @@ import json
 import re
 import subprocess
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from engine.utils import decrypt_secret, find_fact_start_times
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
@@ -37,7 +36,7 @@ def run(args, target_bitrate, target_preset):
     duration = args.target_duration if args.target_duration else 30
     ckpt_name = args.ckpt_name if args.ckpt_name else "ace_step_v1_3.5b.safetensors"
     
-    print(f"--- Starting Standalone AI Music Generation ---")
+    print("--- Starting Standalone AI Music Generation ---")
     print(f"[Log] Original Prompt: '{prompt}'")
     
     # Expand Prompt via LLM
@@ -63,7 +62,7 @@ def run(args, target_bitrate, target_preset):
     print(f"[Log] Session directory initialized at: {session_dir}")
 
     # Generate Audio
-    print(f"[Log] Generating AI audio...")
+    print("[Log] Generating AI audio...")
     audio_path = generate_ai_audio(expanded_prompt, duration=duration, output_dir=session_dir, ckpt_name=ckpt_name)
     if not audio_path:
         print("[Error] AI Music generation failed.")
@@ -74,7 +73,7 @@ def run(args, target_bitrate, target_preset):
     print(f"[Log] AI Audio generated successfully at: {audio_path}")
     
     # Generate visual background & compile video
-    print(f"[Log] Creating visual video container for the generated music...")
+    print("[Log] Creating visual video container for the generated music...")
     if args.video_id and args.user_id:
         report_status(args.video_id, args.user_id, meta["title"], "Processing", None, "MUSIC")
         
@@ -124,7 +123,7 @@ def run(args, target_bitrate, target_preset):
     )
     
     # Combine image + audio into MP4
-    print(f"[Log] Compiling final video...")
+    print("[Log] Compiling final video...")
     import subprocess
     ffmpeg_cmd = [
         "ffmpeg", "-y",
@@ -157,7 +156,7 @@ def run(args, target_bitrate, target_preset):
                 ], check=True, capture_output=True)
                 thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
                 try: os.remove(thumbnail_file)
-                except: pass
+                except Exception: pass
             except Exception as te:
                 print(f"[Warning] Thumbnail extraction failed: {te}")
                 

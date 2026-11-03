@@ -9,7 +9,6 @@ import json
 import re
 import subprocess
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from engine.utils import decrypt_secret, find_fact_start_times
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
@@ -83,7 +82,7 @@ def run(args, target_bitrate, target_preset):
     out_filename = os.path.basename(args.source_video).rsplit('.', 1)[0] + f"_{target_filter}.mp4"
     output_video = os.path.join(session_dir, out_filename)
     
-    print(f"--- Starting Standalone Filter Application ---")
+    print("--- Starting Standalone Filter Application ---")
     apply_standalone_video_filter(args.source_video, output_video, filter_name=target_filter, use_hq=args.hq, timeline_cuts=timeline_cuts)
     print(f"[Success] 🎨 Filtered video ready at: {output_video}")
     sys.exit(0)

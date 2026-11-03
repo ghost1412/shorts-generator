@@ -9,7 +9,6 @@ import json
 import re
 import subprocess
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from engine.utils import decrypt_secret, find_fact_start_times
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice

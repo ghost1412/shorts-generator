@@ -12,7 +12,6 @@ import json
 import re
 import subprocess
 from dotenv import load_dotenv
-from supabase import create_client, Client
 from engine.utils import decrypt_secret, find_fact_start_times
 from engine.pipeline import POOL_SIZE, VIBE_VOICE_MAP, CARTOON_VOICE_MAP, CARTOON_AUDIO_CONFIG, report_status, export_srt, print_clip_score_table
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
@@ -78,7 +77,7 @@ def persist_and_export(args, mode, category, metadata, final_video, output_filen
             ], check=True, capture_output=True)
             thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
             try: os.remove(thumbnail_file)
-            except: pass
+            except Exception: pass
         except Exception as te:
             print(f"[Warning] Thumbnail extraction/upload failed: {te}")
 
@@ -464,7 +463,7 @@ def run(args, target_bitrate, target_preset):
                         try:
                             from engine.analysis import transcribe_video
                             temp_t_dir = args.session_dir if args.session_dir else f"assets/temp_{random.randint(100000, 999999)}"
-                            print(f"[Log] 🎙️ Transcribing source video to extract scene context for FUNNY_EXPLAINER...")
+                            print("[Log] 🎙️ Transcribing source video to extract scene context for FUNNY_EXPLAINER...")
                             t_path = transcribe_video(args.source_video, temp_t_dir)
                             if os.path.exists(t_path):
                                 with open(t_path, 'r', encoding='utf-8') as tf:
@@ -628,9 +627,9 @@ def run(args, target_bitrate, target_preset):
     if is_local_experiment:
         local_bg_pool = [os.path.join(LOCAL_BG_DIR, f) for f in os.listdir(LOCAL_BG_DIR) if f.endswith(".mp4")]
         if local_bg_pool:
-            print(f"[Log] 🧪 SEARCH_EXPERIMENT: Local Collection Selected (60% Bucket)")
+            print("[Log] 🧪 SEARCH_EXPERIMENT: Local Collection Selected (60% Bucket)")
         else:
-            print(f"[Log] [Warning] Local experiment selected but pool is empty, falling back to Pexels.")
+            print("[Log] [Warning] Local experiment selected but pool is empty, falling back to Pexels.")
             is_local_experiment = False
 
     def get_video_duration(path):
@@ -801,7 +800,7 @@ def run(args, target_bitrate, target_preset):
     elif mode == "FUNNY_EXPLAINER":
         bg_video_paths = []
         if getattr(args, 'source_video', None) and os.path.exists(args.source_video):
-            print(f"[Log] 🎬 Extracting scene clips across the ENTIRE source video timeline to cover full video...")
+            print("[Log] 🎬 Extracting scene clips across the ENTIRE source video timeline to cover full video...")
             steps = funny_data.get("scene_steps", []) if 'funny_data' in locals() else []
             num_steps = max(3, len(steps))
             clip_dur = total_bg_duration / num_steps
@@ -1256,6 +1255,7 @@ def run(args, target_bitrate, target_preset):
 
         youtube_creds = None
         if args.user_id:
+            from supabase import create_client, Client
             supabase_url = os.getenv("SUPABASE_URL")
             supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") # Use Service Role for backend
 

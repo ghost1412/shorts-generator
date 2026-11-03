@@ -3,11 +3,29 @@ import subprocess
 import os
 import threading
 import uuid
+import hmac
 from dotenv import load_dotenv
 
 load_dotenv()
 
 app = Flask(__name__)
+
+
+def _check_key():
+    """Optional auth: when SHORTSFLOW_API_KEY is set, require it (Bearer or X-API-Key). Returns an error response or None."""
+    expected = os.getenv("SHORTSFLOW_API_KEY")
+    if not expected:
+        return None
+    supplied = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    if not hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
+        return jsonify({"error": "Invalid or missing API key"}), 401
+    return None
+
+
+def _flaglike(*values):
+    """True if any string value starts with '-' (would be parsed as a CLI flag by main.py)."""
+    return any(isinstance(v, str) and v.lstrip().startswith("-") for v in values)
+
 
 # This is a basic worker server that listens for render requests from the Next.js dashboard.
 # It runs the python main.py command in the background.
@@ -61,7 +79,10 @@ def run_generation(mode, category, script, vibe, video_id, user_id, style=None, 
 
 @app.route('/render', methods=['POST'])
 def trigger_render():
-    data = request.json
+    denied = _check_key()
+    if denied:
+        return denied
+    data = request.get_json(silent=True) or {}
     mode = data.get('mode', 'AUTO')
     category = data.get('category', 'random')
     script = data.get('customScript', '')
@@ -75,7 +96,10 @@ def trigger_render():
     style_context = data.get('styleContext')
     prompt = data.get('prompt')
     ckpt_name = data.get('ckptName')
-    
+
+    if _flaglike(mode, category, script, vibe, user_id, video_id, style, source_video, user_context, style_context, prompt, ckpt_name):
+        return jsonify({"error": "Values must not start with '-'"}), 400
+
     # Start the processing in a background thread so the HTTP request returns immediately
     thread = threading.Thread(target=run_generation, args=(mode, category, script, vibe, video_id, user_id, style, source_video, use_audio_detect, user_context, style_context, prompt, ckpt_name))
     thread.start()
@@ -88,6 +112,9 @@ def trigger_render():
 
 @app.route('/kids-image', methods=['POST'])
 def generate_kids_illustration():
+    denied = _check_key()
+    if denied:
+        return denied
     try:
         data = request.json or {}
         prompt = data.get('prompt')
@@ -122,4 +149,4 @@ def health():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     print(f"--- ShortsFlow Dedicated Worker listening on port {port} ---")
-    app.run(host='0.0.0.0', port=port)
+    app.run(host=os.getenv('HOST', '127.0.0.1'), port=port)

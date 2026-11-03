@@ -92,3 +92,21 @@ def test_brand_find_and_tts_fields_reach_the_cli(client):
     for pair in (("--find", "pricing"), ("--logo", "l.png"), ("--handle", "@me"),
                  ("--end_card", "Follow"), ("--tts_provider", "kokoro")):
         assert args[args.index(pair[0]) + 1] == pair[1]
+
+
+def test_webhook_url_validation(client, monkeypatch):
+    monkeypatch.delenv("SHORTSFLOW_ALLOW_PRIVATE_WEBHOOKS", raising=False)
+    for bad in ("ftp://example.com/x", "file:///etc/passwd", "http://127.0.0.1:9/x", "http://localhost/x",
+                "http://169.254.169.254/latest", "http://10.0.0.5/x"):
+        r = client.post("/v1/shorts", json={"webhook_url": bad})
+        assert r.status_code == 422, bad
+    monkeypatch.setenv("SHORTSFLOW_ALLOW_PRIVATE_WEBHOOKS", "1")
+    assert client.post("/v1/shorts", json={"webhook_url": "http://127.0.0.1:9/x"}).status_code == 202
+
+
+def test_flag_like_strings_rejected(client):
+    for field in ("category", "prompt", "script", "mode"):
+        assert client.post("/v1/shorts", json={field: "--use_audio_detect"}).status_code == 422, field
+    for field in ("source_video", "find", "handle", "end_card", "logo"):
+        body = {"source_video": "x", field: "-rf"}
+        assert client.post("/v1/clips", json=body).status_code == 422, field

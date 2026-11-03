@@ -227,6 +227,8 @@ curl -X POST localhost:8080/v1/clips -H "Authorization: Bearer change-me" -H "Co
 curl localhost:8080/v1/jobs/a1b2c3 -H "Authorization: Bearer change-me"   # status + files[] download links
 ```
 
+Set `SHORTSFLOW_API_KEY` before exposing the API beyond localhost; webhook URLs pointing at private addresses are rejected unless `SHORTSFLOW_ALLOW_PRIVATE_WEBHOOKS=1`.
+
 `POST /v1/shorts` generates from an idea (`mode`, `category`, `prompt`...). Webhooks are signed with
 `X-ShortsFlow-Signature: sha256=<HMAC of body>` when `SHORTSFLOW_WEBHOOK_SECRET` is set. Jobs run one at a time by default
 (`SHORTSFLOW_MAX_CONCURRENT`). With Docker: `SHORTSFLOW_API_KEY=change-me docker compose --profile api up api` (refuses to start without a key). A ready-made n8n flow lives in [`examples/n8n/`](examples/n8n/shortsflow-clip-workflow.json).

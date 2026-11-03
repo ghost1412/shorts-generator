@@ -233,7 +233,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--reel_captions"]
     else:
         cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
-               "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload",
+               "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--layout", "auto", "--skip-upload",
                "--session_dir", session, "--output_json", results]
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
@@ -491,8 +491,8 @@ def build_ui():
                         with gr.Row():
                             clip_count = gr.Slider(1, 15, value=3, step=1, label="Number of clips")
                             target_duration = gr.Slider(15, 90, value=30, step=5, label="Target length (s)")
-                        layout = gr.Radio(["single", "active", "split"], value="single", label="Framing",
-                                          info="active = cut to whoever is talking (podcasts, interviews)")
+                        layout = gr.Radio(["single", "auto", "active", "split"], value="single", label="Framing",
+                                          info="auto = picks per clip (two-person shot -> cut to whoever talks, otherwise a tracked crop); active = always cut to the speaker")
                         with gr.Row():
                             smart_crop = gr.Checkbox(value=True, label="Face-tracking 9:16 crop")
                             tighten = gr.Checkbox(value=True, label="Remove silences")
