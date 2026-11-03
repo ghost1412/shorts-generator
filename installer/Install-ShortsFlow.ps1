@@ -91,25 +91,50 @@ try {
 
     # 3. Packages ---------------------------------------------------------------------------------------------
     Step 3 "Installing ShortsFlow and its AI components (the slow step)"
-    $hasNvidia = $false
+    # Pick the newest PyTorch CUDA build the installed NVIDIA driver supports (its header reports the highest CUDA version it can run).
+    $cudaTag = $null
     if (-not $Cpu) {
         $smi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
-        if ($smi) { & $smi.Source -L *> $null; $hasNvidia = ($LASTEXITCODE -eq 0) }
+        if ($smi) {
+            $header = (& $smi.Source 2>$null) -join "`n"
+            if ($LASTEXITCODE -eq 0 -and $header -match "CUDA (?:UMD )?Version:\s*(\d+)\.(\d+)") {
+                $driverCuda = [double]("$($Matches[1]).$($Matches[2])")
+                if ($driverCuda -ge 13.0) { $cudaTag = "cu130" }
+                elseif ($driverCuda -ge 12.6) { $cudaTag = "cu126" }
+                elseif ($driverCuda -ge 12.4) { $cudaTag = "cu124" }
+                else { Write-Host "NVIDIA driver is old (CUDA $driverCuda): update it from nvidia.com for GPU speed. Using the CPU build for now." -ForegroundColor Yellow }
+            }
+        }
     }
-    if ($hasNvidia) {
-        Write-Host "NVIDIA graphics card found: using the GPU build (faster speech recognition)."
-        $torchIndex = "https://download.pytorch.org/whl/cu124"
+    if ($cudaTag) {
+        Write-Host "NVIDIA graphics card found: using the GPU build $cudaTag (faster speech recognition)."
+        $torchIndex = "https://download.pytorch.org/whl/$cudaTag"
     } else {
-        Write-Host "No NVIDIA graphics card: using the CPU build (works, but transcription is slower)."
+        Write-Host "No usable NVIDIA graphics card: using the CPU build (works, but transcription is slower)."
         $torchIndex = "https://download.pytorch.org/whl/cpu"
     }
-    Run $Uv @("pip", "install", "--python", $Py, "torch", "--extra-index-url", $torchIndex)
+    # torch and torchaudio together from that index; later installs must not touch them (PyPI's Windows torch is CPU-only)
+    Run $Uv @("pip", "install", "--python", $Py, "torch", "torchaudio", "--extra-index-url", $torchIndex)
     if ($Wheel) {
         $spec = "shortsflow[clip,webui] @ " + ([Uri](Resolve-Path $Wheel).Path).AbsoluteUri
     } else {
         $spec = "shortsflow[clip,webui]"
     }
-    Run $Uv @("pip", "install", "--python", $Py, "--upgrade", $spec)
+    Run $Uv @("pip", "install", "--python", $Py, "--upgrade-package", "shortsflow", "--extra-index-url", $torchIndex, $spec)
+    if ($cudaTag) {
+        & $Py -c "import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)"
+        if ($LASTEXITCODE -ne 0) {
+            # an earlier install may have left a CPU-only torch that counts as "already satisfied": replace it once
+            Write-Host "Replacing the CPU build of PyTorch with the GPU build..."
+            Run $Uv @("pip", "install", "--python", $Py, "--reinstall-package", "torch", "--reinstall-package", "torchaudio", "torch", "torchaudio", "--extra-index-url", $torchIndex)
+            & $Py -c "import sys, torch; sys.exit(0 if torch.cuda.is_available() else 1)"
+        }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "The GPU build was installed but CUDA is not usable on this PC; ShortsFlow will run on the CPU (slower). Update your NVIDIA driver and run this installer again." -ForegroundColor Yellow
+        } else {
+            Write-Host "GPU check passed: CUDA is available to PyTorch."
+        }
+    }
 
     # 4. Node -------------------------------------------------------------------------------------------------
     $NodeDir = Join-Path $InstallDir "node"

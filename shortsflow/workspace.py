@@ -5,6 +5,7 @@ assets/, music/, remotion-video/ and a .env next to where it runs, so `shortsflo
 (default ~/shortsflow, or SHORTSFLOW_HOME) and copies those in from the wheel the first time.
 """
 import os
+import re
 import shutil
 import subprocess
 
@@ -36,6 +37,28 @@ def _copy_missing(src, dst):
                 shutil.copy2(os.path.join(folder, name), out)
 
 
+_PLACEHOLDER = re.compile(r"^(\s*)([A-Z][A-Z0-9_]*)\s*=\s*(your_\S*|\S*_here)\b(.*)$")
+
+
+def comment_out_placeholders(env_path):
+    """Turn `GEMINI_API_KEY=your_gemini_api_key_here` into a comment. A placeholder is not a key: loaded as one, every AI step
+    retried it for minutes ("400 Bad Request") before falling back. Returns how many lines were changed. Safe to repeat."""
+    if not os.path.exists(env_path):
+        return 0
+    with open(env_path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    changed = 0
+    for i, line in enumerate(lines):
+        m = _PLACEHOLDER.match(line)
+        if m:
+            lines[i] = f"{m.group(1)}# {m.group(2)}={m.group(3)}{m.group(4)}"
+            changed += 1
+    if changed:
+        with open(env_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(lines) + "\n")
+    return changed
+
+
 def bootstrap(home=None):
     """Create/refresh the workspace and return its path. Safe to call on every run."""
     home = home or resolve_home()
@@ -45,6 +68,7 @@ def bootstrap(home=None):
         env, example = os.path.join(home, ".env"), os.path.join(home, "env.example")
         if not os.path.exists(env) and os.path.exists(example):
             shutil.copy2(example, env)
+        comment_out_placeholders(env)   # new and existing workspaces: placeholder values must not count as keys
     os.environ["SHORTSFLOW_HOME"] = home
     return home
 

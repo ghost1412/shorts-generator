@@ -65,3 +65,27 @@ def test_cli_version_and_usage(capsys):
     assert capsys.readouterr().out.startswith("shortsflow ")
     cli.main([])
     assert "shortsflow init" in capsys.readouterr().out
+
+
+def test_placeholder_keys_in_env_are_commented_out_but_real_ones_stay(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("GEMINI_API_KEY=your_gemini_api_key_here\nGROQ_API_KEY=gsk_real123\nPEXELS_API_KEY=your_pexels_api_key_here # free\n"
+                   "LLM_PROVIDER=auto # 'auto'\nHF_API_KEY=\n", encoding="utf-8")
+    assert workspace.comment_out_placeholders(str(env)) == 2
+    text = env.read_text(encoding="utf-8")
+    assert "# GEMINI_API_KEY=your_gemini_api_key_here" in text and "# PEXELS_API_KEY=your_pexels_api_key_here # free" in text
+    assert "\nGROQ_API_KEY=gsk_real123\n" in text and "LLM_PROVIDER=auto" in text
+    assert workspace.comment_out_placeholders(str(env)) == 0          # idempotent
+    assert workspace.comment_out_placeholders(str(tmp_path / "missing.env")) == 0
+
+
+def test_bootstrap_cleans_the_workspace_env(tmp_path, monkeypatch):
+    monkeypatch.setattr(workspace, "is_checkout", lambda: False)
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    (bundle / "env.example").write_text("GEMINI_API_KEY=your_gemini_api_key_here\nPEXELS_API_KEY=real\n")
+    monkeypatch.setattr(workspace, "BUNDLE", str(bundle))
+    home = tmp_path / "home"
+    workspace.bootstrap(str(home))
+    text = (home / ".env").read_text()
+    assert "# GEMINI_API_KEY=your_gemini_api_key_here" in text and "\nPEXELS_API_KEY=real" in text
