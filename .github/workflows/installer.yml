@@ -164,7 +164,8 @@ jobs:
             Start-Sleep -Seconds 2
             try { $ok = (Invoke-WebRequest -Uri "http://127.0.0.1:7860" -UseBasicParsing).StatusCode -eq 200 } catch {}
           }
-          taskkill /PID $app.Id /T /F | Out-Null
+          taskkill /PID $app.Id /T /F 2>&1 | Out-Null
+          $global:LASTEXITCODE = 0     # taskkill exits non-zero when the process already ended; that must not fail this step
           if (-not $ok) { throw "ShortsFlow.cmd did not bring up the browser app" }
           Write-Host "ShortsFlow.cmd started the browser app"
 
@@ -177,6 +178,7 @@ jobs:
           if (-not (Test-Path "$dir\workspace\my-videos-marker.txt")) { throw "uninstall deleted the user's workspace" }
           if (Test-Path $desktopLink) { throw "uninstall left the Desktop shortcut" }
           Write-Host "Uninstall removed the program and kept the workspace"
+          exit 0
 
       - uses: actions/upload-artifact@v4
         with:
