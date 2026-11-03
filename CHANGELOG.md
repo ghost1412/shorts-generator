@@ -9,8 +9,12 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 - **Highlights video** option in the browser app (one landscape video made of the best moments, 1-10 minutes).
 - **"Pick the moments"** in the browser app: make shorts only about a topic you describe, and cut chosen words or phrases out.
 - The browser app has a **spoken-language** box (default: detect it automatically).
+- **`--layout auto`**: per clip, a two-person shot gets the cut-to-whoever-is-talking layout, anything else the tracked single crop. Used by default on the browser app's Start here tab.
 
 ### Fixed
+- Highlights-video prompt now includes the segment-length rules; an API key with non-ASCII characters returns 401 instead of 500; network calls to social/ComfyUI services have timeouts.
+- Security hardening: the legacy `server.py` worker supports `SHORTSFLOW_API_KEY` and listens on localhost by default; API webhook URLs must be http(s) and cannot point at private addresses (override: `SHORTSFLOW_ALLOW_PRIVATE_WEBHOOKS=1`); text values starting with `-` are rejected.
+- Clipping no longer needs `supabase` to be importable; the dead Aspect ratio choice was removed from the Clip (advanced) tab (clips are always 9:16).
 - Cropping on footage without faces (gameplay, scenery): the crop stays centred instead of being pulled to the edge by false face detections.
 - The brand typed in the browser app is now applied even if "Save my brand" was not pressed.
 - The local AI default is `qwen2.5:7b` (about 13x faster than the previous `qwen3:8b` for clip scoring).

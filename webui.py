@@ -349,11 +349,12 @@ def zip_cards(cards):
     return gr.update(value=review.build_zip(cards, os.path.join(ROOT, "sessions", time.strftime("shorts_%Y%m%d_%H%M%S.zip"))), visible=True)
 
 
-def _render_settings():
+def _render_settings(with_aspect=True):
     with gr.Accordion("Render settings", open=False):
         with gr.Row():
             caption_style = gr.Dropdown(CAPTION_STYLES, value="HORMOZI", label="Caption style")
-            aspect_ratio = gr.Dropdown(ASPECTS, value="9:16", label="Aspect ratio")
+            # Clipping always produces 9:16, so the choice is only offered where it changes the result.
+            aspect_ratio = gr.Dropdown(ASPECTS, value="9:16", label="Aspect ratio") if with_aspect else gr.State("9:16")
         with gr.Row():
             llm_provider = gr.Dropdown(LLM_PROVIDERS, value="auto", label="LLM provider")
             tts_provider = gr.Dropdown(["auto", "edgetts", "elevenlabs", "voicestudio", "local"],
@@ -498,7 +499,7 @@ def build_ui():
                             tighten = gr.Checkbox(value=True, label="Remove silences")
                             broll = gr.Checkbox(label="Auto B-roll")
                             srt = gr.Checkbox(label="Export .srt")
-                        clip_settings = _render_settings()
+                        clip_settings = _render_settings(with_aspect=False)
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                     with gr.Column():
                         clip_videos = gr.Files(label="Rendered clips")
