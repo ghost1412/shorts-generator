@@ -40,6 +40,10 @@ for i, (title, score, color) in enumerate([("Why the sky is blue (and sunsets ar
 with open(os.path.join(session, "results.json"), "w", encoding="utf-8") as f:
     json.dump({"source_video": "demo.mp4", "session_dir": session, "total_clips": 2, "clips": clips}, f)
 
+# the workspace of a real install gets these copied in from the package; mirror that
+import shutil
+shutil.copytree(os.path.join(ROOT, "assets", "caption_previews"), os.path.join(home, "assets", "caption_previews"))
+
 # 2. start the app on that workspace
 env = dict(os.environ, SHORTSFLOW_HOME=home, PYTHONIOENCODING="utf-8")
 app = subprocess.Popen([sys.executable, os.path.join(ROOT, "webui.py"), "--port", str(PORT)], cwd=ROOT, env=env,
@@ -91,6 +95,31 @@ try:
         page.wait_for_selector("text=.zip", timeout=30000)
         page.wait_for_timeout(1000)
         page.screenshot(path=os.path.join(out_dir, "04_zip.png"), full_page=True)
+        # style picker + brand kit: choose a style, fill the brand, upload a logo, save, then reload to prove it persisted
+        from PIL import Image
+        logo = os.path.join(home, "my_logo.png")
+        Image.new("RGBA", (300, 300), (255, 80, 120, 255)).save(logo)
+        page.goto(f"http://127.0.0.1:{PORT}")
+        page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
+        page.get_by_text("Pink glow box").click()
+        page.wait_for_timeout(800)
+        page.get_by_text("Your brand: logo, @handle, end card").click()
+        page.get_by_label("@handle").fill("@lightexplained")
+        page.get_by_label("End card text (last 2 seconds)").fill("Follow for more")
+        page.locator("input[type=file]").nth(1).set_input_files(logo)
+        page.wait_for_timeout(1000)
+        page.get_by_role("button", name="Save my brand").click()
+        page.wait_for_selector("text=Saved your brand", timeout=30000)
+        page.screenshot(path=os.path.join(out_dir, "05_style_and_brand.png"), full_page=True)
+        saved = os.path.join(home, "brand", "brand.json")
+        assert os.path.exists(saved), "brand.json was not written"
+        assert json.load(open(saved, encoding="utf-8"))["handle"] == "@lightexplained"
+        page.reload()
+        page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
+        page.get_by_text("Your brand: logo, @handle, end card").click()
+        page.wait_for_selector("text=Your brand is saved", timeout=30000)
+        assert page.get_by_label("@handle").input_value() == "@lightexplained", "the saved handle was not reloaded"
+        page.screenshot(path=os.path.join(out_dir, "06_brand_reloaded.png"), full_page=True)
         browser.close()
     print("screenshots written to", out_dir)
 finally:

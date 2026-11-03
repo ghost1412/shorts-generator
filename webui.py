@@ -166,7 +166,42 @@ def _cards_from_videos(videos):
             for i, v in enumerate(videos, start=1)]
 
 
-def quick_clip(url, upload, clip_count, captions):
+CAPTION_CHOICES = [("Bold yellow (Hormozi)", "HORMOZI"), ("Pink glow box", "GLOW_BOX"),
+                   ("Bouncy gold", "BOUNCE"), ("Clean dark boxes", "MINIMAL")]
+BRAND_POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left"]
+
+
+def style_preview(style):
+    """Path of the preview still for a caption style (None when the image is missing)."""
+    path = os.path.join(ROOT, "assets", "caption_previews", f"{style}.jpg")
+    return path if os.path.exists(path) else None
+
+
+def brand_fields():
+    """Saved brand -> values for the brand form."""
+    from shortsflow import brand
+    b = brand.load(ROOT)
+    if not b:
+        return "", "", brand.DEFAULT_COLOR, "top-right", None, "No brand saved yet."
+    return (b["handle"], b["end_card"], b["color"], b["logo_position"], b["logo"],
+            "Your brand is saved. It is added to every short while the box above is ticked.")
+
+
+def save_brand(logo, handle, end_card, color, position):
+    from shortsflow import brand
+    try:
+        return brand.save(ROOT, logo_path=logo, handle=handle, end_card=end_card, color=color, position=position)
+    except ValueError as e:
+        raise gr.Error(str(e))
+
+
+def clear_brand():
+    from shortsflow import brand
+    brand.clear(ROOT)
+    return "", "", brand.DEFAULT_COLOR, "top-right", None, "Brand removed."
+
+
+def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -181,7 +216,10 @@ def quick_clip(url, upload, clip_count, captions):
            "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload",
            "--session_dir", session, "--output_json", results]
     if captions:
-        cmd += ["--use_remotion", "--caption_style", "HORMOZI"]
+        cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
+    if use_brand:
+        from shortsflow import brand
+        cmd += brand.cli_args(ROOT)
     progress, seen = onboarding.Progress(), 0
     status = progress.message
     yield status, "", []
@@ -254,6 +292,23 @@ def build_ui():
                         q_count = gr.Slider(1, 10, value=3, step=1, label="How many shorts?")
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
+                        q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
+                                           info="Only used when animated captions are on.")
+                        q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
+                        with gr.Accordion("Your brand: logo, @handle, end card", open=False):
+                            q_brand_on = gr.Checkbox(value=True, label="Add my brand to the shorts")
+                            q_logo = gr.Image(label="Logo (PNG with a transparent background works best)", type="filepath",
+                                              height=140, sources=["upload"])
+                            with gr.Row():
+                                q_handle = gr.Textbox(label="@handle", placeholder="@mychannel")
+                                q_color = gr.ColorPicker(label="Accent colour", value="#FFEA00")
+                            with gr.Row():
+                                q_endcard = gr.Textbox(label="End card text (last 2 seconds)", placeholder="Follow for more")
+                                q_pos = gr.Dropdown(BRAND_POSITIONS, value="top-right", label="Logo position")
+                            q_brand_msg = gr.Markdown("No brand saved yet.")
+                            with gr.Row():
+                                q_brand_save = gr.Button("Save my brand", variant="secondary")
+                                q_brand_clear = gr.Button("Remove brand")
                         q_btn = gr.Button("✨ Make my shorts", variant="primary")
                     with gr.Column():
                         q_status = gr.Markdown("Waiting for a video...")
@@ -298,7 +353,12 @@ def build_ui():
                     gr.Button("Save key").click(save_groq_key, q_key, q_key_msg)
                 with gr.Accordion("Technical details", open=False):
                     q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions], [q_status, q_log, q_cards])
+                q_style.change(style_preview, q_style, q_style_img)
+                brand_form = [q_handle, q_endcard, q_color, q_pos, q_logo, q_brand_msg]
+                q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
+                q_brand_clear.click(clear_brand, None, brand_form)
+                demo.load(brand_fields, None, brand_form)
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on], [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
                 demo.load(earlier_runs, None, q_runs)
