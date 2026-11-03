@@ -61,8 +61,8 @@ begin
           '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\installer\Install-ShortsFlow.ps1') +
           '" -InstallDir "' + ExpandConstant('{app}') + '" -NoShortcuts',
           '', SW_SHOW, ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
-      MsgBox('Setup could not finish downloading everything.' + #13#10 +
+      SuppressibleMsgBox('Setup could not finish downloading everything.' + #13#10 +
              'Check your internet connection, then run this installer again (it resumes where it stopped).' + #13#10 +
-             'Details: ' + ExpandConstant('{app}\install.log'), mbError, MB_OK);
+             'Details: ' + ExpandConstant('{app}\install.log'), mbError, MB_OK, IDOK);
   end;
 end;

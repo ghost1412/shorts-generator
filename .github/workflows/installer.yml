@@ -125,6 +125,9 @@ jobs:
           $exe = (Get-ChildItem installer\output\ShortsFlow-Setup-*.exe | Select-Object -First 1).FullName
           $dir = "$env:RUNNER_TEMP\sf-exe"
           $inno = "$env:RUNNER_TEMP\inno.log"
+          # this step runs in PowerShell 7, whose module path breaks module autoloading in the Windows PowerShell 5.1 the installer
+          # starts; a real user's PC has the normal machine path, so use that
+          $env:PSModulePath = [Environment]::GetEnvironmentVariable("PSModulePath", "Machine")
           $p = Start-Process -FilePath $exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dir`"", "/LOG=`"$inno`"" -PassThru
           # poll instead of -Wait so a hang shows where it is stuck (the PowerShell installer logs to install.log)
           $deadline = (Get-Date).AddMinutes(35)

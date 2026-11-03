@@ -53,6 +53,14 @@ function Download($url, $dest) {
     }
 }
 
+function Sha256File($path) {
+    # plain .NET instead of Get-FileHash: no dependence on PowerShell module autoloading (breaks when launched from PowerShell 7)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($path)
+    try { return ([BitConverter]::ToString($sha.ComputeHash($stream)) -replace "-", "").ToLower() }
+    finally { $stream.Dispose(); $sha.Dispose() }
+}
+
 function Run($exe, [string[]]$arguments) {
     & $exe @arguments
     if ($LASTEXITCODE -ne 0) { throw "'$exe $($arguments -join ' ')' failed with exit code $LASTEXITCODE" }
@@ -148,7 +156,7 @@ try {
             Download "https://nodejs.org/dist/$NodeVersion/$name.zip" $zip
             $sums = (Invoke-WebRequest -Uri "https://nodejs.org/dist/$NodeVersion/SHASUMS256.txt" -UseBasicParsing).Content
             $expected = ($sums -split "`n" | Where-Object { $_ -match "$name.zip" } | Select-Object -First 1).Split(" ")[0].Trim()
-            $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+            $actual = (Sha256File $zip)
             if ($expected -and $actual -ne $expected.ToLower()) { Remove-Item $zip; throw "Node.js download is corrupt (checksum mismatch). Run the installer again." }
             Expand-Archive -Path $zip -DestinationPath $InstallDir -Force
             if (Test-Path $NodeDir) { Remove-Item -Recurse -Force $NodeDir }
@@ -169,7 +177,7 @@ try {
         $content = (Invoke-WebRequest -Uri "$ffUrl.sha256" -UseBasicParsing).Content
         if ($content -is [byte[]]) { $content = [Text.Encoding]::ASCII.GetString($content) }
         $expected = $content.Trim().Split(" ")[0].ToLower()
-        $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+        $actual = (Sha256File $zip)
         if ($expected -and $actual -ne $expected) { Remove-Item $zip; throw "FFmpeg download is corrupt (checksum mismatch). Run the installer again." }
         $tmp = Join-Path $InstallDir "ffmpeg_tmp"
         if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
