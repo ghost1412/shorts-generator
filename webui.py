@@ -116,13 +116,21 @@ def _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_pr
     return args
 
 
+def _count(value):
+    """How many shorts: a whole number, at least 1 (the box can be left empty)."""
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return 3
+
+
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
                caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
     cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
-           "--clip_count", str(int(clip_count)), "--target_duration", str(int(target_duration)),
+           "--clip_count", str(_count(clip_count)), "--target_duration", str(int(target_duration)),
            "--layout", layout]
     for flag, on in (("--smart_crop", smart_crop), ("--tighten", tighten), ("--broll", broll), ("--srt", srt)):
         if on:
@@ -233,7 +241,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--reel_captions"]
     else:
         cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
-               "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--layout", "auto", "--skip-upload",
+               "--clip_count", str(_count(clip_count)), "--smart_crop", "--tighten", "--layout", "auto", "--skip-upload",
                "--session_dir", session, "--output_json", results]
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
@@ -382,8 +390,10 @@ def build_ui():
                         q_mode = gr.Radio([("Short vertical clips (TikTok, Reels, Shorts)", "shorts"),
                                            ("One highlights video (long-form, landscape)", "long")],
                                           value="shorts", label="What do you want?")
-                        q_count = gr.Slider(1, 10, value=3, step=1, label="How many shorts?")
-                        q_minutes = gr.Slider(1, 10, value=4, step=1, label="Highlights video length (minutes)", visible=False)
+                        q_count = gr.Number(value=3, minimum=1, precision=0, label="How many shorts?",
+                                            info="No limit. If the video does not have that many good moments you get fewer.")
+                        q_minutes = gr.Slider(1, 30, value=4, step=1, label="Highlights video length (minutes)", visible=False,
+                                             info="Never longer than your video. Long reels take longer to make and the file gets big (about 2 GB for 15 minutes).")
                         with gr.Accordion("Pick the moments (optional)", open=False):
                             q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
                                                 info="Describe the part you want. Leave empty to let the AI pick the best moments.")
@@ -393,7 +403,7 @@ def build_ui():
                             q_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
                             q_caption_lang = gr.Dropdown(CAPTION_LANG_CHOICES, value="", label="Captions in...",
                                                          info="Translates the captions with AI (a free Groq key or Ollama is needed). "
-                                                              "Japanese, Chinese, Korean, Arabic and Russian captions are not supported yet.")
+                                                              "Japanese, Chinese, Korean and Arabic captions are not supported yet.")
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
@@ -490,7 +500,7 @@ def build_ui():
                         url = gr.Textbox(label="YouTube / video URL", placeholder="https://www.youtube.com/watch?v=...")
                         upload = gr.File(label="...or upload a video", file_types=["video"], type="filepath")
                         with gr.Row():
-                            clip_count = gr.Slider(1, 15, value=3, step=1, label="Number of clips")
+                            clip_count = gr.Number(value=3, minimum=1, precision=0, label="Number of clips", info="No limit.")
                             target_duration = gr.Slider(15, 90, value=30, step=5, label="Target length (s)")
                         layout = gr.Radio(["single", "auto", "active", "split"], value="single", label="Framing",
                                           info="auto = picks per clip (two-person shot -> cut to whoever talks, otherwise a tracked crop); active = always cut to the speaker")

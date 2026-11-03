@@ -42,8 +42,10 @@ def _ts(seconds):
 
 _DEVANAGARI = re.compile("[ऀ-ॿ]")
 DEVANAGARI_FONT = "Noto Sans Devanagari"
-_FONT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                          "remotion-video", "public", "fonts", "NotoSansDevanagari.ttf")
+_CYRILLIC_GREEK = re.compile("[Ͱ-ϿЀ-ԯ]")
+CYRILLIC_FONT = "Noto Sans"
+_FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "remotion-video", "public", "fonts")
+_FONT_FILES = [os.path.join(_FONT_DIR, "NotoSansDevanagari.ttf"), os.path.join(_FONT_DIR, "NotoSansCyrillic.ttf")]
 
 
 def _clean(word):
@@ -55,14 +57,15 @@ def _clean(word):
 
 
 def _stage_fonts(folder):
-    """Copy the bundled Devanagari font next to the .ass file so `ass=...:fontsdir=.` finds it on any machine."""
-    try:
-        if os.path.exists(_FONT_FILE):
-            dest = os.path.join(folder, os.path.basename(_FONT_FILE))
-            if not os.path.exists(dest):
-                shutil.copyfile(_FONT_FILE, dest)
-    except OSError:
-        pass
+    """Copy the bundled Devanagari/Cyrillic fonts next to the .ass file so `ass=...:fontsdir=.` finds them on any machine."""
+    for font_file in _FONT_FILES:
+        try:
+            if os.path.exists(font_file):
+                dest = os.path.join(folder, os.path.basename(font_file))
+                if not os.path.exists(dest):
+                    shutil.copyfile(font_file, dest)
+        except OSError:
+            pass
 
 
 def ass_document(words, size=(1920, 1080), font="Impact", font_size=None, bottom_margin=None):

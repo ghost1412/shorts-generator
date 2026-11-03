@@ -110,3 +110,9 @@ def test_flag_like_strings_rejected(client):
     for field in ("source_video", "find", "handle", "end_card", "logo"):
         body = {"source_video": "x", field: "-rf"}
         assert client.post("/v1/clips", json=body).status_code == 422, field
+
+
+def test_clip_count_is_not_capped(client):
+    r = client.post("/v1/clips", json={"source_video": "https://youtu.be/x", "clip_count": 60})
+    assert r.status_code == 202 and "60" in client.calls[-1]
+    assert client.post("/v1/clips", json={"source_video": "x", "clip_count": 0}).status_code == 422

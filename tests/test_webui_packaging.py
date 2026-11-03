@@ -130,3 +130,18 @@ def test_quick_clip_uses_auto_layout_for_shorts(monkeypatch, tmp_path):
     list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False))
     cmd = seen["cmd"]
     assert cmd[cmd.index("--layout") + 1] == "auto"
+
+
+def test_clip_count_has_no_upper_limit_and_survives_an_empty_box(monkeypatch, tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_run(cmd):
+        seen["cmd"] = cmd
+        yield "", []
+    monkeypatch.setattr(webui, "_run", fake_run)
+    for given, expected in ((40, "40"), (None, "3"), (0, "1"), (2.0, "2")):
+        list(webui.quick_clip("https://example.com/v", None, given, False, "HORMOZI", False))
+        assert seen["cmd"][seen["cmd"].index("--clip_count") + 1] == expected

@@ -105,7 +105,7 @@ TOOLS_DEFINITIONS = [
             "properties": {
                 "source_video": {"type": "string",
                                  "description": "Local video file path or a YouTube/other video URL to clip. Required."},
-                "clip_count": {"type": "integer", "default": 3, "minimum": 1, "maximum": 15,
+                "clip_count": {"type": "integer", "default": 3, "minimum": 1,
                                "description": "How many shorts to cut out."},
                 "smart_crop": {"type": "boolean", "default": True,
                                "description": "Follow the speaker's face when cropping the wide video to vertical."},

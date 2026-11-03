@@ -99,7 +99,7 @@ class ShortRequest(Common):
 
 class ClipRequest(Common):
     source_video: str = Field(..., description="YouTube URL or a path on the server")
-    clip_count: int = Field(3, ge=1, le=15)
+    clip_count: int = Field(3, ge=1)
     target_duration: int = Field(45, ge=10, le=180)
     layout: Literal["single", "split", "active", "auto"] = "single"
     smart_crop: bool = True

@@ -3,8 +3,8 @@
 The translated text of each segment is spread over the segment's own time span (by word length), so the
 caption animation keeps following the speech even though the words are different.
 
-Only languages the bundled caption fonts can draw are offered: Latin-script languages (Anton) and Hindi/Marathi
-(Noto Sans Devanagari). Japanese, Chinese, Korean, Arabic, Russian etc. would render as empty boxes.
+Only languages the bundled caption fonts can draw are offered: Latin-script languages (Anton), Hindi/Marathi
+(Noto Sans Devanagari) and Russian/Ukrainian/Bulgarian/Greek (Noto Sans). Japanese, Chinese, Korean and Arabic would render as empty boxes.
 """
 import copy
 import json
@@ -15,6 +15,7 @@ LANGUAGES = {
     "en": "English", "es": "Spanish", "fr": "French", "de": "German", "pt": "Portuguese", "it": "Italian",
     "nl": "Dutch", "pl": "Polish", "tr": "Turkish", "id": "Indonesian", "vi": "Vietnamese",
     "hi": "Hindi", "mr": "Marathi",
+    "ru": "Russian", "uk": "Ukrainian", "bg": "Bulgarian", "el": "Greek",
 }
 BATCH_SEGMENTS = 30
 BATCH_CHARS = 3500
