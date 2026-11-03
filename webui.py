@@ -166,6 +166,16 @@ def _cards_from_videos(videos):
 
 CAPTION_CHOICES = [("Bold yellow (Hormozi)", "HORMOZI"), ("Pink glow box", "GLOW_BOX"),
                    ("Bouncy gold", "BOUNCE"), ("Clean dark boxes", "MINIMAL")]
+SPOKEN_CHOICES = [("Detect it automatically", "auto"), ("English", "en"), ("Hindi", "hi"), ("Spanish", "es"), ("French", "fr"),
+                  ("German", "de"), ("Portuguese", "pt"), ("Italian", "it"), ("Japanese", "ja"), ("Korean", "ko"),
+                  ("Chinese", "zh"), ("Russian", "ru"), ("Arabic", "ar"), ("Turkish", "tr")]
+try:
+    from engine.caption_translate import LANGUAGES as CAPTION_LANGUAGES
+except Exception:   # engine not importable yet in some installs: the same list, written out
+    CAPTION_LANGUAGES = {"en": "English", "es": "Spanish", "fr": "French", "de": "German", "pt": "Portuguese", "it": "Italian",
+                         "nl": "Dutch", "pl": "Polish", "tr": "Turkish", "id": "Indonesian", "vi": "Vietnamese",
+                         "hi": "Hindi", "mr": "Marathi"}
+CAPTION_LANG_CHOICES = [("Same as the video (no translation)", "")] + [(name, code) for code, name in CAPTION_LANGUAGES.items()]
 BRAND_POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left"]
 
 
@@ -200,7 +210,7 @@ def clear_brand():
 
 
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
-               logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut=""):
+               logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang=""):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -212,6 +222,9 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     results = os.path.join(session, "results.json")
     os.makedirs(session, exist_ok=True)
     long_form = mode == "long"
+    lang_args = ["--language", (spoken or "auto")]
+    if caption_lang:
+        lang_args += ["--caption_lang", caption_lang]
     if long_form:   # one highlights video made of the best moments, in story order (landscape, like the source)
         cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "long",
                "--target_duration", str(int(float(minutes) * 60)), "--skip-upload",
@@ -229,6 +242,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         for phrase in (cut or "").splitlines():
             if phrase.strip():
                 cmd += ["--cut", phrase.strip()]
+    cmd += lang_args
     if use_brand and not long_form:
         from shortsflow import brand
         if logo or (handle or "").strip() or (end_card or "").strip():
@@ -374,6 +388,11 @@ def build_ui():
                                                 info="Describe the part you want. Leave empty to let the AI pick the best moments.")
                             q_cut = gr.Textbox(label="Cut these words or phrases out (one per line)", lines=3, placeholder="you know, so basically",
                                                info="Every time it is said, that bit is removed from the short.")
+                        with gr.Accordion("Languages (optional)", open=False):
+                            q_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
+                            q_caption_lang = gr.Dropdown(CAPTION_LANG_CHOICES, value="", label="Captions in...",
+                                                         info="Translates the captions with AI (a free Groq key or Ollama is needed). "
+                                                              "Japanese, Chinese, Korean, Arabic and Russian captions are not supported yet.")
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
@@ -458,7 +477,7 @@ def build_ui():
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut],
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang],
                             [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])

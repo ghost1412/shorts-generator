@@ -2,6 +2,19 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+### New
+- **Captions in another language**: `--caption_lang es` (or the "Languages" box in the browser app) translates the captions with your AI provider and keeps them timed to the speech. Spanish, French, German, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian, Vietnamese, Hindi and Marathi (the bundled caption fonts cannot draw Japanese, Chinese, Korean, Arabic or Russian yet). Translation quality depends on the model; small local models are weaker in Hindi.
+- **Highlights video** option in the browser app (one landscape video made of the best moments, 1-10 minutes).
+- **"Pick the moments"** in the browser app: make shorts only about a topic you describe, and cut chosen words or phrases out.
+- The browser app has a **spoken-language** box (default: detect it automatically).
+
+### Fixed
+- Cropping on footage without faces (gameplay, scenery): the crop stays centred instead of being pulled to the edge by false face detections.
+- The brand typed in the browser app is now applied even if "Save my brand" was not pressed.
+- The local AI default is `qwen2.5:7b` (about 13x faster than the previous `qwen3:8b` for clip scoring).
+
 ## 0.2.0 (2026-11-03)
 
 ### New

@@ -70,6 +70,15 @@ def run(args, target_bitrate, target_preset):
         language=getattr(args, 'language', 'en'),
     )
     
+    # Captions in another language: translate the word-timed transcript once the moments are chosen
+    if getattr(args, "caption_lang", None):
+        from engine.caption_translate import resolve_language, translate_transcript
+        try:
+            transcript_path = translate_transcript(transcript_path, resolve_language(args.caption_lang))
+        except (ValueError, RuntimeError) as e:
+            print(f"[Error] {e}")
+            sys.exit(2)
+
     # 🟢 Print the beautiful new score table
     print_clip_score_table(highlights)
     
@@ -402,6 +411,7 @@ def run(args, target_bitrate, target_preset):
                 "smart_crop": bool(args.smart_crop), "tighten": bool(args.tighten), "tighten_mode": args.tighten_mode,
                 "use_remotion": bool(args.use_remotion), "caption_style": args.caption_style,
                 "subtitle_y_pos": args.subtitle_y_pos, "brand": getattr(args, "brand", None),
+                "caption_lang": getattr(args, "caption_lang", None),
             },
             "clips": []
         }

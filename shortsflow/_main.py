@@ -71,6 +71,7 @@ def parse_args():
     parser.add_argument("--end_card", help="Text for a closing end card (last 2 seconds), e.g. 'Follow for more'.")
     parser.add_argument("--remove_fillers", action="store_true", help="Cut \"um\" / \"uh\" / \"er\" out of clips (uses Whisper word timestamps; combines with --tighten).")
     parser.add_argument("--language", default="en", help="Spoken language of the source video for transcription (e.g. en, hi, es). Use \"auto\" to let Whisper detect it. Default: en.")
+    parser.add_argument("--caption_lang", help="Translate the captions into this language (e.g. es, fr, de, pt, it, hi). Needs an AI provider (Groq, Gemini or Ollama). Clipping mode.")
     parser.add_argument("--reel_captions", action="store_true", help="Burn word captions into long-form highlight reels (--extract_mode long).")
     parser.add_argument("--cut", action="append", metavar="PHRASE", help="Cut every occurrence of this phrase out of the clips, e.g. --cut \"you know\" (repeatable; clipping mode).")
     parser.add_argument("--edit_transcript", metavar="FILE", help="Edited copy of <session_dir>/transcript.txt; the words you deleted are cut from the clips. Re-run with the same --session_dir and --use_cache.")

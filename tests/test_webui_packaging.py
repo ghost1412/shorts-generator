@@ -97,3 +97,21 @@ def test_quick_clip_passes_find_and_cut_phrases_to_the_pipeline(monkeypatch, tmp
     seen.clear()
     list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False))
     assert "--find" not in seen["cmd"] and "--cut" not in seen["cmd"]
+
+
+def test_quick_clip_passes_languages(monkeypatch, tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_run(cmd):
+        seen["cmd"] = cmd
+        yield "", []
+    monkeypatch.setattr(webui, "_run", fake_run)
+    list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False, spoken="hi", caption_lang="es"))
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--language") + 1] == "hi" and cmd[cmd.index("--caption_lang") + 1] == "es"
+    list(webui.quick_clip("https://example.com/v", None, 2, False, "HORMOZI", False))
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--language") + 1] == "auto" and "--caption_lang" not in cmd

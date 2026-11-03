@@ -69,6 +69,12 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     if not os.path.exists(transcript):
         raise ValueError("The saved transcript for this run is missing.")
 
+    if settings.get("caption_lang"):      # the run translated its captions: keep using that transcript
+        from engine.caption_translate import resolve_language
+        translated = os.path.join(session_dir, f"transcript_{resolve_language(settings['caption_lang'])}.json")
+        if os.path.exists(translated):
+            transcript = translated
+
     from engine.analysis import detect_letterbox, detect_orientation, probe_duration
     start, end = validate_window(clip["start"] if start is None else start, clip["end"] if end is None else end, probe_duration(source))
     style = caption_style or settings.get("caption_style") or "HORMOZI"
