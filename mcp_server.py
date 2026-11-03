@@ -34,161 +34,135 @@ def _server_version():
     except Exception:
         return "0.2.0"
 
+CONTENT_MODES = ["FACTS", "EXPLAINER", "STORY", "WYR", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC",
+                 "EMOJI_GUESS", "REDDIT", "TRIVIA", "QUOTE", "NEWS", "RIDDLE"]
+CAPTION_STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "AUTO", "RANDOM"]
+TTS_PROVIDERS = ["auto", "edgetts", "elevenlabs", "voicestudio", "local", "kokoro"]
+ASPECT_RATIOS = ["9:16", "16:9", "1:1", "4:5"]
+SFX_PRESETS = ["auto", "whoosh", "pop", "riser", "boom", "none"]
+VIBES = ["suspense", "spooky", "cinematic", "upbeat", "sarcastic", "funny"]
+
+_CAPTION_HELP = ("Animated caption look (needs use_remotion): HORMOZI = bold yellow single words, GLOW_BOX = words in boxes with a "
+                 "pink highlight, BOUNCE = bouncy gold single words, MINIMAL = clean dark boxes, AUTO/RANDOM = pick for me.")
+
 TOOLS_DEFINITIONS = [
     {
         "name": "generate_short",
-        "description": "Generate an AI Short video (Facts, Explainer, Podcast, Story, WYR, Dubbing, etc.)",
+        "description": (
+            "Create an original vertical short video from an idea: an AI-written script, voice-over, stock footage, background "
+            "music and animated captions, rendered locally by the ShortsFlow pipeline. It runs in the background: the call "
+            "returns a job_id immediately and the render takes a few minutes, so poll get_render_status until the job is "
+            "'completed' or 'failed'. It uses the user's own LLM, voice and stock-footage keys from the ShortsFlow .env, writes "
+            "files only inside the ShortsFlow folder, and never uploads or posts anything. Use this to make a new short from a "
+            "topic; use extract_clips instead to cut shorts out of an existing video."),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "mode": {
-                    "type": "string",
-                    "description": "Content mode: FACTS, EXPLAINER, STORY, WYR, TOP_5, CHAT_STORY, HORROR, TRUE_CRIME, BIBLE, ARTICLE, UGC, EMOJI_GUESS, REDDIT, TRIVIA, QUOTE",
-                    "default": "FACTS"
-                },
+                    "type": "string", "enum": CONTENT_MODES, "default": "FACTS",
+                    "description": ("Content format. FACTS = a 'spot the lie' quiz of three claims; STORY / HORROR / TRUE_CRIME = "
+                                    "narrated stories; EXPLAINER = an animated explainer; WYR = 'would you rather'; TOP_5 = a ranked "
+                                    "list; TRIVIA / RIDDLE / EMOJI_GUESS = quiz formats; NEWS = a news recap; others as named.")},
                 "category": {
-                    "type": "string",
-                    "description": "Topic or category (e.g. 'space mysteries', 'quantum physics', 'psychology')",
-                    "default": "space mysteries"
-                },
+                    "type": "string", "default": "space mysteries",
+                    "description": "Topic or category the script should be about, e.g. 'space mysteries', 'ancient Rome', 'psychology'."},
                 "prompt": {
                     "type": "string",
-                    "description": "Detailed prompt or script context for AI generation"
-                },
+                    "description": "Optional extra instructions or context for the script writer, e.g. 'Explain how black holes bend light'."},
                 "script": {
                     "type": "string",
-                    "description": "Custom manual script to use directly (skips LLM generation)"
-                },
-                "vibe": {
-                    "type": "string",
-                    "enum": ["suspense", "spooky", "cinematic", "upbeat", "sarcastic", "funny"],
-                    "default": "suspense"
-                },
+                    "description": "Optional finished script to narrate as written. When given, no AI script is generated."},
+                "vibe": {"type": "string", "enum": VIBES, "default": "suspense", "description": "Mood of the background music."},
                 "use_remotion": {
-                    "type": "boolean",
-                    "description": "Use React-based Remotion subtitle engine for dynamic spring animations",
-                    "default": True
-                },
-                "caption_style": {
-                    "type": "string",
-                    "enum": ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"],
-                    "default": "HORMOZI"
-                },
+                    "type": "boolean", "default": True,
+                    "description": "Render animated captions with the Remotion engine (needs Node.js). False uses simple captions."},
+                "caption_style": {"type": "string", "enum": CAPTION_STYLES, "default": "HORMOZI", "description": _CAPTION_HELP},
                 "tts_provider": {
-                    "type": "string",
-                    "enum": ["edge-tts", "elevenlabs", "voicestudio", "gtts"],
-                    "default": "edge-tts"
-                },
-                "aspect_ratio": {
-                    "type": "string",
-                    "enum": ["9:16", "16:9", "1:1", "4:5"],
-                    "default": "9:16"
-                },
-                "auto_ducking": {
-                    "type": "boolean",
-                    "description": "Automatically duck background music when voice audio plays",
-                    "default": True
-                },
-                "sfx_preset": {
-                    "type": "string",
-                    "enum": ["none", "pop", "whoosh", "chime", "riser", "boom"],
-                    "default": "whoosh"
-                },
-                "target_lang": {
-                    "type": "string",
-                    "description": "Language code for translation/dubbing (e.g., 'es', 'fr', 'de', 'ja')"
-                }
+                    "type": "string", "enum": TTS_PROVIDERS, "default": "auto",
+                    "description": ("Voice-over engine. auto picks the best available; edgetts is free; kokoro and local run fully "
+                                    "offline; elevenlabs and voicestudio need their own setup.")},
+                "aspect_ratio": {"type": "string", "enum": ASPECT_RATIOS, "default": "9:16",
+                                 "description": "Output shape: 9:16 vertical (Shorts, Reels, TikTok), 16:9, 1:1 or 4:5."},
+                "auto_ducking": {"type": "boolean", "default": True,
+                                 "description": "Lower the background music while the voice is speaking."},
+                "sfx_preset": {"type": "string", "enum": SFX_PRESETS, "default": "auto",
+                               "description": "Sound effects on visual transitions; none turns them off."},
             },
-            "required": []
-        }
+            "required": [],
+        },
     },
     {
         "name": "extract_clips",
-        "description": "Extract vertical viral shorts from a long video or YouTube URL",
+        "description": (
+            "Cut the best moments out of a long video (a local file path or a YouTube link) into captioned vertical shorts: it "
+            "transcribes the speech with Whisper, scores the moments, crops to 9:16 with face tracking and burns in animated "
+            "captions. It runs in the background: the call returns a job_id immediately and the work can take several minutes "
+            "(longer on a computer without an NVIDIA GPU), so poll get_render_status until the job is 'completed' or 'failed'. "
+            "Clipping works without any API key; an AI key only improves scoring and titles. Files are written under the "
+            "ShortsFlow folder (sessions/...) and nothing is uploaded. Use generate_short instead to create a video from a topic."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "source_video": {
-                    "type": "string",
-                    "description": "YouTube video URL or local video file path"
-                },
-                "clip_count": {
-                    "type": "integer",
-                    "description": "Number of viral shorts to extract",
-                    "default": 3
-                },
-                "smart_crop": {
-                    "type": "boolean",
-                    "description": "Enable AI face and subject tracking crop for 9:16 vertical video",
-                    "default": True
-                },
-                "tighten": {
-                    "type": "boolean",
-                    "description": "Automatically trim silence gaps for punchy high retention",
-                    "default": True
-                },
-                "layout": {
-                    "type": "string",
-                    "enum": ["single", "split", "active"],
-                    "default": "single",
-                    "description": "single: face-tracked crop; split: two speakers stacked; active: cut to whoever is talking (stacked when unsure) for podcasts/interviews"
-                },
-                "use_remotion": {
-                    "type": "boolean",
-                    "default": True
-                },
-                "caption_style": {
-                    "type": "string",
-                    "default": "HORMOZI"
-                }
+                "source_video": {"type": "string",
+                                 "description": "Local video file path or a YouTube/other video URL to clip. Required."},
+                "clip_count": {"type": "integer", "default": 3, "minimum": 1, "maximum": 15,
+                               "description": "How many shorts to cut out."},
+                "smart_crop": {"type": "boolean", "default": True,
+                               "description": "Follow the speaker's face when cropping the wide video to vertical."},
+                "tighten": {"type": "boolean", "default": True,
+                            "description": "Cut out silences and dead air inside each short."},
+                "layout": {"type": "string", "enum": ["single", "split", "active"], "default": "single",
+                           "description": ("Framing: single = face-tracked crop; split = two speakers stacked; active = cut to "
+                                           "whoever is talking (stacked when unsure), best for podcasts and interviews.")},
+                "use_remotion": {"type": "boolean", "default": True,
+                                 "description": "Animated captions (needs Node.js). False renders without animated captions."},
+                "caption_style": {"type": "string", "enum": CAPTION_STYLES, "default": "HORMOZI", "description": _CAPTION_HELP},
             },
-            "required": ["source_video"]
-        }
+            "required": ["source_video"],
+        },
     },
     {
         "name": "generate_social_package",
-        "description": "Generate viral social media titles, descriptions, hashtags, and hooks for YouTube Shorts, TikTok, and Instagram Reels",
+        "description": (
+            "Write platform-ready text for a short: a title, description, hashtags and a short caption for YouTube Shorts, TikTok "
+            "and Instagram Reels. It answers immediately (no job). It uses the configured AI model; if none is reachable it "
+            "returns a generic template filled with the topic instead, so check the wording. It does not publish anything."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "topic": {
-                    "type": "string",
-                    "description": "Topic or title of the video"
-                },
-                "category": {
-                    "type": "string",
-                    "default": "general"
-                },
-                "mode": {
-                    "type": "string",
-                    "default": "FACTS"
-                }
+                "topic": {"type": "string", "description": "What the video is about, e.g. 'Why the sky is blue'. Required."},
+                "category": {"type": "string", "default": "general",
+                             "description": "Broad category used to pick hashtags, e.g. 'science' or 'history'."},
+                "mode": {"type": "string", "enum": CONTENT_MODES, "default": "FACTS",
+                         "description": "Format of the video, which shapes the tone of the text."},
             },
-            "required": ["topic"]
-        }
+            "required": ["topic"],
+        },
     },
     {
         "name": "get_render_status",
-        "description": "Check the progress and status of a video rendering job",
+        "description": (
+            "Check a background job started by generate_short or extract_clips. Returns a JSON object with status "
+            "('processing', 'completed', 'failed' or 'not_found'), progress (0-100), the last log lines, and an error message "
+            "(the last lines of the log) when the job failed. Jobs are remembered only while this server is running. "
+            "Call it every 20-30 seconds until the status is no longer 'processing'. It changes nothing."),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "job_id": {
-                    "type": "string",
-                    "description": "The unique job ID returned by generate_short or extract_clips"
-                }
+                "job_id": {"type": "string",
+                           "description": "The job_id returned by generate_short or extract_clips. Required."},
             },
-            "required": ["job_id"]
-        }
+            "required": ["job_id"],
+        },
     },
     {
         "name": "list_supported_modes",
-        "description": "List all available content generation modes, TTS engines, caption styles, and aspect ratios",
-        "inputSchema": {
-            "type": "object",
-            "properties": {}
-        }
-    }
+        "description": (
+            "List the options the other tools accept: content modes for generate_short, caption styles, voice-over engines, "
+            "aspect ratios and sound-effect presets. Instant, read-only, takes no input. Call it first if you are unsure "
+            "which value to pass."),
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 def run_main_command(job_id: str, args_list: list):
@@ -267,8 +241,6 @@ def handle_tool_call(tool_name: str, args: dict) -> dict:
             cli_args.append("--auto_ducking")
         if args.get("sfx_preset"):
             cli_args.extend(["--sfx_preset", args["sfx_preset"]])
-        if args.get("target_lang"):
-            cli_args.extend(["--target_lang", args["target_lang"]])
 
         thread = threading.Thread(target=run_main_command, args=(job_id, cli_args))
         thread.start()
@@ -361,15 +333,12 @@ def handle_tool_call(tool_name: str, args: dict) -> dict:
 
     elif tool_name == "list_supported_modes":
         info = {
-            "content_modes": [
-                "FACTS", "EXPLAINER", "STORY", "WYR", "TOP_5", "CHAT_STORY",
-                "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC", "EMOJI_GUESS",
-                "REDDIT", "TRIVIA", "QUOTE", "NEWS", "RIDDLE"
-            ],
-            "caption_styles": ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"],
-            "tts_providers": ["edge-tts", "elevenlabs", "voicestudio", "gtts"],
-            "aspect_ratios": ["9:16", "16:9", "1:1", "4:5"],
-            "sfx_presets": ["none", "pop", "whoosh", "chime", "riser", "boom"]
+            "content_modes": CONTENT_MODES,
+            "caption_styles": CAPTION_STYLES,
+            "tts_providers": TTS_PROVIDERS,
+            "aspect_ratios": ASPECT_RATIOS,
+            "sfx_presets": SFX_PRESETS,
+            "vibes": VIBES,
         }
         return {
             "content": [
