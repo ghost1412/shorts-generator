@@ -45,6 +45,16 @@ by Aida Thomas, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0); 
 
 ## ⚡ Quick Start - pick one
 
+## 🚀 Your first shorts in 3 steps (no API key needed)
+
+Clipping a long video into vertical shorts works **without any account or API key**. A key (or a free local Ollama) only adds AI titles and descriptions, and is needed for the idea-to-video modes.
+
+1. **Install** (needs [Python 3.12](https://python.org)): `pip install "shortsflow[clip]"`
+2. **Check your setup**: `shortsflow doctor` lists what is ready and what to fix, in plain words.
+3. **Make shorts** from a file or a link: `shortsflow clip my_video.mp4` (or `shortsflow clip "https://youtube.com/watch?v=..."`). Add `--count 5` for more clips, `--captions` for animated captions (needs [Node.js](https://nodejs.org), then run `shortsflow init` once).
+
+Your shorts are saved in a `shortsflow` folder in your home directory (the command prints the exact path). Stuck? `shortsflow doctor` tells you the next step, and error messages say how to fix a bad key or a rate limit.
+
 | Option | Command | Best for |
 |---|---|---|
 | ☁️ **Google Colab** (free GPU, zero install) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb) | Trying it in 5 minutes |
