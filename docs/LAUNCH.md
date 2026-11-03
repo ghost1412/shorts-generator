@@ -5,7 +5,9 @@ Best timing: Show HN on a weekday morning US Eastern; stay around for the first 
 
 ## Before you post (checklist)
 
-- [ ] `pip install shortsflow` works in a fresh venv; `shortsflow doctor` is green
+- [ ] `pip install shortsflow` works in a fresh venv; `shortsflow doctor` is green; `shortsflow clip some_video.mp4` makes shorts with no keys
+- [ ] The Windows installer (`ShortsFlow-Setup-<version>.exe` on the latest GitHub release) has been run end to end on a PC that is not yours (or a fresh VM) and made a short; note the SmartScreen "More info > Run anyway" step in your post
+- [ ] The daily channel workflow is green again (Groq model fix, 2026-11-03)
 - [ ] GHCR package `ghcr.io/ghost1412/shorts-generator` is public and `docker run` starts the WebUI
 - [ ] Colab notebook runs top to bottom
 - [ ] `pip install -U edge-tts` (Edge TTS breaks when Microsoft rotates its token)
@@ -14,6 +16,10 @@ Best timing: Show HN on a weekday morning US Eastern; stay around for the first 
 
 ## What is new since the first drafts (use these as the hook)
 
+- **One-click Windows install** (no Python, Node or API key first): download `ShortsFlow-Setup` from the Releases page, open ShortsFlow, paste a link or drop a video, press one button. Unsigned (SmartScreen warning), roughly 2 GB download (about 5 GB with an NVIDIA card), CPU works but is slow
+- **`shortsflow clip VIDEO_OR_LINK`**: one command, no API key; plain-language error messages and a friendlier `shortsflow doctor`
+- **Beginner browser tab** ("Start here"): link or upload, how many shorts, one button, plain progress ("Listening to the video...", "Finding the best moments...")
+- Still-image avatars now render as cut-outs (the green screen is removed)
 - `pip install shortsflow`, then `shortsflow init` / `shortsflow doctor`
 - Prompt-based clipping: `--find "where they discuss pricing"` clips only the moments that match
 - Edit the video by editing its transcript: `--cut "you know"` or delete words in `transcript.txt` and re-run with `--edit_transcript`
@@ -35,7 +41,7 @@ Show HN: ShortsFlow – open-source, local-first alternative to Opus Clip
 **Text:**
 I built ShortsFlow to make vertical Shorts/Reels without paying per minute for clipping SaaS, and without uploading footage anywhere.
 
-`pip install shortsflow` (or Docker, or Colab), then point it at a YouTube link or a file:
+On Windows there is a one-click installer (no Python or API key needed): open it, paste a link or drop in a video, press a button. Otherwise `pip install shortsflow` (or Docker, or Colab) and `shortsflow clip my_video.mp4` works with no key at all. Under the hood:
 
 - Whisper transcribes locally with word timestamps and an LLM scores the hooks. FFmpeg cuts 9:16 clips with face tracking, and captions are rendered with Remotion.
 - `--find "where they discuss pricing"` clips only the moments that match your request.
@@ -45,7 +51,7 @@ I built ShortsFlow to make vertical Shorts/Reels without paying per minute for c
 
 It can run fully locally: Whisper on your GPU, Ollama for the LLM, Kokoro for the voice. There is a REST API with webhooks for automation (an n8n example is included) and an MCP server for agents. MIT licensed.
 
-Honest limitations: it started as a script and grew, so parts are still being refactored. The pitch-based speaker switching needs the two voices to differ by roughly 20%, and I have only checked it on a few interviews. Filler removal and the publishing integration (Upload-Post) have had little testing on real footage, so treat them as experimental. Rendering a short takes a few minutes, and a GPU helps a lot.
+Honest limitations: the Windows installer is not code-signed yet (SmartScreen will warn you), it downloads around 2 GB (about 5 GB with an NVIDIA card), and on a CPU-only machine transcribing a long video is slow. It started as a script and grew, so parts are still being refactored. The pitch-based speaker switching needs the two voices to differ by roughly 20%, and I have only checked it on a few interviews. Filler removal and the publishing integration (Upload-Post) have had little testing on real footage, so treat them as experimental. Rendering a short takes a few minutes, and a GPU helps a lot.
 
 I'd love feedback on clipping quality and on which features are worth keeping.
 
@@ -64,7 +70,7 @@ Hi r/selfhosted! I've been building an open-source tool for making vertical shor
 - **Podcast mode**: cuts to the active speaker, or shows both stacked when it's unsure
 - **Fully local**: Whisper on your GPU, Ollama for the LLM, Kokoro for the voice; only stock footage (Pexels) needs an API key, and only for the generate-from-a-topic mode
 - **Automate it**: REST API with API keys and signed webhooks, n8n example included
-- **Install**: `pip install shortsflow`, `docker run -p 7860:7860 ghcr.io/ghost1412/shorts-generator`, or open the Colab
+- **Install**: a one-click Windows installer from the Releases page (unsigned, so SmartScreen warns), `pip install shortsflow` then `shortsflow clip video.mp4` (no API key needed for clipping), `docker run -p 7860:7860 ghcr.io/ghost1412/shorts-generator`, or open the Colab
 
 Repo: https://github.com/ghost1412/shorts-generator
 
