@@ -1,0 +1,29 @@
+name: UI screenshots
+
+# Opens the browser app in a real browser against a canned finished run, checks the review screen works, and uploads screenshots.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "webui.py"
+      - "shortsflow/review.py"
+      - "shortsflow/onboarding.py"
+      - "scripts/ui_screenshots.py"
+      - ".github/workflows/ui_screenshots.yml"
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "gradio>=5,<7" python-dotenv requests imageio-ffmpeg playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python scripts/ui_screenshots.py ui-screenshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: ui-screenshots/*.png

@@ -145,29 +145,67 @@ def save_groq_key(key):
     return "⚠️ That does not look like a key. Copy it again from console.groq.com (no spaces)."
 
 
+def _cards_from_videos(videos):
+    """Fallback cards when the run wrote no results.json: just the files, with generic titles."""
+    return [{"index": i, "video": v, "thumbnail": None, "title": f"Short {i}", "description": "", "tags": [], "hook": "",
+             "reason": "", "score": None, "label": "unrated", "start": None, "end": None, "duration": None}
+            for i, v in enumerate(videos, start=1)]
+
+
 def quick_clip(url, upload, clip_count, captions):
-    """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log."""
-    from shortsflow import onboarding
+    """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
+    Yields (status, log, cards): `cards` feeds the review screen."""
+    import time
+    from shortsflow import onboarding, review
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a video link or upload a video file first.")
+    session = os.path.join(ROOT, "sessions", time.strftime("web_%Y%m%d_%H%M%S"))
+    results = os.path.join(session, "results.json")
+    os.makedirs(session, exist_ok=True)
     cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
-           "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload"]
+           "--clip_count", str(int(clip_count)), "--smart_crop", "--tighten", "--skip-upload",
+           "--session_dir", session, "--output_json", results]
     if captions:
         cmd += ["--use_remotion", "--caption_style", "HORMOZI"]
     progress, seen = onboarding.Progress(), 0
     status = progress.message
-    yield status, [], ""
+    yield status, "", []
     log, videos = "", []
     for log, videos in _run(cmd):
         lines = log.splitlines()
         for line in lines[seen:]:
             status = progress.feed(line)
         seen = len(lines)
-        yield status, videos, log
-    if not videos and not status.startswith("⚠️"):
+        yield status, log, []
+    cards = review.load_results(results) or _cards_from_videos(videos)
+    if not cards and not status.startswith("⚠️"):
         status = "❌ No shorts were made. Open 'Technical details' below for the reason, or check the setup list above."
-    yield status, videos, log
+    elif cards:
+        status = f"✅ Done! {len(cards)} short{'s' if len(cards) != 1 else ''} ready: review them below."
+    yield status, log, cards
+
+
+def open_earlier(choice):
+    """Load an earlier run into the review screen."""
+    from shortsflow import review
+    cards = review.load_results(choice) if choice else []
+    if not cards:
+        raise gr.Error("That run has no shorts left (the files may have been moved or deleted).")
+    return f"Opened an earlier run: {len(cards)} short(s).", cards
+
+
+def earlier_runs():
+    from shortsflow import review
+    return gr.update(choices=[(name, path) for name, path in review.recent_runs(ROOT)])
+
+
+def zip_cards(cards):
+    from shortsflow import review
+    if not cards:
+        raise gr.Error("There are no shorts to download yet.")
+    import time
+    return review.build_zip(cards, os.path.join(ROOT, "sessions", time.strftime("shorts_%Y%m%d_%H%M%S.zip")))
 
 
 def _render_settings():
@@ -204,7 +242,34 @@ def build_ui():
                         q_btn = gr.Button("✨ Make my shorts", variant="primary")
                     with gr.Column():
                         q_status = gr.Markdown("Waiting for a video...")
-                        q_videos = gr.Files(label="Your shorts")
+                q_cards = gr.State([])
+
+                @gr.render(inputs=q_cards)
+                def show_review(cards):
+                    """One card per short: preview, score, copy-ready title/description/tags, and a remove button."""
+                    from shortsflow import review
+                    if not cards:
+                        return
+                    gr.Markdown("### Your shorts")
+                    for c in cards:
+                        with gr.Group():
+                            with gr.Row():
+                                gr.Video(value=c["video"], height=440, interactive=False, show_label=False, scale=1)
+                                with gr.Column(scale=2):
+                                    score = f"{c['label'].title()} ({int(c['score'])}/100)" if c.get("score") is not None else "Not rated"
+                                    dur = f" · {c['duration']:.0f}s" if c.get("duration") else ""
+                                    gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else ""))
+                                    gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
+                                               placeholder="No title or description was written (it needs an AI key or Ollama).")
+                                    rm = gr.Button("Remove this short", size="sm")
+                                    rm.click(lambda cs, i=c["index"]: [x for x in cs if x["index"] != i], q_cards, q_cards)
+
+                with gr.Row():
+                    q_zip_btn = gr.Button("⬇ Download all as .zip")
+                    q_zip = gr.File(label="Your download", interactive=False)
+                with gr.Accordion("Open an earlier run", open=False):
+                    q_runs = gr.Dropdown(label="Earlier runs", choices=[], interactive=True)
+                    q_open = gr.Button("Open")
                 with gr.Accordion("Is my computer ready?", open=False):
                     q_check = gr.Markdown(setup_status())
                     gr.Button("Check again").click(setup_status, None, q_check)
@@ -216,7 +281,10 @@ def build_ui():
                     gr.Button("Save key").click(save_groq_key, q_key, q_key_msg)
                 with gr.Accordion("Technical details", open=False):
                     q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions], [q_status, q_videos, q_log])
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions], [q_status, q_log, q_cards])
+                q_zip_btn.click(zip_cards, q_cards, q_zip)
+                q_open.click(open_earlier, q_runs, [q_status, q_cards])
+                demo.load(earlier_runs, None, q_runs)
 
             with gr.Tab("✂️ Clip (advanced)"):
                 with gr.Row():

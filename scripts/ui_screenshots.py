@@ -1,0 +1,89 @@
+"""Open the browser app in a real browser and take screenshots (used by the "UI screenshots" workflow).
+
+Builds a canned finished run (two tiny 9:16 clips + a results.json) so the review screen can be shown without running the pipeline.
+
+    python scripts/ui_screenshots.py OUT_DIR
+"""
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+out_dir = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "ui-screenshots")
+os.makedirs(out_dir, exist_ok=True)
+PORT = 7871
+
+# 1. a workspace with one finished run
+home = tempfile.mkdtemp(prefix="sf_ui_")
+session = os.path.join(home, "sessions", "web_20261103_120000")
+os.makedirs(session)
+try:
+    import imageio_ffmpeg
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+except Exception:
+    ffmpeg = "ffmpeg"
+clips = []
+for i, (title, score, color) in enumerate([("Why the sky is blue (and sunsets are red)", 86, "0x2b5876"),
+                                           ("The one trick nobody tells you about light", 63, "0x4e4376")], start=1):
+    video = os.path.join(session, f"video_clip_{i}.mp4")
+    subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"color=c={color}:s=360x640:r=25:d=3",
+                    "-f", "lavfi", "-i", "sine=frequency=330:d=3", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", video], check=True)
+    clips.append({"clip_index": i, "video_path": video, "start": 12.0 * i, "end": 12.0 * i + 24, "duration": 24.0,
+                  "viral_score": score, "hook": title, "reason": "Strong opening line and a clear payoff" if score > 80 else "Decent moment, slower start",
+                  "title": title, "description": "A short, clear explanation viewers can follow in half a minute.",
+                  "tags": ["science", "light", "explained"], "thumbnail": None})
+with open(os.path.join(session, "results.json"), "w", encoding="utf-8") as f:
+    json.dump({"source_video": "demo.mp4", "session_dir": session, "total_clips": 2, "clips": clips}, f)
+
+# 2. start the app on that workspace
+env = dict(os.environ, SHORTSFLOW_HOME=home, PYTHONIOENCODING="utf-8")
+app = subprocess.Popen([sys.executable, os.path.join(ROOT, "webui.py"), "--port", str(PORT)], cwd=ROOT, env=env,
+                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+try:
+    for _ in range(90):
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{PORT}", timeout=2)
+            break
+        except Exception:
+            time.sleep(1)
+    else:
+        raise SystemExit("the app did not start")
+
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        page.goto(f"http://127.0.0.1:{PORT}")
+        page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
+        page.wait_for_timeout(1500)
+        page.screenshot(path=os.path.join(out_dir, "01_start_here.png"), full_page=True)
+
+        page.get_by_text("Open an earlier run").click()
+        page.get_by_label("Earlier runs").click()
+        page.get_by_role("option", name="web_20261103_120000").click()
+        page.get_by_role("button", name="Open", exact=True).click()
+        page.wait_for_selector("text=Your shorts", timeout=60000)
+        page.wait_for_timeout(2500)
+        page.screenshot(path=os.path.join(out_dir, "02_review.png"), full_page=True)
+
+        page.get_by_role("button", name="Remove this short").first.click()
+        page.wait_for_timeout(1500)
+        page.screenshot(path=os.path.join(out_dir, "03_after_remove.png"), full_page=True)
+
+        page.get_by_role("button", name="Download all as .zip").click()
+        page.wait_for_selector("text=.zip", timeout=30000)
+        page.wait_for_timeout(1000)
+        page.screenshot(path=os.path.join(out_dir, "04_zip.png"), full_page=True)
+        browser.close()
+    print("screenshots written to", out_dir)
+finally:
+    app.terminate()
+    try:
+        app.wait(timeout=10)
+    except Exception:
+        app.kill()
