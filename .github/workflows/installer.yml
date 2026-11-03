@@ -48,6 +48,41 @@ jobs:
           & "$env:RUNNER_TEMP\sf\venv\Scripts\python.exe" -c "from shortsflow import webui; print('webui module OK')"
           if ($LASTEXITCODE -ne 0) { throw "installed package has no webui module" }
 
+      - name: End-to-end on a clean Windows PC without an NVIDIA card - make a real short and start the browser app
+        shell: pwsh
+        run: |
+          $sf = "$env:RUNNER_TEMP\sf"
+          $env:SHORTSFLOW_HOME = "$sf\workspace"
+          $env:SHORTSFLOW_WHISPER_MODEL = "tiny"     # small download, this only proves the pipeline runs
+          $work = "$env:RUNNER_TEMP\e2e"
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          # a ~30 s video with real speech, made offline with Windows' built-in voice
+          Add-Type -AssemblyName System.Speech
+          $voice = New-Object System.Speech.Synthesis.SpeechSynthesizer
+          $voice.SetOutputToWaveFile("$work\speech.wav")
+          $voice.Speak("Welcome to this short demo. Today we explain why the sky looks blue. Sunlight is made of many colors. The blue light scatters the most in the air. That is why you see a blue sky during the day. At sunset the light travels farther, so the red and orange colors reach your eyes. Now you know the secret behind the colors of the sky. Thanks for watching, and see you next time.")
+          $voice.Dispose()
+          $ff = & "$sf\venv\Scripts\python.exe" -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"
+          & $ff -y -loglevel error -f lavfi -i testsrc2=size=1280x720:rate=25 -i "$work\speech.wav" -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac "$work\sample.mp4"
+          if ($LASTEXITCODE -ne 0) { throw "could not build the sample video" }
+
+          & "$sf\venv\Scripts\shortsflow.exe" clip "$work\sample.mp4" --count 1 --session_dir "$work\out"
+          if ($LASTEXITCODE -ne 0) { throw "shortsflow clip failed on a PC without an NVIDIA card" }
+          $clip = Get-Item "$work\out\video_clip_1.mp4" -ErrorAction Stop
+          if ($clip.Length -lt 50000) { throw "the short is suspiciously small ($($clip.Length) bytes)" }
+          Write-Host "Short made: $($clip.Length) bytes"
+
+          # the browser app (what the desktop shortcut opens) must come up
+          $p = Start-Process -FilePath "$sf\venv\Scripts\shortsflow.exe" -ArgumentList "webui","--port","7861" -PassThru -RedirectStandardOutput "$work\webui.out" -RedirectStandardError "$work\webui.err"
+          $ok = $false
+          for ($i = 0; $i -lt 60 -and -not $ok; $i++) {
+            Start-Sleep -Seconds 2
+            try { $ok = (Invoke-WebRequest -Uri "http://127.0.0.1:7861" -UseBasicParsing).StatusCode -eq 200 } catch {}
+          }
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { Get-Content "$work\webui.err" -ErrorAction SilentlyContinue | Select-Object -Last 30; throw "the browser app did not start" }
+          Write-Host "Browser app answered on port 7861"
+
       - name: Wait for this version on PyPI (the installer downloads it from there)
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
