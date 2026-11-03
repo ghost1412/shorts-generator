@@ -125,7 +125,21 @@ jobs:
           $exe = (Get-ChildItem installer\output\ShortsFlow-Setup-*.exe | Select-Object -First 1).FullName
           $dir = "$env:RUNNER_TEMP\sf-exe"
           $inno = "$env:RUNNER_TEMP\inno.log"
-          $p = Start-Process -FilePath $exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dir`"", "/LOG=`"$inno`"" -Wait -PassThru
+          $p = Start-Process -FilePath $exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=`"$dir`"", "/LOG=`"$inno`"" -PassThru
+          # poll instead of -Wait so a hang shows where it is stuck (the PowerShell installer logs to install.log)
+          $deadline = (Get-Date).AddMinutes(35)
+          while (-not $p.HasExited -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 60
+            Write-Host "--- installer still running ($([int]((Get-Date) - $p.StartTime).TotalMinutes) min); last install.log lines:"
+            if (Test-Path "$dir\install.log") { Get-Content "$dir\install.log" -Tail 4 }
+          }
+          if (-not $p.HasExited) {
+            Write-Host "installer did not finish in 35 minutes"
+            if (Test-Path "$dir\install.log") { Get-Content "$dir\install.log" -Tail 80 }
+            if (Test-Path $inno) { Get-Content $inno -Tail 60 }
+            Get-Process | Where-Object { $_.Path -and $_.Path -like "$dir*" -or $_.ProcessName -match "powershell|pwsh|uv|npm|node" } | Select-Object ProcessName, Id, CPU | Format-Table | Out-String | Write-Host
+            throw "the .exe installer hung"
+          }
           Write-Host "installer exit code: $($p.ExitCode)"
           if ($p.ExitCode -ne 0 -or -not (Test-Path "$dir\venv\Scripts\shortsflow.exe")) {
             if (Test-Path "$dir\install.log") { Get-Content "$dir\install.log" -Tail 60 }
