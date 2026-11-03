@@ -83,7 +83,9 @@ def doctor(home):
 
     keys = {k: v for k, v in dotenv_values(os.path.join(home, ".env")).items() if real(v)}
     have_llm = any(real(os.getenv(k)) or keys.get(k) for k in ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "HF_API_KEY"))
-    checks.append(("An LLM key (Gemini/Groq/OpenAI/HF) or local Ollama", have_llm, f"add GEMINI_API_KEY to {os.path.join(home, '.env')}"))
+    checks.append(("An LLM key (Gemini/Groq/OpenAI/HF) or local Ollama", have_llm,
+                   f"optional - clipping works without one; titles and idea-to-video modes need it. Easiest free option: get a key at console.groq.com and add GROQ_API_KEY=... to {os.path.join(home, '.env')}, "
+                   "or install Ollama from ollama.com"))
     checks.append(("PEXELS_API_KEY (stock footage)", real(os.getenv("PEXELS_API_KEY")) or bool(keys.get("PEXELS_API_KEY")),
-                   f"add PEXELS_API_KEY to {os.path.join(home, '.env')} (free)"))
+                   f"only for idea-to-video modes: free key at pexels.com/api, add PEXELS_API_KEY to {os.path.join(home, '.env')}"))
     return checks

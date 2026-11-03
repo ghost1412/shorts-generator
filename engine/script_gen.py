@@ -371,9 +371,17 @@ def get_llm_response(
                     err_msg = str(e)
                     if "404" in err_msg or "401" in err_msg or "403" in err_msg:
                         print(f"[Warning] Gemini API ({g_model}) client error: {e}")
+                        from engine.friendly_errors import explain_http_error
+                        _hint = explain_http_error(e, "Google Gemini")
+                        if _hint:
+                            print(f"[Warning] {_hint}")
                         break
                     if attempt == max_attempts - 1:
                         print(f"[Warning] Gemini API ({g_model}) failed after {max_attempts} attempts: {e}")
+                        from engine.friendly_errors import explain_http_error
+                        _hint = explain_http_error(e, "Google Gemini")
+                        if _hint:
+                            print(f"[Warning] {_hint}")
 
 
     # 3. DeepSeek Fallback
@@ -475,6 +483,10 @@ def get_llm_response(
                 max_tokens=min(max_tokens, 8000), temperature=temperature, timeout=min(timeout, 60))
         except Exception as e:
             print(f"[Warning] Groq API failed: {e}")
+            from engine.friendly_errors import explain_http_error
+            _hint = explain_http_error(e, "Groq")
+            if _hint:
+                print(f"[Warning] {_hint}")
 
     # 6. HuggingFace fallback
     if HF_API_KEY:
@@ -488,11 +500,16 @@ def get_llm_response(
             return response.json()["choices"][0]["message"]["content"]
         except Exception as e:
             print(f"[Warning] HuggingFace API failed: {e}")
+            from engine.friendly_errors import explain_http_error
+            hint = explain_http_error(e, "Hugging Face")
+            if hint:
+                print(f"[Warning] {hint}")
             if "402" in str(e):
-                print("[Warning] HuggingFace says this token has no Inference Providers credits left (separate from other HF "
-                      "quotas). Check huggingface.co/settings/billing, or add a free GROQ_API_KEY / a local Ollama as a fallback.")
+                print("[Warning] (Hugging Face Inference Providers credits are separate from other HF quotas: "
+                      "check huggingface.co/settings/billing.)")
 
-    raise RuntimeError("All configured LLM providers failed. Check API keys or local Ollama service status.")
+    from engine.friendly_errors import NO_LLM_HELP
+    raise RuntimeError(f"All configured LLM providers failed. Check API keys or local Ollama service status. {NO_LLM_HELP}")
 
 def with_best_of_n(func, validator, n=3):
     """Retries a generation function up to n times until the validator passes."""
