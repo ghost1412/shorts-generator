@@ -84,7 +84,7 @@ def snap_clip(clip, spans, **opts):
     """A copy of `clip` ({start, end, ...}) with its edges moved to sentence boundaries; the original clip when nothing
     sensible can be done. Adds `orig_start` / `orig_end` / `snapped` to the copy."""
     o = {**DEFAULTS, **opts}
-    if not spans:
+    if not spans or clip.get("user_moment"):          # moments the user chose by time are cut exactly as given
         return clip
     start, end = float(clip["start"]), float(clip["end"])
     starts = [s for s, _, _ in spans]

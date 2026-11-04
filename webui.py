@@ -160,6 +160,14 @@ def _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_pr
     return args
 
 
+def _length(value, default=30):
+    """Length of each short in seconds, kept between 10 and 60 (shorts are never longer than a minute)."""
+    try:
+        return max(10, min(60, int(float(value))))
+    except (TypeError, ValueError):
+        return default
+
+
 def _minutes(value):
     """Highlights video length in whole minutes, at least 1 (the box can be left empty)."""
     try:
@@ -350,7 +358,7 @@ def clear_brand():
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
-               auto_edit="none", edit_strength="medium", stat_pops=False):
+               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments=""):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -373,7 +381,9 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--reel_captions"]
     else:
         cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
-               "--clip_count", str(_count(clip_count)), "--smart_crop", "--tighten", "--layout", layout, "--skip-upload",
+               "--clip_count", str(_count(clip_count)), "--target_duration", str(_length(length)),
+               "--min_duration", str(max(8, round(_length(length) * 0.6))),
+               "--smart_crop", "--tighten", "--layout", layout, "--skip-upload",
                "--session_dir", session, "--output_json", results]
         cmd += web_args.filler_args(layout, filler_video)
         cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, bool(captions), broll=broll, auto_zoom=auto_zoom, cold_open=cold_open, stat_pops=stat_pops)
@@ -382,6 +392,13 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
         if (find or "").strip():
             cmd += ["--find", find.strip()]
+        if (moments or "").strip():
+            from engine.moments import parse_moments
+            try:
+                parse_moments(moments)                                   # a typo is reported here, before the long analysis
+            except ValueError as e:
+                raise gr.Error(f"Exact times: {e}")
+            cmd += ["--moments", moments.strip()]
         for phrase in (cut or "").splitlines():
             if phrase.strip():
                 cmd += ["--cut", phrase.strip()]
@@ -637,11 +654,15 @@ def build_ui():
                                           value="shorts", label="What do you want?")
                         q_count = gr.Number(value=3, minimum=1, precision=0, label="How many shorts?",
                                             info="No limit. If the video does not have that many good moments you get fewer.")
+                        q_length = gr.Slider(15, 60, value=30, step=5, label="Length of each short (seconds)",
+                                             info="The aim for each short. Clips end at the end of a sentence, so they can be a few seconds longer or shorter.")
                         q_minutes = gr.Number(value=4, minimum=1, precision=0, label="Highlights video length (minutes)", visible=False,
                                               info="No limit, but never longer than your video. Long reels take longer to make and the file gets big (about 2 GB for 15 minutes).")
                         with gr.Accordion("Pick the moments (optional)", open=False):
                             q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
                                                 info="Describe the part you want. Leave empty to let the AI pick the best moments.")
+                            q_moments = gr.Textbox(label="Or give exact times (one per line)", lines=3, placeholder="7:00-7:45",
+                                                   info="Makes shorts from exactly these moments, like a cutscene you spotted. Use minutes:seconds, e.g. 7:00-7:45 or 1:01:40-1:02:30. Leave empty to let the AI choose.")
                             q_cut = gr.Textbox(label="Cut these words or phrases out (one per line)", lines=3, placeholder="you know, so basically",
                                                info="Every time it is said, that bit is removed from the short.")
                         with gr.Accordion("Languages (optional)", open=False):
@@ -770,13 +791,14 @@ def build_ui():
                 with gr.Accordion("Technical details", open=False):
                     q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 q_style.change(style_preview, q_style, q_style_img)
-                q_mode.change(lambda m: (gr.update(visible=m == "shorts"), gr.update(visible=m == "long")), q_mode, [q_count, q_minutes])
+                q_mode.change(lambda m: (gr.update(visible=m == "shorts"), gr.update(visible=m == "shorts"), gr.update(visible=m == "long")),
+                              q_mode, [q_count, q_length, q_minutes])
                 brand_form = [q_handle, q_endcard, q_color, q_pos, q_logo, q_brand_msg]
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)

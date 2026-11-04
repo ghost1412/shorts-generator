@@ -1554,7 +1554,7 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True, moments=None):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1570,7 +1570,13 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
 
     highlights_cache_path = os.path.join(output_dir, "highlights.json")
     highlights = None
-    if find_query:
+    if moments and mode == "shorts":
+        # the user chose the moments (a cutscene, a boss entrance ...): no AI selection, no sentence snapping
+        from engine.moments import parse_moments
+        highlights = parse_moments(moments, default_length=target_duration or 30, video_seconds=probe_duration(video_path))
+        print(f"[Log] Using the {len(highlights)} moment(s) you chose: " +
+              ", ".join(f"{h['start']:.0f}-{h['end']:.0f}s" for h in highlights))
+    elif find_query:
         from engine.find_moments import find_moments, llm_ask
         with open(transcript_path, 'r', encoding='utf-8') as f:
             segments = json.load(f).get('segments', [])

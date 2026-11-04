@@ -151,6 +151,7 @@ def run(args, target_bitrate, target_preset):
         diversity=not getattr(args, 'no_diversity', False),
         rerank=not getattr(args, 'no_rerank', False),
         extra_signals=not getattr(args, 'no_signals', False),
+        moments=getattr(args, 'moments', None),
     )
     
     timing.mark("analysis done (all of process_source_video)")

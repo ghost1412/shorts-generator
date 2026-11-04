@@ -89,3 +89,34 @@ def test_ui_has_a_stop_button_on_every_tab():
     labels = [getattr(b, "value", None) for b in demo.blocks.values() if type(b).__name__ == "Button"]
     assert labels.count("⏹ Stop") == 5
     assert "Continue" in labels
+
+
+def test_length_of_each_short_reaches_the_command(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    monkeypatch.setattr(webui, "save_command", lambda session, cmd: None)
+    monkeypatch.setattr(webui, "_stream_clip", lambda cmd, results, lf, minutes, find: iter([seen.update(cmd=cmd) or ("ok", "", [])]))
+    list(webui.quick_clip("a.mp4", None, 3, False, length=45))
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--target_duration") + 1] == "45" and cmd[cmd.index("--min_duration") + 1] == "27"
+    list(webui.quick_clip("a.mp4", None, 3, False, length=15))
+    cmd = seen["cmd"]
+    assert cmd[cmd.index("--target_duration") + 1] == "15" and cmd[cmd.index("--min_duration") + 1] == "9"
+
+
+def test_length_is_kept_inside_what_a_short_can_be():
+    assert webui._length(30) == 30 and webui._length(200) == 60 and webui._length(3) == 10
+    assert webui._length(None) == 30 and webui._length("abc") == 30 and webui._length(22.7) == 22
+
+
+def test_exact_times_reach_the_command_and_typos_are_reported_early(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    monkeypatch.setattr(webui, "save_command", lambda session, cmd: None)
+    monkeypatch.setattr(webui, "_stream_clip", lambda cmd, results, lf, minutes, find: iter([seen.update(cmd=cmd) or ("ok", "", [])]))
+    list(webui.quick_clip("a.mp4", None, 3, False, moments="7:00-7:45\n61:40-62:30"))
+    assert seen["cmd"][seen["cmd"].index("--moments") + 1] == "7:00-7:45\n61:40-62:30"
+    list(webui.quick_clip("a.mp4", None, 3, False))
+    assert "--moments" not in seen["cmd"]
+    with pytest.raises(gr.Error, match="Exact times: .* not a time"):
+        list(webui.quick_clip("a.mp4", None, 3, False, moments="seven o'clock"))
