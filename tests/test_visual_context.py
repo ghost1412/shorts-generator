@@ -45,6 +45,7 @@ def test_describe_candidates_caches_and_skips_failures(tmp_path):
 
 def test_no_model_leaves_highlights(monkeypatch, capsys):
     monkeypatch.delenv("SHORTSFLOW_VISION_MODEL", raising=False)
+    monkeypatch.setattr(vc, "gemini_key", lambda: None)
     monkeypatch.setattr(vc, "installed_models", lambda *a, **k: [])
     hl = [{"start": 1, "end": 20}]
     assert vc.describe_candidates("v.mp4", hl) == hl
@@ -68,3 +69,43 @@ def test_grab_frames_real_ffmpeg(tmp_path):
                     str(video)], check=True)
     frames = vc.grab_frames(str(video), 0, 6, ffmpeg="ffmpeg")
     assert len(frames) == 3 and frames[0][:2] == b"\xff\xd8"
+
+
+def test_backend_choice(monkeypatch):
+    monkeypatch.delenv("SHORTSFLOW_VISION", raising=False)
+    monkeypatch.setattr(vc, "installed_models", lambda *a, **k: ["gemma3:12b"])
+    monkeypatch.setattr(vc, "gemini_key", lambda: "K")
+    assert vc.choose_backend()[1] is vc.describe_gemini                  # a key: Gemini, nothing on the local GPU
+    monkeypatch.setenv("SHORTSFLOW_VISION", "ollama")
+    model, ask, label = vc.choose_backend()
+    assert ask is vc.describe and model == "gemma3:12b" and "local" in label
+    monkeypatch.setenv("SHORTSFLOW_VISION", "auto")
+    monkeypatch.setattr(vc, "gemini_key", lambda: None)
+    assert vc.choose_backend()[1] is vc.describe
+
+
+def test_gemini_request_and_cleaning(monkeypatch):
+    seen = {}
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps({"candidates": [{"content": {"parts": [{"text": "Here is the description:\nKratos fights Zeus."}]}}]}).encode()
+
+    def fake(req, timeout=0):
+        seen["url"], seen["body"], seen["key"] = req.full_url, json.loads(req.data), req.get_header("X-goog-api-key")
+        return Resp()
+
+    monkeypatch.setattr(vc.urllib.request, "urlopen", fake)
+    out = vc.describe_gemini([b"\xff\xd8" + b"x" * 600], "gemini-flash-latest", about="God of War", key="SECRET")
+    assert out == "Kratos fights Zeus."
+    assert "key=" not in seen["url"] and seen["key"] == "SECRET"           # the key travels in a header, never in the URL
+    parts = seen["body"]["contents"][0]["parts"]
+    assert "God of War" in parts[0]["text"] and parts[1]["inline_data"]["mime_type"] == "image/jpeg"
+    monkeypatch.setattr(vc, "gemini_key", lambda: None)                  # no key anywhere (not even .env): nothing is sent
+    assert vc.describe_gemini([], "m", key="K") == "" and vc.describe_gemini([b"x"], "m") == ""

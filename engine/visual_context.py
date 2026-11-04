@@ -5,6 +5,10 @@ viewers while the story happens on screen (a boss appears, a cutscene plays, a s
 frames of each candidate moment with a local vision model (Ollama) and writes a one-sentence "what is on screen" description that the
 ranking step and the title writer then use next to the transcript.
 
+Two backends: Gemini (when GEMINI_API_KEY is set: the few small frames are sent to Google, nothing runs on this PC's GPU) or a local
+Ollama vision model (nothing leaves the PC). `SHORTSFLOW_VISION=ollama` forces local, `=gemini` forces Gemini; the default uses Gemini
+when a key exists, else Ollama, and prints which one it uses.
+
 Everything is optional and fails safe: no Ollama, no vision-capable model, a slow answer, a bad frame: the candidates simply keep no
 description and the run goes on as before. The model never sees more than a few small frames per candidate.
 """
@@ -89,14 +93,69 @@ def describe(frames, model, about="", base=None, timeout=300):
         return ""
 
 
-def describe_candidates(video, highlights, about="", cache_path=None, model=None, grab=grab_frames, ask=describe, max_clips=10):
+GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
+
+
+def gemini_key():
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+            key = os.getenv("GEMINI_API_KEY")
+        except Exception:
+            key = None
+    return (key or "").strip() or None
+
+
+def describe_gemini(frames, model, about="", timeout=90, key=None):
+    """One description for these JPEG frames from Gemini, '' when it cannot be had."""
+    key = key or gemini_key()
+    if not frames or not key:
+        return ""
+    parts = [{"text": PROMPT.format(about=(f"The video is: {about}. " if about else ""))}]
+    parts += [{"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(f).decode()}} for f in frames]
+    body = json.dumps({"contents": [{"parts": parts}], "generationConfig": {"temperature": 0, "maxOutputTokens": 300}}).encode()
+    last = ""
+    for name in ([model] if model and model not in GEMINI_MODELS else []) + list(GEMINI_MODELS):
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{name}:generateContent", body,
+                                     {"Content-Type": "application/json", "x-goog-api-key": key})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.load(r)
+            text = "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
+            if text.strip():
+                return clean_description(text)
+        except Exception as e:
+            last = str(e)[:80]
+    print(f"[Warning] Visual context: Gemini did not answer ({last}).")
+    return ""
+
+
+def choose_backend():
+    """(model name, ask function, label) or (None, None, why): Gemini if a key exists (unless SHORTSFLOW_VISION=ollama), else Ollama."""
+    want = (os.getenv("SHORTSFLOW_VISION") or "auto").strip().lower()
+    if want in ("auto", "gemini") and gemini_key():
+        return GEMINI_MODELS[0], describe_gemini, "Gemini (the frames are sent to Google)"
+    model = pick_vision_model()
+    if model and want != "gemini":
+        return model, describe, f"local {model}"
+    return None, None, "none"
+
+
+def describe_candidates(video, highlights, about="", cache_path=None, model=None, grab=grab_frames, ask=None, max_clips=10):
     """Copies of the highlights with `visual` set to what is on screen. Candidates it cannot describe stay as they were.
 
     Descriptions are cached in `cache_path` (json, keyed by start-end), so a continued run does not look again."""
     if not highlights:
         return highlights
+    if ask is None:
+        found, ask, label = choose_backend()
+        model = model or found
+        if found:
+            print(f"[Log] Visual context uses {label}.")
     model = model or pick_vision_model()
-    if not model:
+    if not model or ask is None:
         print("[Warning] Visual context needs a local vision model. Install one with `ollama pull gemma3:12b` (or set "
               "SHORTSFLOW_VISION_MODEL); continuing with the transcript only.")
         return highlights

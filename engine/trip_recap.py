@@ -476,12 +476,11 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
 
     if visual:
         from engine.visual_context import describe_candidates
-        from engine import visual_context
         for d in days:
             for m in d["moments"]:
                 one = describe_candidates(m["file"], [{"start": m["start"], "end": m["end"]}], about=f"{trip_name} {note}".strip(),
                                           cache_path=os.path.join(session_dir, "visual_context.json"),
-                                          ask=describe or visual_context.describe)
+                                          ask=describe)
                 if one and one[0].get("visual"):
                     m["visual"] = one[0]["visual"]
 
