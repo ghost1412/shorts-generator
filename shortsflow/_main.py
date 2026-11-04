@@ -60,6 +60,7 @@ def parse_args():
     parser.add_argument("--extract_mode", choices=["shorts", "long"], default="shorts")
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
+    parser.add_argument("--no_signals", action="store_true", help="Ignore the extra scoring signals (speech-rate change, and laughter/applause with --use_audio_detect).")
     parser.add_argument("--no_rerank", action="store_true", help="Skip the second LLM pass that rates all clip candidates together with context (uses the older per-clip scoring).")
     parser.add_argument("--no_diversity", action="store_true", help="Do not skip near-duplicate clips or prefer different topics when choosing shorts.")
     parser.add_argument("--no_snap", action="store_true", help="Keep the clip start/end exactly as chosen instead of moving them to sentence boundaries (shorts only).")

@@ -148,6 +148,7 @@ def run(args, target_bitrate, target_preset):
         snap=not getattr(args, 'no_snap', False),
         diversity=not getattr(args, 'no_diversity', False),
         rerank=not getattr(args, 'no_rerank', False),
+        extra_signals=not getattr(args, 'no_signals', False),
     )
     
     # The filler pass needs the words as spoken: a translated transcript has no "um" in it

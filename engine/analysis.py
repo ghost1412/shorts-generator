@@ -829,7 +829,7 @@ def merge_segments(segments, min_gap=6.0, max_dur=95.0, score_sensitive=False):
     merged.append(curr)
     return merged
 
-def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, diversity=True):
+def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, diversity=True, extra_signals=True):
     from engine.script_gen import robust_json_parse, get_llm_response
     
     with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -954,6 +954,18 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         except Exception as e:
             print(f"[Warning] Outline/Motion analysis failed: {e}")
 
+    # Extra signals: speech-rate change (from the words) and laughter / applause (needs --use_audio_detect). ~10% of the mix.
+    if extra_signals and compressed_segments:
+        try:
+            from engine.signals import extra_signal
+            extra, rate_sig, laugh_sig = extra_signal(compressed_segments, audio_full if use_audio_detect else None, sr)
+            for seg, x, r, l_ in zip(compressed_segments, extra, rate_sig, laugh_sig):
+                seg['norm_extra'], seg['rate_signal'], seg['laugh_signal'] = x, r, l_
+            if use_audio_detect and audio_full is not None:
+                print(f"[Log] Extra signals: {sum(1 for v in laugh_sig if v >= 0.5)} laughter/applause-like segment(s) of {len(laugh_sig)}.")
+        except Exception as e:
+            print(f"[Warning] Extra signals skipped: {e}")
+
     # 🟢 PHASE 2: Final Signal & Delta (Contrast) Detection
     # Now that we have all signals (Text, Audio, Motion), we calculate context-aware deltas.
     for i, seg in enumerate(compressed_segments):
@@ -1013,6 +1025,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             seg['norm_delta'] * 0.10 + 
             seg['norm_audio_delta'] * 0.10
         )
+        combined_signal = combined_signal * 0.9 + seg.get('norm_extra', 0.0) * 0.1      # speech-rate + laughter (0 when off)
         pos = round(seg['start'] / total_duration, 2) if total_duration > 0 else 0
         seg['pruning_score'] = combined_signal * (0.8 if pos < 0.03 else 1.0)  # skip cold-open/intro, otherwise neutral
             
@@ -1241,6 +1254,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                             avg_norm_delta * 0.10 + 
                             avg_norm_ad    * 0.10
                         )
+                        avg_norm_extra = sum(s.get('norm_extra', 0.0) for s in relevant_segs) / len(relevant_segs)
+                        combined_signal = combined_signal * 0.9 + avg_norm_extra * 0.1
                         h['final_score'] = (v_score * 0.7) + (combined_signal * 100 * 0.3)
                     else:
                         h['final_score'] = v_score
@@ -1535,7 +1550,7 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1571,7 +1586,8 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
         highlights = identify_highlights(
             transcript_path, video_path=video_path, clip_count=pool_count,
             mode=mode, target_duration=target_duration, min_duration=min_duration, use_audio_detect=use_audio_detect,
-            style=style, user_context=user_context, style_context=style_context, diversity=diversity
+            style=style, user_context=user_context, style_context=style_context, diversity=diversity,
+            extra_signals=extra_signals
         )
 
         # Boost chapter-overlapping segments
