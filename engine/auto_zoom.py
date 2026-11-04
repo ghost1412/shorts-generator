@@ -132,6 +132,26 @@ def choose_zoom_moments(words, duration, peaks=None, intensity=1.0, min_spacing=
     return moments
 
 
+def fill_gaps(moments, duration, max_gap=7.0, intensity=1.0):
+    """Add a slow push-in in the middle of every stretch longer than `max_gap` seconds that has no zoom, so a long calm patch does
+    not look frozen (the director uses it). Existing moments are kept; the new ones are subtle, 2.6 s long, and stay clear of
+    their neighbours and of the clip edges."""
+    out = sorted((dict(m) for m in moments or []), key=lambda m: m["start"])
+    if not duration or duration <= max_gap or intensity <= 0:
+        return out
+    marks = [0.0] + [t for m in out for t in (m["start"], m["end"])] + [float(duration)]
+    added = []
+    for a, b in zip(marks[0::2], marks[1::2]):            # (end of one moment, start of the next), the first from 0
+        if b - a > max_gap:
+            length = 2.6
+            mid = (a + b) / 2.0
+            start, end = mid - length / 2, mid + length / 2
+            if start - a >= 0.8 and b - end >= 0.8 and EDGE <= start and end <= duration - 0.3:
+                added.append({"start": round(start, 3), "end": round(end, 3),
+                              "scale": round(1.0 + (PUSH_SCALE - 1.0) * intensity, 4), "rise": round(length * 0.8, 3)})
+    return sorted(out + added, key=lambda m: m["start"])
+
+
 def _ease_out(p):
     p = min(1.0, max(0.0, p))
     return 1.0 - (1.0 - p) ** 3

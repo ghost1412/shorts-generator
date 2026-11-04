@@ -141,6 +141,7 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     if edit_cfg:
         os.environ["SHORTSFLOW_ZOOM_INTENSITY"] = str(edit_cfg["zoom_intensity"])
         os.environ["SHORTSFLOW_ZOOM_SPACING"] = str(edit_cfg["zoom_spacing"])
+        os.environ["SHORTSFLOW_ZOOM_FILL"] = "1"
     emoji_on = bool(settings.get("caption_emoji"))    # --caption_emoji: the same keyword emoji again
     prev_emoji_env = os.environ.get("SHORTSFLOW_CAPTION_EMOJI")
     if emoji_on:

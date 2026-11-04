@@ -87,3 +87,9 @@ def test_settings_roundtrip_and_plan_file(tmp_path):
     path = auto_edit.write_plan(str(tmp_path), {"preset": "vlog"}, [{"clip": "a.mp4"}])
     assert json.load(open(path))["clips"][0]["clip"] == "a.mp4"
     assert auto_edit.read_zoom_moments(str(tmp_path / "none.mp4")) == []
+
+
+def test_slow_pushes_get_no_sound_only_quick_punch_ins_do():
+    cfg = {"sfx": {"zoom": "pop", "broll": None, "cut": None}}
+    zooms = [{"start": 3.0, "end": 4.1}, {"start": 10.0, "end": 12.6}]               # a punch (1.1 s) and a slow push (2.6 s)
+    assert [(e["t"], e["kind"]) for e in auto_edit.build_sfx_events(cfg, zooms, [], None)] == [(3.0, "pop")]

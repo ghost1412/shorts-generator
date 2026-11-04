@@ -105,6 +105,7 @@ def apply_preset(args, preset, strength="medium", argv=None):
         flags["video_filter"] = args.video_filter
     os.environ["SHORTSFLOW_ZOOM_INTENSITY"] = str(s["zoom_intensity"])
     os.environ["SHORTSFLOW_ZOOM_SPACING"] = str(s["zoom_spacing"])
+    os.environ["SHORTSFLOW_ZOOM_FILL"] = "1"
     args.auto_edit_cfg = {"preset": preset, "strength": strength, "sfx": dict(p["sfx"]), "sfx_db": s["sfx_db"],
                           "zoom_intensity": s["zoom_intensity"], "zoom_spacing": s["zoom_spacing"]}
     return {"preset": preset, "strength": strength, "label": p["label"], "flags": flags, "notes": notes}
@@ -144,7 +145,8 @@ def build_sfx_events(cfg, zoom_moments=None, broll_events=None, cold_info=None):
         events.append({"t": shift, "kind": sfx["cut"], "why": "cut from the teaser to the clip"})
     if sfx.get("zoom"):
         for m in zoom_moments or []:
-            events.append({"t": float(m["start"]) + shift, "kind": sfx["zoom"], "why": "zoom"})
+            if float(m["end"]) - float(m["start"]) <= 1.3:                  # quick punch-ins get a sound; slow pushes stay silent
+                events.append({"t": float(m["start"]) + shift, "kind": sfx["zoom"], "why": "zoom"})
     if sfx.get("broll"):
         for b in broll_events or []:
             events.append({"t": float(b["t"]) + shift, "kind": sfx["broll"], "why": f"cutaway: {b.get('keyword', '')}".strip()})

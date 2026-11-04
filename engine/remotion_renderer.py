@@ -382,9 +382,12 @@ def render_with_remotion(
         if auto_zoom:
             try:
                 from engine.auto_zoom import choose_zoom_moments, energy_peaks
-                moments = choose_zoom_moments(words, duration, peaks=energy_peaks(audio_path),
-                                              intensity=float(os.getenv("SHORTSFLOW_ZOOM_INTENSITY") or 1.0),
+                zoom_strength = float(os.getenv("SHORTSFLOW_ZOOM_INTENSITY") or 1.0)
+                moments = choose_zoom_moments(words, duration, peaks=energy_peaks(audio_path), intensity=zoom_strength,
                                               min_spacing=float(os.getenv("SHORTSFLOW_ZOOM_SPACING") or 2.5))
+                if os.getenv("SHORTSFLOW_ZOOM_FILL") == "1":     # auto-edit: no long stretch without a visible change
+                    from engine.auto_zoom import fill_gaps
+                    moments = fill_gaps(moments, duration, intensity=zoom_strength)
                 if moments:
                     props["zoomMoments"] = moments
                     try:   # the auto-edit sound effects read the chosen moments from here

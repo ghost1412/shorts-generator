@@ -112,3 +112,17 @@ def test_renderer_adds_zoom_props_only_when_asked():
     import engine.remotion_renderer as rr
     src = open(rr.__file__, encoding="utf-8").read()
     assert "auto_zoom=False" in src and 'props["zoomMoments"]' in src
+
+
+def test_fill_gaps_adds_a_push_in_the_middle_of_long_calm_stretches():
+    from engine.auto_zoom import fill_gaps
+    moments = [{"start": 2.0, "end": 3.1, "scale": 1.08, "rise": 0.12}]
+    out = fill_gaps(moments, 30.0, max_gap=7.0)
+    assert len(out) == 2 and out[0] == moments[0]                                   # existing moment kept as it was
+    fill = out[1]
+    assert 3.1 + 0.8 <= fill["start"] and fill["end"] <= 29.7 and abs((fill["start"] + fill["end"]) / 2 - 16.55) < 0.1
+    assert fill["scale"] == 1.05 and fill["rise"] > 1.0                             # a slow push, subtle
+    assert fill_gaps(moments, 8.0, max_gap=7.0) == moments                           # nothing long enough to fill
+    assert fill_gaps([], 0, max_gap=7.0) == [] and fill_gaps(moments, 30.0, intensity=0) == moments
+    dense = [{"start": float(t), "end": t + 1.0, "scale": 1.08, "rise": 0.12} for t in (1, 5, 9, 13)]
+    assert fill_gaps(dense, 15.0, max_gap=7.0) == dense                              # gaps of 4 s: untouched
