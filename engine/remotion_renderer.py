@@ -116,6 +116,20 @@ def overlay_props(hook_text=None, hook_seconds=2.8):
     return props
 
 
+CRF_BY_QUALITY = {"low": 23, "medium": 16, "high": 12, "ultra": 8}
+
+
+def quality_flags(env=None):
+    """Remotion encoder flags from --quality / --bitrate (the CLI exports them as SHORTSFLOW_QUALITY / SHORTSFLOW_BITRATE).
+    They used to be ignored here: the CRF was fixed at 16. `medium` (the default) is still CRF 16, so existing output is
+    unchanged. A manual bitrate replaces the CRF, because Remotion does not accept both."""
+    env = os.environ if env is None else env
+    bitrate = (env.get("SHORTSFLOW_BITRATE") or "").strip()
+    if bitrate:
+        return [f"--video-bitrate={bitrate}"]
+    return [f"--crf={CRF_BY_QUALITY.get((env.get('SHORTSFLOW_QUALITY') or 'medium').lower(), 16)}"]
+
+
 def render_with_remotion(
     audio_path,
     subs_path,
@@ -443,7 +457,7 @@ def render_with_remotion(
             f"--width={res_w}",
             f"--height={res_h}",
             "--codec=h264",
-            "--crf=16",
+            *quality_flags(),
             "--pixel-format=yuv420p",
             gl_flag,
             "--chromium-options=--no-sandbox --disable-dev-shm-usage",

@@ -12,6 +12,12 @@ SAFE_TOP = 220
 SAFE_MID = 750
 SAFE_BOTTOM = 1600
 
+# The largest 9:16 window centred in the frame, whatever the source shape: wide sources lose the sides, tall ones (a 1080x2400
+# phone video) lose top and bottom, an exact 9:16 source loses nothing. The old `crop=ih*9/16:ih` failed on anything taller
+# than 9:16 and was skipped for "portrait" sources, which then got stretched to 9:16 (4:5 videos).
+CENTER_CROP_9X16 = "crop='min(iw,ih*9/16)':'min(ih,iw*16/9)':(iw-ow)/2:(ih-oh)/2"
+
+
 def smooth_focal_points(raw_pts, tau=0.4, max_vel_per_sec=0.5, deadband=0.04):
     """Anti-blinking pass over (time, x) focal points (x = fraction of the frame width).
 
@@ -43,20 +49,17 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
     Generates an FFmpeg crop filter string for dynamic focal point tracking.
     Includes EMA smoothing, velocity caps, and deadband hysteresis to prevent camera flickering/jittering.
     """
-    if orientation == 'portrait':
-        return None  # No crop needed for portrait, it will just scale
-
     base_filter = ""
     if letterbox_crop:
         base_filter = f"{letterbox_crop},"
 
     if not interest_points:
-        return f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
+        return f"{base_filter}{CENTER_CROP_9X16}"
     
     # Filter and sort interest points for this segment
     raw_pts = sorted([(t, x) for t, x in interest_points.items() if start_time <= t <= end_time])
     if not raw_pts:
-        return f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
+        return f"{base_filter}{CENTER_CROP_9X16}"
         
     pts = smooth_focal_points(raw_pts)
 
@@ -81,10 +84,11 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
         return expr
 
     focal_x_pct = get_focal_x_expr()
-    crop_w = "ih*9/16"
+    crop_w = "min(iw,ih*9/16)"
+    crop_h = "min(ih,iw*16/9)"
     x_expr = f"min(max(0,({focal_x_pct}*iw)-({crop_w}/2)),iw-{crop_w})"
-    
-    return f"{base_filter}crop={crop_w}:ih:'{x_expr}':0"
+
+    return f"{base_filter}crop='{crop_w}':'{crop_h}':'{x_expr}':'(ih-oh)/2'"
 
 def generate_ffmpeg_split_screen_filter(target_w=1080, target_h=1920):
     """
@@ -2619,7 +2623,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
             else:
                 base_filter = f"{letterbox_crop}," if letterbox_crop else ""
-                crop_filter = None if orientation == 'portrait' else f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
+                crop_filter = f"{base_filter}{CENTER_CROP_9X16}"
                 vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
             vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"

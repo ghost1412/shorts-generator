@@ -205,6 +205,9 @@ if args.hq and (not hasattr(args, 'quality') or args.quality == "medium"):
     args.quality = "high"
 
 target_bitrate = args.bitrate if args.bitrate else bitrate_map.get(args.quality or "medium")
+os.environ["SHORTSFLOW_QUALITY"] = args.quality or "medium"   # Remotion output: --quality picks the CRF, --bitrate overrides it
+if args.bitrate:
+    os.environ["SHORTSFLOW_BITRATE"] = args.bitrate
 target_preset = args.preset if args.preset else preset_map.get(args.quality or "medium")
 
 # 🟢 PRO CONFIG: ComfyUI Availability Health Check

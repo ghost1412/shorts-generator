@@ -30,6 +30,55 @@ def make_reel_chapters(highlights, transcript_path, reel_path, session_dir):
         return []
 
 
+def _marker(clip_file, kind):
+    return f"{clip_file}.{kind}"
+
+
+def _fingerprint(value):
+    import hashlib
+    return hashlib.md5(json.dumps(value, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+
+
+def already_done(clip_file, kind, value):
+    """True when `kind` ("branded", "clean") was already applied to this clip with the same settings (--use_cache reuses
+    finished clips, and stamping the logo or normalising the audio a second time would damage them)."""
+    try:
+        with open(_marker(clip_file, kind), "r", encoding="utf-8") as f:
+            return f.read().strip() == _fingerprint(value)
+    except OSError:
+        return False
+
+
+def mark_done(clip_file, kind, value):
+    try:
+        with open(_marker(clip_file, kind), "w", encoding="utf-8") as f:
+            f.write(_fingerprint(value))
+    except OSError:
+        pass
+
+
+def align_clips_with_highlights(highlights, files, extract_mode="shorts", mashup=False):
+    """(highlights, files) restricted to the clips that were really rendered, in highlight order.
+
+    Short clips are named video_clip_<n>.mp4 where n is the 1-based highlight number, so the file name says which
+    highlight it belongs to. Other outputs (the long-form reel, the mashup) are returned unchanged."""
+    import re
+    if extract_mode == "long" or mashup or not files:
+        return highlights, files
+    by_index = {}
+    for f in files:
+        m = re.search(r"video_clip_(\d+)\.mp4$", str(f).replace("\\", "/"))
+        if not m:
+            return highlights, files               # not the per-highlight naming: leave things as they are
+        by_index[int(m.group(1)) - 1] = f
+    kept = sorted(i for i in by_index if 0 <= i < len(highlights))
+    if len(kept) < len(highlights):
+        missing = [i + 1 for i in range(len(highlights)) if i not in by_index]
+        print(f"[Warning] {len(highlights) - len(kept)} clip(s) could not be rendered (clip {', '.join(map(str, missing))}); "
+              "the others keep their own titles and thumbnails.")
+    return [highlights[i] for i in kept], [by_index[i] for i in kept]
+
+
 def run(args, target_bitrate, target_preset):
     import time
     from engine.video_gen import extract_segments
@@ -41,6 +90,22 @@ def run(args, target_bitrate, target_preset):
     session_dir = args.session_dir if args.session_dir else f"sessions/extraction_{int(time.time())}"
     os.makedirs(session_dir, exist_ok=True)
     
+    # Check the brand kit now: a missing logo or a bad position used to surface only after the whole render, before
+    # metadata.json and --output_json were written
+    brand_kit = None
+    if any(getattr(args, k, None) for k in ("brand", "logo", "handle", "end_card")):
+        from engine.branding import load_brand
+        try:
+            brand_kit = load_brand(getattr(args, "brand", None), getattr(args, "logo", None),
+                                   getattr(args, "handle", None), getattr(args, "end_card", None))
+        except (OSError, ValueError) as e:
+            print(f"[Error] Brand kit problem: {e}")
+            sys.exit(2)
+
+    # --tighten_mode speed is a MoviePy-only effect: the animated-caption (Remotion) path cuts instead
+    if getattr(args, "use_remotion", False) and getattr(args, "tighten", False) and getattr(args, "tighten_mode", "cut") == "speed":
+        print("[Warning] --tighten_mode speed is not available with animated captions (--use_remotion): the pauses are cut instead.")
+
     source_url = args.source_video if is_url(args.source_video) else None   # chapters are cached under the URL, not the file
     # 🟢 Auto-download video if source_video is a URL
     if is_url(args.source_video):
@@ -179,6 +244,12 @@ def run(args, target_bitrate, target_preset):
         reel_captions=getattr(args, 'reel_captions', False)
     )
     
+    # Pair every output with ITS highlight. Everything below walks `highlights` and `extracted_files` in step, but the
+    # renderer only returns the clips that succeeded (and worker threads add them in finishing order), so after one
+    # failed clip the titles, thumbnails, SRTs and results.json would all be shifted onto the wrong video.
+    highlights, extracted_files = align_clips_with_highlights(highlights, extracted_files, args.extract_mode,
+                                                              getattr(args, "mashup", False))
+
     # Auto B-roll: stock cutaways on spoken nouns, overlaid on the finished vertical clips (engine/broll.py)
     if getattr(args, "broll", False) and extracted_files:
         if args.extract_mode == "long" or getattr(args, "mashup", False):
@@ -211,21 +282,24 @@ def run(args, target_bitrate, target_preset):
     # Audio clean-up (noise reduction + loudness normalisation); runs on the finished clips of every render path
     if getattr(args, "clean_audio", False) and extracted_files:
         from engine.audio_clean import clean_clips
-        print(f"[Log] Cleaning audio of {len(extracted_files)} clip(s)...")
-        clean_clips(extracted_files)
+        todo = [f for f in extracted_files if not already_done(f, "clean", True)]
+        print(f"[Log] Cleaning audio of {len(todo)} clip(s)...")
+        for f in todo:
+            if clean_clips([f]):
+                mark_done(f, "clean", True)
 
-    # Brand kit: logo watermark, @handle and end card
-    if any(getattr(args, k, None) for k in ("brand", "logo", "handle", "end_card")) and extracted_files:
-        from engine.branding import apply_brand, load_brand
-        brand = load_brand(getattr(args, "brand", None), getattr(args, "logo", None),
-                           getattr(args, "handle", None), getattr(args, "end_card", None))
-        if brand:
-            print(f"[Log] Applying brand kit to {len(extracted_files)} clip(s)...")
-            for clip_file in extracted_files:
-                try:
-                    apply_brand(clip_file, brand)
-                except Exception as e:
-                    print(f"[Warning] Branding failed for {os.path.basename(clip_file)}: {e}")
+    # Brand kit: logo watermark, @handle and end card (the kit was validated before the render started)
+    if brand_kit and extracted_files:
+        from engine.branding import apply_brand
+        print(f"[Log] Applying brand kit to {len(extracted_files)} clip(s)...")
+        for clip_file in extracted_files:
+            if already_done(clip_file, "branded", brand_kit):
+                continue    # --use_cache reuses finished clips: do not stamp the logo on a second time
+            try:
+                apply_brand(clip_file, brand_kit)
+                mark_done(clip_file, "branded", brand_kit)
+            except Exception as e:
+                print(f"[Warning] Branding failed for {os.path.basename(clip_file)}: {e}")
 
     # Export SRT for each extracted file
     if getattr(args, 'srt', False) and extracted_files and os.path.exists(transcript_path):
