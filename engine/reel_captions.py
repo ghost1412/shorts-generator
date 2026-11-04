@@ -51,8 +51,12 @@ _FONT_FILES = [os.path.join(_FONT_DIR, "NotoSansDevanagari.ttf"), os.path.join(_
                os.path.join(_FONT_DIR, "NotoSansArabic.ttf")]
 
 
-def _clean(word, cjk_family=None):
-    word = re.sub(r"[{}\\]", "", word).upper()
+def _clean(word, cjk_family=None, upper=True, tag_cyrillic=False):
+    """ASS-safe text with a `{\\fn...}` font override for scripts Impact cannot draw. `upper`/`tag_cyrillic` are for
+    sentence captions (dubbing): keep the case and also name the bundled font for Cyrillic/Greek."""
+    word = re.sub(r"[{}\\]", "", word)
+    if upper:
+        word = word.upper()
     if cjk_family and cjk_language(word):
         # Chinese/Japanese/Korean: per-transcript subset font from engine.script_fonts (named here, staged next to the .ass)
         word = "{\\fn" + cjk_family + "}" + word
@@ -62,6 +66,8 @@ def _clean(word, cjk_family=None):
     elif _DEVANAGARI.search(word):
         # Impact has no Devanagari glyphs; name the bundled font so it does not depend on a system fallback
         word = "{\\fn" + DEVANAGARI_FONT + "}" + word
+    elif tag_cyrillic and _CYRILLIC_GREEK.search(word):
+        word = "{\\fn" + CYRILLIC_FONT + "}" + word
     return word
 
 

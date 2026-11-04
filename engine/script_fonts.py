@@ -16,11 +16,18 @@ import shutil
 
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".cache", "shortsflow", "fonts")
 SUBSET_DIR = os.path.join(CACHE_DIR, "subsets")
-_RAW = "https://raw.githubusercontent.com/google/fonts/main/ofl/"
+# Pinned to one google/fonts commit and checked against a SHA256, so a changed or tampered file is never used.
+FONTS_COMMIT = "a85815a42757630ce188fdad368c2dfc444d4773"
+_RAW = f"https://raw.githubusercontent.com/google/fonts/{FONTS_COMMIT}/ofl/"
 CJK_SOURCES = {
     "zh": ("NotoSansSC.ttf", _RAW + "notosanssc/NotoSansSC%5Bwght%5D.ttf"),
     "ja": ("NotoSansJP.ttf", _RAW + "notosansjp/NotoSansJP%5Bwght%5D.ttf"),
     "ko": ("NotoSansKR.ttf", _RAW + "notosanskr/NotoSansKR%5Bwght%5D.ttf"),
+}
+CJK_SHA256 = {
+    "zh": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+    "ja": "c2f3b4d463500a2ddcd3849cded1fceeb9fd6d1c32e6cbecd568453ba50fc68f",
+    "ko": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",
 }
 SUBSET_PREFIX = "SFCJK"
 SUBSET_NAME_RE = re.compile(SUBSET_PREFIX + r"-(?:zh|ja|ko)-[0-9a-f]{8}")
@@ -71,7 +78,21 @@ def _download(url, dest):
     os.replace(tmp, dest)
 
 
-def ensure_base_font(lang, download=_download, cache_dir=None):
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _checksum_ok(lang, path, expected=None):
+    """True when the file matches the pinned SHA256 (`expected` overrides the table, mainly for tests)."""
+    want = expected if expected is not None else CJK_SHA256.get(lang)
+    return bool(want) and _sha256(path) == want
+
+
+def ensure_base_font(lang, download=_download, cache_dir=None, expected_sha256=None):
     """Path of the full Noto Sans CJK font for `lang`, downloading it on first use. None when it cannot be had."""
     if lang not in CJK_SOURCES:
         return None
@@ -79,13 +100,21 @@ def ensure_base_font(lang, download=_download, cache_dir=None):
     folder = cache_dir or CACHE_DIR
     path = os.path.join(folder, name)
     if os.path.exists(path) and os.path.getsize(path) > 1_000_000:
-        return path
+        if _checksum_ok(lang, path, expected_sha256):
+            return path
+        print(f"[Warning] The cached {lang} caption font does not match the pinned checksum; downloading it again.")
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     try:
         os.makedirs(folder, exist_ok=True)
         print(f"[Log] Downloading the {lang} caption font (first time only, ~10-18 MB)...")
         download(url, path)
         if os.path.getsize(path) < 1_000_000:
             raise OSError("downloaded file is too small")
+        if not _checksum_ok(lang, path, expected_sha256):
+            raise OSError("checksum mismatch (file is not the pinned Noto Sans build)")
         return path
     except Exception as e:
         print(f"[Warning] Could not get the {lang} caption font ({e}); those captions may show empty boxes.")
