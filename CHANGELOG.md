@@ -5,6 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **More varied shorts**: when picking clips, a moment that repeats the wording of one already chosen is skipped, and a clip on a new topic is preferred over a slightly better repeat from the same topic (topics are found from how the vocabulary of neighbouring sentences changes; no model needed). `--no_diversity` turns it off.
 - **Cleaner clip boundaries**: short clips (and `--find` results) now start at the beginning of a sentence, skip a leading "So, um, okay.", finish the sentence they stop in and keep a 0.4 s tail, instead of starting or ending mid-sentence. `--no_snap` turns it off. An offline benchmark (`python scripts/benchmark_highlights.py`) measures it on seeded synthetic transcripts: starts on a sentence 10% -> 100%, ends 27% -> 100%, payoff included 40% -> 82%. Numbers come from synthetic picks, so they measure the boundary handling, not a model's taste.
 
 ## 0.4.0 (2026-11-04)

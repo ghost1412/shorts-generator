@@ -829,7 +829,7 @@ def merge_segments(segments, min_gap=6.0, max_dur=95.0, score_sensitive=False):
     merged.append(curr)
     return merged
 
-def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None):
+def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="shorts", target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, diversity=True):
     from engine.script_gen import robust_json_parse, get_llm_response
     
     with open(transcript_path, 'r', encoding='utf-8') as f:
@@ -1266,6 +1266,17 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             # 🟢 OPUS-STYLE SORTING: Prioritize high hybrid scores
             valid_highlights.sort(key=lambda x: x.get('final_score', 0), reverse=True)
             
+            # Variety: skip a clip that repeats one already chosen and prefer a new topic over a slightly better repeat
+            if mode == "shorts" and diversity and len(valid_highlights) > 1:
+                try:
+                    from engine.topics import diversify
+                    before = len(valid_highlights)
+                    valid_highlights = diversify(valid_highlights, transcript_data)
+                    if len(valid_highlights) < before:
+                        print(f"[Log] Diversity: dropped {before - len(valid_highlights)} near-duplicate candidate(s).")
+                except Exception as e:
+                    print(f"[Warning] Topic diversity skipped: {e}")
+
             # Limit segments for shorts mode AFTER merge to keep only the best substantial clips
             if mode == "shorts":
                 valid_highlights = valid_highlights[:clip_count]
@@ -1524,7 +1535,7 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1558,7 +1569,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
         highlights = identify_highlights(
             transcript_path, video_path=video_path, clip_count=clip_count,
             mode=mode, target_duration=target_duration, min_duration=min_duration, use_audio_detect=use_audio_detect,
-            style=style, user_context=user_context, style_context=style_context
+            style=style, user_context=user_context, style_context=style_context, diversity=diversity
         )
 
         # Boost chapter-overlapping segments
