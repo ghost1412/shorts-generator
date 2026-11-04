@@ -1627,6 +1627,9 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
                 print(f"[Warning] LLM scoring skipped: {e}")
         _mark("context ranking / LLM scoring")
         if mode == "shorts":
+            from engine.feedback import apply_preferences
+            highlights = apply_preferences(highlights)         # a small nudge toward the clip length the user tends to like
+        if mode == "shorts":
             # Final geometry BEFORE choosing among the pool: snap, clamp to the video, and drop clips below the length floor
             # (ranking and snapping can shorten a clip, and a goodbye at the very end of a video can be left with a few seconds)
             floor = max(8.0, min_duration - 5.0)

@@ -187,6 +187,15 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
     yield "❌ No dubbed video was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
 
 
+def rate_clip(card, liked):
+    """Thumbs up / down on a review card: saved locally; the picker learns which clip length you tend to like (engine/feedback.py)."""
+    from engine import feedback
+    n = feedback.record(card.get("title"), card.get("duration") or 0, card.get("score"), liked)
+    if not n:
+        return "Could not save the rating on this computer."
+    return ("Thanks! " if liked else "Noted. ") + feedback.summary()
+
+
 def photo_reel(files, reel_type, name="", texts="", music=None, duration=24):
     """Photo reel tab: photos in, a typed reel out. Yields (status, log, video)."""
     import time
@@ -596,6 +605,12 @@ def build_ui():
                                 if c.get("title_variants"):
                                     with gr.Accordion("Other title ideas", open=False):
                                         gr.Textbox(value=review.variants_text(c), lines=3, interactive=False, show_label=False)
+                                with gr.Row():
+                                    up = gr.Button("👍 Good pick", size="sm")
+                                    down = gr.Button("👎 Not good", size="sm")
+                                    fb = gr.Markdown("")
+                                up.click(lambda c=c: rate_clip(c, True), None, fb)
+                                down.click(lambda c=c: rate_clip(c, False), None, fb)
                                 rm = gr.Button("Remove this short", size="sm")
                                 rm.click(lambda cs, i=c["index"]: [x for x in cs if x["index"] != i], q_cards, q_cards)
                                 if c.get("can_rerender"):

@@ -230,59 +230,92 @@ def generate_ffmpeg_dynamic_zoom_filter(duration=30.0, zoom_factor=1.12):
 
 # insert_broll_cutaways was retired: B-roll is now an FFmpeg overlay on the finished clip (engine/broll.py, --broll).
 
+def plan_tighten(duration, keep_intervals, mode="cut", speed=None, padding=0.08, min_gap=0.25):
+    """The pieces tighten_clip builds, as [(source_start, source_end, rate)]: rate 1.0 for the parts that are kept, `speed` for the
+    skipped gaps in 'speed' mode (gaps are simply dropped in 'cut' mode). Returns None when there is nothing to do.
+    Shared by tighten_clip and time_after_tighten, so the captions can follow exactly what was done to the picture."""
+    if not keep_intervals:
+        return None
+    min_clip_duration = 0.25
+    padded = []
+    for s, e in sorted(keep_intervals, key=lambda x: x[0]):          # safety padding around every kept interval
+        ps, pe = max(0.0, s - padding), min(duration, e + padding)
+        if pe - ps >= min_clip_duration:
+            padded.append((ps, pe))
+    if not padded:
+        return None
+    merged = []                                                      # merge overlapping or closely adjacent intervals
+    curr_s, curr_e = padded[0]
+    for next_s, next_e in padded[1:]:
+        if next_s - curr_e <= min_gap:
+            curr_e = max(curr_e, next_e)
+        else:
+            merged.append((curr_s, curr_e))
+            curr_s, curr_e = next_s, next_e
+    merged.append((curr_s, curr_e))
+    plan, last_end = [], 0
+    for start, end in merged:
+        if start > last_end and mode == "speed" and speed:
+            plan.append((last_end, start, float(speed)))
+        if end - start >= min_clip_duration:
+            plan.append((start, end, 1.0))
+        last_end = end
+    return plan or None
+
+
+def time_after_tighten(plan, t):
+    """Where source time `t` (seconds into the clip) lands in the tightened clip: parts that were sped up are shorter, dropped gaps
+    collapse to the start of the next part, and None means the moment was cut off the end."""
+    out = 0.0
+    for start, end, rate in plan:
+        if t < start:
+            return out
+        if t <= end:
+            return out + (t - start) / rate
+        out += (end - start) / rate
+    return None
+
+
 def tighten_clip(clip, keep_intervals, mode="cut", speed=None, padding=0.08, min_gap=0.25):
     """
     Tightens a clip by removing non-keep intervals (Auto-Editor style).
     Includes interval merging, safety padding, and micro-cut filtering to prevent flickering/blinking artifacts.
     """
-    if not keep_intervals: return clip
-
-    # 1. Sort intervals by start time
-    sorted_intervals = sorted(keep_intervals, key=lambda x: x[0])
-    
-    # 2. Add safety padding (80ms buffer) and merge close gaps (< 250ms)
-    min_clip_duration = 0.25
-
-    padded_intervals = []
-    for s, e in sorted_intervals:
-        ps = max(0.0, s - padding)
-        pe = min(clip.duration, e + padding)
-        if pe - ps >= min_clip_duration:
-            padded_intervals.append((ps, pe))
-
-    if not padded_intervals:
+    plan = plan_tighten(clip.duration, keep_intervals, mode, speed, padding, min_gap)
+    if not plan:
         return clip
-
-    # Merge overlapping or closely adjacent intervals
-    merged_intervals = []
-    curr_s, curr_e = padded_intervals[0]
-
-    for next_s, next_e in padded_intervals[1:]:
-        if next_s - curr_e <= min_gap:
-            curr_e = max(curr_e, next_e)
-        else:
-            merged_intervals.append((curr_s, curr_e))
-            curr_s, curr_e = next_s, next_e
-    merged_intervals.append((curr_s, curr_e))
-
-    # 3. Build subclips
     parts = []
-    last_end = 0
-
-    for start, end in merged_intervals:
-        if start > last_end and mode == "speed" and speed:
-            skipped = clip.subclipped(last_end, start).with_effects([vfx.MultiplySpeed(speed)])
-            parts.append(skipped)
-
-        if end - start >= min_clip_duration:
-            parts.append(clip.subclipped(start, end))
-        last_end = end
-
-    if not parts:
-        return clip
-
+    for start, end, rate in plan:
+        part = clip.subclipped(start, end)
+        parts.append(part if rate == 1.0 else part.with_effects([vfx.MultiplySpeed(rate)]))
     from moviepy import concatenate_videoclips
     return concatenate_videoclips(parts)
+
+
+def retime_transcript(transcript_data, window_start, window_end, plan):
+    """(transcript, new_duration): the words between window_start and window_end, with times counted from the clip start AFTER
+    tightening (so captions stay in step when silences were sped up). Words that were cut off are dropped."""
+    new_end = time_after_tighten(plan, window_end - window_start)
+    if new_end is None:
+        new_end = sum((e - s) / r for s, e, r in plan)
+    segments = []
+    for seg in transcript_data.get("segments", []):
+        words = []
+        for w in seg.get("words") or []:
+            if "start" not in w or "end" not in w or not str(w.get("word", "")).strip():
+                continue
+            if w["start"] < window_start or w["end"] > window_end:
+                continue
+            t0 = time_after_tighten(plan, w["start"] - window_start)
+            t1 = time_after_tighten(plan, w["end"] - window_start)
+            if t0 is None or t1 is None:
+                continue
+            words.append({"word": w["word"], "start": round(t0, 3), "end": round(max(t1, t0 + 0.05), 3)})
+        if words:
+            segments.append({"start": words[0]["start"], "end": words[-1]["end"],
+                             "text": " ".join(x["word"].strip() for x in words), "words": words})
+    return {"segments": segments}, new_end
+
 
 def smart_vertical_crop(clip, interest_points, damping=0.1):
     """
@@ -2907,7 +2940,13 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                     print(f"[Log] Tightening Short {i+1} (Removing silences)")
                     # Filler words are short (~0.3 s): the default 80 ms padding / 250 ms gap merge would stitch them back in
                     fine = {"padding": 0.02, "min_gap": 0.06} if remove_fillers else {}
-                    sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None, **fine)
+                    speed = 5.0 if tighten_mode == "speed" else None
+                    speed_plan = plan_tighten(sub.duration, local_silence, tighten_mode, speed, **fine)
+                    sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=speed, **fine)
+                    if speed_plan and tighten_mode == "speed":
+                        # the sped-up silences made the clip shorter: move every caption word to where it now is
+                        cap_data, retimed_end = retime_transcript(cap_data, cap_start, cap_end, speed_plan)
+                        cap_start, cap_end = 0.0, retimed_end + 0.01
             
             sub = sub.with_position("center")
             loop_clips.append(sub)
@@ -3025,7 +3064,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 for c in overlays:
                     try: c.close()
                     except: pass
-                if final_audio and final_audio != sub.audio:
+                if final_audio is not None and final_audio is not sub.audio:   # identity: `!=` makes MoviePy compare every audio frame
                     try: final_audio.close()
                     except: pass
                 for c in loop_clips:
