@@ -142,8 +142,8 @@ All GIFs are real renders from this repository.
 | **Brand kit (logo, @handle, end card, accent colour)** | ✅ | Usually on paid tiers |
 | **Prompt-based clipping ("only where they discuss pricing")** | ✅ `--find` (LLM search, keyword fallback offline) | Varies by tool |
 | **Edit by transcript (cut phrases, remove ums / uhs)** | ✅ `--cut`, `--edit_transcript`, `--remove_fillers` | Varies by tool |
-| **Caption languages** | ✅ Latin, Cyrillic, Greek and Devanagari scripts, optional translation (`--caption_lang`); no Japanese / Chinese / Korean / Arabic yet | Many languages |
-| **Dubbing / translated voice-over** | ❌ not implemented (captions can be translated) | Often a paid add-on |
+| **Caption languages** | ✅ Latin, Cyrillic, Greek, Devanagari, Arabic and Chinese / Japanese / Korean (CJK fonts download once on first use), optional translation (`--caption_lang`) | Many languages |
+| **Dubbing / translated voice-over** | ✅ basic (`--mode DUB`: one synthetic voice per language, no voice cloning, no lip-sync) | Often a paid add-on, with voice cloning |
 | **Idea-to-video (facts, explainers, stories)** | ✅ 30+ modes | ❌ clipping only |
 | **Automation** | ✅ CLI, REST API, MCP server, Docker, GitHub Actions | API usually on higher tiers |
 | **Polished timeline editor** | ❌ | ✅ |
@@ -173,7 +173,7 @@ _Honest take: the paid tools have a nicer editor, hosted convenience and tested 
 | 🔢 **Top 5 Countdown** | Numbered listicle countdown shorts (#5 ➔ #1) with rank badges | `py main.py --mode TOP_5 --category "inventions"` |
 | 💬 **Chat Story** | Animated text message conversation shorts (iMessage format) | `py main.py --mode CHAT_STORY --category "mystery"` |
 | 👥 **Podcast** *(planned, not implemented yet)* | 2-speaker debate shorts with alternating multi-voice synthesis | - |
-| 🌐 **Video Dubbing** *(planned, not implemented yet)* | Multilingual video translation & voice re-synthesis | - |
+| 🌐 **Video Dubbing** *(basic)* | Transcribes, translates per sentence, re-voices with edge-tts (needs internet; Kokoro for English), ducks the original audio, writes translated `.srt` (`--dub_captions` burns it in). One voice for everyone, no lip-sync or voice cloning | `py main.py --mode DUB --source_video talk.mp4 --target_lang es` |
 | 🧮 **Manim Explainer** | Programmatic 2D/3D math, CS, and science animations | `py main.py --mode EXPLAINER --prompt "Gravity"` |
 | 💡 **AI Facts** | High-energy trivia & mystery facts with scene stock loops | `py main.py --mode FACTS --category "space"` |
 | 📖 **AI Story** | Narrative story voiceover with visual scene stitching | `py main.py --mode STORY --category "sci-fi"` |
@@ -321,7 +321,8 @@ py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --c
 # 3. Render Landscape 16:9 YouTube Video with SFX
 py main.py --mode EXPLAINER --prompt "Quantum physics" --aspect_ratio 16:9 --sfx_preset whoosh
 
-# 4. Translate and dub video: planned, not implemented yet (--mode DUB / --target_lang are ignored)
+# 4. Translate and dub a video (basic: one synthetic voice, no cloning; --language auto if the source is not English)
+py main.py --mode DUB --source_video talk.mp4 --target_lang es --dub_captions
 
 # 5. Process Batch Content Calendar Queue
 py main.py --batch_file "topics.txt" --mode FACTS --aspect_ratio 9:16 --use_remotion

@@ -25,7 +25,7 @@ python main.py --source_video "<youtube url or local file>" --extract_mode short
   --clip_count 3 --smart_crop --tighten --use_remotion --caption_style HORMOZI --skip-upload
 ```
 
-Useful flags: `--target_duration 30`, `--srt`, `--broll`, `--target_lang es` (dub), `--output_json result.json` (transcript, clips, scores, hooks).
+Useful flags: `--target_duration 30`, `--srt`, `--broll`, `--output_json result.json` (transcript, clips, scores, hooks).
 
 ## Generate a short from an idea
 
@@ -34,7 +34,7 @@ python main.py --mode FACTS --category "space mysteries" --vibe suspense --use_r
 python main.py --mode EXPLAINER --prompt "Explain how gravity works visually" --skip-upload
 ```
 
-Modes: FACTS, STORY, EXPLAINER, WYR, TOP_5, CHAT_STORY, HORROR, TRUE_CRIME, REDDIT, TRIVIA, QUOTE, RIDDLE, EMOJI_GUESS, NEWS, ARTICLE, UGC, AUTO. (DUB and PODCAST are planned, not implemented.)
+Modes: FACTS, STORY, EXPLAINER, WYR, TOP_5, CHAT_STORY, HORROR, TRUE_CRIME, REDDIT, TRIVIA, QUOTE, RIDDLE, EMOJI_GUESS, NEWS, ARTICLE, UGC, AUTO. DUB (`--mode DUB --source_video X --target_lang es`, basic: one synthetic voice, no cloning). PODCAST is planned, not implemented.
 
 ## Rules
 

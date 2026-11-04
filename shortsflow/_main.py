@@ -143,7 +143,8 @@ def parse_args():
     parser.add_argument("--tts_provider", choices=["auto", "elevenlabs", "voicestudio", "edgetts", "local", "kokoro"], default="auto", help="Specify Text-to-Speech synthesis provider.")
     parser.add_argument("--clone_voice", help="Path to custom audio sample file (.wav, .mp3) for zero-shot voice cloning.")
     parser.add_argument("--aspect_ratio", choices=["9:16", "16:9", "1:1", "4:5"], default="9:16", help="Select output video aspect ratio (default 9:16 vertical).")
-    parser.add_argument("--target_lang", help="Target language code for automatic video translation and dubbing (e.g. es, hi, de, fr, ja, pt).")
+    parser.add_argument("--target_lang", help="Target language for --mode DUB (translate and re-voice the video): es, hi, de, fr, ja, pt, zh, it, ru, ko, ar, en, tr, nl, pl, uk, id.")
+    parser.add_argument("--dub_captions", action="store_true", help="--mode DUB: burn the translated subtitles into the dubbed video (re-encodes; the .srt is always written).")
     parser.add_argument("--auto_ducking", action="store_true", help="Enable dynamic background music ducking during voice audio.")
     parser.add_argument("--sfx_preset", choices=["auto", "whoosh", "pop", "riser", "boom", "none"], default="auto", help="Select sound effects preset to overlay on visual transitions.")
     parser.add_argument("--enable_zoom", action="store_true", help="Apply smooth camera push-in zoom motion keyframing.")
@@ -160,13 +161,13 @@ def parse_args():
 
 args = parse_args()
 
-NOT_IMPLEMENTED_MODES = ("DUB", "PODCAST", "SPLIT_SCREEN")
+NOT_IMPLEMENTED_MODES = ("PODCAST", "SPLIT_SCREEN")
 if getattr(args, "mode", None) in NOT_IMPLEMENTED_MODES:
     print(f"[Error] Mode {args.mode} is listed but not implemented yet, so it would not do what its name says. "
           "Use clipping (--source_video ...) or one of the generate modes (FACTS, STORY, NEWS, ...).")
     sys.exit(2)
-if getattr(args, "target_lang", None):
-    print("[Warning] --target_lang is not implemented yet (video dubbing is planned); the option is ignored.")
+if getattr(args, "target_lang", None) and getattr(args, "mode", None) != "DUB":
+    print("[Warning] --target_lang only works with --mode DUB (translate and re-voice a video); the option is ignored here.")
 
 if getattr(args, "use_ollama", False):
     os.environ["FORCE_OLLAMA"] = "true"
@@ -234,6 +235,11 @@ if args.use_comfy or args.use_ai_audio:
 if getattr(args, "mode", None) == "MUSIC":
     from engine.modes.music import run as run_music
     run_music(args, target_bitrate, target_preset)
+
+# 🟢 Standalone DUB Mode (translate + re-voice a video)
+if getattr(args, "mode", None) == "DUB":
+    from engine.modes.dub import run as run_dub
+    run_dub(args, target_bitrate, target_preset)
 
 # 🟢 Standalone EXPLAINER Mode
 if getattr(args, "mode", None) == "EXPLAINER":
