@@ -206,7 +206,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     yield from _run(cmd)
 
 
-def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto", original="quiet"):
+def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto", original="music"):
     """Dub tab: translate a video's speech and re-voice it. Yields (status, log, video, srt)."""
     import time
     from shortsflow import onboarding
@@ -872,8 +872,8 @@ def build_ui():
                             d_voice = gr.Dropdown(web_args.DUB_VOICE_CHOICES, value="auto", label="Voice")
                             d_tts = gr.Dropdown(web_args.DUB_PROVIDER_CHOICES, value="auto", label="Voice engine",
                                                 info="Automatic uses Edge online; Kokoro runs on this PC but only speaks English.")
-                        d_original = gr.Dropdown(web_args.DUB_ORIGINAL_CHOICES, value="quiet", label="The video's own sound",
-                                                 info="There is no way to remove only the voice, so the original voice stays faintly audible unless you remove all the sound.")
+                        d_original = gr.Dropdown(web_args.DUB_ORIGINAL_CHOICES, value="music", label="The video's own sound",
+                                                 info="The first choice separates the voice from the music (needs 'pip install demucs'; about a minute per minute of video on the CPU) and removes only the voice. Without it the original is kept faintly.")
                         d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
                         d_btn = gr.Button("🌍 Dub my video", variant="primary")
                         d_stop = gr.Button("⏹ Stop", variant="stop")

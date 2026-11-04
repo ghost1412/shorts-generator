@@ -120,7 +120,7 @@ def _parse(response):
     return robust_json_parse(response)
 
 
-def translate_segments(segments, target_lang, llm=None, parse=None):
+def translate_segments(segments, target_lang, llm=None, parse=None, about=None):
     """Translate each segment keeping one-to-one timing. Returns (texts, failed_count).
     A segment the LLM did not return stays in the source language and counts as failed."""
     llm, parse = llm or _default_llm, parse or _parse
@@ -134,7 +134,10 @@ def translate_segments(segments, target_lang, llm=None, parse=None):
         prompt = (
             f"Translate each spoken line of this video into natural, spoken {lang_full} for dubbing.\n"
             "Keep the meaning and tone. Each translation must be short enough to be spoken in the same time, "
-            "so stay at or below max_chars when you can. Do not merge or split lines.\n\n"
+            "so stay at or below max_chars when you can. Do not merge or split lines.\n"
+            "The lines come from speech recognition, so a word can be misheard: when a line makes no sense, translate what was "
+            "most likely meant, and keep names as proper names.\n"
+            + (f"What the video is about (use it to fix misheard names and terms): {str(about).strip()[:400]}\n" if about else "") + "\n"
             f"Lines: {json.dumps(items, ensure_ascii=False)}\n\n"
             'Return raw JSON only: {"translations": [{"id": <id>, "text": "<translated line>"}]}'
         )
@@ -276,16 +279,17 @@ def synthesize(text, lang, out_path, provider="auto", voice=None):
         raise
 
 
-ORIGINAL_MODES = ("quiet", "duck", "mute")
+ORIGINAL_MODES = ("music", "quiet", "duck", "mute")
 QUIET_GAIN = 0.12            # about -18 dB: the original stays as a faint bed, the new voice is clearly in front
 
 
-def build_filter(placements, total, source_has_audio=True, original="quiet"):
+def build_filter(placements, total, source_has_audio=True, original="quiet", stem_index=None):
     """FFmpeg filter_complex text. placements: [{index(input no.), start, tempo, trim}] with inputs 1..n = dub clips.
 
     original: what happens to the video's own sound. "quiet" (default) keeps it at about -18 dB and lowers it further while the
     new voice speaks, "duck" only lowers it while the new voice speaks (the original stays at full volume elsewhere, so any part
-    that was not dubbed is heard in the original language), "mute" removes it completely."""
+    that was not dubbed is heard in the original language), "mute" removes it completely. "music" (needs `stem_index`, the input
+    number of the voice-free stem from engine.stem_split) keeps the music and effects at full volume with the original voice removed."""
     parts, labels = [], []
     for p in placements:
         chain = []
@@ -302,7 +306,10 @@ def build_filter(placements, total, source_has_audio=True, original="quiet"):
     mix = "".join(labels) + f"amix=inputs={n}:normalize=0:dropout_transition=0,apad=whole_dur={total:.3f}"
     if source_has_audio and original != "mute":
         parts.append(mix + ",asplit=2[dubmix][dubkey]")
-        parts.append("[0:a]aresample=44100" + (f",volume={QUIET_GAIN}" if original == "quiet" else "") + "[orig]")
+        if original == "music" and stem_index:
+            parts.append(f"[{stem_index}:a]aresample=44100,volume=0.9[orig]")
+        else:
+            parts.append("[0:a]aresample=44100" + (f",volume={QUIET_GAIN}" if original in ("quiet", "music") else "") + "[orig]")
         parts.append("[orig][dubkey]sidechaincompress=threshold=0.015:ratio=14:attack=15:release=500:makeup=1[ducked]")
         parts.append("[ducked][dubmix]amix=inputs=2:normalize=0:duration=first[aout]")
     else:
@@ -316,12 +323,18 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None, origin
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     total = media_duration(source_video) or (max(c["start"] for c in clips) + 5)
     placements = [dict(c, index=i) for i, c in enumerate(clips, 1)]
+    stem = None
+    if original == "music" and has_audio(source_video):
+        from engine.stem_split import split_vocals
+        stem = split_vocals(source_video, session_dir)         # None -> the faint-original fallback inside build_filter
     script = os.path.join(session_dir, "dub_filter.txt")
     with open(script, "w", encoding="utf-8") as f:
-        f.write(build_filter(placements, total, has_audio(source_video), original))
+        f.write(build_filter(placements, total, has_audio(source_video), original, stem_index=len(clips) + 1 if stem else None))
     cmd = [ffmpeg, "-y", "-i", os.path.abspath(source_video)]
     for c in clips:
         cmd += ["-i", os.path.abspath(c["path"])]
+    if stem:
+        cmd += ["-i", os.path.abspath(stem)]
     cmd += ["-filter_complex_script", os.path.abspath(script), "-map", "0:v:0", "-map", "[aout]"]
     if burn_srt:
         ass = os.path.splitext(burn_srt)[0] + ".ass"
@@ -342,7 +355,7 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None, origin
 
 
 def dub_video(source_video, target_lang, session_dir, output_path=None, language="en", provider="auto",
-              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None, original="quiet"):
+              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None, original="music", about=None):
     """Full pipeline. Returns {"video", "srt", "json", "segments", "failed_translations", "failed_voices"}.
     transcribe/llm/synth/mixer can be replaced (tests, custom backends)."""
     target = normalize_lang(target_lang)
@@ -366,7 +379,7 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
     if note:
         print(f"[Warning] {note}")
 
-    texts, failed_tr = translate_segments(segments, target, llm=llm)
+    texts, failed_tr = translate_segments(segments, target, llm=llm, about=about)
     if failed_tr == len(segments):
         raise RuntimeError("Translation failed for every segment (no LLM answered). Check your AI key / Ollama "
                            "(see `shortsflow doctor`); nothing was dubbed.")

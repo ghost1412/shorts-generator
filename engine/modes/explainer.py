@@ -68,7 +68,7 @@ def run(args, target_bitrate, target_preset):
                 "-vf", f"setpts={speed_factor}*PTS,tpad=stop_mode=clone:stop_duration=60",
                 "-c:v", "libx264",
                 "-c:a", "aac", "-b:a", "192k",
-                "-shortest", merged_path
+                "-t", f"{a_dur:.3f}", merged_path
             ]
             res = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
             if res.returncode == 0 and os.path.exists(merged_path):
