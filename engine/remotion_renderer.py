@@ -154,6 +154,7 @@ def render_with_remotion(
     aspect_ratio="9:16",
     hook_text=None,     # str: headline shown big for the first ~3 s (--hook_overlay)
     auto_zoom=False,    # bool: punch-in / slow push-in on the picture layer at emphasised words (--auto_zoom)
+    reel_style=None,    # dict: PHOTO_REEL look {flash, motion, grade, accent} from the reel type (engine/photo_reel_types.py)
 ):
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
@@ -388,6 +389,7 @@ def render_with_remotion(
             except Exception as e:
                 print(f"[Warning] Auto zoom skipped ({e}).")
         if extra_font: props["extraFont"] = extra_font
+        if reel_style and mode == "PHOTO_REEL": props["reelStyle"] = reel_style
         if remotion_tot: props["thisOrThat"] = remotion_tot
         if remotion_rank: props["rankIt"] = remotion_rank
         if remotion_cap: props["captionThis"] = remotion_cap

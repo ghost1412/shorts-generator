@@ -85,8 +85,25 @@ def run(args, target_bitrate, target_preset):
         sys.exit(1)
 
     photo_captions = None
+    plan = None
+    reel_type = getattr(args, "reel_type", None)
+    if reel_type:
+        # A reel TYPE decides which photos are used (blurry / duplicate ones are dropped), their order, how long each is held,
+        # the captions, the title and the look. Without a type the original behaviour below is unchanged.
+        from engine.photo_reel_types import parse_texts, plan_reel
+        try:
+            plan = plan_reel(photo_files, reel_type, target_duration=float(getattr(args, "target_duration", 30) or 30),
+                             name=getattr(args, "prompt", None), texts=parse_texts(getattr(args, "reel_text", None)))
+        except ValueError as e:
+            print(f"[Error] {e}")
+            sys.exit(2)
+        photo_files, photo_captions = plan["photos"], plan["captions"]
+        args.use_remotion = True       # captions, titles and the look are drawn by the animated renderer
+        print(f"[Log] 🎞️ Reel type '{plan['label']}': {len(photo_files)} photo(s) used"
+              + (f", {plan['dropped']} skipped (blurry, duplicate or unreadable)" if plan["dropped"] else "") + f"; title: {plan['title']!r}")
+
     # 🧠 Vision LLM Story Arc Analysis (if --smart_story flag is set)
-    if getattr(args, "smart_story", False):
+    if getattr(args, "smart_story", False) and not plan:
         from engine.script_gen import analyze_photo_story_with_vision
         vision_res = analyze_photo_story_with_vision(photo_files, user_prompt=getattr(args, "prompt", None))
         ordered_indices = vision_res.get("ordered_indices", [])
@@ -112,10 +129,19 @@ def run(args, target_bitrate, target_preset):
             print(f"[Log] No --music given: using {os.path.basename(music_path)} under the photos.")
 
     # Detect beats in input audio if provided (capped at target_duration)
-    beat_timestamps = detect_beats(music_path, target_count=len(photo_files), max_duration=target_dur) if music_path else None
+    # Music the user chose: cut to its beat. A reel type without their music uses its own timing (hero photos held longer).
+    beat_timestamps = detect_beats(music_path, target_count=len(photo_files), max_duration=target_dur)         if music_path and (not plan or getattr(args, "music", None)) else None
+    if plan and not (beat_timestamps and len(beat_timestamps) == len(photo_files)):
+        beat_timestamps = plan["starts"]
     print(f"[Log] 📸 Loaded {len(photo_files)} photos for PHOTO_REEL mode.")
-    if beat_timestamps:
+    if beat_timestamps and plan and beat_timestamps == plan["starts"]:
+        print(f"[Log] ⏱️ Timing from the reel type: {len(beat_timestamps)} photos over {target_dur}s (first and last held longer).")
+    elif beat_timestamps:
         print(f"[Log] 🎵 Beat detection completed: {len(beat_timestamps)} timestamps extracted over {target_dur}s.")
+
+    if plan and not getattr(args, "use_remotion", False):
+        print("[Log] Reel types need the animated renderer: turning on --use_remotion.")
+        args.use_remotion = True
 
     if getattr(args, "use_remotion", False):
         print("[Log] 🎬 Rendering Photo Reel using Remotion React engine...")
@@ -125,7 +151,8 @@ def run(args, target_bitrate, target_preset):
             output_path=out_video,
             mode="PHOTO_REEL",
             bg_music_path=music_path,
-            title_text=getattr(args, "prompt", None), # Only show title if --prompt is explicitly set
+            title_text=plan["title"] if plan else getattr(args, "prompt", None), # Only show title if --prompt is explicitly set
+            duration=plan["duration"] if plan else None, reel_style=plan["style"] if plan else None,
             background_paths=photo_files,
             beat_timestamps=beat_timestamps,
             captions=photo_captions,

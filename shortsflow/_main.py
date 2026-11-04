@@ -40,6 +40,8 @@ def parse_args():
     parser.add_argument("--scene", help="Scene or scenario prompt for FUNNY_EXPLAINER mode.")
     parser.add_argument("--photos_dir", help="Directory containing photos for PHOTO_REEL mode.")
     parser.add_argument("--music", help="Path to audio/music track for PHOTO_REEL or background music.")
+    parser.add_argument("--reel_type", choices=["memories", "travel", "product", "then_now", "countdown", "tribute"], help="PHOTO_REEL: give the reel a shape (order, timing, captions, title, look). Blurry and duplicate photos are skipped.")
+    parser.add_argument("--reel_text", action="append", help="PHOTO_REEL with --reel_type: your own caption for the next photo (repeat, or separate with |). --prompt is the title / name.")
     parser.add_argument("--smart_story", action="store_true", help="Use Multimodal Vision LLM to re-order photos into a narrative story arc and generate captions.")
     parser.add_argument("--prompt", help="Prompt for AI Music/Image generation.")
     parser.add_argument("--ckpt_name", default="stable_audio_3_medium_base.safetensors", help="Checkpoint name for ComfyUI audio model.")

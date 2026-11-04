@@ -183,6 +183,35 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
     yield "❌ No dubbed video was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
 
 
+def photo_reel(files, reel_type, name="", texts="", music=None, duration=24):
+    """Photo reel tab: photos in, a typed reel out. Yields (status, log, video)."""
+    import time
+    from shortsflow import onboarding
+    from engine.photo_reel_types import PHOTO_EXTS
+    photos = [f for f in (files or []) if str(getattr(f, "name", f)).lower().endswith(PHOTO_EXTS)]
+    if len(photos) < 3:
+        raise gr.Error("Add at least 3 photos (JPG, PNG or WebP).")
+    session = os.path.join(ROOT, "sessions", time.strftime("reel_%Y%m%d_%H%M%S"))
+    folder = web_args.stage_photos(photos, os.path.join(session, "photos"))
+    cmd = [*_pipeline_cmd(), *web_args.photo_reel_args(folder, reel_type, name, texts, music, duration, session)]
+    progress, seen = onboarding.Progress(start="📸 Looking at your photos...", steps=onboarding.PHOTO_STEPS), 0
+    status = progress.message
+    yield status, "", None
+    log = ""
+    for log, _videos in _run(cmd):
+        lines = log.splitlines()
+        for line in lines[seen:]:
+            status = progress.feed(line)
+        seen = len(lines)
+        yield status, log, None
+    video = web_args.find_photo_reel(session)
+    if video:
+        yield "✅ Done! Your reel is ready below.", log, video
+        return
+    reason = next((ln.split("]", 1)[1].strip() for ln in reversed(log.splitlines()) if ln.startswith("[Error]")), "")
+    yield "❌ No reel was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None
+
+
 def generate_short(mode, category, prompt, script, vibe, voice, caption_style, aspect_ratio,
                    use_remotion, llm_provider, tts_provider):
     cmd = [*_pipeline_cmd(), "--mode", mode, "--vibe", vibe]
@@ -671,6 +700,29 @@ def build_ui():
                 with gr.Accordion("Technical details", open=False):
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice], [d_status, d_log, d_video, d_srt])
+
+            with gr.Tab("📸 Photo reel"):
+                from engine.photo_reel_types import type_labels
+                gr.Markdown("### Make a reel from your photos\n"
+                            "Pick a type: it chooses the order, how long each photo stays, the captions, the title and the look. "
+                            "Blurry and duplicate photos are skipped. Works with no account or key.")
+                with gr.Row():
+                    with gr.Column():
+                        p_files = gr.File(label="Your photos (3 or more)", file_count="multiple", file_types=["image"], type="filepath")
+                        p_type = gr.Dropdown(type_labels(), value="memories", label="Reel type",
+                                             info="Travel recap and Memories follow the photo dates; Countdown and Product follow the order you add them.")
+                        p_name = gr.Textbox(label="Title or name (optional)", placeholder="Lisbon, Mia, the new bottle...")
+                        p_texts = gr.Textbox(label="Your own words for the photos (optional)", lines=3,
+                                             placeholder="One line per photo, in order. Leave empty for automatic captions.")
+                        p_music = gr.File(label="Music (optional, otherwise a built-in track)", file_types=["audio"], type="filepath")
+                        p_len = gr.Slider(10, 60, value=24, step=2, label="Length (seconds)")
+                        p_btn = gr.Button("📸 Make my reel", variant="primary")
+                    with gr.Column():
+                        p_status = gr.Markdown("Waiting for photos...")
+                        p_video = gr.Video(label="Your reel", interactive=False)
+                with gr.Accordion("Technical details", open=False):
+                    p_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
+                p_btn.click(photo_reel, [p_files, p_type, p_name, p_texts, p_music, p_len], [p_status, p_log, p_video])
 
             with gr.Tab("🪄 Generate from an idea"):
                 with gr.Row():

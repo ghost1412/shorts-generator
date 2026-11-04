@@ -190,3 +190,21 @@ def test_shared_or_network_webui_always_gets_a_login():
     assert web_args.resolve_auth("me:secret", True) == ("me", "secret")
     with pytest.raises(SystemExit):
         web_args.resolve_auth("nopassword", True)
+
+
+def test_photo_reel_command_and_staging(tmp_path):
+    from PIL import Image
+    from shortsflow import web_args
+    a, b = tmp_path / "b.jpg", tmp_path / "a.png"
+    Image.new("RGB", (8, 8)).save(a)
+    Image.new("RGB", (8, 8)).save(b)
+    (tmp_path / "notes.txt").write_text("x")
+    folder = web_args.stage_photos([str(a), str(b), str(tmp_path / "notes.txt")], str(tmp_path / "stage"))
+    assert sorted(os.listdir(folder)) == ["001_b.jpg", "002_a.png"]                      # order kept, non-images ignored
+    cmd = web_args.photo_reel_args(folder, "countdown", " Top places ", "best | good", "song.mp3", 30, "sessions/x")
+    assert cmd[:4] == ["--mode", "PHOTO_REEL", "--photos_dir", folder] and "--skip_upload" in cmd
+    assert cmd[cmd.index("--reel_type") + 1] == "countdown" and cmd[cmd.index("--prompt") + 1] == "Top places"
+    assert [cmd[i + 1] for i, c in enumerate(cmd) if c == "--reel_text"] == ["best", "good"]
+    assert cmd[cmd.index("--music") + 1] == "song.mp3" and cmd[cmd.index("--target_duration") + 1] == "30"
+    plain = web_args.photo_reel_args(folder, "memories")
+    assert "--prompt" not in plain and "--music" not in plain and "--reel_text" not in plain

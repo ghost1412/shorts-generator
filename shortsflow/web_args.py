@@ -85,3 +85,39 @@ def resolve_auth(auth, share, host="127.0.0.1"):
         import secrets
         return "shortsflow", secrets.token_urlsafe(9)
     return None
+
+
+def stage_photos(paths, folder):
+    """Copy uploaded photos into `folder`, keeping the order they were given (the reel types that use the given order read file
+    names). Returns the folder. Non-image files are ignored."""
+    import shutil
+    from engine.photo_reel_types import PHOTO_EXTS
+    os.makedirs(folder, exist_ok=True)
+    n = 0
+    for p in paths or []:
+        src = p if isinstance(p, str) else getattr(p, "name", "")
+        if src and src.lower().endswith(PHOTO_EXTS) and os.path.isfile(src):
+            n += 1
+            shutil.copy2(src, os.path.join(folder, f"{n:03d}_{os.path.basename(src)}"))
+    return folder
+
+
+def photo_reel_args(photos_dir, reel_type, name="", texts="", music=None, duration=24, session_dir=None):
+    """Command-line arguments for a typed photo reel."""
+    args = ["--mode", "PHOTO_REEL", "--photos_dir", photos_dir, "--reel_type", reel_type, "--target_duration", str(int(duration)),
+            "--skip_upload"]
+    if session_dir:
+        args += ["--session_dir", session_dir]
+    if (name or "").strip():
+        args += ["--prompt", name.strip()]
+    from engine.photo_reel_types import parse_texts
+    for line in parse_texts(texts):
+        args += ["--reel_text", line]
+    if music:
+        args += ["--music", music]
+    return args
+
+
+def find_photo_reel(session_dir):
+    path = os.path.join(session_dir, "photo_reel.mp4")
+    return path if os.path.isfile(path) else None

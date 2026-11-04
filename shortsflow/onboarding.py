@@ -20,6 +20,12 @@ DUB_STEPS = [
     (r"Dubbing \d+ spoken segment", "🌍 Translating, recording the new voice and mixing it in..."),
     (r"\[Success\] Dubbed video ready", "✅ Done! Your dubbed video is ready below."),
 ]
+# Photo reel tab
+PHOTO_STEPS = [
+    (r"Reel type", "🧐 Choosing the best photos and planning the reel..."),
+    (r"Rendering Photo Reel using Remotion", "🎬 Building your reel (about a minute)..."),
+    (r"\[Success\].*Photo Reel rendered", "✅ Done! Your reel is ready below."),
+]
 _WARN_WORDS = ("credits", "rejected the API key", "rate limiting", "Could not reach")
 
 

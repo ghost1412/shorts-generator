@@ -68,6 +68,16 @@ export const backgroundSchema = z.object({
   clipDuration: z.number().optional(), // seconds; used to loop clips shorter than their slot
 });
 
+// PHOTO_REEL look, set by the reel type (engine/photo_reel_types.py): flash = strength of the cut flash, motion = Ken Burns strength,
+// grade = a CSS filter for the photos, accent = colour of the caption sticker.
+export const reelStyleSchema = z.object({
+  flash: z.number().default(1),
+  motion: z.number().default(1),
+  grade: z.string().default(""),
+  accent: z.string().default("#00ffff"),
+  captionScale: z.number().default(1), // size of the caption sticker (countdown numbers and THEN / NOW are drawn bigger)
+});
+
 export const thisOrThatSchema = z.object({
   optionA: z.string(),
   optionB: z.string(),
@@ -145,6 +155,7 @@ export const shortFlowSchema = z.object({
   captionEmoji: z.boolean().default(false), // keyword emoji, drawn from bundled Twemoji PNGs (public/emoji): no system font needed
   hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
   hookSeconds: z.number().default(2.8),
+  reelStyle: reelStyleSchema.optional(), // PHOTO_REEL type look (flash / motion / colour grade / accent)
   zoomMoments: z.array(z.object({ start: z.number(), end: z.number(), scale: z.number(), rise: z.number() })).optional(), // --auto_zoom: picture-layer punch-ins (captions never zoom)
   extraFont: z.object({ family: z.string(), url: z.string() }).optional(), // per-render CJK subset font (static file path)
   avatarUrl: z.string().optional(),
@@ -782,8 +793,15 @@ const PhotoReelSegment: React.FC<{
   durationInFrames: number;
   segmentIndex: number;
   isFirst: boolean;
-}> = ({ bg, fps, durationInFrames, segmentIndex, isFirst }) => {
+  reelStyle?: z.infer<typeof reelStyleSchema>;
+}> = ({ bg, fps, durationInFrames, segmentIndex, isFirst, reelStyle }) => {
   const frame = useCurrentFrame();
+  const flashK = reelStyle?.flash ?? 1;
+  const motionK = reelStyle?.motion ?? 1;
+  const grade = reelStyle?.grade || undefined;
+  const accent = reelStyle?.accent ?? "#00ffff";
+  // a big sticker must still fit the 1080 px canvas: long captions are scaled down to ~980 px wide
+  const captionScale = Math.max(1, Math.min(reelStyle?.captionScale ?? 1, 980 / Math.max(1, (bg.caption?.length ?? 0) * 24 + 72)));
 
   // 1. Spring physics entrance bounce
   const spr = spring({
@@ -804,24 +822,24 @@ const PhotoReelSegment: React.FC<{
 
   if (modeIndex === 0) {
     // Zoom In
-    const zoom = interpolate(frame, [0, durationInFrames], [1.0, 1.15], { extrapolateRight: "clamp" });
+    const zoom = 1 + (interpolate(frame, [0, durationInFrames], [1.0, 1.15], { extrapolateRight: "clamp" }) - 1) * motionK;
     transformStr = `scale(${zoom * entryScale})`;
   } else if (modeIndex === 1) {
     // Zoom Out
-    const zoom = interpolate(frame, [0, durationInFrames], [1.18, 1.02], { extrapolateRight: "clamp" });
+    const zoom = 1 + (interpolate(frame, [0, durationInFrames], [1.18, 1.02], { extrapolateRight: "clamp" }) - 1) * motionK;
     transformStr = `scale(${zoom * entryScale})`;
   } else if (modeIndex === 2) {
     // Pan Right + Scale
-    const panX = interpolate(frame, [0, durationInFrames], [-4, 4], { extrapolateRight: "clamp" });
-    transformStr = `scale(${1.08 * entryScale}) translateX(${panX}%)`;
+    const panX = interpolate(frame, [0, durationInFrames], [-4, 4], { extrapolateRight: "clamp" }) * motionK;
+    transformStr = `scale(${(1 + 0.08 * motionK) * entryScale}) translateX(${panX}%)`;
   } else {
     // Pan Left + Scale
-    const panX = interpolate(frame, [0, durationInFrames], [4, -4], { extrapolateRight: "clamp" });
-    transformStr = `scale(${1.08 * entryScale}) translateX(${panX}%)`;
+    const panX = interpolate(frame, [0, durationInFrames], [4, -4], { extrapolateRight: "clamp" }) * motionK;
+    transformStr = `scale(${(1 + 0.08 * motionK) * entryScale}) translateX(${panX}%)`;
   }
 
   // 3. Flash / Light-Leak Cut Effect (3-frame white burst at start of segment)
-  const flashOpacity = interpolate(
+  const flashOpacity = flashK * interpolate(
     frame,
     [0, 2, 6],
     [0.9, 0.4, 0],
@@ -897,6 +915,7 @@ const PhotoReelSegment: React.FC<{
               width: "100%",
               height: "100%",
               objectFit: "cover",
+              filter: grade,
             }}
           />
         </div>
@@ -934,6 +953,7 @@ const PhotoReelSegment: React.FC<{
                 borderRadius: "28px",
                 boxShadow: "0 30px 80px rgba(0, 0, 0, 0.85), 0 0 40px rgba(255, 0, 127, 0.2)",
                 border: "3px solid rgba(255, 255, 255, 0.3)",
+                filter: grade,
               }}
             />
           </div>
@@ -968,7 +988,8 @@ const PhotoReelSegment: React.FC<{
             display: "flex",
             justifyContent: "center",
             zIndex: 20,
-            transform: `scale(${stickerScale})`,
+            transform: `scale(${stickerScale * captionScale})`,
+            transformOrigin: "center bottom",
             opacity: stickerOpacity,
           }}
         >
@@ -976,10 +997,10 @@ const PhotoReelSegment: React.FC<{
             style={{
               background: "rgba(15, 23, 42, 0.85)",
               backdropFilter: "blur(16px)",
-              border: "2px solid rgba(255, 255, 255, 0.3)",
+              border: `2px solid ${accent}88`,
               borderRadius: "50px",
               padding: "16px 36px",
-              boxShadow: "0 15px 35px rgba(0,0,0,0.6), 0 0 25px rgba(0,255,255,0.3)",
+              boxShadow: `0 15px 35px rgba(0,0,0,0.6), 0 0 25px ${accent}66`,
               display: "flex",
               alignItems: "center",
               gap: "10px",
@@ -1199,6 +1220,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   hookText,
   hookSeconds = 2.8,
   zoomMoments,
+  reelStyle,
   extraFont,
   avatarUrl,
   avatarAspect,
@@ -1515,6 +1537,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   durationInFrames={durationInFrames}
                   segmentIndex={idx}
                   isFirst={idx === 0}
+                  reelStyle={reelStyle}
                 />
               </Sequence>
             );

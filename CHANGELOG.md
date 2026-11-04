@@ -4,6 +4,9 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+### New
+- **Photo reels with a type**: `--mode PHOTO_REEL --reel_type memories|travel|product|then_now|countdown|tribute` (and a new Photo reel tab in the browser app). The type decides the order (photo dates for memories/travel), how long each photo stays (first and last held longer), the captions (Day 1 / Day 2, #5 ... #1, THEN / NOW, your own lines), the title, the closing line and the look (flash, motion, colour grade). Blurry and near-duplicate photos are skipped automatically. `--prompt` is the title or name, `--reel_text` adds your own words per photo; without `--music` a built-in track plays. A reel without `--reel_type` renders exactly as before.
+
 ## 0.4.1 (2026-11-04)
 
 ### New
