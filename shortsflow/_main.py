@@ -111,7 +111,7 @@ def parse_args():
     # 🟢 Gap Closure Flags
     parser.add_argument("--srt", action="store_true", help="Export SRT subtitle file alongside each video.")
     parser.add_argument("--use_chapters", action="store_true", help="Boost scores for segments overlapping YouTube chapters.")
-    parser.add_argument("--broll", action="store_true", help="Automatically download and insert B-roll cutaways during silences.")
+    parser.add_argument("--broll", action="store_true", help="Auto B-roll: short stock cutaways (about 2 s) over the upper part of the frame when a concrete noun is spoken. Needs PEXELS_API_KEY or clips in assets/backgrounds/local; skipped otherwise.")
     parser.add_argument("--preview", action="store_true", help="Render a low-res 3fps proxy video for quick preview.")
     
     # Cartoon/Persona Flags

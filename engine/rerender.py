@@ -128,6 +128,18 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         if not files or not os.path.exists(files[0]):
             raise RuntimeError("The re-render produced no video.")
         new_clip = files[0]
+        if settings.get("broll"):                    # --broll: the cutaways go back on (timing from the same retimed words as the captions)
+            from engine.broll import apply_to_clip, clip_words
+            try:
+                with open(os.path.join(session_dir, "transcript.json"), "r", encoding="utf-8") as f_t:
+                    broll_words = clip_words(json.load(f_t), start, end, silence, tighten_mode=tighten_mode,
+                                             remove_fillers=bool(extra.get("remove_fillers")))
+                if broll_words is not None:
+                    apply_to_clip(new_clip, broll_words, layout=settings.get("layout", "single"),
+                                  caption_y=settings.get("subtitle_y_pos", 1150) if settings.get("use_remotion") else 1150,
+                                  hook_overlay=hook_on)
+            except (OSError, ValueError) as e:
+                print(f"[Warning] B-roll skipped on re-render: {e}")
         if settings.get("clean_audio"):              # --clean_audio: a re-render must not fall back to the raw sound
             from engine.audio_clean import clean_audio
             clean_audio(new_clip)

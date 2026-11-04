@@ -9,12 +9,14 @@ FALLBACK_DUB_LANGUAGES = {
 }
 
 
-def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_remotion=True):
+def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_remotion=True, broll=False):
     """Flags for the optional extras. The hook title and caption emoji are drawn by Remotion, so they are
     left out when animated captions are off (the pipeline would ignore them anyway)."""
     args = []
     if clean_audio:
         args.append("--clean_audio")
+    if broll:
+        args.append("--broll")
     if use_remotion:
         if hook_overlay:
             args.append("--hook_overlay")

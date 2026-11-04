@@ -203,55 +203,7 @@ def generate_ffmpeg_dynamic_zoom_filter(duration=30.0, zoom_factor=1.12):
     filter_str = f"zoompan=z='{zoom_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30"
     return filter_str
 
-def insert_broll_cutaways(clip, silence_intervals, broll_dir, fps=30):
-    """
-    Inserts B-roll video over long silence gaps to maintain visual engagement.
-    Replaces the video track but keeps the original audio.
-    """
-    if not os.path.exists(broll_dir) or not silence_intervals: return clip
-    brolls = [os.path.join(broll_dir, f) for f in os.listdir(broll_dir) if f.endswith('.mp4')]
-    if not brolls: return clip
-    
-    import random
-    from moviepy import CompositeVideoClip, VideoFileClip
-    
-    final_clips = [clip]
-    broll_idx = 0
-    
-    for start, end in silence_intervals:
-        gap = end - start
-        if gap > 1.5:  # Only insert broll for gaps > 1.5s
-            try:
-                b_path = brolls[broll_idx % len(brolls)]
-                broll_idx += 1
-                b_clip = VideoFileClip(b_path)
-                
-                # Trim and loop broll if needed
-                if b_clip.duration < gap:
-                    from moviepy import vfx
-                    b_clip = b_clip.fx(vfx.loop, duration=gap)
-                else:
-                    b_clip = b_clip.subclip(0, gap)
-                    
-                # Resize and crop to match main clip
-                b_clip = b_clip.resize(height=clip.h)
-                if b_clip.w != clip.w:
-                    b_clip = b_clip.crop(x_center=b_clip.w/2, width=clip.w)
-                
-                # Position over time
-                b_clip = b_clip.with_start(start).with_position(("center", "center"))
-                # Add crossfade
-                b_clip = b_clip.crossfadein(0.15).crossfadeout(0.15)
-                
-                final_clips.append(b_clip)
-            except Exception as e:
-                print(f"[Warning] Failed to insert B-roll {b_path}: {e}")
-                
-    if len(final_clips) > 1:
-        print(f"[Log] Inserted {len(final_clips)-1} B-roll cutaways for visual retention.")
-        return CompositeVideoClip(final_clips, size=clip.size)
-        
-    return clip
+# insert_broll_cutaways was retired: B-roll is now an FFmpeg overlay on the finished clip (engine/broll.py, --broll).
 
 def tighten_clip(clip, keep_intervals, mode="cut", speed=None, padding=0.08, min_gap=0.25):
     """
@@ -2924,8 +2876,6 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                     # Filler words are short (~0.3 s): the default 80 ms padding / 250 ms gap merge would stitch them back in
                     fine = {"padding": 0.02, "min_gap": 0.06} if remove_fillers else {}
                     sub = tighten_clip(sub, local_silence, mode=tighten_mode, speed=5.0 if tighten_mode=="speed" else None, **fine)
-                    # 🟢 NEW: Insert B-roll over silences for visual retention
-                    sub = insert_broll_cutaways(sub, local_silence, broll_dir="assets/broll")
             
             sub = sub.with_position("center")
             loop_clips.append(sub)

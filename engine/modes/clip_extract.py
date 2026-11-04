@@ -69,11 +69,6 @@ def run(args, target_bitrate, target_preset):
     # 🟢 Print the beautiful new score table
     print_clip_score_table(highlights)
     
-    # 🟢 Download B-roll if requested
-    if args.broll:
-        from engine.media_gen import download_broll_clips
-        download_broll_clips()
-        
     # 🟢 Handle Preview Mode
     if args.preview:
         print("\n[Log] 🔍 PREVIEW MODE ENABLED: Rendering fast 3fps proxy instead of full extraction...")
@@ -150,6 +145,35 @@ def run(args, target_bitrate, target_preset):
         reel_captions=getattr(args, 'reel_captions', False)
     )
     
+    # Auto B-roll: stock cutaways on spoken nouns, overlaid on the finished vertical clips (engine/broll.py)
+    if getattr(args, "broll", False) and extracted_files:
+        if args.extract_mode == "long" or getattr(args, "mashup", False):
+            print("[Log] B-roll applies to short vertical clips; skipped for the highlights video.")
+        else:
+            from engine.broll import clip_words, apply_to_clip
+            words_source = os.path.join(session_dir, "transcript.json")  # original language: the keyword list is English
+            if not os.path.exists(words_source):
+                words_source = transcript_path
+            try:
+                with open(words_source, 'r', encoding='utf-8') as f:
+                    broll_transcript = json.load(f)
+            except (OSError, ValueError):
+                broll_transcript = {}
+            hook_on = bool(getattr(args, "hook_overlay", False) and args.use_remotion)
+            caption_y = args.subtitle_y_pos if args.use_remotion else 1150
+            placed = 0
+            for i, clip_file in enumerate(extracted_files):
+                if i >= len(highlights):
+                    break
+                words = clip_words(broll_transcript, highlights[i]['start'], highlights[i]['end'], final_silence,
+                                   tighten_mode=args.tighten_mode, remove_fillers=getattr(args, "remove_fillers", False))
+                if words is None:
+                    print("[Warning] B-roll timing needs --tighten_mode cut when tightening; skipped.")
+                    break
+                placed += apply_to_clip(clip_file, words, layout=getattr(args, "layout", "single"),
+                                        caption_y=caption_y, hook_overlay=hook_on)
+            print(f"[Log] B-roll: {placed} cutaway(s) added across {len(extracted_files)} clip(s).")
+
     # Audio clean-up (noise reduction + loudness normalisation); runs on the finished clips of every render path
     if getattr(args, "clean_audio", False) and extracted_files:
         from engine.audio_clean import clean_clips
@@ -407,6 +431,7 @@ def run(args, target_bitrate, target_preset):
                 "subtitle_y_pos": args.subtitle_y_pos, "brand": getattr(args, "brand", None),
                 "caption_lang": getattr(args, "caption_lang", None),
                 "clean_audio": bool(getattr(args, "clean_audio", False)), "hook_overlay": bool(getattr(args, "hook_overlay", False)),
+                "broll": bool(getattr(args, "broll", False)),
             },
             "clips": []
         }
