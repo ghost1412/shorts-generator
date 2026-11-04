@@ -210,7 +210,7 @@ def write_itinerary(trip_name, note, days, ask=None, stops=None):
     if ask is None:
         try:
             from engine.script_gen import get_llm_response
-            ask = lambda p: get_llm_response(p, "You write short, honest travel captions. Reply with raw JSON only.", max_tokens=1200)  # noqa: E731
+            ask = lambda p: get_llm_response(p, "You write short, honest travel captions. Reply with raw JSON only.", max_tokens=4000)  # noqa: E731
         except Exception:
             return fb
     try:
