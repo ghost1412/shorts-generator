@@ -403,28 +403,96 @@ def cinematic_layers(path_base, title, line="", small="", look=None, index=0):
         img.save(out)
         return out
 
-    def title_fn(d):
-        if stacked:
-            f, y = font(120), cy - int(120 * u) * (len(title.split()) - 1) // 2
-            for wd in title.upper().split():
-                d.text((cx, y), wd, font=f, fill=ink, anchor=anchor, stroke_width=2, stroke_fill=shadow)
-                y += int(125 * u)
-        else:
-            d.text((cx, cy), spaced(title), font=font(86), fill=ink, anchor=anchor, stroke_width=2, stroke_fill=shadow)
+    max_w = (W - cx - int(W * 0.06)) if left else int(W * 0.86)         # text never leaves the frame
+    meter = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
 
-    rows = len(title.split()) if stacked else 1
-    below = cy + (int(125 * u) * rows) // 2 + int(30 * u) if stacked else cy + int(90 * u)
+    def fit(text, size, min_size, max_lines=1):
+        """(lines, font, line height): wide-spaced on one line if it fits, else plain capitals wrapped and shrunk until every line fits."""
+        for sz in range(size, min_size - 1, -4):
+            f = font(sz)
+            if meter.textlength(spaced(text), font=f) <= max_w:
+                return [spaced(text)], f, int(sz * 1.15 * u)
+        plain = str(text).upper()
+        for sz in range(size, 23, -4):
+            f = font(sz)
+            lines = _wrap(meter, plain, f, max_w)
+            if len(lines) <= max(max_lines, 2) and all(meter.textlength(ln, font=f) <= max_w for ln in lines):
+                return lines, f, int(sz * 1.15 * u)
+        f = font(24)
+        return _wrap(meter, plain, f, max_w), f, int(28 * u)
+
+    if stacked:
+        size = 120
+        while size > 48 and max(meter.textlength(w.upper(), font=font(size)) for w in words) > max_w:
+            size -= 6
+        t_lines, t_font, t_lh = [w.upper() for w in words], font(size), int(size * 1.05 * u)
+    else:
+        t_lines, t_font, t_lh = fit(title, 86, 52, max_lines=3)
+    block = t_lh * len(t_lines)
+
+    def title_fn(d):
+        y = cy - block // 2 + t_lh // 2
+        for ln in t_lines:
+            d.text((cx, y), ln, font=t_font, fill=ink, anchor=anchor, stroke_width=2, stroke_fill=shadow)
+            y += t_lh
+
+    below = cy + block // 2 + int(30 * u)
     layers = []
     if small:
-        layers.append((layer(lambda d: d.text((cx, cy - int(130 * u)), spaced(small), font=font(34), fill=ink, anchor=anchor), "a"), 0.3))
+        s_lines, s_font, s_lh = fit(small, 34, 24)
+
+        def credit(d):
+            y = cy - block // 2 - int(40 * u) - s_lh * (len(s_lines) - 1)
+            for ln in s_lines:
+                d.text((cx, y), ln, font=s_font, fill=ink, anchor=anchor)
+                y += s_lh
+        layers.append((layer(credit, "a"), 0.3))
     layers.append((layer(title_fn, "b"), 0.9))
     if line:
+        l_lines, l_font, l_lh = fit(line, 40, 28)
+
         def sub(d):
             x0, x1 = (cx, cx + int(120 * u)) if left else (cx - int(60 * u), cx + int(60 * u))
             d.line([(x0, below), (x1, below)], fill=accent, width=max(2, int(3 * u)))
-            d.text((cx, below + int(60 * u)), spaced(line), font=font(40), fill=accent, anchor=anchor)
+            y = below + int(50 * u)
+            for ln in l_lines:
+                d.text((cx, y), ln, font=l_font, fill=accent, anchor=anchor)
+                y += l_lh
         layers.append((layer(sub, "c"), 1.7))
     return layers
+
+
+def beat_grid(music):
+    """(beat seconds, time of the first beat) of the music, or None when no steady tempo is found."""
+    try:
+        from engine.beat_sync import detect_beats
+        beats = detect_beats(music, max_duration=90, min_interval=0.3, max_interval=1.5)
+        gaps = sorted(b - a for a, b in zip(beats, beats[1:]) if 0.25 < b - a < 1.6)
+        if len(gaps) < 6:
+            return None
+        return gaps[len(gaps) // 2], float(beats[0])
+    except Exception:
+        return None
+
+
+def on_beat(seconds, beat, bars=1):
+    """`seconds` rounded to a whole number of `bars` beats (at least one)."""
+    unit = beat * bars
+    return max(1, round(seconds / unit)) * unit
+
+
+def filter_orientation(all_infos, mode, minimum=3):
+    """Keeps only landscape or only portrait videos (as shown, rotation included). Returns (infos, note); with fewer than `minimum`
+    left it keeps everything (they are then shown blurred-fit) and says so."""
+    if mode not in ("landscape", "portrait"):
+        return all_infos, ""
+    keep = (lambda w, h: w >= h) if mode == "landscape" else (lambda w, h: h > w)
+    kept = [[i for i in infos if keep(i[2], i[3])] for infos in all_infos]
+    kept = [k for k in kept if k]
+    n = sum(len(k) for k in kept)
+    if n < minimum:
+        return all_infos, f"only {n} {mode} video(s), so all videos are used"
+    return kept, f"{n} {mode} of {sum(len(i) for i in all_infos)} videos"
 
 
 def beat_length(music, length, bars=2):
@@ -475,10 +543,24 @@ def caption_png(path, text, y_frac=0.74, size=78, lower=False):
     from PIL import Image, ImageDraw
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    if lower:       # small, spaced, bottom-left lower third with a thin rule
-        f = _font(46, text)
-        d.line([(70, int(H * 0.86) - 40), (190, int(H * 0.86) - 40)], fill=(200, 170, 120, 255), width=3)
-        d.text((70, int(H * 0.86)), spaced(text), font=f, fill=(245, 240, 230, 255), anchor="lm", stroke_width=2, stroke_fill=(0, 0, 0, 160))
+    if lower:       # small, spaced, bottom-left lower third with a thin rule; wraps and shrinks to stay inside the frame
+        u = min(W, H) / 1080.0
+        left_x, max_w = int(70 * u), W - int(70 * u) - int(W * 0.06)
+        label, f = spaced(text), None
+        for sz in (46, 42, 38, 34):
+            f = _font(int(sz * u), text)
+            if d.textlength(label, font=f) <= max_w:
+                lines = [label]
+                break
+        else:
+            label = str(text).upper()
+            f = _font(int(40 * u), text)
+            lines = _wrap(d, label, f, max_w)[:3]
+        lh = int(54 * u)
+        y0 = int(H * 0.86) - lh * (len(lines) - 1)
+        d.line([(left_x, y0 - int(40 * u)), (left_x + int(120 * u), y0 - int(40 * u))], fill=(200, 170, 120, 255), width=max(2, int(3 * u)))
+        for i, ln in enumerate(lines):
+            d.text((left_x, y0 + i * lh), ln, font=f, fill=(245, 240, 230, 255), anchor="lm", stroke_width=2, stroke_fill=(0, 0, 0, 160))
         img.save(path)
         return path
     f = _font(size, text)
@@ -493,11 +575,25 @@ def caption_png(path, text, y_frac=0.74, size=78, lower=False):
 
 
 def video_info(path, ffprobe="ffprobe"):
-    r = subprocess.run([ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:format=duration",
+    """(seconds, width, height) as the video is SHOWN: phones store a vertical clip as 1920x1080 with a 90/270 degree rotation flag."""
+    r = subprocess.run([ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries",
+                        "stream=width,height:stream_tags=rotate:stream_side_data=rotation:format=duration",
                         "-of", "json", path], capture_output=True, text=True)
     data = json.loads(r.stdout or "{}")
     st = (data.get("streams") or [{}])[0]
-    return float(data.get("format", {}).get("duration") or 0), int(st.get("width") or 0), int(st.get("height") or 0)
+    w, h = int(st.get("width") or 0), int(st.get("height") or 0)
+    rot = 0
+    try:
+        for sd in st.get("side_data_list") or []:
+            if "rotation" in sd:
+                rot = int(float(sd["rotation"]))
+        if not rot:
+            rot = int(float((st.get("tags") or {}).get("rotate") or 0))
+    except (TypeError, ValueError):
+        rot = 0
+    if abs(rot) % 180 == 90:
+        w, h = h, w
+    return float(data.get("format", {}).get("duration") or 0), w, h
 
 
 def has_audio(path, ffprobe="ffprobe"):
@@ -506,12 +602,17 @@ def has_audio(path, ffprobe="ffprobe"):
     return bool(r.stdout.strip())
 
 
-ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "160k"]
+QUALITY = {"crf": "21", "preset": "veryfast"}      # the cinematic style renders at crf 17 / preset fast
+
+
+def _enc():
+    return ["-c:v", "libx264", "-preset", QUALITY["preset"], "-crf", QUALITY["crf"], "-pix_fmt", "yuv420p", "-r", "30",
+            "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k"]
 
 
 def render_card(ffmpeg, png, out, seconds=CARD_SECONDS):
     cmd = [ffmpeg, "-y", "-loglevel", "error", "-loop", "1", "-t", f"{seconds}", "-i", png, "-f", "lavfi", "-t", f"{seconds}",
-           "-i", "anullsrc=r=44100:cl=stereo", "-vf", "fade=t=in:st=0:d=0.3,fade=t=out:st=%.2f:d=0.3" % (seconds - 0.3), *ENC, "-shortest", out]
+           "-i", "anullsrc=r=44100:cl=stereo", "-vf", "fade=t=in:st=0:d=0.3,fade=t=out:st=%.2f:d=0.3" % (seconds - 0.3), *_enc(), "-shortest", out]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError("Could not make a title card: " + (r.stderr or "")[-300:])
@@ -521,10 +622,10 @@ def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="aut
     w, h = size or (0, 0)
     portrait = h > w > 0
     if layout == "crop" or (layout == "auto" and portrait == (H > W)):
-        base = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1"
+        base = f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H},setsar=1"
     else:
         base = (f"split[a][b];[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=24:2[bg];"
-                f"[b]scale={W}:{H}:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
+                f"[b]scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
     fade = (f",{grade}" if grade else "") + f",fade=t=in:st=0:d={fade_s}:color=black,fade=t=out:st={seconds - fade_s:.2f}:d={fade_s}:color=black"
     cmd = [ffmpeg, "-y", "-loglevel", "error", "-ss", f"{start:.2f}", "-t", f"{seconds:.2f}", "-i", src]
     if layers:
@@ -544,18 +645,20 @@ def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="aut
     else:
         n = 0
         vf = f"[0:v]{base}{fade}[vout]"
+    if not audio:       # the silent track is an INPUT: it has to come before any output option such as -map
+        cmd += ["-f", "lavfi", "-t", f"{seconds:.2f}", "-i", "anullsrc=r=44100:cl=stereo"]
     cmd += ["-filter_complex", vf, "-map", "[vout]"]
     if audio:
         cmd += ["-map", "0:a:0", "-af", f"afade=t=in:st=0:d={fade_s},afade=t=out:st={seconds - fade_s:.2f}:d={fade_s},aresample=44100"]
     else:
-        cmd += ["-f", "lavfi", "-t", f"{seconds:.2f}", "-i", "anullsrc=r=44100:cl=stereo", "-map", f"{n + 1}:a"]
-    cmd += [*ENC, "-t", f"{seconds:.2f}", out]
+        cmd += ["-map", f"{n + 1}:a"]
+    cmd += [*_enc(), "-t", f"{seconds:.2f}", out]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not os.path.isfile(out):
         raise RuntimeError("Could not cut a clip: " + (r.stderr or "")[-400:])
 
 
-def concat(ffmpeg, parts, out, session_dir, music=None, music_gain=0.25):
+def concat(ffmpeg, parts, out, session_dir, music=None, music_gain=0.25, music_start=0.0, music_only=False):
     lst = os.path.join(session_dir, "recap_parts.txt")
     with open(lst, "w", encoding="utf-8") as f:
         for p in parts:
@@ -566,8 +669,14 @@ def concat(ffmpeg, parts, out, session_dir, music=None, music_gain=0.25):
     if r.returncode != 0:
         raise RuntimeError("Could not join the recap: " + (r.stderr or "")[-300:])
     if music:
-        r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", joined, "-stream_loop", "-1", "-i", music,
-                            "-filter_complex", f"[1:a]volume={music_gain}[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]",
+        total = video_info(joined)[0] or 0.0
+        fades = f"afade=t=in:st=0:d=0.6,afade=t=out:st={max(0.0, total - 2.5):.2f}:d=2.5"
+        if music_only:      # the clips' own sound is dropped: one unbroken song, faded in and out
+            graph = f"[1:a]volume={music_gain},{fades}[a]"
+        else:
+            graph = f"[1:a]volume={music_gain},{fades}[m];[0:a][m]amix=inputs=2:duration=first:normalize=0[a]"
+        r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", joined, "-stream_loop", "-1", "-ss", f"{max(0.0, music_start):.3f}", "-i", music,
+                            "-filter_complex", graph,
                             "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", out],
                            capture_output=True, text=True)
         if r.returncode != 0:
@@ -659,7 +768,7 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any"):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1."""
     global W, H
@@ -672,13 +781,17 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
     if key not in ASPECTS:
         raise ValueError(f"Unknown aspect {key!r}. Choose one of: {', '.join(ASPECTS)}")
     W, H = ASPECTS[key]
+    old_quality = dict(QUALITY)
+    if style == "cinematic":
+        QUALITY.update(crf="17", preset="fast")
     try:
-        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops)
+        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation)
     finally:
         W, H = old
+        QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any"):
     videos = collect_videos(list(paths))
     days_paths = group_days(videos)
     if not days_paths:
@@ -708,15 +821,24 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             all_infos.append(infos)
     if not all_infos:
         raise ValueError("None of the videos could be read.")
+    all_infos, note_o = filter_orientation(all_infos, orientation)
+    if note_o:
+        print(f"[Log] {orientation.capitalize()} version: {note_o}.")
     if cine:
         grade = pick_grade(ffmpeg, [i[0] for infos in all_infos for i in infos])
         print(f"[Log] Colour grade: {'warm' if grade == CINEMATIC_GRADE else 'cool'} (from the footage).")
     counts, clip_len = plan_days([len(i) for i in all_infos], max(float(total_seconds) - opening, len(all_infos) * 6.0))
+    glimpse_s, title_s, first_min, music_start = GLIMPSE_SECONDS, 3.4, 3.2, 0.0
+    mute_orig = bool(cine and music)        # the song carries the edit: the clips' own sound would break it at every cut
     if cine and music:
-        snapped = beat_length(music, clip_len)
-        if snapped != clip_len:
-            print(f"[Log] Cuts follow the music: moments {clip_len:.2f}s -> {snapped:.2f}s (whole beats).")
-            clip_len = snapped
+        grid = beat_grid(music)
+        if grid:
+            beat, music_start = grid
+            snapped = on_beat(clip_len, beat, 2)
+            if 0.6 * clip_len <= snapped <= 1.5 * clip_len:
+                clip_len = snapped
+            glimpse_s, title_s, first_min = on_beat(GLIMPSE_SECONDS, beat), on_beat(3.4, beat), on_beat(3.2, beat)
+            print(f"[Log] Cuts follow the music: beat {beat:.3f}s, every shot is a whole number of beats; the song starts on its first beat.")
     print(f"[Log] Trip recap: {len(all_infos)} day(s), {sum(len(i) for i in all_infos)} video(s); moments per day: {counts} of {clip_len:g}s.")
 
     days = []
@@ -758,12 +880,12 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         if visual:
             from engine.visual_context import rate_scenery
             rate = rate_scenery
-        glimpses = pick_glimpses(days, GLIMPSES, GLIMPSE_SECONDS, grab=grab, rate=rate)
+        glimpses = pick_glimpses(days, GLIMPSES, glimpse_s, grab=grab, rate=rate)
         if glimpses:
             hook_png = caption_png(os.path.join(parts_dir, "hook.png"), it["hook"], y_frac=0.3, size=96, lower=cine)
             for gi, g in enumerate(glimpses, 1):
                 out = os.path.join(parts_dir, f"glimpse_{gi}.mp4")
-                render_clip(ffmpeg, g["file"], g["start"], GLIMPSE_SECONDS, out, hook_png, layout, g["size"], audio=has_audio(g["file"]),
+                render_clip(ffmpeg, g["file"], g["start"], glimpse_s, out, hook_png, layout, g["size"], audio=has_audio(g["file"]) and not mute_orig,
                             cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s)
                 parts.append(out)
             print(f"[Log] Opening: hook \"{it['hook']}\" over {len(glimpses)} glimpse(s).")
@@ -772,7 +894,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             out = os.path.join(parts_dir, "trip_title.mp4")
             lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else "A travel film", "",
                                    look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0)
-            render_clip(ffmpeg, m0["file"], m0["start"], 3.4, out, None, layout, m0["size"], audio=has_audio(m0["file"]), grade=grade, fade_s=fade_s, layers=lay)
+            render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay)
             parts.append(out)
         else:
             title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else "Day by day", "")
@@ -797,12 +919,12 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             if cine and mi == 1:
                 lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], f"{unit} {di}" if len(days) > 1 else "",
                                        look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di)
-                secs = max(secs, 3.2)
-            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]), grade=grade, fade_s=fade_s, layers=lay)
+                secs = max(secs, first_min)
+            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay)
             parts.append(out)
         print(f"[Log] Day {di} rendered.")
     video = os.path.join(session_dir, "recap.mp4")
-    concat(ffmpeg, parts, video, session_dir, music=music)
+    concat(ffmpeg, parts, video, session_dir, music=music, music_gain=0.9 if mute_orig else 0.25, music_start=music_start, music_only=mute_orig)
     md_path, js_path = os.path.join(session_dir, "itinerary.md"), os.path.join(session_dir, "itinerary.json")
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(itinerary_markdown(it, days, unit))
@@ -812,6 +934,24 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     print(f"[Success] Trip recap ready at: {video}")
     print(f"[Log] Itinerary: {md_path}")
     return {"video": video, "itinerary_md": md_path, "itinerary_json": js_path, "days": len(days)}
+
+
+def make_recap_versions(paths, session_dir, aspect=None, style="auto", **kw):
+    """One recap for portrait devices (9:16, only the vertical videos) and one for landscape (16:9 unless `aspect` is given, only the
+    landscape videos). Returns {"portrait": result, "landscape": result}; the videos are session_dir/recap_portrait.mp4 and recap_landscape.mp4."""
+    import shutil
+    style = "cinematic" if style == "auto" else style
+    out = {}
+    for name, asp, ori in (("portrait", "9:16", "portrait"), ("landscape", aspect or "16:9", "landscape")):
+        sub = os.path.join(session_dir, name)
+        print(f"[Log] === {name.capitalize()} version ({asp}) ===")
+        res = make_recap(paths, sub, aspect=asp, style=style, orientation=ori, **kw)
+        final = os.path.join(session_dir, f"recap_{name}.mp4")
+        shutil.copyfile(res["video"], final)
+        res["video"] = final
+        out[name] = res
+        print(f"[Success] {name.capitalize()} recap: {final}")
+    return out
 
 
 def infos_order(infos, f):
@@ -844,10 +984,16 @@ def run(args, target_bitrate=None, target_preset=None):
         sys.exit(2)
     layout = getattr(args, "layout", "auto")
     try:
-        make_recap(paths, session_dir, trip_name=getattr(args, "trip_name", "") or "", note=getattr(args, "user_context", "") or "",
-                   total_seconds=getattr(args, "recap_length", 60) or 60, music=getattr(args, "music", None),
-                   visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
-                   style=getattr(args, "recap_style", "auto") or "auto", stops=getattr(args, "trip_stops", None), aspect=getattr(args, "recap_aspect", None), layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+        common = dict(trip_name=getattr(args, "trip_name", "") or "", note=getattr(args, "user_context", "") or "",
+                      total_seconds=getattr(args, "recap_length", 60) or 60, music=getattr(args, "music", None),
+                      visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
+                      stops=getattr(args, "trip_stops", None), layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+        style = getattr(args, "recap_style", "auto") or "auto"
+        if getattr(args, "recap_versions", "one") == "both":
+            make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)
+        else:
+            make_recap(paths, session_dir, style=style, aspect=getattr(args, "recap_aspect", None),
+                       orientation=getattr(args, "recap_orientation", "any") or "any", **common)
     except (ValueError, RuntimeError) as e:
         print(f"[Error] {e}")
         sys.exit(1)

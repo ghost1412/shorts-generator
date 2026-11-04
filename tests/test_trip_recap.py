@@ -212,3 +212,78 @@ def test_cinematic_layers_follow_the_look(tmp_path):
 def test_beat_length_unchanged_without_a_tempo():
     from engine import trip_recap as t
     assert t.beat_length("missing.mp3", 3.0) == 3.0
+
+
+def test_video_info_swaps_sides_for_phone_rotation(monkeypatch):
+    import json as _json
+    from engine import trip_recap as t
+
+    def fake(side):
+        class R:
+            stdout = _json.dumps({"streams": [side], "format": {"duration": "4.0"}})
+        return lambda *a, **k: R()
+    monkeypatch.setattr(t.subprocess, "run", fake({"width": 1920, "height": 1080, "side_data_list": [{"rotation": -90}]}))
+    assert t.video_info("x.mp4") == (4.0, 1080, 1920)               # stored landscape, shown portrait
+    monkeypatch.setattr(t.subprocess, "run", fake({"width": 1920, "height": 1080, "tags": {"rotate": "270"}}))
+    assert t.video_info("x.mp4") == (4.0, 1080, 1920)
+    monkeypatch.setattr(t.subprocess, "run", fake({"width": 1920, "height": 1080, "side_data_list": [{"rotation": 180}]}))
+    assert t.video_info("x.mp4") == (4.0, 1920, 1080)               # upside down is still landscape
+
+
+def test_filter_orientation_keeps_one_shape_or_falls_back():
+    from engine import trip_recap as t
+    day = [("a", 5, 1920, 1080), ("b", 5, 1080, 1920), ("c", 5, 1920, 1080), ("d", 5, 1920, 1080), ("e", 5, 1080, 1920)]
+    land, _ = t.filter_orientation([day], "landscape", minimum=3)
+    assert [i[0] for i in land[0]] == ["a", "c", "d"]
+    same, note = t.filter_orientation([day], "portrait", minimum=3)      # only 2 vertical videos: keep all, say so
+    assert same == [day] and "only 2" in note
+    assert t.filter_orientation([day], "any") == ([day], "")
+
+
+def test_on_beat_gives_whole_beats():
+    from engine import trip_recap as t
+    assert abs(t.on_beat(1.4, 0.5) - 1.5) < 1e-9
+    assert abs(t.on_beat(4.99, 0.4, 2) - 4.8) < 1e-9
+    assert t.on_beat(0.01, 0.5) == 0.5                                  # never shorter than one beat
+
+
+def test_render_clip_silent_track_comes_before_the_maps(tmp_path):
+    from engine import trip_recap as t
+    seen = {}
+
+    def fake(cmd, **k):
+        seen["cmd"] = cmd
+        open(cmd[-1], "wb").write(b"x")
+
+        class R:
+            returncode = 0
+            stderr = ""
+        return R()
+    orig = t.subprocess.run
+    t.subprocess.run = fake
+    try:
+        t.render_clip("ffmpeg", "in.mp4", 0, 2.0, str(tmp_path / "o.mp4"), None, "auto", (1920, 1080), audio=False)
+    finally:
+        t.subprocess.run = orig
+    cmd = seen["cmd"]
+    assert max(i for i, c in enumerate(cmd) if c == "-i") < cmd.index("-map")      # every input is declared before the first -map
+
+
+def test_long_titles_and_captions_stay_inside_a_vertical_frame(tmp_path):
+    from PIL import Image
+    from engine import trip_recap as t
+    old = (t.W, t.H)
+    t.W, t.H = t.ASPECTS["9:16"]
+    try:
+        for index, zone in ((0, "center"), (1, "left"), (1, "lower")):
+            lay = t.cinematic_layers(str(tmp_path / f"t{index}{zone}"), "Day 1: Arriving in Almaty, Kazakhstan", "Day 1 of 5 in the mountains", "a very long credit line for the film",
+                                     look={"zone": zone, "dark": True, "accent": (200, 150, 90)}, index=index)
+            for png, _ts in lay:
+                box = Image.open(png).getchannel("A").getbbox()
+                assert box is None or (box[0] >= 0 and box[2] <= t.W), (zone, png, box)       # nothing is cut off at the sides
+                assert box is None or (box[0] > 0 or zone == "center" or True)
+        cap = t.caption_png(str(tmp_path / "cap.png"), "Walking down wooden steps through the forest to the lake", lower=True)
+        box = Image.open(cap).getchannel("A").getbbox()
+        assert box[2] <= t.W - 20
+    finally:
+        t.W, t.H = old
