@@ -1596,13 +1596,29 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
                 ranked = None
                 if rerank and mode == "shorts":
                     from engine.highlight_rank import rank_with_context
-                    ranked = rank_with_context(highlights, transcript_data)     # one request for all candidates, with context
+                    ranked = rank_with_context(highlights, transcript_data, min_len=max(8.0, min_duration - 5.0))   # one request, with context
                 highlights = ranked if ranked is not None else llm_score_highlights(highlights, transcript_data)
             except Exception as e:
                 print(f"[Warning] LLM scoring skipped: {e}")
-        if mode == "shorts" and len(highlights) > clip_count:
-            # the larger pool was only for choosing: keep the best ones
-            highlights = sorted(highlights, key=lambda h: float(h.get('final_score', h.get('viral_score', 0)) or 0), reverse=True)[:clip_count]
+        if mode == "shorts":
+            # Final geometry BEFORE choosing among the pool: snap, clamp to the video, and drop clips below the length floor
+            # (ranking and snapping can shorten a clip, and a goodbye at the very end of a video can be left with a few seconds)
+            floor = max(8.0, min_duration - 5.0)
+            try:
+                if snap:
+                    from engine.highlight_quality import snap_highlights
+                    with open(transcript_path, 'r', encoding='utf-8') as f:
+                        highlights = snap_highlights(highlights, json.load(f), min_len=floor)
+            except Exception as e:
+                print(f"[Warning] Boundary snapping skipped: {e}")
+            highlights = clamp_highlights(highlights, probe_duration(video_path))
+            long_enough = [h for h in highlights if float(h['end']) - float(h['start']) >= floor]
+            if len(long_enough) != len(highlights):
+                print(f"[Log] Dropped {len(highlights) - len(long_enough)} clip(s) shorter than {floor:.0f}s after ranking and snapping.")
+            highlights = long_enough or highlights
+            if len(highlights) > clip_count:
+                # the larger pool was only for choosing: keep the best ones
+                highlights = sorted(highlights, key=lambda h: float(h.get('final_score', h.get('viral_score', 0)) or 0), reverse=True)[:clip_count]
 
         try:
             with open(highlights_cache_path, "w", encoding="utf-8") as f:
@@ -1616,7 +1632,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
         try:
             from engine.highlight_quality import snap_highlights
             with open(transcript_path, 'r', encoding='utf-8') as f:
-                highlights = snap_highlights(highlights, json.load(f))
+                highlights = snap_highlights(highlights, json.load(f), min_len=max(8.0, min_duration - 5.0))
             moved = sum(1 for h in highlights if h.get('snapped') and (h['start'] != h.get('orig_start') or h['end'] != h.get('orig_end')))
             print(f"[Log] Boundary snapping: {moved} of {len(highlights)} clip(s) moved to sentence boundaries.")
         except Exception as e:

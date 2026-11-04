@@ -83,3 +83,19 @@ def test_parse_accepts_wrapped_json_and_odd_values():
     got = parse_ranking(reply, 2)
     assert got[1]["score"] == 7.5 and got[1]["extend_end"] == 0 and got[1]["trim_start"] == 1
     assert parse_ranking("[]", 2) == {} and parse_ranking({"clips": []}, 2) == {}
+
+
+def test_trim_start_respects_the_callers_minimum_length():
+    tr = _t(SENT)
+    sp = sentence_spans(tr)
+    cands = [{"start": sp[2][0], "end": sp[4][1], "final_score": 70}]            # ~3 sentences, ~12 s
+    reply = json.dumps([{"id": 1, "score": 8, "trim_start": 1}])
+    short_ok = rank_with_context(cands, tr, ask=lambda p: reply, min_len=3.0)[0]
+    strict = rank_with_context(cands, tr, ask=lambda p: reply, min_len=30.0)[0]
+    assert short_ok["start"] > cands[0]["start"] and strict["start"] == cands[0]["start"]
+
+
+def test_prompt_tells_the_model_outros_are_weak():
+    tr = _t(SENT)
+    cands, sp = _cands(tr)
+    assert "goodbye" in build_prompt(cands, sp, sp[-1][1]).lower()
