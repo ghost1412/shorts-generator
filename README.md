@@ -104,6 +104,28 @@ cd shorts-generator
 
 ---
 
+## 🖼️ Demo gallery
+
+All GIFs are real renders from this repository.
+
+<div align="center">
+  <img src="demos/demo_clipping_active.gif" width="200" alt="Clipping a podcast with active-speaker switching" />
+  <img src="demos/demo_spot_the_lie.gif" width="200" alt="Spot the Lie short" />
+  <img src="demos/demo_short.gif" width="200" alt="Viral short with animated captions" />
+  <img src="demos/demo_facts.gif" width="200" alt="AI facts short" />
+  <img src="demos/demo_explainer.gif" width="200" alt="Manim explainer" />
+</div>
+
+| GIF | What it shows |
+| :--- | :--- |
+| `demo_clipping_active.gif` | Long interview clipped with `--layout active`: the shot cuts to whoever is speaking, with word captions |
+| `demo_spot_the_lie.gif` | The "Spot the Lie" quiz format that runs the daily YouTube channel |
+| `demo_short.gif` | Idea-to-video short with spring captions |
+| `demo_facts.gif` | `--mode FACTS` trivia short |
+| `demo_explainer.gif` | `--mode EXPLAINER` Manim animation |
+
+---
+
 ## ⚡ ShortsFlow vs Opus Clip, Klap & Vizard
 
 | | ⚡ ShortsFlow | Paid clippers |
@@ -114,14 +136,21 @@ cd shorts-generator
 | **Face-tracked 9:16 reframing** | ✅ | ✅ |
 | **Podcast layouts** | ✅ single, stacked split, active-speaker switching | ✅ varies by tool |
 | **Word-level animated captions** | ✅ Remotion (Hormozi, Glow Box, Bounce, Minimal) | ✅ |
-| **Virality / hook score per clip** | ✅ in `--output_json` (WebUI view planned) | ✅ |
-| **Dubbing** | ✅ | Often a paid add-on |
+| **Virality / hook score per clip** | ✅ strong / good / okay / weak label with the reason on the review screen, raw score in `--output_json` | ✅ |
+| **Review screen, copy-ready title / description / hashtags** | ✅ browser app | ✅ |
+| **Edit one short (caption style, start / end, undo)** | ✅ browser app; not a frame-accurate timeline | ✅ fuller editors |
+| **Brand kit (logo, @handle, end card, accent colour)** | ✅ | Usually on paid tiers |
+| **Prompt-based clipping ("only where they discuss pricing")** | ✅ `--find` (LLM search, keyword fallback offline) | Varies by tool |
+| **Edit by transcript (cut phrases, remove ums / uhs)** | ✅ `--cut`, `--edit_transcript`, `--remove_fillers` | Varies by tool |
+| **Caption languages** | ✅ Latin, Cyrillic, Greek and Devanagari scripts, optional translation (`--caption_lang`); no Japanese / Chinese / Korean / Arabic yet | Many languages |
+| **Dubbing / translated voice-over** | ❌ not implemented (captions can be translated) | Often a paid add-on |
 | **Idea-to-video (facts, explainers, stories)** | ✅ 30+ modes | ❌ clipping only |
-| **Automation** | ✅ CLI, MCP server, Docker, GitHub Actions | API usually on higher tiers |
-| **Polished timeline editor** | ❌ not yet | ✅ |
-| **Multi-platform scheduling** | ✅ TikTok / Instagram / YouTube via Upload-Post (`python -m engine.publish`) | ✅ |
+| **Automation** | ✅ CLI, REST API, MCP server, Docker, GitHub Actions | API usually on higher tiers |
+| **Polished timeline editor** | ❌ | ✅ |
+| **Multi-platform scheduling** | ⚠️ TikTok / Instagram / YouTube via Upload-Post (`python -m engine.publish`); only tested against mocks, not a live account | ✅ |
+| **Setup** | One-click Windows installer or `pip install shortsflow`; CPU works but is slow, an NVIDIA GPU is much faster | Open a browser tab |
 
-_Honest take: the paid tools have a nicer editor and scheduling. ShortsFlow wins on cost, privacy, and being scriptable._
+_Honest take: the paid tools have a nicer editor, hosted convenience and tested scheduling. ShortsFlow wins on cost, privacy, and being scriptable. Competitor columns describe typical offerings and change often; check their current pricing and features._
 
 ---
 
@@ -163,6 +192,9 @@ _Honest take: the paid tools have a nicer editor and scheduling. ShortsFlow wins
 | 🔊 **Audio Mastering & SFX** | Auto SFX (`whoosh`, `pop`, `riser`, `boom`), Dynamic BGM Audio Ducking (`--auto_ducking`), Studio Master Filter (`--enhance_audio`) |
 | 🎥 **Motion & Visual Filters** | Dynamic Camera Push-In Zoom (`--enable_zoom`), 12 Color Grade Presets (`--video_filter cyberpunk`, `kurosawa`, `teal_orange`) |
 | 📦 **Batch Automation** | Automated queue execution from CSV / text lists (`--batch_file "topics.txt"`) |
+| 🌍 **Caption Languages** | Latin, Cyrillic (ru, uk, bg), Greek and Devanagari captions; `--caption_lang es` translates captions with your AI provider and keeps them timed |
+| 🧭 **Layouts** | `--layout auto` picks per clip: cut-to-speaker for two-person shots, tracked single crop otherwise; also `active`, `stacked` |
+| 🎞️ **Highlights Video** | One landscape video of the best moments, any length, from the browser app |
 | 🤖 **Multi-LLM Matrix** | Google Gemini, Local Ollama (`qwen2.5:7b`), DeepSeek, Groq, Anthropic, OpenRouter (`--llm_provider`) |
 
 ---
