@@ -5,6 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **Click-to-cut words**: under "Edit this short" in the browser app, every word of the short is a tick box. Tick the words you do not want ("um", a false start), press "Cut the ticked words" and the short is re-rendered without them (picture and captions); untick to bring them back, "Undo last change" restores the earlier version. Also `python -m engine.rerender SESSION INDEX --cuts 7.0:8.0`.
 - **Captions in another language**: `--caption_lang es` (or the "Languages" box in the browser app) translates the captions with your AI provider and keeps them timed to the speech. Spanish, French, German, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian, Vietnamese, Hindi and Marathi (the bundled caption fonts cannot draw Japanese, Chinese, Korean, Arabic or Russian yet). Translation quality depends on the model; small local models are weaker in Hindi.
 - **Highlights video** option in the browser app (one landscape video made of the best moments, any length).
 - **"Pick the moments"** in the browser app: make shorts only about a topic you describe, and cut chosen words or phrases out.

@@ -52,8 +52,11 @@ def validate_window(start, end, source_seconds=None):
     return start, end
 
 
-def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=None, use_brand=True):
-    """Re-render a clip in place. Returns the updated clip dict (from results.json)."""
+def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=None, use_brand=True, cuts=None):
+    """Re-render a clip in place. Returns the updated clip dict (from results.json).
+
+    `cuts` = [(start, end)] spans of the ORIGINAL video (seconds) to remove from the clip (click-to-cut words).
+    None keeps the cuts the clip already has, [] clears them."""
     results_path = os.path.join(session_dir, "results.json")
     data = _load_json(results_path, None)
     if not data:
@@ -92,15 +95,27 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     if settings.get("tighten"):
         silence = [tuple(item) for item in _load_json(os.path.join(session_dir, "silence_intervals.json"), [])]
 
+    cuts = [tuple(c) for c in (clip.get("cuts") or [])] if cuts is None else [tuple(c) for c in cuts]
+    extra = {}
+    tighten_mode = settings.get("tighten_mode", "cut")
+    if cuts:
+        from engine.fillers import MIN_KEEP, carve
+        silence = carve(silence or [(start, end)], sorted(cuts), min_keep=MIN_KEEP)
+        left = sum(min(b, end) - max(a, start) for a, b in silence if min(b, end) > max(a, start))
+        if left < MIN_SECONDS:
+            raise ValueError("Cutting those words would leave less than 3 seconds. Untick some of them.")
+        tighten_mode = "cut"                       # cutting words always removes the picture too
+        extra["remove_fillers"] = True             # tight padding, so a short cut is not stitched back together
+
     from engine.video_gen import extract_segments
     tmp = tempfile.mkdtemp(prefix="rerender_", dir=session_dir)
     try:
         files = extract_segments(
             source, [{"start": start, "end": end}], transcript, tmp, mode=mode, bitrate="12M", preset="medium", codec="libx264",
-            interest_points=interest, silence_intervals=silence, tighten_mode=settings.get("tighten_mode", "cut"),
+            interest_points=interest, silence_intervals=silence, tighten_mode=tighten_mode,
             use_remotion=bool(settings.get("use_remotion")), orientation=detect_orientation(source) if settings.get("smart_crop") else "landscape",
             letterbox_crop=detect_letterbox(source) if settings.get("smart_crop") else None,
-            caption_style=style, subtitle_y_pos=settings.get("subtitle_y_pos", 1150), layout=settings.get("layout", "single"))
+            caption_style=style, subtitle_y_pos=settings.get("subtitle_y_pos", 1150), layout=settings.get("layout", "single"), **extra)
         if not files or not os.path.exists(files[0]):
             raise RuntimeError("The re-render produced no video.")
         new_clip = files[0]
@@ -132,8 +147,12 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             print(f"[Warning] Thumbnail not refreshed: {e}")
 
     # remember what the clip looked like so "undo" can put the numbers back together with the video
-    clip["previous"] = {k: clip.get(k) for k in ("start", "end", "duration", "caption_style")}
+    clip["previous"] = {k: clip.get(k) for k in ("start", "end", "duration", "caption_style", "cuts")}
     clip.update({"start": round(start, 2), "end": round(end, 2), "duration": round(end - start, 2), "caption_style": style})
+    if cuts:
+        clip["cuts"] = [[round(s, 3), round(e, 3)] for s, e in cuts]
+    else:
+        clip.pop("cuts", None)
     tmp_json = results_path + ".tmp"
     with open(tmp_json, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
@@ -175,9 +194,14 @@ def main(argv=None):
     p.add_argument("--end", type=float)
     p.add_argument("--style", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"])
     p.add_argument("--no-brand", action="store_true")
+    p.add_argument("--cuts", help="spans of the original video to cut out, '1.2:1.8,3:3.5' (seconds); '' clears the cuts")
     a = p.parse_args(argv)
     try:
-        clip = rerender_clip(a.session_dir, a.clip_index, a.start, a.end, a.style, use_brand=not a.no_brand)
+        cuts = None
+        if a.cuts is not None:
+            from shortsflow.word_edit import parse_spans_arg
+            cuts = parse_spans_arg(a.cuts)
+        clip = rerender_clip(a.session_dir, a.clip_index, a.start, a.end, a.style, use_brand=not a.no_brand, cuts=cuts)
     except (ValueError, RuntimeError) as e:
         print(f"[Error] {e}")
         return 1

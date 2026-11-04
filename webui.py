@@ -307,8 +307,9 @@ def earlier_runs():
     return gr.update(choices=[(name, path) for name, path in review.recent_runs(ROOT)])
 
 
-def rerender_card(cards, index, style, start, end):
-    """Re-render one short (new caption style and/or start/end) with the run's cached analysis, then refresh its card."""
+def rerender_card(cards, index, style, start, end, cuts=None):
+    """Re-render one short (new caption style and/or start/end) with the run's cached analysis, then refresh its card.
+    `cuts` = spans of the original video to remove (click-to-cut words); None leaves the short's cuts as they are."""
     from shortsflow import review
     card = next((c for c in cards or [] if c["index"] == index), None)
     if not card or not card.get("can_rerender"):
@@ -322,7 +323,10 @@ def rerender_card(cards, index, style, start, end):
         cmd += ["--end", str(end)]
     if style and card.get("animated_captions"):
         cmd += ["--style", style]
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
+    if cuts is not None:
+        from shortsflow import word_edit
+        cmd += ["--cuts", word_edit.spans_arg(cuts)]
+    env =dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     if r.returncode != 0:
         reason = next((ln[len("[Error] "):] for ln in reversed((r.stdout or "").splitlines()) if ln.startswith("[Error] ")),
@@ -338,6 +342,26 @@ def rerender_handler(index):
     """A real generator function for one card (a lambda that returns a generator is not treated as streaming by Gradio)."""
     def handler(cards, style, start, end):
         yield from rerender_card(cards, index, style, start, end)
+    return handler
+
+
+def word_choices(card):
+    """(choices, ticked, hint) for the click-to-cut word boxes of one short."""
+    from shortsflow import word_edit
+    words = word_edit.load_words(card["session_dir"])
+    choices, ticked = word_edit.choices_for(words, card.get("start"), card.get("end"), card.get("cuts"))
+    return choices, ticked, word_edit.summary(card.get("cuts") or [])
+
+
+def cut_words_handler(index):
+    """Re-render short `index` without the ticked words (an empty tick list brings every word back)."""
+    def handler(cards, ticked, style, start, end):
+        from shortsflow import word_edit
+        card = next((c for c in cards or [] if c["index"] == index), None)
+        if not card:
+            raise gr.Error("This short cannot be edited (the data of its run is missing).")
+        words = word_edit.load_words(card["session_dir"])
+        yield from rerender_card(cards, index, style, start, end, cuts=word_edit.spans_from_ticks(words, ticked))
     return handler
 
 
@@ -472,6 +496,12 @@ def build_ui():
                                             back = gr.Button("Undo last change", size="sm")
                                         go.click(rerender_handler(c["index"]), [q_cards, st, t0, t1], [q_cards, q_status])
                                         back.click(undo_handler(c["index"]), q_cards, [q_cards, q_status])
+                                        choices, ticked, hint = word_choices(c)
+                                        if choices:
+                                            gr.Markdown(f"**Cut words out.** Tick the words you do not want, then press the button. {hint}")
+                                            wd = gr.CheckboxGroup(choices, value=ticked, label="Words in this short", interactive=True)
+                                            wgo = gr.Button("Cut the ticked words", size="sm", variant="secondary")
+                                            wgo.click(cut_words_handler(c["index"]), [q_cards, wd, st, t0, t1], [q_cards, q_status])
 
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
