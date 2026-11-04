@@ -8,6 +8,13 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 - **Browser app controls for the 0.3.0 options**: an "Extras" section on the Start here tab (clean up the sound, big title at the start, emoji next to key words, satisfying video underneath with an optional footage file) and the same options under Clip (advanced). The title and emoji are only passed when animated captions are on, since Remotion draws them.
 - **"Dub a video" tab**: pick a video or link, the language to dub into and the language spoken, optionally burn the translated subtitles in; shows plain-language progress and gives you the dubbed video and the translated `.srt`.
 
+- **Dub tab: voice and voice engine**: choose female or male (`--dub_voice`) and the engine (automatic, Edge online, or Kokoro on this PC for English).
+- **Click-to-cut words: type a phrase to tick it** (any script, no spaces needed for Chinese or Japanese), and the word list now scrolls inside a fixed-height box instead of making a very long panel.
+
+### Improved
+- The "UI screenshots" workflow now also shows the Extras sections, the Dub tab and the word tick boxes (with a typed phrase ticked), from a small generated transcript.
+- Checked MINIMAL and BOUNCE captions with Arabic plus Chinese / Japanese in real renders: joined Arabic letters, CJK from the per-render subset font. The pinned Korean font hash was confirmed against a real download.
+
 ### Fixed
 - The caption-language hint in the browser app no longer says Japanese, Chinese, Korean and Arabic are unsupported.
 - `--layout split_filler` with animated (Remotion) captions: the captions sat on the filler half (default position 1150). They now sit just above the seam in the lower part of the clip half. An explicit `--subtitle_y_pos` is kept as you set it.
