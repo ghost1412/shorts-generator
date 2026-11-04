@@ -100,7 +100,7 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             interest_points=interest, silence_intervals=silence, tighten_mode=settings.get("tighten_mode", "cut"),
             use_remotion=bool(settings.get("use_remotion")), orientation=detect_orientation(source) if settings.get("smart_crop") else "landscape",
             letterbox_crop=detect_letterbox(source) if settings.get("smart_crop") else None,
-            caption_style=style, subtitle_y_pos=settings.get("subtitle_y_pos", 1150), layout=settings.get("layout", "single"))
+            caption_style=style, subtitle_y_pos=settings.get("subtitle_y_pos", 1150), layout=settings.get("layout", "single"), filler_video=settings.get("filler_video"))
         if not files or not os.path.exists(files[0]):
             raise RuntimeError("The re-render produced no video.")
         new_clip = files[0]

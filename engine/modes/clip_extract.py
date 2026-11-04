@@ -145,6 +145,7 @@ def run(args, target_bitrate, target_preset):
         video_filter=active_video_filter, user_context=args.user_context,
         max_workers=getattr(args, 'max_workers', None),
         layout=args.layout,
+        filler_video=getattr(args, 'filler_video', None),
         remove_fillers=getattr(args, 'remove_fillers', False),
         reel_captions=getattr(args, 'reel_captions', False)
     )
@@ -394,7 +395,7 @@ def run(args, target_bitrate, target_preset):
             "total_clips": len(highlights),
             # what this run used, so a single clip can be re-rendered later with the same settings (engine/rerender.py)
             "settings": {
-                "extract_mode": args.extract_mode, "layout": getattr(args, "layout", "single"),
+                "extract_mode": args.extract_mode, "layout": getattr(args, "layout", "single"), "filler_video": getattr(args, "filler_video", None),
                 "smart_crop": bool(args.smart_crop), "tighten": bool(args.tighten), "tighten_mode": args.tighten_mode,
                 "use_remotion": bool(args.use_remotion), "caption_style": args.caption_style,
                 "subtitle_y_pos": args.subtitle_y_pos, "brand": getattr(args, "brand", None),

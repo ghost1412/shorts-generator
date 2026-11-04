@@ -5,6 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **"Satisfying footage" layout**: `--layout split_filler` puts the clip on the top half and looping gameplay or satisfying footage underneath (also in the browser app's Framing choice and the REST API). `--filler_video FILE` picks the footage; otherwise a video from `assets/backgrounds/local/` is used, else a Pexels stock clip (needs `PEXELS_API_KEY`), else the normal crop.
 - **Captions in another language**: `--caption_lang es` (or the "Languages" box in the browser app) translates the captions with your AI provider and keeps them timed to the speech. Spanish, French, German, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian, Vietnamese, Hindi and Marathi (the bundled caption fonts cannot draw Japanese, Chinese, Korean, Arabic or Russian yet). Translation quality depends on the model; small local models are weaker in Hindi.
 - **Highlights video** option in the browser app (one landscape video made of the best moments, any length).
 - **"Pick the moments"** in the browser app: make shorts only about a topic you describe, and cut chosen words or phrases out.

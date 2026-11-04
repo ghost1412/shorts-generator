@@ -2588,7 +2588,7 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2613,7 +2613,16 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     if _has_nvenc: print("[Log] NVIDIA GPU Detected: Using NVENC for ultra-fast encoding 🚀")
     
     processes = []
-    
+
+    # 'split_filler': clip on top, looping filler footage underneath (shorts only)
+    filler_path = None
+    if layout == "split_filler" and mode == "shorts":
+        from engine.filler import resolve_filler_video
+        filler_path = resolve_filler_video(filler_video, output_dir)
+        if not filler_path:
+            print("[Warning] split_filler: no filler footage found (--filler_video, assets/backgrounds/local or "
+                  "PEXELS_API_KEY); using the regular single crop.")
+
     for i, hi in enumerate(highlights):
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
         if use_cache and os.path.exists(target) and os.path.getsize(target) > 1000:
@@ -2642,7 +2651,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                       (" (auto layout: single)" if layout == "auto" else ""))
 
         if mode == "shorts":
-            if active_shots:
+            if filler_path:
+                # chain for the clip half only; the full graph is assembled below once colour grades are prepended
+                vf_filter = f"{letterbox_crop}" if letterbox_crop else "null"
+            elif active_shots:
                 from engine.speaker_focus import build_active_speaker_filter
                 vf_filter = build_active_speaker_filter(active_shots, w, h)
             elif layout == "split":
@@ -2694,9 +2706,17 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         # 🟢 UPGRADE: Ensure intermediate segments have high quality (constant quality / low crf)
         quality_flags = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
         
+        if filler_path and mode == "shorts":
+            from engine.filler import build_filler_split_graph
+            graph = build_filler_split_graph(vf_filter, w, h, scaling_alg)
+            input_args = ['-ss', str(hi['start']), '-i', source_path, '-stream_loop', '-1', '-i', filler_path]
+            filter_args = ['-filter_complex', graph, '-map', '[v]', '-map', '0:a?']
+        else:
+            input_args = ['-ss', str(hi['start']), '-i', source_path]
+            filter_args = ['-vf', vf_filter]
         cmd = [
-            ffmpeg_exe, '-y', '-ss', str(hi['start']), '-i', source_path,
-            '-t', str(duration), '-vf', vf_filter,
+            ffmpeg_exe, '-y'] + input_args + [
+            '-t', str(duration)] + filter_args + [
             '-r', '30', # 🟢 FORCE 30FPS: Standardize extraction to prevent stuttering in MoviePy & match Remotion
             '-c:v', target_codec, '-preset', target_preset,
         ] + quality_flags + [
