@@ -562,6 +562,11 @@ def run(args, target_bitrate, target_preset):
                 "broll": bool(getattr(args, "broll", False)),
                 "auto_zoom": bool(getattr(args, "auto_zoom", False)),
                 "caption_color": getattr(args, "caption_color", None),
+                "caption_emoji": bool(getattr(args, "caption_emoji", False)),
+                "remove_fillers": bool(getattr(args, "remove_fillers", False)),
+                "video_filter": getattr(args, "video_filter", None) if getattr(args, "video_filter", "none") not in (None, "none", "auto") else None,
+                "logo": getattr(args, "logo", None), "handle": getattr(args, "handle", None),
+                "end_card": getattr(args, "end_card", None),
             },
             "clips": []
         }

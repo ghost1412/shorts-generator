@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument("--extract_mode", choices=["shorts", "long"], default="shorts")
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
-    parser.add_argument("--min_duration", type=int, default=15, help="Minimum clip duration for extraction (default 15s).")
+    parser.add_argument("--min_duration", type=int, default=15, help="Target minimum clip length in seconds (default 15). Clips can be up to 5 s shorter than this when a moment ends early.")
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
     parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
     parser.add_argument("--style", choices=["sarcastic", "meme", "funny", "action", "stylish"], action="append", help="Optional viral editing styles (can be used multiple times).")
@@ -79,7 +79,7 @@ def parse_args():
     parser.add_argument("--clip_report", nargs="?", const="md", choices=["md", "csv", "both"], help="Write a summary of the run (title, time range, score, file, thumbnail) to the session folder as clip_report.md and/or .csv. Clipping mode.")
     parser.add_argument("--reel_captions", action="store_true", help="Burn word captions into long-form highlight reels (--extract_mode long).")
     parser.add_argument("--cut", action="append", metavar="PHRASE", help="Cut every occurrence of this phrase out of the clips, e.g. --cut \"you know\" (repeatable; clipping mode).")
-    parser.add_argument("--edit_transcript", metavar="FILE", help="Edited copy of <session_dir>/transcript.txt; the words you deleted are cut from the clips. Re-run with the same --session_dir and --use_cache.")
+    parser.add_argument("--edit_transcript", metavar="FILE", help="Edited copy of <session_dir>/transcript.txt; the words you deleted are cut from the clips. Re-run with the same --session_dir (do not add --use_cache: it would reuse the clips cut before the edit).")
     parser.add_argument("--find", help="Clip only moments matching this request, e.g. \"where they discuss pricing\" (clipping mode).")
     parser.add_argument("--user_context", help="Extra context to guide AI extraction (specific scenes/styles).")
     parser.add_argument("--style_context", help="Context for editing style and pacing (e.g. 'fast cuts', 'cinematic').")
@@ -123,13 +123,13 @@ def parse_args():
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
     parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "AUTO", "RANDOM"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI). KARAOKE = colour sweep along the line, NEON = glow, BAR = subtitle bar.")
     parser.add_argument("--caption_color", type=str, default=None, help="Accent colour of the active caption word as hex, e.g. '#FF3366' (any caption style; needs --use_remotion).")
-    parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for subtitles in Remotion (default: 1150).")
+    parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for animated (Remotion) captions on clips (default: 1150; moved up automatically for --layout split_filler).")
     parser.add_argument("--max_workers", type=int, default=None, help="Force number of parallel rendering worker threads (e.g. 2 or 4 for Remotion/FFmpeg).")
     
     # Provider & Media Overrides
     parser.add_argument("--use_ollama", action="store_true", help="Force local Ollama LLM execution.")
     parser.add_argument("--llm_provider", choices=["auto", "gemini", "ollama", "openai", "anthropic", "deepseek", "groq", "openrouter", "custom"], default="auto", help="Specify LLM provider (gemini, ollama, openai, anthropic, deepseek, groq, openrouter, custom).")
-    parser.add_argument("--llm_model", help="Specify exact model name for the LLM provider (e.g., gpt-4o-mini, deepseek-chat, llama-3.3-70b-versatile, qwen3:8b).")
+    parser.add_argument("--llm_model", help="Specify exact model name for the LLM provider (e.g., gpt-4o-mini, deepseek-chat, openai/gpt-oss-120b for Groq, qwen2.5:7b for Ollama).")
     parser.add_argument("--bg_media", help="Path to custom local background image (.jpg, .png) or video (.mp4, .mov).")
     
     # Interactive Kids Story Creator Flags
@@ -157,6 +157,18 @@ def parse_args():
     parser.add_argument("--enhance_audio", action="store_true", help="Apply studio audio mastering (highpass, noise gate, compressor, EBU R128 loudnorm).")
 
     args = parser.parse_args()
+    # Older option names that the engine never read are now aliases of the features that do the same job
+    if args.enhance_audio and not args.clean_audio:
+        args.clean_audio = True           # studio audio mastering == noise reduction + loudness normalisation
+    if args.enable_zoom and not args.auto_zoom:
+        args.auto_zoom = True             # camera push-in == the punch-in zoom (needs --use_remotion)
+    for flag, value, default in (("--auto_ducking", args.auto_ducking, False), ("--sfx_preset", args.sfx_preset, "auto")):
+        if value != default:
+            print(f"[Warning] {flag} is not implemented yet and is ignored.")
+    if args.aspect_ratio != "9:16":
+        print(f"[Warning] --aspect_ratio {args.aspect_ratio} is not implemented: output is 9:16 vertical (the highlights video is 16:9).")
+    if getattr(args, "llm_model", None):
+        os.environ["LLM_MODEL"] = args.llm_model      # was never read: only the LLM_MODEL env var worked
     if args.caption_emoji:
         os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
     if args.hook_overlay:

@@ -85,3 +85,9 @@ def test_markers_stop_brand_and_audio_clean_being_applied_twice(tmp_path):
     assert clip_extract.already_done(clip, "branded", kit)
     assert not clip_extract.already_done(clip, "branded", {"logo": "b.png", "handle": "@me"})   # changed kit: apply again
     assert not clip_extract.already_done(clip, "clean", True)
+
+
+def test_photo_reel_without_music_gets_an_audio_file(tmp_path):
+    from engine.modes.photo_reel import default_music_or_silence
+    path = default_music_or_silence(str(tmp_path), 3)
+    assert path and __import__("os").path.getsize(path) > 500

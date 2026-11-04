@@ -18,6 +18,24 @@ from engine.storage import upload_to_storage
 
 
 
+def default_music_or_silence(session_dir, seconds):
+    """A track for a photo reel made without --music: the bundled background music, else a silent file. The Remotion
+    renderer needs an audio file, and used to stop with 'Voice audio path not found' when there was none."""
+    from engine.paths import project_root
+    bundled = os.path.join(project_root(), "music", "bg_music.mp3")
+    if os.path.isfile(bundled):
+        return bundled
+    silent = os.path.join(session_dir, "silence.mp3")
+    try:
+        import imageio_ffmpeg
+        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                        "-t", str(max(1.0, float(seconds))), "-q:a", "9", silent], capture_output=True, check=True)
+        return silent
+    except Exception as e:
+        print(f"[Warning] Could not create a silent track ({e}).")
+        return None
+
+
 def run(args, target_bitrate, target_preset):
     from engine.beat_sync import detect_beats
     from engine.video_gen import create_photo_reel_video
@@ -87,6 +105,11 @@ def run(args, target_bitrate, target_preset):
     out_video = os.path.join(session_dir, "photo_reel.mp4")
 
     target_dur = getattr(args, "target_duration", 30) or 30
+
+    if not music_path and getattr(args, "use_remotion", False):
+        music_path = default_music_or_silence(session_dir, target_dur)
+        if music_path:
+            print(f"[Log] No --music given: using {os.path.basename(music_path)} under the photos.")
 
     # Detect beats in input audio if provided (capped at target_duration)
     beat_timestamps = detect_beats(music_path, target_count=len(photo_files), max_duration=target_dur) if music_path else None

@@ -52,6 +52,19 @@ def pick_video_file(video_files):
     over = sorted((vf for vf in sized if vf["width"] > 1440), key=lambda vf: vf["width"])
     return (exact or under or over or video_files or [{}])[0].get("link")
 
+def _close_browser(exe):
+    """Windows keeps the browser's cookie database locked while the browser runs. Force-closing it would also kill the
+    user's open tabs and unsaved work, so it only happens when SHORTSFLOW_CLOSE_BROWSER=1 is set; otherwise the user
+    is told to close the browser (or export a cookies file and use --cookies)."""
+    if os.environ.get("SHORTSFLOW_CLOSE_BROWSER") == "1":
+        print(f"[Log] Closing '{exe}' (SHORTSFLOW_CLOSE_BROWSER=1) to unlock the cookie database...")
+        subprocess.run(["taskkill", "/F", "/IM", exe], capture_output=True)
+        time.sleep(1.0)
+    else:
+        print(f"[Warning] '{exe}' is running and may lock its cookie database. Close the browser yourself, use --cookies "
+              "FILE, or set SHORTSFLOW_CLOSE_BROWSER=1 to let ShortsFlow close it.")
+
+
 def download_background_video(fact_text, fallback_query="nature", output_path="assets/bg.mp4", orientation="portrait", custom_bg=None, force_literal=False):
     """
     downloads a background video based on keywords from the fact or custom background media.
@@ -710,9 +723,7 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4",
                     # Check if process is running
                     check_proc = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {target_exe}"], capture_output=True, text=True)
                     if target_exe in check_proc.stdout:
-                        print(f"[Log] Closing background '{target_exe}' processes to unlock cookie database...")
-                        subprocess.run(["taskkill", "/F", "/IM", target_exe], capture_output=True)
-                        time.sleep(1.0)
+                        _close_browser(target_exe)
         
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -730,8 +741,7 @@ def download_source_video_from_url(url, output_dir, filename="source_video.mp4",
                         if sys.platform == "win32":
                             t_exe = "msedge.exe" if browser.lower() == "edge" else ("chrome.exe" if browser.lower() == "chrome" else None)
                             if t_exe:
-                                subprocess.run(["taskkill", "/F", "/IM", t_exe], capture_output=True)
-                                time.sleep(1.0)
+                                _close_browser(t_exe)
                         print(f"[Log] Trying browser cookies from: '{browser}'...")
                         opts_cookies = dict(ydl_opts)
                         opts_cookies['cookiesfrombrowser'] = (browser,)

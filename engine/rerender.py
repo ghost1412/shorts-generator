@@ -109,6 +109,19 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         tighten_mode = "cut"                       # cutting words always removes the picture too
         extra["remove_fillers"] = True             # tight padding, so a short cut is not stitched back together
 
+    if settings.get("remove_fillers") and not cuts:
+        # --remove_fillers: cut the ums again (the cut list for the window is not stored, so find them from the words)
+        try:
+            from engine.fillers import remove_fillers as find_fillers
+            segs = _load_json(os.path.join(session_dir, "transcript.json"), {}).get("segments", [])
+            total = max([s_.get("end", 0) for s_ in segs] or [0]) + 1.0
+            silence, n_fill = find_fillers(silence or [], segs, total)
+            extra["remove_fillers"] = True
+            print(f"[Log] Removing {n_fill} filler word(s) again")
+        except Exception as e:
+            print(f"[Warning] Filler removal skipped on re-render: {e}")
+    if settings.get("video_filter"):
+        extra["video_filter"] = settings["video_filter"]       # the colour grade stays
     from engine.video_gen import extract_segments
     window = {"start": start, "end": end}
     hook_on = bool(settings.get("hook_overlay") and clip.get("hook"))
@@ -122,6 +135,10 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     prev_zoom_env = os.environ.get("SHORTSFLOW_AUTO_ZOOM")
     if zoom_on:
         os.environ["SHORTSFLOW_AUTO_ZOOM"] = "1"
+    emoji_on = bool(settings.get("caption_emoji"))    # --caption_emoji: the same keyword emoji again
+    prev_emoji_env = os.environ.get("SHORTSFLOW_CAPTION_EMOJI")
+    if emoji_on:
+        os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
     caption_color = settings.get("caption_color")     # --caption_color: same accent colour again
     prev_color_env = os.environ.get("SHORTSFLOW_CAPTION_COLOR")
     if caption_color:
@@ -152,9 +169,17 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             from engine.audio_clean import clean_audio
             clean_audio(new_clip)
         brand_json = settings.get("brand")
-        if use_brand and brand_json and os.path.exists(brand_json):
+        if use_brand and brand_json and not os.path.exists(brand_json):
+            brand_json = None
+        if use_brand and (brand_json or any(settings.get(k) for k in ("logo", "handle", "end_card"))):
             from engine.branding import apply_brand, load_brand
-            brand = load_brand(path=brand_json)
+            try:
+                # the brand file plus the --logo / --handle / --end_card given on the command line
+                brand = load_brand(path=brand_json, logo=settings.get("logo"), handle=settings.get("handle"),
+                                   end_card=settings.get("end_card"))
+            except (OSError, ValueError) as e:
+                print(f"[Warning] Brand kit skipped on re-render: {e}")
+                brand = None
             if brand:
                 apply_brand(new_clip, brand)
 
@@ -177,6 +202,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                 os.environ.pop("SHORTSFLOW_AUTO_ZOOM", None)
             else:
                 os.environ["SHORTSFLOW_AUTO_ZOOM"] = prev_zoom_env
+        if emoji_on:
+            if prev_emoji_env is None:
+                os.environ.pop("SHORTSFLOW_CAPTION_EMOJI", None)
+            else:
+                os.environ["SHORTSFLOW_CAPTION_EMOJI"] = prev_emoji_env
         if caption_color:
             if prev_color_env is None:
                 os.environ.pop("SHORTSFLOW_CAPTION_COLOR", None)
