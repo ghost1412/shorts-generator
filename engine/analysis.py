@@ -1045,7 +1045,12 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
     context_window = 3 
     limit = 100 
     
-    if len(compressed_segments) > limit:
+    from engine.highlight_chunks import plan_chunks, per_chunk_count, segments_in, clamp_to_chunk
+    chunks = plan_chunks(total_duration) if mode == "shorts" else [(0.0, total_duration)]
+    if len(chunks) > 1:
+        print(f"[Log] Long video ({total_duration / 60:.0f} min): choosing moments in {len(chunks)} stretches of about "
+              f"{total_duration / len(chunks) / 60:.0f} min each, so no part of the video is skipped.")
+    if len(compressed_segments) > limit and len(chunks) == 1:
         if mode == "long":
             # 🟢 NEW: Ensure representation across the entire timeline
             # Instead of top 75 absolute peaks, take top N from every 10% of video
@@ -1079,13 +1084,17 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         
         compressed_segments = [compressed_segments[i] for i in sorted(list(selected_indices))]
     
-    full_text_with_ts = ""
-    for segment in compressed_segments:
-        # 🟢 UPGRADE: Enriched signal richness for LLM
-        # pos=timeline position, t=text, d=text_delta, a=audio, ad=audio_delta, sd=silence_delta
-        pos = round(segment['start'] / total_duration, 2) if total_duration > 0 else 0
-        sigs = f"pos={pos} t={segment['norm_score']} d={segment['norm_delta']} a={segment['norm_audio']} ad={segment['norm_audio_delta']} sd={segment['norm_silence_delta']}"
-        full_text_with_ts += f"[{segment['start']:.2f}s - {segment['end']:.2f}s | {sigs}]: {segment['text']}\n"
+    def log_text(segs):
+        text = ""
+        for segment in segs:
+            # 🟢 UPGRADE: Enriched signal richness for LLM
+            # pos=timeline position, t=text, d=text_delta, a=audio, ad=audio_delta, sd=silence_delta
+            pos = round(segment['start'] / total_duration, 2) if total_duration > 0 else 0
+            sigs = f"pos={pos} t={segment['norm_score']} d={segment['norm_delta']} a={segment['norm_audio']} ad={segment['norm_audio_delta']} sd={segment['norm_silence_delta']}"
+            text += f"[{segment['start']:.2f}s - {segment['end']:.2f}s | {sigs}]: {segment['text']}\n"
+        return text
+
+    full_text_with_ts = log_text(compressed_segments)
     
     # Style-specific injections (Handle list or string)
     styles_list = style if isinstance(style, list) else ([style] if style else [])
@@ -1117,7 +1126,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
 
     if mode == "shorts":
         system_prompt = f"You are a professional social media manager. Identify high-impact viral moments. {style_instructions} {context_injection} {style_injection} {outline_injection} YOU MUST PROVIDE TIMESTAMPS FOR EVERY CLIP."
-        prompt = f"""Objective: Identify up to {clip_count} distinct viral moments for YouTube Shorts.
+        def _shorts_prompt(clip_count, full_text_with_ts):
+            return f"""Objective: Identify up to {clip_count} distinct viral moments for YouTube Shorts.
         
         {context_injection}
         {style_injection}
@@ -1143,6 +1153,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         
         Log Data (Signal/Delta marked):
         {full_text_with_ts}"""
+        prompt = _shorts_prompt(clip_count, full_text_with_ts)
     else: # Long-Form Highlight Reel
         context_injection = ""
         if user_context:
@@ -1204,10 +1215,34 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         # 🟢 PERFORMANCE: Set dynamic_max to 8192 to prevent Gemini token truncation
         dynamic_max = 8192
         
-        response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
-        print(f"[DEBUG] Raw LLM Response: {response_text}")
-        print(f"[Log] LLM analysis received ({len(response_text)} chars). Processing results...")
-        res_data = robust_json_parse(response_text)
+        if len(chunks) > 1:
+            res_data, response_text = [], ""
+            want = per_chunk_count(clip_count, len(chunks))
+            for ci, (lo, hi) in enumerate(chunks, 1):
+                part = segments_in(compressed_segments, lo, hi)
+                if not part:
+                    continue
+                print(f"[Log] Stretch {ci}/{len(chunks)} ({lo / 60:.0f}-{hi / 60:.0f} min): {len(part)} segments, asking for up to {want} moment(s)...")
+                try:
+                    raw = get_llm_response(_shorts_prompt(want, log_text(part)), system_prompt, max_tokens=dynamic_max)
+                    found = robust_json_parse(raw)
+                except Exception as e:
+                    print(f"[Warning] Stretch {ci} failed ({e}); continuing with the others.")
+                    continue
+                response_text += raw + "\n"
+                if isinstance(found, dict):
+                    found = next((found[k] for k in ("highlights", "segments", "data", "clips") if k in found), [found] if 'start' in found else [])
+                kept = [c for c in (clamp_to_chunk(normalize_highlight(h) if isinstance(h, dict) else h, lo, hi)
+                                    for h in (found if isinstance(found, list) else [])) if c]
+                if len(kept) < len(found if isinstance(found, list) else []):
+                    print(f"[Log] Stretch {ci}: ignored {len(found) - len(kept)} answer(s) with times outside the stretch.")
+                res_data += kept
+            print(f"[Log] LLM analysis received {len(res_data)} moment(s) from {len(chunks)} stretches. Processing results...")
+        else:
+            response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
+            print(f"[DEBUG] Raw LLM Response: {response_text}")
+            print(f"[Log] LLM analysis received ({len(response_text)} chars). Processing results...")
+            res_data = robust_json_parse(response_text)
         
         highlights = []
         if isinstance(res_data, list):
