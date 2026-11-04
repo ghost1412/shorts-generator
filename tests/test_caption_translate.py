@@ -18,8 +18,20 @@ def _transcript(tmp_path, language="en"):
 
 def test_resolve_language_accepts_codes_and_names_and_rejects_unsupported_scripts():
     assert ct.resolve_language("ES") == "es" and ct.resolve_language("Hindi") == "hi"
+    assert [ct.resolve_language(x) for x in ("ja", "Chinese", "korean", "ar")] == ["ja", "zh", "ko", "ar"]
     with pytest.raises(ValueError, match="not supported"):
-        ct.resolve_language("ja")
+        ct.resolve_language("th")
+
+
+def test_caption_tokens_cut_unspaced_languages_into_short_chunks():
+    assert ct.caption_tokens("hola amigo mío") == ["hola", "amigo", "mío"]
+    assert ct.caption_tokens("مرحبا بالعالم") == ["مرحبا", "بالعالم"]
+    assert ct.caption_tokens("안녕하세요 여러분") == ["안녕하세요", "여러분"]
+    tokens = ct.caption_tokens("今天我们来聊聊人工智能，好吗？")
+    assert "".join(tokens) == "今天我们来聊聊人工智能，好吗？"
+    assert all(len(t) <= 4 for t in tokens)
+    assert any(t.endswith("，") for t in tokens)  # punctuation stays with the chunk before it
+    assert ct.caption_tokens("使用AI工具") == ["使用", "AI", "工具"]
 
 
 def test_respread_covers_the_original_span_in_order():

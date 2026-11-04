@@ -8,6 +8,8 @@ import re
 import shutil
 import subprocess
 
+from engine.script_fonts import ARABIC_FONT, SUBSET_DIR, cjk_language, cjk_subset, has_arabic, subset_files_for
+
 
 def reel_words(parts, transcript_data, xf=0.0):
     """Words on the REEL timeline. `parts` = [(start, end, duration)] for each segment in play order (source seconds and
@@ -45,20 +47,35 @@ DEVANAGARI_FONT = "Noto Sans Devanagari"
 _CYRILLIC_GREEK = re.compile("[Ͱ-ϿЀ-ԯ]")
 CYRILLIC_FONT = "Noto Sans"
 _FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "remotion-video", "public", "fonts")
-_FONT_FILES = [os.path.join(_FONT_DIR, "NotoSansDevanagari.ttf"), os.path.join(_FONT_DIR, "NotoSansCyrillic.ttf")]
+_FONT_FILES = [os.path.join(_FONT_DIR, "NotoSansDevanagari.ttf"), os.path.join(_FONT_DIR, "NotoSansCyrillic.ttf"),
+               os.path.join(_FONT_DIR, "NotoSansArabic.ttf")]
 
 
-def _clean(word):
+def _clean(word, cjk_family=None):
     word = re.sub(r"[{}\\]", "", word).upper()
-    if _DEVANAGARI.search(word):
+    if cjk_family and cjk_language(word):
+        # Chinese/Japanese/Korean: per-transcript subset font from engine.script_fonts (named here, staged next to the .ass)
+        word = "{\\fn" + cjk_family + "}" + word
+    elif has_arabic(word):
+        # libass shapes and reorders Arabic itself (HarfBuzz/FriBidi); each Dialogue holds one word, so word order is moot
+        word = "{\\fn" + ARABIC_FONT + "}" + word
+    elif _DEVANAGARI.search(word):
         # Impact has no Devanagari glyphs; name the bundled font so it does not depend on a system fallback
         word = "{\\fn" + DEVANAGARI_FONT + "}" + word
     return word
 
 
-def _stage_fonts(folder):
-    """Copy the bundled Devanagari/Cyrillic fonts next to the .ass file so `ass=...:fontsdir=.` finds them on any machine."""
-    for font_file in _FONT_FILES:
+def _stage_fonts(folder, ass_path=None):
+    """Copy the bundled Devanagari/Cyrillic/Arabic fonts (and any CJK subset the .ass names) next to the .ass file so
+    `ass=...:fontsdir=.` finds them on any machine."""
+    extra = []
+    if ass_path:
+        try:
+            with open(ass_path, encoding="utf-8") as f:
+                extra = subset_files_for(f.read(), SUBSET_DIR)
+        except OSError:
+            pass
+    for font_file in _FONT_FILES + extra:
         try:
             if os.path.exists(font_file):
                 dest = os.path.join(folder, os.path.basename(font_file))
@@ -82,7 +99,9 @@ def ass_document(words, size=(1920, 1080), font="Impact", font_size=None, bottom
         f"{max(3, round(h / 270))},1,2,40,40,{bottom_margin},1\n\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
-    lines = [f"Dialogue: 0,{_ts(s)},{_ts(e)},Default,,0,0,0,,{_clean(t)}" for s, e, t in words]
+    subset = cjk_subset(" ".join(t for _s, _e, t in words))  # None unless the words contain Chinese/Japanese/Korean
+    family = subset[0] if subset else None
+    lines = [f"Dialogue: 0,{_ts(s)},{_ts(e)},Default,,0,0,0,,{_clean(t, family)}" for s, e, t in words]
     return head + "\n".join(lines) + "\n"
 
 
@@ -93,7 +112,7 @@ def burn_captions(video_in, ass_path, video_out, codec="libx264", quality_params
         import imageio_ffmpeg
         exe = imageio_ffmpeg.get_ffmpeg_exe()
     folder, name = os.path.split(os.path.abspath(ass_path))
-    _stage_fonts(folder)
+    _stage_fonts(folder, ass_path)
     params = quality_params or (["-crf", "18"] if codec == "libx264" else ["-rc", "vbr", "-cq", "18", "-b:v", "0"])
     cmd = [exe, "-y", "-i", os.path.abspath(video_in), "-vf", f"ass={name}:fontsdir=.", "-c:v", codec, *params,
            "-pix_fmt", "yuv420p", "-c:a", "copy", os.path.abspath(video_out)]
@@ -131,7 +150,7 @@ def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx2
     cwd = None
     if ass_path:
         cwd, name = os.path.split(os.path.abspath(ass_path))
-        _stage_fonts(cwd)
+        _stage_fonts(cwd, ass_path)
         parts.append(f"[{vcur}]ass={name}:fontsdir=.[vout]")
         vcur = "vout"
     folder = workdir or cwd or os.path.dirname(os.path.abspath(out_path))

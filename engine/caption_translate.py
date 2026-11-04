@@ -3,8 +3,9 @@
 The translated text of each segment is spread over the segment's own time span (by word length), so the
 caption animation keeps following the speech even though the words are different.
 
-Only languages the bundled caption fonts can draw are offered: Latin-script languages (Anton), Hindi/Marathi
-(Noto Sans Devanagari) and Russian/Ukrainian/Bulgarian/Greek (Noto Sans). Japanese, Chinese, Korean and Arabic would render as empty boxes.
+Only languages the caption fonts can draw are offered: Latin-script languages (Anton), Hindi/Marathi
+(Noto Sans Devanagari), Russian/Ukrainian/Bulgarian/Greek (Noto Sans), Arabic (bundled Noto Sans Arabic) and
+Chinese/Japanese/Korean (Noto Sans CJK, downloaded once and cut down per render, see engine/script_fonts.py).
 """
 import copy
 import json
@@ -16,6 +17,7 @@ LANGUAGES = {
     "nl": "Dutch", "pl": "Polish", "tr": "Turkish", "id": "Indonesian", "vi": "Vietnamese",
     "hi": "Hindi", "mr": "Marathi",
     "ru": "Russian", "uk": "Ukrainian", "bg": "Bulgarian", "el": "Greek",
+    "ar": "Arabic", "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
 }
 BATCH_SEGMENTS = 30
 BATCH_CHARS = 3500
@@ -68,13 +70,51 @@ def translate_lines(lines, language, ask):
     return out
 
 
+_CJK_UNIT = re.compile(r"[A-Za-z0-9_'’]+|\s+|.", re.S)
+_CJK_CHUNK = 3  # characters per caption word for languages written without spaces
+_CLOSERS = "，。！？、；：…,.!?;:)）」』”"
+
+
+def caption_tokens(text):
+    """Caption 'words' for `text`. Spaced languages split on whitespace. Chinese/Japanese have no spaces, so runs of
+    CJK characters are cut into chunks of a few characters (closing punctuation stays with the chunk before it)."""
+    from engine.script_fonts import cjk_language
+    if cjk_language(text) not in ("zh", "ja"):  # Latin, Cyrillic, Arabic, ... and Korean (which uses spaces)
+        return text.split()
+    tokens, chunk = [], ""
+    for unit in _CJK_UNIT.findall(text):
+        if unit.isspace():
+            if chunk:
+                tokens.append(chunk)
+                chunk = ""
+        elif len(unit) > 1 or unit.isascii() and unit.isalnum():
+            if chunk:
+                tokens.append(chunk)
+                chunk = ""
+            tokens.append(unit)
+        elif unit in _CLOSERS and (chunk or tokens):
+            if chunk:
+                tokens.append(chunk + unit)
+                chunk = ""
+            else:
+                tokens[-1] += unit
+        else:
+            chunk += unit
+            if len(chunk) >= _CJK_CHUNK:
+                tokens.append(chunk)
+                chunk = ""
+    if chunk:
+        tokens.append(chunk)
+    return tokens
+
+
 def respread(segment, new_text):
     """Word list for `new_text` timed across the span of the segment's original words."""
     words = [w for w in segment.get("words") or [] if "start" in w and "end" in w]
     t0 = words[0]["start"] if words else segment.get("start", 0.0)
     t1 = words[-1]["end"] if words else segment.get("end", t0)
     t1 = max(t1, t0 + 0.2)
-    tokens = new_text.split()
+    tokens = caption_tokens(new_text)
     if not tokens:
         return []
     weights = [len(t) + 1 for t in tokens]

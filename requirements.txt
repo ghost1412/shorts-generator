@@ -5,6 +5,8 @@ requests>=2.32,<3
 python-dotenv>=1.0,<2
 moviepy>=2.1,<3
 Pillow>=10.4,<12
+# cuts the CJK caption font down to the characters used in a video (engine/script_fonts.py)
+fonttools>=4.50,<5
 numpy>=1.26,<3
 # edge-tts must stay current - Microsoft rotates its token check and old releases get HTTP 403
 edge-tts>=7.3.1
