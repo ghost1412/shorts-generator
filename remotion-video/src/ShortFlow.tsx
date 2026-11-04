@@ -1,4 +1,4 @@
-import { emojiForWord } from "./captionEmoji";
+import { emojiForWord, emojiFileName } from "./captionEmoji";
 import {
   Audio,
   OffthreadVideo,
@@ -114,7 +114,9 @@ export const shortFlowSchema = z.object({
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
   captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]).default("HORMOZI"),
-  captionEmoji: z.boolean().default(false), // needs an emoji font on the render machine (fonts-noto-color-emoji on Linux)
+  captionEmoji: z.boolean().default(false), // keyword emoji, drawn from bundled Twemoji PNGs (public/emoji): no system font needed
+  hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
+  hookSeconds: z.number().default(2.8),
   avatarUrl: z.string().optional(),
   avatarAspect: z.number().optional(), // width / height of the avatar asset; square art is not cropped to 16:9
   avatarKeyed: z.boolean().optional(), // transparent cut-out (green screen removed): drawn without the framed window
@@ -133,6 +135,75 @@ type ShortFlowProps = z.infer<typeof shortFlowSchema>;
 const isVideoAsset = (src: string) => {
   const s = src.toLowerCase();
   return s.endsWith(".mp4") || s.endsWith(".mov") || s.endsWith(".webm");
+};
+
+// Keyword emoji drawn from a bundled Twemoji PNG (no system emoji font needed). Renders nothing when there is no emoji.
+const CaptionEmoji: React.FC<{ word: string; size: number }> = ({ word, size }) => {
+  const e = emojiForWord(word);
+  if (!e) return null;
+  return (
+    <Img
+      src={staticFile(`emoji/${emojiFileName(e)}.png`)}
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        marginLeft: "12px",
+        verticalAlign: "middle",
+        display: "inline-block",
+        filter: "drop-shadow(4px 4px 0 rgba(0,0,0,0.9))",
+      }}
+    />
+  );
+};
+
+// Big title for the first seconds of a clip (--hook_overlay): springs in, holds, fades out.
+const HookOverlay: React.FC<{ text: string; seconds: number; fps: number; frame: number }> = ({ text, seconds, fps, frame }) => {
+  const t = frame / fps;
+  if (t > seconds) return null;
+  const pop = spring({ frame, fps, config: { damping: 12, stiffness: 160, mass: 0.8 } });
+  const opacity = interpolate(t, [seconds - 0.35, seconds], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const fontSize = text.length > 36 ? 84 : text.length > 22 ? 100 : 118;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "330px",
+        width: "100%",
+        display: "flex",
+        justifyContent: "center",
+        padding: "0 60px",
+        boxSizing: "border-box",
+        zIndex: 60,
+        opacity,
+      }}
+    >
+      <div
+        style={{
+          transform: `scale(${0.6 + 0.4 * pop}) rotate(${(1 - pop) * -4}deg)`,
+          background: "rgba(0, 0, 0, 0.78)",
+          border: "6px solid #FFEA00",
+          borderRadius: "28px",
+          padding: "26px 44px",
+          boxShadow: "0 14px 40px rgba(0,0,0,0.6)",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+            fontSize: `${fontSize}px`,
+            lineHeight: 1.08,
+            color: "#FFEA00",
+            textTransform: "uppercase",
+            textAlign: "center",
+            letterSpacing: "1px",
+            textShadow: "4px 4px 0 #000000",
+          }}
+        >
+          {text}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // --- HELPER FOR INFLUENCER & PRESET SUBTITLES ---
@@ -239,7 +310,7 @@ const Subtitles: React.FC<{
               }}
             >
               {w.word}
-              {isActive && captionEmoji ? emojiForWord(w.word) : ""}
+              {isActive && captionEmoji ? <CaptionEmoji word={w.word} size={90} /> : null}
             </span>
           );
         }
@@ -314,7 +385,7 @@ const Subtitles: React.FC<{
               }}
             >
               {w.word}
-              {isActive && captionEmoji ? emojiForWord(w.word) : ""}
+              {isActive && captionEmoji ? <CaptionEmoji word={w.word} size={84} /> : null}
             </span>
           );
         }
@@ -873,6 +944,8 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   subtitleYPos,
   captionStyle = "HORMOZI",
   captionEmoji = false,
+  hookText,
+  hookSeconds = 2.8,
   avatarUrl,
   avatarAspect,
   avatarKeyed,
@@ -1256,6 +1329,8 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           </div>
         </div>
       )}
+
+      {hookText && <HookOverlay text={hookText} seconds={hookSeconds} fps={fps} frame={frame} />}
 
       {/* 5. STYLISH CAPTIONS */}
       <Subtitles

@@ -14,6 +14,9 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 - **Captions in Russian, Ukrainian, Bulgarian and Greek** (bundled Noto Sans, Cyrillic/Greek subset); verified in a real Remotion render. The highlights video uses the same font.
 - The **number of shorts has no limit** any more (browser app, REST API, MCP); the highlights video length has no limit either (a number box).
 
+- **Hook overlay**: `--hook_overlay` shows each clip's hook as a big title for the first ~3 seconds (pops in, fades out). Works with `--use_remotion` clipping.
+- **Caption emoji work everywhere**: `--caption_emoji` now draws bundled Twemoji images (CC-BY 4.0) instead of relying on a system emoji font, so it also works on a clean Windows PC, in Docker and on CI.
+
 ### Fixed
 - Highlights-video prompt now includes the segment-length rules; an API key with non-ASCII characters returns 401 instead of 500; network calls to social/ComfyUI services have timeouts.
 - Security hardening: the legacy `server.py` worker supports `SHORTSFLOW_API_KEY` and listens on localhost by default; API webhook URLs must be http(s) and cannot point at private addresses (override: `SHORTSFLOW_ALLOW_PRIVATE_WEBHOOKS=1`); text values starting with `-` are rejected.

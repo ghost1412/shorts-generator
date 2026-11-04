@@ -72,6 +72,31 @@ def asset_aspect(path):
         return None
 
 
+def clean_hook_text(text, max_words=9, max_chars=60):
+    """Turn a clip's hook/title into a short on-screen headline; '' when there is nothing usable."""
+    if not isinstance(text, str):
+        return ""
+    text = " ".join(text.replace("\n", " ").split()).strip(" \"'")
+    if not text or text.lower().startswith("keywords:"):  # debug strings from the keyword fallback
+        return ""
+    words = text.split(" ")
+    if len(words) > max_words:
+        text = " ".join(words[:max_words]).rstrip(",;:-") + "..."
+    if len(text) > max_chars:
+        text = text[:max_chars].rsplit(" ", 1)[0].rstrip(",;:-") + "..."
+    return text
+
+
+def overlay_props(hook_text=None, hook_seconds=2.8):
+    """Caption-extra props for the Remotion composition: keyword emoji (env opt-in) and the hook overlay."""
+    props = {"captionEmoji": os.getenv("SHORTSFLOW_CAPTION_EMOJI", "") == "1"}
+    hook = clean_hook_text(hook_text)
+    if hook:
+        props["hookText"] = hook
+        props["hookSeconds"] = float(hook_seconds)
+    return props
+
+
 def render_with_remotion(
     audio_path,
     subs_path,
@@ -93,7 +118,8 @@ def render_with_remotion(
     captions=None,
     funny_explainer=None,
     teach_card=None,
-    aspect_ratio="9:16"
+    aspect_ratio="9:16",
+    hook_text=None,     # str: headline shown big for the first ~3 s (--hook_overlay)
 ):
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
@@ -299,7 +325,7 @@ def render_with_remotion(
           "titleText": title_text,
           "subtitleYPos": subtitle_y_pos,
           "captionStyle": caption_style,
-          "captionEmoji": os.getenv("SHORTSFLOW_CAPTION_EMOJI", "") == "1",
+          **overlay_props(hook_text),
           "avatarUrl": rel_avatar_path if rel_avatar_path else None,
           "avatarAspect": avatar_aspect,
           "avatarKeyed": avatar_keyed,
