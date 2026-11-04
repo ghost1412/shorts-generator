@@ -49,7 +49,7 @@ def test_voice_reaches_the_synthesiser(tmp_path, monkeypatch, transcript):
 
     def fake_edge_synth(text, lang, out, provider="auto", voice=None):
         calls.append((lang, voice))
-        open(out, "wb").write(b"x")
+        open(out, "wb").write(b"x" * 500)
         return out
 
     monkeypatch.setattr(dubbing, "synthesize", fake_edge_synth)
@@ -95,7 +95,7 @@ def test_dub_video_writes_an_ass_next_to_the_srt_when_captions_are_on(tmp_path, 
     monkeypatch.setattr(dubbing, "_parse", json.loads)
     llm = lambda prompt: json.dumps({"translations": [{"id": 0, "text": "Hola"}, {"id": 1, "text": "Bienvenido"}]})  # noqa: E731
     mixer = lambda src, clips, out, d, burn_srt=None: open(out, "wb").write(b"v")  # noqa: E731
-    synth = lambda text, out: open(out, "wb").write(b"x")  # noqa: E731
+    synth = lambda text, out: open(out, "wb").write(b"x" * 500)  # noqa: E731
     res = dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=llm, synth=synth,
                             mixer=mixer, captions=True)
     ass = res["srt"][:-4] + ".ass"

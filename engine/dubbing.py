@@ -76,6 +76,16 @@ def build_srt(segments):
     return "\n".join(blocks)
 
 
+def voice_failure_message(errors):
+    """The error shown when no segment got a voice: names the real cause when it is the common 403 (Microsoft rejects an old
+    edge-tts), otherwise the generic hint."""
+    text = " ".join(errors or [])
+    if "403" in text or "Invalid response status" in text:
+        return ("The voice service (Microsoft Edge TTS) rejected the request, which usually means the installed 'edge-tts' "
+                "package is too old. Update it with:  pip install -U edge-tts  (use the same Python that runs ShortsFlow), then try again.")
+    return "No voice could be generated (edge-tts needs internet; Kokoro covers English only)."
+
+
 def segments_from_transcript(data, min_len=0.4):
     """Whisper segments -> [{start, end, text}] without empty / sub-0.4 s ones."""
     out = []
@@ -342,20 +352,30 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
     clips_dir = os.path.join(session_dir, "dub_clips")
     os.makedirs(clips_dir, exist_ok=True)
 
+    voice_errors = []
+
     def make(i):
         path = os.path.join(clips_dir, f"seg_{i:04d}.mp3")
         try:
             synth(texts[i], path)
-            return path if os.path.exists(path) else None
+            if os.path.exists(path) and os.path.getsize(path) > 200:
+                return path
+            raise RuntimeError("the voice service returned an empty file")
         except Exception as e:
+            voice_errors.append(str(e))
             print(f"[Warning] Voice for segment {i + 1} failed: {e}")
+            try:
+                if os.path.exists(path) and os.path.getsize(path) <= 200:
+                    os.remove(path)                      # an empty file must not look like a finished voice
+            except OSError:
+                pass
             return None
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         paths = list(pool.map(make, range(len(segments))))
     failed_voice = sum(1 for p in paths if not p)
     if failed_voice == len(paths):
-        raise RuntimeError("No voice could be generated (edge-tts needs internet; Kokoro covers English only).")
+        raise RuntimeError(voice_failure_message(voice_errors))
 
     clips = []
     for i, (seg, path) in enumerate(zip(segments, paths)):

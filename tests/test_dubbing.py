@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -80,7 +81,7 @@ def test_dub_video_pipeline_with_fakes(tmp_path, monkeypatch, transcript):
     monkeypatch.setattr(dubbing, "_parse", json.loads)
 
     def synth(text, out):
-        open(out, "wb").write(b"x")
+        open(out, "wb").write(b"x" * 500)
 
     seen = {}
 
@@ -120,3 +121,28 @@ def test_dub_video_fails_when_no_voice(tmp_path, monkeypatch, transcript):
         raise RuntimeError("offline")
     with pytest.raises(RuntimeError, match="No voice"):
         dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=llm, synth=synth)
+
+
+def test_failed_voices_are_not_kept_as_empty_files_and_the_403_cause_is_named(tmp_path, monkeypatch, transcript):
+    _fake_media(monkeypatch)
+    llm = lambda prompt: json.dumps({"translations": [{"id": 0, "text": "Hola"}, {"id": 1, "text": "Bienvenido"}]})  # noqa: E731
+    monkeypatch.setattr(dubbing, "_parse", json.loads)
+
+    def broken(text, out):
+        open(out, "wb").close()                                   # what a rejected request leaves behind: an empty file
+        raise RuntimeError("403, message='Invalid response status'")
+
+    with pytest.raises(RuntimeError, match="pip install -U edge-tts"):
+        dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=llm, synth=broken)
+    assert os.listdir(tmp_path / "dub_clips") == []                                   # no empty files left behind
+
+    def empty(text, out):
+        open(out, "wb").close()                                   # "succeeds" but writes nothing
+    with pytest.raises(RuntimeError, match="No voice|rejected"):
+        dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=llm, synth=empty)
+
+
+def test_voice_failure_message_generic_and_specific():
+    from engine.dubbing import voice_failure_message
+    assert "pip install -U edge-tts" in voice_failure_message(["WSServerHandshakeError 403"])
+    assert "needs internet" in voice_failure_message(["timeout"]) and "needs internet" in voice_failure_message([])
