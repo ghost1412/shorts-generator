@@ -129,10 +129,12 @@ def print_clip_score_table(highlights):
     print("="*85 + "\n")
 
 
-def batch_item_command(argv, item, index, python="python", entry=("-m", "shortsflow")):
+def batch_item_command(argv, item, index, python="python", entry=("-m", "shortsflow"), as_category=False):
     """Command line for one batch item: the user's own arguments (so --use_remotion, --layout, --find, --cut, --brand,
     ... all carry over), minus the batch/per-item options, plus this item's source and output file."""
     drop_with_value = {"--batch_file", "--source_video", "--output_json", "--session_dir"}
+    if as_category:   # a topic line (not a video): generate modes take it as the category
+        drop_with_value = drop_with_value | {"--category"}
     out, skip = [], False
     for a in argv:
         if skip:
@@ -143,7 +145,7 @@ def batch_item_command(argv, item, index, python="python", entry=("-m", "shortsf
             skip = "=" not in a
             continue
         out.append(a)
-    cmd = [python, *entry, *out, "--source_video", item]
+    cmd = [python, *entry, *out, "--category" if as_category else "--source_video", item]
     if "--output_json" in argv or any(a.startswith("--output_json=") for a in argv):
         cmd += ["--output_json", f"batch_out_{index}.json"]
     return cmd

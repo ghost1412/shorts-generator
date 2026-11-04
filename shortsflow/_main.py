@@ -138,6 +138,7 @@ def parse_args():
     parser.add_argument("--hero_name", help="Name of the hero (e.g. Luna).")
     parser.add_argument("--companion", help="Hero's companion (e.g. Twinkle the Pixie).")
     parser.add_argument("--quest", help="Hero's adventure quest.")
+    parser.add_argument("--setting", help="Where the kids story takes place (e.g. magical forest); also used to pick the stock footage.")
     # YouTube Multi-Account Flags
     parser.add_argument("--youtube_account", help="Select YouTube account slot (e.g. 1, 2, channel_b).")
     parser.add_argument("--youtube_token_file", help="Path to custom YouTube token.json file.")
@@ -195,37 +196,6 @@ if getattr(args, "llm_provider", None) and args.llm_provider != "auto":
     os.environ["LLM_PROVIDER"] = args.llm_provider
     print(f"[Log] 🤖 Requested LLM Provider: {args.llm_provider}")
 
-if getattr(args, "batch_file", None) and os.path.exists(args.batch_file):
-    print(f"\n[Log] 📦 BATCH PROCESSING MODE ACTIVE: Reading {args.batch_file}...")
-    with open(args.batch_file, "r", encoding="utf-8") as bf:
-        lines = [line.strip() for line in bf if line.strip() and not line.strip().startswith("#")]
-        
-    print(f"[Log] Found {len(lines)} item(s) in batch list. Executing sequential generation...\n")
-    for b_idx, item in enumerate(lines, 1):
-        print(f"\n" + "="*70)
-        print(f"📦 BATCH ITEM {b_idx}/{len(lines)}: {item}")
-        print("="*70)
-        
-        cmd = [sys.executable, "main.py"]
-        if is_url(item) or item.endswith((".mp4", ".mov", ".mkv")):
-            cmd.extend(["--source_video", item])
-        else:
-            cmd.extend(["--mode", args.mode or "FACTS", "--category", item])
-            
-        if args.use_remotion: cmd.append("--use_remotion")
-        if args.caption_style: cmd.extend(["--caption_style", args.caption_style])
-        if args.aspect_ratio: cmd.extend(["--aspect_ratio", args.aspect_ratio])
-        if args.tts_provider: cmd.extend(["--tts_provider", args.tts_provider])
-        if args.auto_ducking: cmd.append("--auto_ducking")
-        if args.enable_zoom: cmd.append("--enable_zoom")
-        if args.enhance_audio: cmd.append("--enhance_audio")
-        cmd.append("--skip_upload")
-        
-        subprocess.run(cmd, check=False)
-        
-    print("\n[Log] 🏁 All batch queue items completed successfully.")
-    sys.exit(0)
-
 # Quality Mapping (Overridden by manual flags if present)
 bitrate_map = {"low": "4M", "medium": "12M", "high": "25M", "ultra": "50M"}
 preset_map = {"low": "ultrafast", "medium": "medium", "high": "slow", "ultra": "slower"}
@@ -281,7 +251,8 @@ if getattr(args, "batch_file", None):
         print(f"[Batch {idx}/{len(urls)}] Processing: {item}")
         print(f"==========================================")
         from engine.pipeline import batch_item_command
-        cmd = batch_item_command(sys.argv[1:], item, idx, python=sys.executable)
+        is_video_item = is_url(item) or item.lower().endswith((".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"))
+        cmd = batch_item_command(sys.argv[1:], item, idx, python=sys.executable, as_category=not is_video_item)
         res = subprocess.run(cmd)
         if res.returncode != 0:
             print(f"[Warning] Batch item {idx} failed with return code {res.returncode}. Continuing...")

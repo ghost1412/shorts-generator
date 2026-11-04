@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import subprocess
 from engine.media_gen import is_url, download_source_video_from_url
 from engine.pipeline import POOL_SIZE, print_clip_score_table
 
@@ -40,6 +41,7 @@ def run(args, target_bitrate, target_preset):
     session_dir = args.session_dir if args.session_dir else f"sessions/extraction_{int(time.time())}"
     os.makedirs(session_dir, exist_ok=True)
     
+    source_url = args.source_video if is_url(args.source_video) else None   # chapters are cached under the URL, not the file
     # 🟢 Auto-download video if source_video is a URL
     if is_url(args.source_video):
         print(f"[Log] Detected Video URL: '{args.source_video}'. Downloading stream...")
@@ -65,7 +67,7 @@ def run(args, target_bitrate, target_preset):
     chapters_path = None
     if args.use_chapters:
         from engine.media_gen import get_chapters_json_path
-        chapters_path = get_chapters_json_path(args.source_video, session_dir)
+        chapters_path = get_chapters_json_path(source_url or args.source_video, session_dir)
 
     highlights, transcript_path, interest_points, silence_intervals = process_source_video(
         args.source_video, session_dir, mode=args.extract_mode, 
@@ -80,6 +82,9 @@ def run(args, target_bitrate, target_preset):
         language=getattr(args, 'language', 'en'),
     )
     
+    # The filler pass needs the words as spoken: a translated transcript has no "um" in it
+    spoken_transcript_path = transcript_path
+
     # Captions in another language: translate the word-timed transcript once the moments are chosen
     if getattr(args, "caption_lang", None):
         from engine.caption_translate import resolve_language, translate_transcript
@@ -102,7 +107,6 @@ def run(args, target_bitrate, target_preset):
     # 🟢 Handle Preview Mode
     if args.preview:
         print("\n[Log] 🔍 PREVIEW MODE ENABLED: Rendering fast 3fps proxy instead of full extraction...")
-        import subprocess
         for i, h in enumerate(highlights):
             out_preview = os.path.join(session_dir, f"preview_clip_{i+1}.mp4")
             cmd = [
@@ -122,7 +126,7 @@ def run(args, target_bitrate, target_preset):
     final_silence = silence_intervals if args.tighten else None
     if getattr(args, "remove_fillers", False):
         from engine.fillers import remove_fillers
-        with open(transcript_path, 'r', encoding='utf-8') as f:
+        with open(spoken_transcript_path, 'r', encoding='utf-8') as f:
             t_segments = json.load(f).get('segments', [])
         total = max([s.get('end', 0) for s in t_segments] or [0]) + 1.0
         rms = None
@@ -232,13 +236,15 @@ def run(args, target_bitrate, target_preset):
             for i, clip_file in enumerate(extracted_files):
                 if i < len(highlights):
                     hi = highlights[i]
-                    clip_segs = [s for s in t_data.get('segments', []) if s['start'] >= hi['start'] and s['end'] <= hi['end']]
-                    # Offset times relative to clip start
-                    for s in clip_segs:
-                        s['start'] = max(0, s['start'] - hi['start'])
-                        s['end'] = max(0, s['end'] - hi['start'])
+                    # Copies: one transcript serves every clip, so one clip's offsets must not leak into the next
+                    clip_segs = []
+                    for seg in t_data.get('segments', []):
+                        if seg['end'] <= hi['start'] or seg['start'] >= hi['end']:
+                            continue
+                        clip_segs.append(dict(seg, start=max(0.0, seg['start'] - hi['start']),
+                                              end=min(hi['end'] - hi['start'], seg['end'] - hi['start'])))
                     srt_path = clip_file.rsplit('.', 1)[0] + ".srt"
-                    from engine.video_gen import export_srt
+                    from engine.pipeline import export_srt
                     export_srt({'segments': clip_segs}, srt_path)
         except Exception as e:
             print(f"[Warning] Failed to export SRT files: {e}")

@@ -181,7 +181,6 @@ class ModernShortsGeneratorUI(ctk.CTk):
                 "🧮 Manim Math & CS Explainer",
                 "🤔 This or That (WYR Challenge)",
                 "🔍 Find N Meme Puzzle (Find 7 Cat/Gigachad)",
-                "🏆 Rank-It Tier List Reveal",
                 "❓ Interactive Trivia Quiz",
                 "🧩 Riddle & Lateral Thinking",
                 "📰 News Breakdown (Persona/Cartoon)",
@@ -209,7 +208,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
         # Mood / Vibe Selector
         ctk.CTkLabel(mode_card, text="Narrative Vibe / Mood:", font=ctk.CTkFont(size=10, weight="bold"), text_color="#94A3B8").pack(anchor="w", padx=12, pady=(2, 2))
-        self.vibe_menu = ctk.CTkOptionMenu(mode_card, values=["suspense", "sarcastic", "energetic", "calm", "mysterious", "spooky", "cinematic", "funny"], height=28, fg_color="#0F172A", button_color="#334155")
+        self.vibe_menu = ctk.CTkOptionMenu(mode_card, values=["suspense", "spooky", "cinematic", "upbeat", "sarcastic", "funny"], height=28, fg_color="#0F172A", button_color="#334155")
         self.vibe_menu.pack(fill="x", padx=12, pady=(0, 10))
 
         # 3. AI Model, Cartoon Persona & Voice Synthesizer Card
@@ -219,7 +218,7 @@ class ModernShortsGeneratorUI(ctk.CTk):
         ctk.CTkLabel(ai_card, text="🤖 LLM Model Provider:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#CBD5E1").pack(anchor="w", padx=12, pady=(10, 4))
         self.llm_provider = ctk.CTkOptionMenu(
             ai_card,
-            values=["⚡ Gemini API (Primary)", "🦙 Local Ollama (Qwen/Llama)", "🤗 HuggingFace Router", "🚀 Groq Llama 3.3 70B", "🐉 DeepSeek Chat"],
+            values=["⚡ Gemini API (Primary)", "🦙 Local Ollama (Qwen/Llama)", "🤗 HuggingFace Router", "🚀 Groq (free tier)", "🐉 DeepSeek Chat"],
             height=30,
             fg_color="#0F172A",
             button_color="#334155"
@@ -706,12 +705,16 @@ class ModernShortsGeneratorUI(ctk.CTk):
             return
 
         # Extraction Format
-        ext_mode = self.extract_mode_menu.get().split()[0]
+        ext_choice = self.extract_mode_menu.get().split()[0]
+        # The menu names four formats; the CLI knows two extract modes (shorts, long) plus --mashup / --clip_count
+        ext_mode = "long" if ext_choice in ("mashup", "long") else "shorts"
 
         if "Auto Clipping" in mode_str:
             cmd.extend(["--source_video", source, "--extract_mode", ext_mode])
-            if ext_mode == "mashup":
+            if ext_choice == "mashup":
                 cmd.append("--mashup")
+            elif ext_choice == "highlights":
+                cmd.extend(["--clip_count", "1"])   # single peak moment
         elif "AI Facts" in mode_str:
             cmd.extend(["--mode", "FACTS", "--category", self.user_context_entry.get().strip() or "space mysteries"])
         elif "AI Story" in mode_str:
@@ -726,8 +729,6 @@ class ModernShortsGeneratorUI(ctk.CTk):
         elif "Find N Meme" in mode_str:
             target_cat = self.user_context_entry.get().strip() or "cat"
             cmd.extend(["--mode", "FIND_IT", "--category", target_cat])
-        elif "Rank-It" in mode_str:
-            cmd.extend(["--mode", "RANK_IT", "--category", self.user_context_entry.get().strip() or "supercars"])
         elif "Trivia Quiz" in mode_str:
             cmd.extend(["--mode", "TRIVIA", "--category", self.user_context_entry.get().strip() or "movies"])
         elif "Riddle" in mode_str:
@@ -772,6 +773,12 @@ class ModernShortsGeneratorUI(ctk.CTk):
 
         # Vibe / Mood
         cmd.extend(["--vibe", self.vibe_menu.get()])
+        # The provider menu used to be ignored; HuggingFace has no CLI choice and stays on the automatic order
+        provider_flag = {"Gemini": "gemini", "Ollama": "ollama", "Groq": "groq", "DeepSeek": "deepseek"}
+        for label, flag in provider_flag.items():
+            if label in self.llm_provider.get():
+                cmd.extend(["--llm_provider", flag])
+                break
 
         # Caption style & Remotion
         if self.remotion_switch.get() == 1:
