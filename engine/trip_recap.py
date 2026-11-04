@@ -135,6 +135,22 @@ def plan_counts(n_days, total_seconds, card=CARD_SECONDS, clip=CLIP_SECONDS):
     return n, round(max(2.5, min(8.0, per_day / n)), 2)
 
 
+def plan_days(video_counts, total_seconds, card=CARD_SECONDS, clip=CLIP_SECONDS):
+    """([moments for each day], seconds per moment). Days with more footage get more time: weight = sqrt(number of videos), so a
+    day with 68 videos gets about 4 times the time of a day with 4 (not 17 times), and every day keeps at least one moment."""
+    n = max(1, len(video_counts))
+    left = max(float(total_seconds) - n * card, n * 3.0)
+    total_moments = max(n, int(round(left / clip)))
+    weights = [max(1.0, float(c)) ** 0.5 for c in video_counts]
+    raw = [total_moments * w / sum(weights) for w in weights]
+    counts = [max(1, int(round(r))) for r in raw]
+    while sum(counts) > total_moments and max(counts) > 1:          # trim the biggest day first
+        counts[counts.index(max(counts))] -= 1
+    while sum(counts) < total_moments:                              # give the rest to the day with the most footage
+        counts[max(range(n), key=lambda i: raw[i] - counts[i])] += 1
+    return counts, round(max(2.5, min(8.0, left / max(1, sum(counts)))), 2)
+
+
 def loudness_per_second(video, ffmpeg=None, run=subprocess.run):
     """[rms level in dB for each second] from the video's sound, [] when it has none."""
     if ffmpeg is None:
@@ -395,7 +411,7 @@ def scenic_score(jpeg):
     return round(0.5 * sat + 0.3 * contrast + 0.2 * exposure, 4)
 
 
-def pick_glimpses(days, k, length, grab=None, score=scenic_score, per_candidates=6):
+def pick_glimpses(days, k, length, grab=None, score=scenic_score, per_candidates=6, rate=None, shortlist=24):
     """The k most scenic windows over the whole trip: [{file, start, end, size, day}], in trip order.
 
     Every video is sampled at `per_candidates` evenly spread windows; one frame of each is scored. No day contributes more than
@@ -409,7 +425,20 @@ def pick_glimpses(days, k, length, grab=None, score=scenic_score, per_candidates
             for s, e in pick_windows(dur, per_candidates, length):
                 frames = grab(f, s, e)
                 if frames:
-                    cands.append({"file": f, "start": s, "end": e, "size": (w, h), "day": di, "score": score(frames[0])})
+                    cands.append({"file": f, "start": s, "end": e, "size": (w, h), "day": di, "score": score(frames[0]), "_frame": frames[0]})
+    if rate and cands:
+        # the colour score is only a first filter; the vision model judges the shortlist (lakes, canyons, mountains; no text overlays)
+        top = sorted(cands, key=lambda c: c["score"], reverse=True)[:shortlist]
+        rated = rate([c["_frame"] for c in top])
+        if rated and len(rated) == len(top):
+            cands = []
+            for c, r in zip(top, rated):
+                if r.get("overlay"):
+                    continue
+                c["score"] = float(r.get("score", 0)) + 0.5 * c["score"]          # the colour score breaks ties
+                cands.append(c)
+    for c in cands:
+        c.pop("_frame", None)
     cap = int(-(-k // max(1, len(days)))) + 1
     chosen, used = [], {}
     ranked = sorted(cands, key=lambda c: c["score"], reverse=True)
@@ -446,18 +475,23 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     hype = style != "plain"
     opening = (GLIMPSES * GLIMPSE_SECONDS + CARD_SECONDS) if hype else 0.0      # glimpses + the trip title card
-    n_clips, clip_len = plan_counts(len(days_paths), max(float(total_seconds) - opening, len(days_paths) * 6.0))
-    print(f"[Log] Trip recap: {len(days_paths)} day(s), {sum(len(d) for d in days_paths)} video(s); {n_clips} moment(s) of {clip_len:g}s per day.")
-
-    days = []
-    for di, files in enumerate(days_paths, 1):
+    all_infos = []
+    for files in days_paths:
         infos = []
         for f in files:
             dur, w, h = video_info(f)
             if dur > 1:
                 infos.append((f, dur, w, h))
-        if not infos:
-            continue
+        if infos:
+            all_infos.append(infos)
+    if not all_infos:
+        raise ValueError("None of the videos could be read.")
+    counts, clip_len = plan_days([len(i) for i in all_infos], max(float(total_seconds) - opening, len(all_infos) * 6.0))
+    print(f"[Log] Trip recap: {len(all_infos)} day(s), {sum(len(i) for i in all_infos)} video(s); moments per day: {counts} of {clip_len:g}s.")
+
+    days = []
+    for di, infos in enumerate(all_infos, 1):
+        n_clips = counts[di - 1]
         total_dur = sum(i[1] for i in infos)
         moments = []
         for f, dur, w, h in infos:
@@ -490,7 +524,11 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
     os.makedirs(parts_dir, exist_ok=True)
     it["hook"] = (hook or it.get("hook") or "").strip() or (f"{trip_name}: you have to see this" if trip_name else "You have to see this place")
     if hype:
-        glimpses = pick_glimpses(days, GLIMPSES, GLIMPSE_SECONDS, grab=grab)
+        rate = None
+        if visual:
+            from engine.visual_context import rate_scenery
+            rate = rate_scenery
+        glimpses = pick_glimpses(days, GLIMPSES, GLIMPSE_SECONDS, grab=grab, rate=rate)
         if glimpses:
             hook_png = caption_png(os.path.join(parts_dir, "hook.png"), it["hook"], y_frac=0.3, size=96)
             for gi, g in enumerate(glimpses, 1):

@@ -154,3 +154,29 @@ def test_stops_are_cut_at_the_longest_pauses():
     # no times in the names, or no clear pauses: equal counts as before
     assert tr.split_by_gaps(["a.mp4", "b.mp4", "c.mp4"], 2) is None
     assert tr.split_by_gaps(["080000_a.mp4", "080500_b.mp4", "081000_c.mp4"], 2) is None
+
+
+def test_plan_days_gives_the_big_day_more_time_but_every_day_some():
+    counts, clip = tr.plan_days([4, 68, 31, 32, 38], 100)
+    assert counts[1] == max(counts) and counts[1] > counts[0] and min(counts) >= 1
+    assert sum(counts) * clip + 5 * tr.CARD_SECONDS == pytest.approx(100, abs=12)
+    assert tr.plan_days([5], 40)[0][0] >= 1
+    assert sum(tr.plan_days([1, 1, 1], 30)[0]) >= 3
+
+
+def test_glimpses_use_the_vision_rating_and_skip_overlays():
+    days = [{"infos": [(f"d{d}.mp4", 60, 640, 360)]} for d in range(3)]
+    grab = lambda f, s, e: [f"{f}|{s}".encode()]  # noqa: E731
+    colour = lambda b: 1.0 if b.startswith(b"d0") else 0.1  # noqa: E731    # colour alone would favour day 1 (the night park walk)
+
+    def rate(frames):
+        out = []
+        for fr in frames:
+            name = fr.decode()
+            out.append({"score": 9.0 if name.startswith("d2") else 2.0, "overlay": name.startswith("d1")})
+        return out
+
+    g = tr.pick_glimpses(days, 4, 1.4, grab=grab, score=colour, rate=rate)
+    assert all(x["day"] != 1 for x in g)                      # the clip with a text overlay never opens the video
+    assert sum(1 for x in g if x["day"] == 2) >= 2            # the rated-beautiful day leads
+    assert tr.pick_glimpses(days, 4, 1.4, grab=grab, score=colour, rate=lambda fr: None)    # a failed rating falls back to colour

@@ -132,6 +132,47 @@ def describe_gemini(frames, model, about="", timeout=90, key=None):
     return ""
 
 
+SCENIC_PROMPT = ("These are {n} frames from different video clips of a trip, numbered in order. For a hook at the start of a travel video, "
+                 "rate each frame 1-10 for how breathtaking it looks as a first shot: wide natural scenery (lakes, mountains, canyons, "
+                 "dramatic light) scores high; close-ups of people, food, streets, indoor, night or dark, blurry or boring frames score low. "
+                 "Also set overlay true if the frame has added text, stickers or a social-media caption (not a place sign). "
+                 'Reply with JSON only: [{{"id": 1, "score": 7, "overlay": false}}, ...] with exactly {n} entries.')
+
+
+def rate_scenery(frames, key=None, timeout=120):
+    """[{score, overlay}] for each JPEG frame, rated by Gemini in ONE request, or None when it cannot be done (no key, bad reply)."""
+    key = key or gemini_key()
+    if not frames or not key or (os.getenv("SHORTSFLOW_VISION") or "").lower() == "ollama":
+        return None
+    parts = [{"text": SCENIC_PROMPT.format(n=len(frames))}]
+    for i, f in enumerate(frames, 1):
+        parts += [{"text": f"Frame {i}:"}, {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(f).decode()}}]
+    body = json.dumps({"contents": [{"parts": parts}], "generationConfig": {"temperature": 0, "maxOutputTokens": 4000}}).encode()
+    import time
+    for name, attempt in [(n, a) for n in GEMINI_MODELS for a in range(3)]:
+        req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{name}:generateContent", body,
+                                     {"Content-Type": "application/json", "x-goog-api-key": key})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.load(r)
+            text = "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
+            from engine.script_gen import robust_json_parse
+            rows = robust_json_parse(text)
+            if isinstance(rows, dict):
+                rows = rows.get("frames") or rows.get("ratings") or []
+            by_id = {int(r["id"]): r for r in rows if isinstance(r, dict) and "id" in r}
+            if len(by_id) >= max(1, len(frames) // 2):
+                return [{"score": max(0.0, min(10.0, float(by_id.get(i, {}).get("score", 0)))), "overlay": bool(by_id.get(i, {}).get("overlay"))}
+                        for i in range(1, len(frames) + 1)]
+        except Exception as e:
+            if "429" in str(e) or "503" in str(e):              # rate limit / busy: wait and ask the same model again
+                time.sleep(20 * (attempt + 1))
+                continue
+            print(f"[Warning] Rating the opening shots with Gemini failed ({str(e)[:80]}); using colour and contrast instead.")
+    print("[Warning] Gemini could not rate the opening shots (busy or over its limit); using colour and contrast instead.")
+    return None
+
+
 def choose_backend():
     """(model name, ask function, label) or (None, None, why): Gemini if a key exists (unless SHORTSFLOW_VISION=ollama), else Ollama."""
     want = (os.getenv("SHORTSFLOW_VISION") or "auto").strip().lower()

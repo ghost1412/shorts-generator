@@ -109,3 +109,22 @@ def test_gemini_request_and_cleaning(monkeypatch):
     assert "God of War" in parts[0]["text"] and parts[1]["inline_data"]["mime_type"] == "image/jpeg"
     monkeypatch.setattr(vc, "gemini_key", lambda: None)                  # no key anywhere (not even .env): nothing is sent
     assert vc.describe_gemini([], "m", key="K") == "" and vc.describe_gemini([b"x"], "m") == ""
+
+
+def test_rate_scenery_parses_one_request(monkeypatch):
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps({"candidates": [{"content": {"parts": [{"text": '[{"id": 1, "score": 9, "overlay": false}, {"id": 2, "score": 3, "overlay": true}]'}]}}]}).encode()
+
+    calls = []
+    monkeypatch.setattr(vc.urllib.request, "urlopen", lambda req, timeout=0: calls.append(req) or Resp())
+    out = vc.rate_scenery([b"a" * 600, b"b" * 600], key="K")
+    assert out == [{"score": 9.0, "overlay": False}, {"score": 3.0, "overlay": True}] and len(calls) == 1
+    monkeypatch.setattr(vc, "gemini_key", lambda: None)
+    assert vc.rate_scenery([b"a"]) is None                     # no key: callers keep the colour score
