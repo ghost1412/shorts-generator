@@ -76,6 +76,19 @@ def build_srt(segments):
     return "\n".join(blocks)
 
 
+def coverage_warning(segments, video_seconds, threshold=0.4):
+    """A sentence when speech recognition found speech in only a small part of the video (the rest keeps its original voice),
+    else None. Typical causes: a language the model is weak at, mixed languages, music or game sound over the voice."""
+    if not video_seconds or video_seconds < 5 or not segments:
+        return None
+    spoken = sum(max(0.0, float(s["end"]) - float(s["start"])) for s in segments)
+    if spoken / video_seconds >= threshold:
+        return None
+    return (f"Speech recognition found speech in only {spoken:.0f} s of the {video_seconds:.0f} s video, so the rest keeps its original "
+            "voice. For other languages or mixed languages try a bigger speech model (set SHORTSFLOW_WHISPER_MODEL=large-v3) and "
+            "pick the spoken language instead of 'detect automatically'.")
+
+
 def voice_failure_message(errors):
     """The error shown when no segment got a voice: names the real cause when it is the common 403 (Microsoft rejects an old
     edge-tts), otherwise the generic hint."""
@@ -263,8 +276,16 @@ def synthesize(text, lang, out_path, provider="auto", voice=None):
         raise
 
 
-def build_filter(placements, total, source_has_audio=True):
-    """FFmpeg filter_complex text. placements: [{index(input no.), start, tempo, trim}] with inputs 1..n = dub clips."""
+ORIGINAL_MODES = ("quiet", "duck", "mute")
+QUIET_GAIN = 0.12            # about -18 dB: the original stays as a faint bed, the new voice is clearly in front
+
+
+def build_filter(placements, total, source_has_audio=True, original="quiet"):
+    """FFmpeg filter_complex text. placements: [{index(input no.), start, tempo, trim}] with inputs 1..n = dub clips.
+
+    original: what happens to the video's own sound. "quiet" (default) keeps it at about -18 dB and lowers it further while the
+    new voice speaks, "duck" only lowers it while the new voice speaks (the original stays at full volume elsewhere, so any part
+    that was not dubbed is heard in the original language), "mute" removes it completely."""
     parts, labels = [], []
     for p in placements:
         chain = []
@@ -279,9 +300,9 @@ def build_filter(placements, total, source_has_audio=True):
         labels.append(f"[{label}]")
     n = len(labels)
     mix = "".join(labels) + f"amix=inputs={n}:normalize=0:dropout_transition=0,apad=whole_dur={total:.3f}"
-    if source_has_audio:
+    if source_has_audio and original != "mute":
         parts.append(mix + ",asplit=2[dubmix][dubkey]")
-        parts.append("[0:a]aresample=44100[orig]")
+        parts.append("[0:a]aresample=44100" + (f",volume={QUIET_GAIN}" if original == "quiet" else "") + "[orig]")
         parts.append("[orig][dubkey]sidechaincompress=threshold=0.015:ratio=14:attack=15:release=500:makeup=1[ducked]")
         parts.append("[ducked][dubmix]amix=inputs=2:normalize=0:duration=first[aout]")
     else:
@@ -289,7 +310,7 @@ def build_filter(placements, total, source_has_audio=True):
     return ";\n".join(parts)
 
 
-def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None):
+def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None, original="quiet"):
     """clips: [{path, start, tempo, trim}]. Writes output_path (video copied, new audio; re-encoded if captions burn in)."""
     import imageio_ffmpeg
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -297,7 +318,7 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None):
     placements = [dict(c, index=i) for i, c in enumerate(clips, 1)]
     script = os.path.join(session_dir, "dub_filter.txt")
     with open(script, "w", encoding="utf-8") as f:
-        f.write(build_filter(placements, total, has_audio(source_video)))
+        f.write(build_filter(placements, total, has_audio(source_video), original))
     cmd = [ffmpeg, "-y", "-i", os.path.abspath(source_video)]
     for c in clips:
         cmd += ["-i", os.path.abspath(c["path"])]
@@ -321,7 +342,7 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None):
 
 
 def dub_video(source_video, target_lang, session_dir, output_path=None, language="en", provider="auto",
-              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None):
+              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None, original="quiet"):
     """Full pipeline. Returns {"video", "srt", "json", "segments", "failed_translations", "failed_voices"}.
     transcribe/llm/synth/mixer can be replaced (tests, custom backends)."""
     target = normalize_lang(target_lang)
@@ -341,6 +362,9 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
     if not segments:
         raise ValueError("No speech found in the video, nothing to dub.")
     print(f"[Log] Dubbing {len(segments)} spoken segment(s) into {LANG_NAMES.get(target, target)}...")
+    note = coverage_warning(segments, media_duration(source_video))
+    if note:
+        print(f"[Warning] {note}")
 
     texts, failed_tr = translate_segments(segments, target, llm=llm)
     if failed_tr == len(segments):
@@ -397,6 +421,9 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
         json.dump({"target_lang": target, "source_lang": source_lang, "segments": translated}, f, ensure_ascii=False, indent=2)
 
     output_path = output_path or os.path.join(session_dir, f"{base}_dub_{target}.mp4")
-    (mixer or mix_dub)(source_video, clips, output_path, session_dir, burn_srt=srt_path if captions else None)
+    if mixer is None:
+        mix_dub(source_video, clips, output_path, session_dir, burn_srt=srt_path if captions else None, original=original)
+    else:
+        mixer(source_video, clips, output_path, session_dir, burn_srt=srt_path if captions else None)
     return {"video": output_path, "srt": srt_path, "json": json_path, "segments": len(segments),
             "failed_translations": failed_tr, "failed_voices": failed_voice}

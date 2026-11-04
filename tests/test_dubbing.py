@@ -146,3 +146,33 @@ def test_voice_failure_message_generic_and_specific():
     from engine.dubbing import voice_failure_message
     assert "pip install -U edge-tts" in voice_failure_message(["WSServerHandshakeError 403"])
     assert "needs internet" in voice_failure_message(["timeout"]) and "needs internet" in voice_failure_message([])
+
+
+def _placements():
+    return [{"index": 1, "start": 1.0, "tempo": 1.0}, {"index": 2, "start": 5.0, "tempo": 1.2}]
+
+
+def test_original_sound_options_in_the_filter():
+    quiet = dubbing.build_filter(_placements(), 20.0, True, "quiet")
+    duck = dubbing.build_filter(_placements(), 20.0, True, "duck")
+    mute = dubbing.build_filter(_placements(), 20.0, True, "mute")
+    assert "volume=0.12[orig]" in quiet and "sidechaincompress" in quiet and "[0:a]" in quiet      # faint bed + lowered under the voice
+    assert "volume=" not in duck.split("[orig]")[0].split("[0:a]")[-1] and "sidechaincompress" in duck
+    assert "[0:a]" not in mute and "sidechaincompress" not in mute and "[aout]" in mute              # original removed entirely
+    assert dubbing.build_filter(_placements(), 20.0, True) == quiet                                  # quiet is the default
+    assert "[0:a]" not in dubbing.build_filter(_placements(), 20.0, False)                           # no source audio: nothing to mix
+
+
+def test_coverage_warning_when_little_speech_was_recognised():
+    segs = [{"start": 1.7, "end": 3.0}, {"start": 31.0, "end": 32.0}]
+    msg = dubbing.coverage_warning(segs, 45.0)
+    assert "only 2 s of the 45 s" in msg and "SHORTSFLOW_WHISPER_MODEL=large-v3" in msg
+    assert dubbing.coverage_warning([{"start": 0, "end": 30}], 45.0) is None                         # most of the video is speech
+    assert dubbing.coverage_warning(segs, 3.0) is None and dubbing.coverage_warning([], 45.0) is None
+
+
+def test_dub_args_original_option():
+    from shortsflow import web_args
+    assert "--dub_original" not in web_args.dub_args("a.mp4", "en")                                  # the default needs no flag
+    assert web_args.dub_args("a.mp4", "en", original="mute")[-2:] == ["--dub_original", "mute"]
+    assert web_args.dub_args("a.mp4", "en", original="duck", session_dir="s")[-4:-2] == ["--dub_original", "duck"]

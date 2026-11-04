@@ -28,6 +28,7 @@ def run(args, target_bitrate=None, target_preset=None):
             provider=getattr(args, "tts_provider", "auto") or "auto",
             captions=bool(getattr(args, "dub_captions", False)),
             voice=getattr(args, "dub_voice", None),
+            original=getattr(args, "dub_original", "quiet") or "quiet",
         )
     except (ValueError, RuntimeError) as e:
         print(f"[Error] {e}")

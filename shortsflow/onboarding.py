@@ -26,7 +26,7 @@ PHOTO_STEPS = [
     (r"Rendering Photo Reel using Remotion", "🎬 Building your reel (about a minute)..."),
     (r"\[Success\].*Photo Reel rendered", "✅ Done! Your reel is ready below."),
 ]
-_WARN_WORDS = ("credits", "rejected the API key", "rate limiting", "Could not reach")
+_WARN_WORDS = ("credits", "rejected the API key", "rate limiting", "Could not reach", "found speech in only")
 
 
 def friendly_step(line, steps=None):

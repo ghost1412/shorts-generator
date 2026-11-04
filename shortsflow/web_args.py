@@ -64,7 +64,12 @@ DUB_VOICE_CHOICES = [("Automatic (female)", "auto"), ("Female", "female"), ("Mal
 DUB_PROVIDER_CHOICES = [("Automatic", "auto"), ("Edge (online, many languages)", "edgetts"), ("Kokoro (on this PC, English only)", "kokoro")]
 
 
-def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_dir=None, tts_provider="auto", voice="auto"):
+DUB_ORIGINAL_CHOICES = [("Keep it very quiet under the new voice (recommended)", "quiet"),
+                        ("Lower it only while the new voice speaks", "duck"), ("Remove the original sound completely", "mute")]
+
+
+def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_dir=None, tts_provider="auto", voice="auto",
+             original="quiet"):
     """Arguments (after the pipeline command) for `--mode DUB`. 'auto' voice / provider leave the flags out."""
     args = ["--mode", "DUB", "--source_video", source, "--target_lang", target_lang,
             "--language", (spoken or "auto")]
@@ -72,6 +77,8 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
         args.append("--dub_captions")
     if voice in ("female", "male"):
         args += ["--dub_voice", voice]
+    if original in ("duck", "mute"):
+        args += ["--dub_original", original]          # "quiet" is the command line's default
     if tts_provider and tts_provider != "auto":
         args += ["--tts_provider", tts_provider]
     if session_dir:

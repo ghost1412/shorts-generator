@@ -156,7 +156,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     yield from _run(cmd)
 
 
-def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto"):
+def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto", original="quiet"):
     """Dub tab: translate a video's speech and re-voice it. Yields (status, log, video, srt)."""
     import time
     from shortsflow import onboarding
@@ -167,7 +167,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
         raise gr.Error("Choose the language to dub into.")
     session = os.path.join(ROOT, "sessions", time.strftime("dub_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session, tts_provider, voice)]
+    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session, tts_provider, voice, original)]
     progress, seen = onboarding.Progress(steps=onboarding.DUB_STEPS), 0
     status = progress.message
     yield status, "", None, None
@@ -725,6 +725,8 @@ def build_ui():
                             d_voice = gr.Dropdown(web_args.DUB_VOICE_CHOICES, value="auto", label="Voice")
                             d_tts = gr.Dropdown(web_args.DUB_PROVIDER_CHOICES, value="auto", label="Voice engine",
                                                 info="Automatic uses Edge online; Kokoro runs on this PC but only speaks English.")
+                        d_original = gr.Dropdown(web_args.DUB_ORIGINAL_CHOICES, value="quiet", label="The video's own sound",
+                                                 info="There is no way to remove only the voice, so the original voice stays faintly audible unless you remove all the sound.")
                         d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
                         d_btn = gr.Button("🌍 Dub my video", variant="primary")
                     with gr.Column():
@@ -733,7 +735,7 @@ def build_ui():
                         d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice], [d_status, d_log, d_video, d_srt])
+                d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original], [d_status, d_log, d_video, d_srt])
 
             with gr.Tab("📸 Photo reel"):
                 from engine.photo_reel_types import type_labels

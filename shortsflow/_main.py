@@ -149,6 +149,7 @@ def parse_args():
     parser.add_argument("--aspect_ratio", choices=["9:16", "16:9", "1:1", "4:5"], default="9:16", help="Select output video aspect ratio (default 9:16 vertical).")
     parser.add_argument("--target_lang", help="Target language for --mode DUB (translate and re-voice the video): es, hi, de, fr, ja, pt, zh, it, ru, ko, ar, en, tr, nl, pl, uk, id.")
     parser.add_argument("--dub_captions", action="store_true", help="--mode DUB: burn the translated subtitles into the dubbed video (re-encodes; the .srt is always written). Uses a font with the glyphs for the target script (Hindi, Arabic, Cyrillic, Chinese, Japanese, Korean).")
+    parser.add_argument("--dub_original", choices=["quiet", "duck", "mute"], default="quiet", help="--mode DUB: what happens to the video's own sound: quiet (default, a faint bed under the new voice), duck (lowered only while the new voice speaks), mute (removed).")
     parser.add_argument("--dub_voice", type=str, default=None, help="--mode DUB: voice for the target language: 'female' (default), 'male', or a full edge-tts name such as es-ES-AlvaroNeural.")
     parser.add_argument("--auto_ducking", action="store_true", help="Enable dynamic background music ducking during voice audio.")
     parser.add_argument("--sfx_preset", choices=["auto", "whoosh", "pop", "riser", "boom", "none"], default="auto", help="Select sound effects preset to overlay on visual transitions.")
