@@ -87,6 +87,26 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
     return args
 
 
+def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None):
+    """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out."""
+    args = ["--mode", "TRIP", "--trip_videos", *[str(v) for v in videos], "--session_dir", session_dir,
+            "--recap_length", str(max(20, min(300, int(length or 60))))]
+    for flag, value in (("--trip_name", name), ("--trip_stops", stops), ("--user_context", note), ("--recap_hook", hook)):
+        if (value or "").strip():
+            args += [flag, value.strip()]
+    if style == "plain":
+        args += ["--recap_style", "plain"]
+    if music:
+        args += ["--music", str(music)]
+    return args
+
+
+def find_trip_outputs(session_dir):
+    """(recap video, itinerary .md) in a trip session folder; either is None when missing."""
+    video, md = os.path.join(session_dir, "recap.mp4"), os.path.join(session_dir, "itinerary.md")
+    return (video if os.path.isfile(video) else None, md if os.path.isfile(md) else None)
+
+
 def find_dub_outputs(session_dir):
     """(dubbed video, translated .srt) written to a dubbing session folder; either is None when missing."""
     videos = sorted(glob.glob(os.path.join(session_dir, "*_dub_*.mp4")), key=os.path.getmtime)

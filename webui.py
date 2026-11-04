@@ -237,6 +237,27 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
     yield "❌ No dubbed video was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
 
 
+def trip_recap(files, name, stops, note, hook, length, style, music):
+    """Trip recap tab: several videos in filming order -> one recap with a hook, title cards and an itinerary."""
+    import time
+    if not files:
+        raise gr.Error("Add your trip videos first (in the order you filmed them).")
+    session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
+    os.makedirs(session, exist_ok=True)
+    cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music)]
+    yield "Working on your recap...", "", None, None
+    log = ""
+    for log, _videos in _run(cmd):
+        last = next((ln.split("]", 1)[1].strip() for ln in reversed(log.splitlines()) if ln.startswith("[Log]")), "")
+        yield f"Working... {last}"[:200], log, None, None
+    video, md = web_args.find_trip_outputs(session)
+    if video:
+        yield "✅ Done! Your trip recap is ready below.", log, video, md
+        return
+    reason = next((ln.split("]", 1)[1].strip() for ln in reversed(log.splitlines()) if ln.startswith("[Error]")), "")
+    yield "❌ No recap was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
+
+
 def rate_clip(card, liked):
     """Thumbs up / down on a review card: saved locally; the picker learns which clip length you tend to like (engine/feedback.py)."""
     from engine import feedback
@@ -885,6 +906,36 @@ def build_ui():
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original], [d_status, d_log, d_video, d_srt])
                 d_stop.click(stop_jobs, None, d_status, cancels=[d_run])
+
+            with gr.Tab("🧳 Trip recap"):
+                gr.Markdown("### Turn your trip videos into one recap\n"
+                            "It opens with a hook over fast glimpses of the most beautiful shots, then shows the whole trip stop by stop (or day by day) "
+                            "with a title card for each, and writes the itinerary. Add the videos in the order you filmed them.")
+                with gr.Row():
+                    with gr.Column():
+                        t_files = gr.File(label="Your trip videos (in filming order)", file_count="multiple", file_types=["video"], type="filepath")
+                        t_name = gr.Textbox(label="Trip name", placeholder="Almaty: Kolsai, Kaindy and Charyn")
+                        t_stops = gr.Textbox(label="Stops, in order (optional)", placeholder="Kolsai Lake, Kaindy Lake, Charyn Canyon",
+                                             info="Use this for a one-day tour. Leave empty for a trip of several days: name the files or folders day1, day2...")
+                        t_note = gr.Textbox(label="What happened (the AI only uses what you write here)", lines=3,
+                                            placeholder="We booked a 17 hour tour from Almaty. We left at 5 am and went first to Kolsai Lake.")
+                        t_hook = gr.Textbox(label="Opening line (optional)", placeholder="Woke up at 4 AM just for this view",
+                                            info="Shown over the first glimpses. Empty: written from your note.")
+                        t_length = gr.Slider(30, 180, value=60, step=5, label="Recap length (seconds)")
+                        t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],
+                                           value="hype", label="Style")
+                        t_music = gr.File(label="Music (optional)", file_types=["audio"], type="filepath")
+                        t_btn = gr.Button("🧳 Make my recap", variant="primary")
+                        t_stop = gr.Button("⏹ Stop", variant="stop")
+                    with gr.Column():
+                        t_status = gr.Markdown("Waiting for your videos...")
+                        t_video = gr.Video(label="Trip recap", interactive=False)
+                        t_md = gr.File(label="Itinerary (.md)", interactive=False)
+                with gr.Accordion("Technical details", open=False):
+                    t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music],
+                                    [t_status, t_log, t_video, t_md])
+                t_stop.click(stop_jobs, None, t_status, cancels=[t_run])
 
             with gr.Tab("📸 Photo reel"):
                 from engine.photo_reel_types import type_labels

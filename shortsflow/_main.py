@@ -25,7 +25,7 @@ from engine.media_gen import is_url
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate either FACTS, STORY, FIND_IT, WYR, REDDIT, TRIVIA, QUOTE, JWST, RIDDLE, ODD_ONE_OUT, or FILTER shorts.")
-    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "TEACH", "DUB", "SPLIT_SCREEN", "PODCAST", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC", "AUTO"], help="Force a specific mode.")
+    parser.add_argument("--mode", choices=["FACTS", "STORY", "FIND_IT", "WYR", "REDDIT", "TRIVIA", "QUOTE", "ODD_ONE_OUT", "NEWS", "NEWS_SERIOUS", "GUESS_SOUND", "RIDDLE", "TREND", "CHALLENGE", "JWST", "TRAILER_MISSED", "MUSIC", "EXPLAINER", "FILTER", "EMOJI_GUESS", "PHOTO_REEL", "FUNNY_EXPLAINER", "TEACH", "DUB", "SPLIT_SCREEN", "PODCAST", "TOP_5", "CHAT_STORY", "HORROR", "TRUE_CRIME", "BIBLE", "ARTICLE", "UGC", "AUTO", "TRIP"], help="Force a specific mode.")
     parser.add_argument("--scene", help="Scene or scenario prompt for FUNNY_EXPLAINER mode.")
     parser.add_argument("--photos_dir", help="Directory containing photos for PHOTO_REEL mode.")
     parser.add_argument("--music", help="Path to audio/music track for PHOTO_REEL or background music.")
@@ -60,6 +60,12 @@ def parse_args():
     parser.add_argument("--no_diversity", action="store_true", help="Do not skip near-duplicate clips or prefer different topics when choosing shorts.")
     parser.add_argument("--moments", help="Make shorts from these exact times instead of letting the AI choose (one per line or comma separated): 7:00-7:45, 1:01:40-1:02:30, 420-465. A single time (7:00) starts a short of --target_duration there. Good for cutscenes and any scene you already know.")
     parser.add_argument("--visual_context", action="store_true", help="Let a local vision model (Ollama, e.g. gemma3:12b) look at a few frames of each candidate moment, so the story on screen counts and not only what is said. Slower; skipped with a note when no vision model is installed. Use --user_context to say what the video is about.")
+    parser.add_argument("--trip_videos", nargs="+", help="--mode TRIP: your trip videos or folders, in day order (one folder per day, or files named day1, day2 ...). Makes one recap with a title card per day plus an itinerary.")
+    parser.add_argument("--trip_name", default="", help="--mode TRIP: the trip's name, e.g. Almaty. Use --user_context for a note about the trip.")
+    parser.add_argument("--recap_length", type=int, default=60, help="--mode TRIP: length of the recap in seconds (default 60).")
+    parser.add_argument("--recap_hook", default="", help="--mode TRIP: the opening line over the first glimpses, e.g. \"Woke up at 4 AM just for this view\". Default: written from your note, else a neutral line.")
+    parser.add_argument("--trip_stops", default="", help="--mode TRIP: name the stops in order, e.g. \"Kolsai Lake, Kaindy Lake, Charyn Canyon\". The videos (in filming order) are split between them and each stop gets a title card; use this for a one-day tour instead of Day 1, Day 2.")
+    parser.add_argument("--recap_style", choices=["hype", "plain"], default="hype", help="--mode TRIP: hype (default) opens with the hook over fast glimpses of the most beautiful shots, then the trip title and the whole trip day by day; plain starts at Day 1.")
     parser.add_argument("--no_snap", action="store_true", help="Keep the clip start/end exactly as chosen instead of moving them to sentence boundaries (shorts only).")
     parser.add_argument("--min_duration", type=int, default=15, help="Target minimum clip length in seconds (default 15). Clips can be up to 5 s shorter than this when a moment ends early.")
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
@@ -257,6 +263,11 @@ if getattr(args, "mode", None) == "MUSIC":
 if getattr(args, "mode", None) == "DUB":
     from engine.modes.dub import run as run_dub
     run_dub(args, target_bitrate, target_preset)
+
+# 🟢 Standalone TRIP recap Mode (several videos -> one recap + itinerary)
+if getattr(args, "mode", None) == "TRIP":
+    from engine.trip_recap import run as run_trip
+    run_trip(args, target_bitrate, target_preset)
 
 # 🟢 Standalone EXPLAINER Mode
 if getattr(args, "mode", None) == "EXPLAINER":

@@ -221,3 +221,11 @@ def test_stat_pops_flag_in_extras():
     from shortsflow import web_args
     assert "--stat_pops" in web_args.extras_args(stat_pops=True) and "--stat_pops" not in web_args.extras_args()
     assert "--stat_pops" not in web_args.extras_args(use_remotion=False, stat_pops=True)    # drawn by Remotion only
+
+
+def test_trip_args():
+    a = web_args.trip_args(["a.mp4", "b.mp4"], "sess", name=" Almaty ", stops="Kolsai, Kaindy", note="", hook="Woke up", length=5, style="plain")
+    assert a[:4] == ["--mode", "TRIP", "--trip_videos", "a.mp4"]
+    assert "--trip_name" in a and a[a.index("--trip_name") + 1] == "Almaty"
+    assert "--user_context" not in a and a[a.index("--recap_length") + 1] == "20"      # empty note left out, length clamped
+    assert "--recap_style" in a and web_args.trip_args(["a.mp4"], "s").count("--recap_style") == 0

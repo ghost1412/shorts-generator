@@ -87,7 +87,7 @@ def test_continue_explains_a_missing_video_and_an_empty_choice(tmp_path):
 def test_ui_has_a_stop_button_on_every_tab():
     demo = webui.build_ui()
     labels = [getattr(b, "value", None) for b in demo.blocks.values() if type(b).__name__ == "Button"]
-    assert labels.count("⏹ Stop") == 5
+    assert labels.count("⏹ Stop") == 6
     assert "Continue" in labels
 
 
