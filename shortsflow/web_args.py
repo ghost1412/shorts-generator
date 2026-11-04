@@ -40,12 +40,20 @@ def dub_languages():
         return [(name, code) for code, name in sorted(FALLBACK_DUB_LANGUAGES.items(), key=lambda kv: kv[1])]
 
 
-def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_dir=None):
-    """Arguments (after the pipeline command) for `--mode DUB`."""
+DUB_VOICE_CHOICES = [("Automatic (female)", "auto"), ("Female", "female"), ("Male", "male")]
+DUB_PROVIDER_CHOICES = [("Automatic", "auto"), ("Edge (online, many languages)", "edgetts"), ("Kokoro (on this PC, English only)", "kokoro")]
+
+
+def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_dir=None, tts_provider="auto", voice="auto"):
+    """Arguments (after the pipeline command) for `--mode DUB`. 'auto' voice / provider leave the flags out."""
     args = ["--mode", "DUB", "--source_video", source, "--target_lang", target_lang,
             "--language", (spoken or "auto")]
     if burn_captions:
         args.append("--dub_captions")
+    if voice in ("female", "male"):
+        args += ["--dub_voice", voice]
+    if tts_provider and tts_provider != "auto":
+        args += ["--tts_provider", tts_provider]
     if session_dir:
         args += ["--session_dir", session_dir]
     return args

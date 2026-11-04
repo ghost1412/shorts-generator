@@ -8,6 +8,8 @@ on:
       - "webui.py"
       - "shortsflow/review.py"
       - "shortsflow/onboarding.py"
+      - "shortsflow/web_args.py"
+      - "shortsflow/word_edit.py"
       - "scripts/ui_screenshots.py"
       - ".github/workflows/ui_screenshots.yml"
 
