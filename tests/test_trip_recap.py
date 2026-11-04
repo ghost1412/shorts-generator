@@ -180,3 +180,35 @@ def test_glimpses_use_the_vision_rating_and_skip_overlays():
     assert all(x["day"] != 1 for x in g)                      # the clip with a text overlay never opens the video
     assert sum(1 for x in g if x["day"] == 2) >= 2            # the rated-beautiful day leads
     assert tr.pick_glimpses(days, 4, 1.4, grab=grab, score=colour, rate=lambda fr: None)    # a failed rating falls back to colour
+
+
+def test_spaced_keeps_word_gaps():
+    from engine import trip_recap as t
+    assert t.spaced("Take me back") == "T A K E   M E   B A C K"
+    assert t.spaced("x" * 30) == "X" * 30            # long text is only upper-cased
+
+
+def test_decide_look_follows_the_footage(tmp_path):
+    from engine import trip_recap as t
+    for n in "abc":
+        (tmp_path / f"{n}.mp4").write_bytes(b"x")
+    assert t.decide_look([str(tmp_path)], probe=lambda f: (5.0, 1920, 1080))[:2] == ("cinematic", "2.35:1")
+    assert t.decide_look([str(tmp_path)], probe=lambda f: (5.0, 1080, 1920))[:2] == ("hype", "9:16")
+
+
+def test_frame_look_falls_back_to_a_neutral_look():
+    from engine import trip_recap as t
+    look = t.frame_look("no-such-ffmpeg", "no-such.mp4", 1.0, run=lambda *a, **k: (_ for _ in ()).throw(OSError()))
+    assert look["zone"] == "center" and look["dark"] is True
+
+
+def test_cinematic_layers_follow_the_look(tmp_path):
+    from engine import trip_recap as t
+    lay = t.cinematic_layers(str(tmp_path / "t"), "Almaty trip", "Day 2", "a film", look={"zone": "lower", "dark": False, "accent": (200, 120, 60)}, index=1)
+    assert [ts for _p, ts in lay] == sorted(ts for _p, ts in lay) and len(lay) == 3      # credit, title, rule + line appear one after another
+    assert all(os.path.isfile(p) for p, _ts in lay)
+
+
+def test_beat_length_unchanged_without_a_tempo():
+    from engine import trip_recap as t
+    assert t.beat_length("missing.mp3", 3.0) == 3.0

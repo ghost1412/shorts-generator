@@ -308,10 +308,179 @@ def title_card_png(path, big, title, summary=""):
     return path
 
 
-def caption_png(path, text, y_frac=0.74, size=78):
+# "cinematic" look: warm teal-orange grade, soft contrast, slow fades, small spaced place labels, quiet black title cards.
+CINEMATIC_GRADE = "eq=contrast=1.06:saturation=1.1:gamma=0.98,colorbalance=rs=0.03:rm=0.04:bm=-0.04:rh=0.05:bh=-0.05"
+GRADE_COOL = "eq=contrast=1.1:saturation=1.18:gamma=0.97,colorbalance=rs=-0.03:bs=0.04:gm=0.02:bh=0.03:rh=-0.02"
+ASPECTS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "2.35:1": (1920, 816)}
+
+
+def frame_look(ffmpeg, src, t, run=subprocess.run):
+    """Reads one frame of the shot a title will sit on: where it is calmest, how bright it is there, and its accent colour.
+    Returns {"zone", "dark", "accent"}; any failure gives the neutral default (centre, light text, gold)."""
+    default = {"zone": "center", "dark": True, "accent": (232, 200, 140)}
+    try:
+        import tempfile
+        from PIL import Image
+        import numpy as np
+        with tempfile.TemporaryDirectory() as tmp:
+            png = os.path.join(tmp, "f.png")
+            r = run([ffmpeg, "-y", "-loglevel", "error", "-ss", f"{max(0.0, t):.2f}", "-i", src, "-frames:v", "1", "-vf", "scale=320:-2", png],
+                    capture_output=True, text=True)
+            if r.returncode != 0 or not os.path.isfile(png):
+                return default
+            im = Image.open(png).convert("RGB")
+        arr = np.asarray(im).astype(np.float32)
+        lum = arr @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+        h, w = lum.shape
+        boxes = {"center": (0.2, 0.8, 0.35, 0.65), "left": (0.05, 0.5, 0.35, 0.65), "lower": (0.05, 0.7, 0.68, 0.9), "upper": (0.2, 0.8, 0.1, 0.3)}
+        stats = {}
+        for name, (x0, x1, y0, y1) in boxes.items():
+            reg = lum[int(h * y0):int(h * y1), int(w * x0):int(w * x1)]
+            stats[name] = (float(reg.std()) + (0.0 if name == "center" else 4.0), float(reg.mean()))      # a small bias keeps the centre when nothing is calmer
+        zone = min(stats, key=lambda k: stats[k][0])
+        sat = arr.max(axis=2) - arr.min(axis=2)
+        mask = sat >= np.percentile(sat, 85)
+        col = arr[mask].mean(axis=0) if mask.any() else np.array(default["accent"], dtype=np.float32)
+        col = np.clip(col * (1.0 + (200 - col.max()) / 400.0) + 25, 0, 255)         # brighten so it reads on dark and light shots
+        return {"zone": zone, "dark": stats[zone][1] < 150, "accent": tuple(int(c) for c in col)}
+    except Exception:
+        return default
+
+
+def pick_grade(ffmpeg, files, run=subprocess.run, sample=6):
+    """Warm footage (sand, rock, sunset: red above blue) gets the warm grade, cool footage (water, ice, forest) the cool one."""
+    try:
+        import tempfile
+        from PIL import Image
+        import numpy as np
+        reds = blues = 0.0
+        step = max(1, len(files) // sample)
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, f in enumerate(files[::step][:sample]):
+                png = os.path.join(tmp, f"{i}.png")
+                dur = video_info(f)[0]
+                r = run([ffmpeg, "-y", "-loglevel", "error", "-ss", f"{dur / 2:.1f}", "-i", f, "-frames:v", "1", "-vf", "scale=96:-2", png],
+                        capture_output=True, text=True)
+                if r.returncode == 0 and os.path.isfile(png):
+                    arr = np.asarray(Image.open(png).convert("RGB")).astype(np.float32)
+                    reds += float(arr[..., 0].mean())
+                    blues += float(arr[..., 2].mean())
+        if reds + blues == 0:
+            return CINEMATIC_GRADE
+        return CINEMATIC_GRADE if reds >= blues * 1.08 else GRADE_COOL
+    except Exception:
+        return CINEMATIC_GRADE
+
+
+def cinematic_layers(path_base, title, line="", small="", look=None, index=0):
+    """Title over the footage as separate transparent layers that fade in one after another: [(png, start second), ...].
+    The look comes from the shot: text goes where the picture is calmest, light or dark text by brightness, accent colour from the shot,
+    and the layout rotates (centred / left-aligned / stacked words) so the cards are not all the same."""
+    from PIL import Image, ImageDraw, ImageFont
+    look = look or {"zone": "center", "dark": True, "accent": (232, 200, 140)}
+    u = min(W, H) / 1080.0
+    zone = look["zone"]
+    ink = (255, 255, 255, 255) if look["dark"] else (22, 18, 14, 255)
+    shadow = (0, 0, 0, 90) if look["dark"] else (255, 255, 255, 70)
+    accent = tuple(look["accent"]) + (255,)
+    left = zone in ("left", "lower")
+    words = str(title).split()
+    stacked = left and index % 2 == 1 and len(words) > 1 and all(len(w) >= 3 for w in words)
+    cx = int(W * 0.08) if left else W // 2
+    cy = {"center": H // 2, "left": H // 2, "lower": int(H * 0.78), "upper": int(H * 0.22)}[zone]
+    anchor = "lm" if left else "mm"
+
+    def font(size):
+        try:
+            return ImageFont.truetype(os.path.join(FONT_DIR, "NotoSansCyrillic.ttf"), max(12, int(size * u)))
+        except OSError:
+            return ImageFont.load_default()
+
+    def layer(draw_fn, name):
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        draw_fn(ImageDraw.Draw(img))
+        out = f"{path_base}_{name}.png"
+        img.save(out)
+        return out
+
+    def title_fn(d):
+        if stacked:
+            f, y = font(120), cy - int(120 * u) * (len(title.split()) - 1) // 2
+            for wd in title.upper().split():
+                d.text((cx, y), wd, font=f, fill=ink, anchor=anchor, stroke_width=2, stroke_fill=shadow)
+                y += int(125 * u)
+        else:
+            d.text((cx, cy), spaced(title), font=font(86), fill=ink, anchor=anchor, stroke_width=2, stroke_fill=shadow)
+
+    rows = len(title.split()) if stacked else 1
+    below = cy + (int(125 * u) * rows) // 2 + int(30 * u) if stacked else cy + int(90 * u)
+    layers = []
+    if small:
+        layers.append((layer(lambda d: d.text((cx, cy - int(130 * u)), spaced(small), font=font(34), fill=ink, anchor=anchor), "a"), 0.3))
+    layers.append((layer(title_fn, "b"), 0.9))
+    if line:
+        def sub(d):
+            x0, x1 = (cx, cx + int(120 * u)) if left else (cx - int(60 * u), cx + int(60 * u))
+            d.line([(x0, below), (x1, below)], fill=accent, width=max(2, int(3 * u)))
+            d.text((cx, below + int(60 * u)), spaced(line), font=font(40), fill=accent, anchor=anchor)
+        layers.append((layer(sub, "c"), 1.7))
+    return layers
+
+
+def beat_length(music, length, bars=2):
+    """Clip length rounded to a whole number of `bars` beats of the music so cuts land on the beat; unchanged if no tempo is found."""
+    try:
+        from engine.beat_sync import detect_beats
+        beats = detect_beats(music, max_duration=90, min_interval=0.3, max_interval=1.5)
+        gaps = sorted(b - a for a, b in zip(beats, beats[1:]) if 0.25 < b - a < 1.6)
+        if len(gaps) < 6:
+            return length
+        beat = gaps[len(gaps) // 2]
+        unit = beat * bars
+        snapped = max(1, round(length / unit)) * unit
+        return snapped if 0.6 * length <= snapped <= 1.5 * length else length
+    except Exception:
+        return length
+
+
+def spaced(text):
+    """'Petra' -> 'P E T R A' (wide letter spacing reads as cinematic)."""
+    text = str(text)
+    if len(text) > 24:
+        return text.upper()
+    return "   ".join(" ".join(w.upper()) for w in text.split())
+
+
+def cinematic_card_png(path, title, line="", small=""):
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (W, H), (0, 0, 0))
+    d = ImageDraw.Draw(img)
+    f_t, f_l, f_s = _font(96, title), _font(46, line), _font(36, small)
+    y = H // 2 - 60
+    for ln in _wrap(d, title.upper(), f_t, W - 200):
+        d.text((W // 2, y), ln, font=f_t, fill=(240, 232, 216), anchor="mm")
+        y += 112
+    d.line([(W // 2 - 70, y + 10), (W // 2 + 70, y + 10)], fill=(200, 170, 120), width=3)
+    y += 60
+    for ln in _wrap(d, line.upper(), f_l, W - 240):
+        d.text((W // 2, y), ln, font=f_l, fill=(200, 170, 120), anchor="mm")
+        y += 58
+    if small:
+        d.text((W // 2, H - 220), small.upper(), font=f_s, fill=(150, 145, 135), anchor="mm")
+    img.save(path)
+    return path
+
+
+def caption_png(path, text, y_frac=0.74, size=78, lower=False):
     from PIL import Image, ImageDraw
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
+    if lower:       # small, spaced, bottom-left lower third with a thin rule
+        f = _font(46, text)
+        d.line([(70, int(H * 0.86) - 40), (190, int(H * 0.86) - 40)], fill=(200, 170, 120, 255), width=3)
+        d.text((70, int(H * 0.86)), spaced(text), font=f, fill=(245, 240, 230, 255), anchor="lm", stroke_width=2, stroke_fill=(0, 0, 0, 160))
+        img.save(path)
+        return path
     f = _font(size, text)
     lines = _wrap(d, text, f, W - 140)
     y = int(H * y_frac)
@@ -348,26 +517,38 @@ def render_card(ffmpeg, png, out, seconds=CARD_SECONDS):
         raise RuntimeError("Could not make a title card: " + (r.stderr or "")[-300:])
 
 
-def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="auto", size=None, audio=True, cap_from=0.3, cap_gap=0.3):
+def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="auto", size=None, audio=True, cap_from=0.3, cap_gap=0.3, grade="", fade_s=0.2, layers=None):
     w, h = size or (0, 0)
     portrait = h > w > 0
-    if layout == "crop" or (layout == "auto" and portrait):
+    if layout == "crop" or (layout == "auto" and portrait == (H > W)):
         base = f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},setsar=1"
     else:
         base = (f"split[a][b];[a]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=24:2[bg];"
                 f"[b]scale={W}:{H}:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
-    fade = f",fade=t=in:st=0:d=0.2,fade=t=out:st={seconds - 0.2:.2f}:d=0.2"
+    fade = (f",{grade}" if grade else "") + f",fade=t=in:st=0:d={fade_s}:color=black,fade=t=out:st={seconds - fade_s:.2f}:d={fade_s}:color=black"
     cmd = [ffmpeg, "-y", "-loglevel", "error", "-ss", f"{start:.2f}", "-t", f"{seconds:.2f}", "-i", src]
-    if caption_file:
+    if layers:
+        n = len(layers)
+        for png, _ts in layers:
+            cmd += ["-loop", "1", "-t", f"{seconds:.2f}", "-i", png]
+        chain, cur = [f"[0:v]{base}[v0]"], "v0"
+        for i, (_png, ts) in enumerate(layers, 1):
+            chain.append(f"[{i}:v]format=rgba,fade=t=in:st={ts:.2f}:d=0.7:alpha=1,fade=t=out:st={max(ts + 0.8, seconds - 0.6):.2f}:d=0.4:alpha=1[l{i}]")
+            chain.append(f"[{cur}][l{i}]overlay=0:0[v{i}]")
+            cur = f"v{i}"
+        vf = ";".join(chain) + f";[{cur}]null{fade}[vout]"
+    elif caption_file:
+        n = 1
         cmd += ["-loop", "1", "-t", f"{seconds:.2f}", "-i", caption_file]
         vf = f"[0:v]{base}[v0];[v0][1:v]overlay=0:0:enable='between(t,{cap_from:.2f},{max(cap_from + 0.1, seconds - cap_gap):.2f})'{fade}[vout]"
     else:
+        n = 0
         vf = f"[0:v]{base}{fade}[vout]"
     cmd += ["-filter_complex", vf, "-map", "[vout]"]
     if audio:
-        cmd += ["-map", "0:a:0", "-af", f"afade=t=in:st=0:d=0.2,afade=t=out:st={seconds - 0.2:.2f}:d=0.2,aresample=44100"]
+        cmd += ["-map", "0:a:0", "-af", f"afade=t=in:st=0:d={fade_s},afade=t=out:st={seconds - fade_s:.2f}:d={fade_s},aresample=44100"]
     else:
-        cmd += ["-f", "lavfi", "-t", f"{seconds:.2f}", "-i", "anullsrc=r=44100:cl=stereo", "-map", "2:a" if caption_file else "1:a"]
+        cmd += ["-f", "lavfi", "-t", f"{seconds:.2f}", "-i", "anullsrc=r=44100:cl=stereo", "-map", f"{n + 1}:a"]
     cmd += [*ENC, "-t", f"{seconds:.2f}", out]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not os.path.isfile(out):
@@ -456,9 +637,48 @@ def pick_glimpses(days, k, length, grab=None, score=scenic_score, per_candidates
     return sorted(chosen, key=lambda c: (c["day"], c["file"], c["start"]))
 
 
+def decide_look(paths, probe=None, sample=12):
+    """Picks the style and frame shape from the footage itself: mostly widescreen footage (cameras, drones) -> the cinematic travel film in
+    2.35:1; mostly vertical phone clips -> the fast 9:16 hype recap. Returns (style, aspect, reason)."""
+    probe = probe or video_info
+    files = [v[0] if isinstance(v, tuple) else v for v in collect_videos(list(paths))]
+    step = max(1, len(files) // sample)
+    wide = tall = 0
+    for f in files[::step][:sample]:
+        try:
+            _d, w, h = probe(f)
+        except Exception:
+            continue
+        if w > h > 0:
+            wide += 1
+        elif h > w > 0:
+            tall += 1
+    if wide > tall:
+        return "cinematic", "2.35:1", f"{wide} of {wide + tall} sampled videos are widescreen"
+    return "hype", "9:16", f"{tall} of {wide + tall} sampled videos are vertical" if tall else "no readable footage to judge from"
+
+
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None):
-    """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos."""
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None):
+    """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
+    aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1."""
+    global W, H
+    if style == "auto":
+        style, auto_aspect, why = decide_look(paths)
+        aspect = aspect or auto_aspect
+        print(f"[Log] Auto look: {style} {aspect} ({why}).")
+    old = (W, H)
+    key = aspect or ("2.35:1" if style == "cinematic" else "9:16")
+    if key not in ASPECTS:
+        raise ValueError(f"Unknown aspect {key!r}. Choose one of: {', '.join(ASPECTS)}")
+    W, H = ASPECTS[key]
+    try:
+        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops)
+    finally:
+        W, H = old
+
+
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops):
     videos = collect_videos(list(paths))
     days_paths = group_days(videos)
     if not days_paths:
@@ -473,7 +693,9 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
     if ffmpeg is None:
         import imageio_ffmpeg
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    cine = style == "cinematic"
     hype = style != "plain"
+    grade, fade_s = (CINEMATIC_GRADE, 0.5) if cine else ("", 0.2)
     opening = (GLIMPSES * GLIMPSE_SECONDS + CARD_SECONDS) if hype else 0.0      # glimpses + the trip title card
     all_infos = []
     for files in days_paths:
@@ -486,7 +708,15 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
             all_infos.append(infos)
     if not all_infos:
         raise ValueError("None of the videos could be read.")
+    if cine:
+        grade = pick_grade(ffmpeg, [i[0] for infos in all_infos for i in infos])
+        print(f"[Log] Colour grade: {'warm' if grade == CINEMATIC_GRADE else 'cool'} (from the footage).")
     counts, clip_len = plan_days([len(i) for i in all_infos], max(float(total_seconds) - opening, len(all_infos) * 6.0))
+    if cine and music:
+        snapped = beat_length(music, clip_len)
+        if snapped != clip_len:
+            print(f"[Log] Cuts follow the music: moments {clip_len:.2f}s -> {snapped:.2f}s (whole beats).")
+            clip_len = snapped
     print(f"[Log] Trip recap: {len(all_infos)} day(s), {sum(len(i) for i in all_infos)} video(s); moments per day: {counts} of {clip_len:g}s.")
 
     days = []
@@ -530,29 +760,45 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
             rate = rate_scenery
         glimpses = pick_glimpses(days, GLIMPSES, GLIMPSE_SECONDS, grab=grab, rate=rate)
         if glimpses:
-            hook_png = caption_png(os.path.join(parts_dir, "hook.png"), it["hook"], y_frac=0.3, size=96)
+            hook_png = caption_png(os.path.join(parts_dir, "hook.png"), it["hook"], y_frac=0.3, size=96, lower=cine)
             for gi, g in enumerate(glimpses, 1):
                 out = os.path.join(parts_dir, f"glimpse_{gi}.mp4")
                 render_clip(ffmpeg, g["file"], g["start"], GLIMPSE_SECONDS, out, hook_png, layout, g["size"], audio=has_audio(g["file"]),
-                            cap_from=0.0, cap_gap=0.0)
+                            cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s)
                 parts.append(out)
             print(f"[Log] Opening: hook \"{it['hook']}\" over {len(glimpses)} glimpse(s).")
-        title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else "Day by day", "")
-        card = os.path.join(parts_dir, "trip_title.mp4")
-        render_card(ffmpeg, title, card)
-        parts.append(card)
+        if cine:
+            m0 = days[0]["moments"][0]
+            out = os.path.join(parts_dir, "trip_title.mp4")
+            lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else "A travel film", "",
+                                   look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0)
+            render_clip(ffmpeg, m0["file"], m0["start"], 3.4, out, None, layout, m0["size"], audio=has_audio(m0["file"]), grade=grade, fade_s=fade_s, layers=lay)
+            parts.append(out)
+        else:
+            title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else "Day by day", "")
+            card = os.path.join(parts_dir, "trip_title.mp4")
+            render_card(ffmpeg, title, card)
+            parts.append(card)
     for di, (d, row) in enumerate(zip(days, it["days"]), 1):
-        if stops:
+        if cine:
+            card_png = None      # the title appears over the day's first shot instead of a card
+        elif stops:
             card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), row["title"], f"Stop {di} of {len(days)}", row["summary"])
         else:
             card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), f"Day {di}", row["title"], row["summary"])
-        card = os.path.join(parts_dir, f"card_{di}.mp4")
-        render_card(ffmpeg, card_png, card)
-        parts.append(card)
+        if card_png:
+            card = os.path.join(parts_dir, f"card_{di}.mp4")
+            render_card(ffmpeg, card_png, card)
+            parts.append(card)
         for mi, (m, cap) in enumerate(zip(d["moments"], row["captions"]), 1):
-            cap_png = caption_png(os.path.join(parts_dir, f"cap_{di}_{mi}.png"), cap) if cap else None
+            cap_png = caption_png(os.path.join(parts_dir, f"cap_{di}_{mi}.png"), cap, lower=cine) if cap and not (cine and mi == 1) else None
             out = os.path.join(parts_dir, f"clip_{di}_{mi}.mp4")
-            render_clip(ffmpeg, m["file"], m["start"], m["end"] - m["start"], out, cap_png, layout, m["size"], audio=has_audio(m["file"]))
+            lay, secs = None, m["end"] - m["start"]
+            if cine and mi == 1:
+                lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], f"{unit} {di}" if len(days) > 1 else "",
+                                       look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di)
+                secs = max(secs, 3.2)
+            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]), grade=grade, fade_s=fade_s, layers=lay)
             parts.append(out)
         print(f"[Log] Day {di} rendered.")
     video = os.path.join(session_dir, "recap.mp4")
@@ -601,7 +847,7 @@ def run(args, target_bitrate=None, target_preset=None):
         make_recap(paths, session_dir, trip_name=getattr(args, "trip_name", "") or "", note=getattr(args, "user_context", "") or "",
                    total_seconds=getattr(args, "recap_length", 60) or 60, music=getattr(args, "music", None),
                    visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
-                   style=getattr(args, "recap_style", "hype") or "hype", stops=getattr(args, "trip_stops", None), layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                   style=getattr(args, "recap_style", "auto") or "auto", stops=getattr(args, "trip_stops", None), aspect=getattr(args, "recap_aspect", None), layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
     except (ValueError, RuntimeError) as e:
         print(f"[Error] {e}")
         sys.exit(1)
