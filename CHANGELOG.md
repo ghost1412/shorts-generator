@@ -10,6 +10,10 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ### Fixed
 - The caption-language hint in the browser app no longer says Japanese, Chinese, Korean and Arabic are unsupported.
+### Fixed
+- `--layout split_filler` with animated (Remotion) captions: the captions sat on the filler half (default position 1150). They now sit just above the seam in the lower part of the clip half. An explicit `--subtitle_y_pos` is kept as you set it.
+- Re-rendering a short (change style, trim, or cut words) dropped `--hook_overlay` and `--clean_audio`: the hook title disappeared and the loudness fell back from about -14 LUFS to about -20 LUFS. Both settings are now saved with the run and applied again.
+- `python -m engine.rerender` reported a failed re-render when its output was piped on Windows (the progress lines contain emoji and the console encoding was cp1252). It now writes UTF-8.
 
 ## 0.3.0 (2026-11-04)
 

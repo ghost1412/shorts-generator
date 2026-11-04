@@ -114,3 +114,50 @@ def test_missing_source_or_results_cannot_be_rerendered(tmp_path):
         rerender.rerender_clip(str(session), 1)
     with pytest.raises(ValueError, match="no results.json"):
         rerender.rerender_clip(str(tmp_path / "empty"), 1)
+
+
+def test_rerender_keeps_hook_overlay_and_clean_audio_from_the_original_run(tmp_path, monkeypatch):
+    session = _session(tmp_path)
+    data = json.loads((session / "results.json").read_text())
+    data["settings"].update({"hook_overlay": True, "clean_audio": True})
+    data["clips"][0]["hook"] = "Save money on unused subscriptions"
+    (session / "results.json").write_text(json.dumps(data))
+    calls = {}
+    _fake_engine(monkeypatch, calls)
+
+    def extract_with_env(source, highlights, transcript, out_dir, **kw):
+        calls["hook_env"] = os.environ.get("SHORTSFLOW_HOOK_OVERLAY")
+        calls["highlights"] = highlights
+        path = os.path.join(out_dir, "video_clip_1.mp4")
+        with open(path, "wb") as f:
+            f.write(b"new video")
+        return [path]
+    sys.modules["engine.video_gen"].extract_segments = extract_with_env
+    cleaned = []
+    audio = types.ModuleType("engine.audio_clean")
+    audio.clean_audio = lambda p, **kw: cleaned.append(os.path.basename(p)) or True
+    monkeypatch.setitem(sys.modules, "engine.audio_clean", audio)
+    monkeypatch.delenv("SHORTSFLOW_HOOK_OVERLAY", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    rerender.rerender_clip(str(session), 1, start=6.0, end=12.0)
+    assert calls["hook_env"] == "1"                                   # the title is drawn again
+    assert calls["highlights"][0]["hook_text"] == "Save money on unused subscriptions"
+    assert cleaned == ["video_clip_1.mp4"]                            # and the sound is cleaned again
+    assert "SHORTSFLOW_HOOK_OVERLAY" not in os.environ                # nothing leaks into later in-process renders
+
+
+def test_cli_survives_a_cp1252_console(monkeypatch):
+    """Progress lines contain emoji; a redirected Windows console (cp1252) must not turn them into a failed re-render."""
+    import io
+    import sys
+
+    from engine import rerender
+
+    raw = io.BytesIO()
+    out = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+    monkeypatch.setattr(sys, "stdout", out)
+    rerender._utf8_console()
+    print("[Log] NVIDIA GPU Detected \U0001f680")
+    out.flush()
+    assert "\U0001f680".encode("utf-8") in raw.getvalue()
