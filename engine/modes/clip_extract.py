@@ -145,6 +145,7 @@ def run(args, target_bitrate, target_preset):
         find_query=getattr(args, 'find', None),
         keep_fillers=getattr(args, 'remove_fillers', False),
         language=getattr(args, 'language', 'en'),
+        snap=not getattr(args, 'no_snap', False),
     )
     
     # The filler pass needs the words as spoken: a translated transcript has no "um" in it

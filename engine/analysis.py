@@ -1524,7 +1524,7 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en"):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1590,6 +1590,17 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             print(f"[Log] Saved highlights to cache: {highlights_cache_path}")
         except Exception as e:
             print(f"[Warning] Failed to cache highlights: {e}")
+
+    if snap and mode == "shorts":
+        # Edges to sentence boundaries (also for --find and cached highlights: snapping an already snapped clip changes nothing)
+        try:
+            from engine.highlight_quality import snap_highlights
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                highlights = snap_highlights(highlights, json.load(f))
+            moved = sum(1 for h in highlights if h.get('snapped') and (h['start'] != h.get('orig_start') or h['end'] != h.get('orig_end')))
+            print(f"[Log] Boundary snapping: {moved} of {len(highlights)} clip(s) moved to sentence boundaries.")
+        except Exception as e:
+            print(f"[Warning] Boundary snapping skipped: {e}")
 
     highlights = order_for_mode(highlights, mode)  # scoring re-sorts best-first; a narrative reel plays in story order
     highlights = clamp_highlights(highlights, probe_duration(video_path))

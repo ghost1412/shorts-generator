@@ -60,6 +60,7 @@ def parse_args():
     parser.add_argument("--extract_mode", choices=["shorts", "long"], default="shorts")
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
+    parser.add_argument("--no_snap", action="store_true", help="Keep the clip start/end exactly as chosen instead of moving them to sentence boundaries (shorts only).")
     parser.add_argument("--min_duration", type=int, default=15, help="Target minimum clip length in seconds (default 15). Clips can be up to 5 s shorter than this when a moment ends early.")
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
     parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
