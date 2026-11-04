@@ -6,6 +6,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ### New
 - **Browser app controls for the 0.3.0 options**: an "Extras" section on the Start here tab (clean up the sound, big title at the start, emoji next to key words, satisfying video underneath with an optional footage file) and the same options under Clip (advanced). The title and emoji are only passed when animated captions are on, since Remotion draws them.
+- **`--auto_zoom` (punch-in zoom)**: a subtle zoom on the picture at numbers, strong words and loud moments (quick punch, about 8%) and a slow push across sentences that start after a pause (about 5%). Animated captions, the hook title and the brand never move, because only the picture layer zooms. Needs `--use_remotion`; skipped with `--layout split_filler` (clip and filler are one picture there, so zooming would move the seam). A checkbox in both Extras sections of the browser app; kept when you re-render a short. Moments come from `engine/auto_zoom.py`.
 - **"Dub a video" tab**: pick a video or link, the language to dub into and the language spoken, optionally burn the translated subtitles in; shows plain-language progress and gives you the dubbed video and the translated `.srt`.
 
 ### Fixed

@@ -9,9 +9,9 @@ FALLBACK_DUB_LANGUAGES = {
 }
 
 
-def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_remotion=True):
-    """Flags for the optional extras. The hook title and caption emoji are drawn by Remotion, so they are
-    left out when animated captions are off (the pipeline would ignore them anyway)."""
+def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_remotion=True, auto_zoom=False):
+    """Flags for the optional extras. The hook title, caption emoji and punch-in zoom are drawn by Remotion, so
+    they are left out when animated captions are off (the pipeline would ignore them anyway)."""
     args = []
     if clean_audio:
         args.append("--clean_audio")
@@ -20,6 +20,8 @@ def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_
             args.append("--hook_overlay")
         if caption_emoji:
             args.append("--caption_emoji")
+        if auto_zoom:
+            args.append("--auto_zoom")
     return args
 
 

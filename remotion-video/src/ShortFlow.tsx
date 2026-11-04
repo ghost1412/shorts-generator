@@ -1,4 +1,5 @@
 import { emojiForWord, emojiFileName } from "./captionEmoji";
+import { zoomScaleAt } from "./autoZoom";
 import {
   Audio,
   OffthreadVideo,
@@ -132,6 +133,7 @@ export const shortFlowSchema = z.object({
   captionEmoji: z.boolean().default(false), // keyword emoji, drawn from bundled Twemoji PNGs (public/emoji): no system font needed
   hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
   hookSeconds: z.number().default(2.8),
+  zoomMoments: z.array(z.object({ start: z.number(), end: z.number(), scale: z.number(), rise: z.number() })).optional(), // --auto_zoom: picture-layer punch-ins (captions never zoom)
   extraFont: z.object({ family: z.string(), url: z.string() }).optional(), // per-render CJK subset font (static file path)
   avatarUrl: z.string().optional(),
   avatarAspect: z.number().optional(), // width / height of the avatar asset; square art is not cropped to 16:9
@@ -441,7 +443,8 @@ const BackgroundSegment: React.FC<{
   fps: number;
   durationInFrames: number;
   isFirst: boolean;
-}> = ({ bg, fps, durationInFrames, isFirst }) => {
+  zoomMoments?: { start: number; end: number; scale: number; rise: number }[];
+}> = ({ bg, fps, durationInFrames, isFirst, zoomMoments }) => {
   const frame = useCurrentFrame();
   
   // Smooth continuous camera zoom (Ken Burns)
@@ -471,7 +474,9 @@ const BackgroundSegment: React.FC<{
         { extrapolateRight: "clamp", extrapolateLeft: "clamp" }
       );
 
-  const activeScale = bg.type === "video" ? 1.0 : scale;
+  // --auto_zoom: the zoom is on this picture layer only, so captions, the hook title and the brand never move
+  const punch = zoomMoments && zoomMoments.length ? zoomScaleAt(bg.start + frame / fps, zoomMoments) : 1.0;
+  const activeScale = bg.type === "video" ? punch : scale;
 
   const badgeScale = spring({ frame, fps, config: { damping: 10, mass: 0.5, stiffness: 140 } });
 
@@ -978,6 +983,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   captionEmoji = false,
   hookText,
   hookSeconds = 2.8,
+  zoomMoments,
   extraFont,
   avatarUrl,
   avatarAspect,
@@ -1319,6 +1325,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   fps={fps}
                   durationInFrames={durationInFrames}
                   isFirst={idx === 0}
+                  zoomMoments={zoomMoments}
                 />
               </Sequence>
             );

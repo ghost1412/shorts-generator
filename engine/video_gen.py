@@ -2880,7 +2880,9 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                         start_offset=r_offset,
                         caption_style=caption_style,
                         subtitle_y_pos=subtitle_y_pos,
-                        hook_text=hi.get('hook_text') if os.getenv("SHORTSFLOW_HOOK_OVERLAY") == "1" else None
+                        hook_text=hi.get('hook_text') if os.getenv("SHORTSFLOW_HOOK_OVERLAY") == "1" else None,
+                        # split_filler bakes clip + filler into one picture, so zooming it would move the seam: skip there
+                        auto_zoom=os.getenv("SHORTSFLOW_AUTO_ZOOM") == "1" and layout != "split_filler"
                     )
                     extracted_files.append(out)
                 except Exception as e:
