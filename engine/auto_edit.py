@@ -16,25 +16,25 @@ PRESETS = {
         "label": "Podcast / interview", "about": "Clean and calm: pauses and ums cut, clear subtitle bar, a teaser opening, gentle zooms.",
         "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "BAR", "caption_emoji": False,
         "hook_overlay": True, "cold_open": True, "auto_zoom": True, "broll": False, "video_filter": None,
-        "sfx": {"zoom": None, "broll": "whoosh", "cut": "whoosh"},
+        "sfx": {"zoom": None, "broll": "whoosh", "cut": "whoosh", "stat": None}, "stat_pops": True,
     },
     "hype": {
         "label": "Hype / gaming / reaction", "about": "Fast and loud: karaoke captions with emoji, frequent zooms, cutaways, a teaser, punchy colour.",
         "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "KARAOKE", "caption_emoji": True,
         "hook_overlay": True, "cold_open": True, "auto_zoom": True, "broll": True, "video_filter": "vibrant_action",
-        "sfx": {"zoom": "pop", "broll": "whoosh", "cut": "hit"},
+        "sfx": {"zoom": "pop", "broll": "whoosh", "cut": "hit", "stat": "pop"}, "stat_pops": True,
     },
     "educational": {
         "label": "Educational / explainer", "about": "Clear and focused: subtitle bar, stock cutaways for the things named, zooms on numbers, no teaser.",
         "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "BAR", "caption_emoji": False,
         "hook_overlay": True, "cold_open": False, "auto_zoom": True, "broll": True, "video_filter": None,
-        "sfx": {"zoom": "pop", "broll": "whoosh", "cut": None},
+        "sfx": {"zoom": "pop", "broll": "whoosh", "cut": None, "stat": "pop"}, "stat_pops": True,
     },
     "vlog": {
         "label": "Vlog / lifestyle", "about": "Warm and personal: glow captions with emoji, a warm colour grade, a teaser, light cutaways.",
         "tighten": True, "remove_fillers": False, "clean_audio": True, "caption_style": "GLOW_BOX", "caption_emoji": True,
         "hook_overlay": True, "cold_open": True, "auto_zoom": True, "broll": True, "video_filter": "cinematic_warm",
-        "sfx": {"zoom": None, "broll": "whoosh", "cut": "whoosh"},
+        "sfx": {"zoom": None, "broll": "whoosh", "cut": "whoosh", "stat": None}, "stat_pops": False,
     },
 }
 
@@ -83,6 +83,7 @@ def apply_preset(args, preset, strength="medium", argv=None):
     turn_on("clean_audio", p["clean_audio"])
     turn_on("hook_overlay", p["hook_overlay"])
     turn_on("auto_zoom", p["auto_zoom"])
+    turn_on("stat_pops", p.get("stat_pops", False))
     turn_on("cold_open", p["cold_open"] and s["cold_open"])
     turn_on("broll", p["broll"] and s["broll"])
     turn_on("caption_emoji", p["caption_emoji"] and s["emoji"])
@@ -121,6 +122,16 @@ def cfg_from_settings(settings):
             "zoom_intensity": s["zoom_intensity"], "zoom_spacing": s["zoom_spacing"]}
 
 
+def read_stat_pops(clip_file):
+    """Stat pop-ups the renderer chose for this clip ([] when there are none)."""
+    try:
+        with open(f"{clip_file}.stats.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (OSError, ValueError):
+        return []
+
+
 def read_zoom_moments(clip_file):
     """Zoom moments the renderer chose for this clip ([] when there are none)."""
     try:
@@ -131,7 +142,7 @@ def read_zoom_moments(clip_file):
         return []
 
 
-def build_sfx_events(cfg, zoom_moments=None, broll_events=None, cold_info=None):
+def build_sfx_events(cfg, zoom_moments=None, broll_events=None, cold_info=None, stat_pops=None):
     """Sound-effect events {t, kind, why} on the FINISHED clip's timeline.
 
     A cold open moves the main clip later by the teaser length, so zooms and cutaways are shifted by it and the cut from teaser
@@ -147,6 +158,9 @@ def build_sfx_events(cfg, zoom_moments=None, broll_events=None, cold_info=None):
         for m in zoom_moments or []:
             if float(m["end"]) - float(m["start"]) <= 1.3:                  # quick punch-ins get a sound; slow pushes stay silent
                 events.append({"t": float(m["start"]) + shift, "kind": sfx["zoom"], "why": "zoom"})
+    if sfx.get("stat"):
+        for st in stat_pops or []:
+            events.append({"t": float(st["start"]) + shift, "kind": sfx["stat"], "why": f"number: {st.get('text', '')}"})
     if sfx.get("broll"):
         for b in broll_events or []:
             events.append({"t": float(b["t"]) + shift, "kind": sfx["broll"], "why": f"cutaway: {b.get('keyword', '')}".strip()})
@@ -173,6 +187,8 @@ def summarize(edit):
         parts.append("pauses and ums cut")
     if edit.get("zooms"):
         parts.append(f"{edit['zooms']} zoom{'s' if edit['zooms'] != 1 else ''}")
+    if edit.get("stats"):
+        parts.append(f"{len(edit['stats'])} number pop-up{'s' if len(edit['stats']) != 1 else ''} ({', '.join(edit['stats'][:3])})")
     if edit.get("broll"):
         parts.append(f"{edit['broll']} cutaway{'s' if edit['broll'] != 1 else ''}")
     if edit.get("cold_open"):

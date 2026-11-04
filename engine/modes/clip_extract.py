@@ -134,6 +134,8 @@ def run(args, target_bitrate, target_preset):
         from engine.media_gen import get_chapters_json_path
         chapters_path = get_chapters_json_path(source_url or args.source_video, session_dir)
 
+    from engine import timing
+    timing.reset()
     highlights, transcript_path, interest_points, silence_intervals = process_source_video(
         args.source_video, session_dir, mode=args.extract_mode, 
         clip_count=args.clip_count, target_duration=args.target_duration,
@@ -151,6 +153,7 @@ def run(args, target_bitrate, target_preset):
         extra_signals=not getattr(args, 'no_signals', False),
     )
     
+    timing.mark("analysis done (all of process_source_video)")
     # The filler pass needs the words as spoken: a translated transcript has no "um" in it
     spoken_transcript_path = transcript_path
 
@@ -230,6 +233,7 @@ def run(args, target_bitrate, target_preset):
         active_video_filter = auto_detect_video_filter(user_context=args.user_context, style_context=args.style_context, category=args.category, prompt=args.prompt)
         print(f"[Log] 🎨 Auto-detected video filter: '{active_video_filter}'")
 
+    timing.mark("fillers + orientation + letterbox checks")
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, session_dir, 
         mode=args.extract_mode, bitrate=target_bitrate, preset=target_preset, codec="libx264",
@@ -248,6 +252,7 @@ def run(args, target_bitrate, target_preset):
         reel_captions=getattr(args, 'reel_captions', False)
     )
     
+    timing.mark("rendering the clips (FFmpeg / Remotion)")
     # Pair every output with ITS highlight. Everything below walks `highlights` and `extracted_files` in step, but the
     # renderer only returns the clips that succeeded (and worker threads add them in finishing order), so after one
     # failed clip the titles, thumbnails, SRTs and results.json would all be shifted onto the wrong video.
@@ -336,7 +341,8 @@ def run(args, target_bitrate, target_preset):
         from engine.broll import _ffmpeg, _probe
         for clip_file in extracted_files:
             zooms = auto_edit.read_zoom_moments(clip_file) if getattr(args, "auto_zoom", False) else []
-            events = auto_edit.build_sfx_events(cfg, zooms, broll_events.get(clip_file), cold_infos.get(clip_file))
+            stats = auto_edit.read_stat_pops(clip_file) if getattr(args, "stat_pops", False) else []
+            events = auto_edit.build_sfx_events(cfg, zooms, broll_events.get(clip_file), cold_infos.get(clip_file), stats)
             mixed = []
             if events and not already_done(clip_file, "sfx", cfg):
                 mixed = sfx_mix.mix_events(clip_file, events, volume_db=cfg["sfx_db"])
@@ -348,7 +354,7 @@ def run(args, target_bitrate, target_preset):
                 duration = 0.0
             cold = cold_infos.get(clip_file)
             edit_logs[clip_file] = {
-                "tightened": bool(getattr(args, "tighten", False)), "zooms": len(zooms), "broll": len(broll_events.get(clip_file) or []),
+                "tightened": bool(getattr(args, "tighten", False)), "zooms": len(zooms), "stats": [s_["text"] for s_ in stats], "broll": len(broll_events.get(clip_file) or []),
                 "cold_open": float(cold["duration"]) if cold else 0.0, "sfx": len(mixed), "sfx_events": mixed,
                 "grade": getattr(args, "video_filter", None) if getattr(args, "video_filter", "none") not in (None, "none", "auto") else None,
                 "captions": args.caption_style if args.use_remotion else None,
@@ -359,6 +365,7 @@ def run(args, target_bitrate, target_preset):
         if getattr(args, "auto_edit_plan", None):
             auto_edit.write_plan(session_dir, args.auto_edit_plan, [dict(clip=os.path.basename(f), **log) for f, log in edit_logs.items()])
 
+    timing.mark("post-processing (B-roll, clean-up, cold open, sound effects)")
     # Brand kit: logo watermark, @handle and end card (the kit was validated before the render started)
     if brand_kit and extracted_files:
         from engine.branding import apply_brand
@@ -490,6 +497,7 @@ def run(args, target_bitrate, target_preset):
         sys.exit(1)
     
     # Generate viral metadata for Highlights
+    timing.mark("brand, SRT")
     print("[Log] Generating viral metadata for extracted clips...")
     highlights_meta = []
     
@@ -636,6 +644,7 @@ def run(args, target_bitrate, target_preset):
                 "auto_zoom": bool(getattr(args, "auto_zoom", False)),
                 "caption_color": getattr(args, "caption_color", None),
                 "caption_emoji": bool(getattr(args, "caption_emoji", False)),
+                "stat_pops": bool(getattr(args, "stat_pops", False)),
                 "cold_open": bool(getattr(args, "cold_open", False)),
                 "auto_edit": getattr(args, "auto_edit", None), "edit_strength": getattr(args, "edit_strength", None) if getattr(args, "auto_edit", None) else None,
                 "remove_fillers": bool(getattr(args, "remove_fillers", False)),
@@ -670,6 +679,7 @@ def run(args, target_bitrate, target_preset):
         with open(args.output_json, "w", encoding="utf-8") as f_out:
             json.dump(output_json_data, f_out, indent=4)
         print(f"[Log] Exported structured JSON results to: {args.output_json}")
+    timing.mark("metadata (titles, thumbnails) + results")
 
     print(f"[Log] SUCCESS! Extracted videos to {session_dir}")
     sys.exit(0)

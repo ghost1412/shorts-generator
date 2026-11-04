@@ -398,6 +398,17 @@ def render_with_remotion(
                     print(f"[Log] Auto zoom: {len(moments)} punch-in moment(s).")
             except Exception as e:
                 print(f"[Warning] Auto zoom skipped ({e}).")
+        if os.getenv("SHORTSFLOW_STAT_POPS") == "1" and mode != "PHOTO_REEL":      # --stat_pops: striking numbers shown big when spoken
+            try:
+                from engine.stat_pops import find_stats
+                stats = find_stats(words, duration)
+                if stats:
+                    props["statPops"] = stats
+                    print(f"[Log] Stat pop-ups: {', '.join(s['text'] for s in stats)}")
+                    with open(f"{output_path}.stats.json", "w", encoding="utf-8") as sf:
+                        json.dump(stats, sf)
+            except Exception as e:
+                print(f"[Warning] Stat pop-ups skipped ({e}).")
         if extra_font: props["extraFont"] = extra_font
         if reel_style and mode == "PHOTO_REEL": props["reelStyle"] = reel_style
         if remotion_tot: props["thisOrThat"] = remotion_tot

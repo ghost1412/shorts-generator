@@ -142,6 +142,10 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         os.environ["SHORTSFLOW_ZOOM_INTENSITY"] = str(edit_cfg["zoom_intensity"])
         os.environ["SHORTSFLOW_ZOOM_SPACING"] = str(edit_cfg["zoom_spacing"])
         os.environ["SHORTSFLOW_ZOOM_FILL"] = "1"
+    stats_on = bool(settings.get("stat_pops"))        # --stat_pops: the same number pop-ups again
+    prev_stats_env = os.environ.get("SHORTSFLOW_STAT_POPS")
+    if stats_on:
+        os.environ["SHORTSFLOW_STAT_POPS"] = "1"
     emoji_on = bool(settings.get("caption_emoji"))    # --caption_emoji: the same keyword emoji again
     prev_emoji_env = os.environ.get("SHORTSFLOW_CAPTION_EMOJI")
     if emoji_on:
@@ -193,13 +197,14 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             from engine import sfx_mix
             from engine.broll import _ffmpeg, _probe
             zooms = auto_edit.read_zoom_moments(new_clip) if zoom_on else []
-            events = auto_edit.build_sfx_events(edit_cfg, zooms, broll_events, cold_info)
+            stats = auto_edit.read_stat_pops(new_clip) if settings.get("stat_pops") else []
+            events = auto_edit.build_sfx_events(edit_cfg, zooms, broll_events, cold_info, stats)
             mixed = sfx_mix.mix_events(new_clip, events, volume_db=edit_cfg["sfx_db"]) if events else []
             try:
                 length = _probe(new_clip, _ffmpeg())[2]
             except Exception:
                 length = 0.0
-            edit_log = {"tightened": bool(settings.get("tighten")), "zooms": len(zooms), "broll": len(broll_events),
+            edit_log = {"tightened": bool(settings.get("tighten")), "zooms": len(zooms), "stats": [s_["text"] for s_ in stats], "broll": len(broll_events),
                         "cold_open": float(cold_info["duration"]) if cold_info else 0.0, "sfx": len(mixed), "sfx_events": mixed,
                         "grade": settings.get("video_filter"), "captions": style if settings.get("use_remotion") else None,
                         "rhythm": auto_edit.rhythm(zooms, broll_events, cold_info, length) if length else {}}
@@ -244,6 +249,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = old
+        if stats_on:
+            if prev_stats_env is None:
+                os.environ.pop("SHORTSFLOW_STAT_POPS", None)
+            else:
+                os.environ["SHORTSFLOW_STAT_POPS"] = prev_stats_env
         if emoji_on:
             if prev_emoji_env is None:
                 os.environ.pop("SHORTSFLOW_CAPTION_EMOJI", None)

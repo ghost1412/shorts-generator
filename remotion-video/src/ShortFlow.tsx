@@ -154,6 +154,7 @@ export const shortFlowSchema = z.object({
   captionColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // --caption_color: accent colour of the active word (any style)
   captionEmoji: z.boolean().default(false), // keyword emoji, drawn from bundled Twemoji PNGs (public/emoji): no system font needed
   hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
+  statPops: z.array(z.object({ start: z.number(), end: z.number(), text: z.string() })).optional(), // --stat_pops: numbers shown big when spoken
   hookSeconds: z.number().default(2.8),
   reelStyle: reelStyleSchema.optional(), // PHOTO_REEL type look (flash / motion / colour grade / accent)
   zoomMoments: z.array(z.object({ start: z.number(), end: z.number(), scale: z.number(), rise: z.number() })).optional(), // --auto_zoom: picture-layer punch-ins (captions never zoom)
@@ -198,6 +199,38 @@ const CaptionEmoji: React.FC<{ word: string; size: number }> = ({ word, size }) 
 };
 
 // Big title for the first seconds of a clip (--hook_overlay): springs in, holds, fades out.
+// A striking number ("$200", "73%") shown big in the upper middle the moment it is said, popping in and fading out.
+const StatPopOverlay: React.FC<{ pops: { start: number; end: number; text: string }[]; fps: number; frame: number }> = ({ pops, fps, frame }) => {
+  const t = frame / fps;
+  const pop = pops.find((p) => t >= p.start && t <= p.end + 0.3);
+  if (!pop) return null;
+  const local = Math.max(0, frame - Math.round(pop.start * fps));
+  const spr = spring({ frame: local, fps, config: { damping: 10, stiffness: 170, mass: 0.7 } });
+  const opacity = interpolate(t, [pop.end - 0.2, pop.end + 0.3], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const size = pop.text.length > 9 ? 150 : pop.text.length > 6 ? 200 : 260;
+  return (
+    <div style={{ position: "absolute", top: "520px", width: "100%", display: "flex", justifyContent: "center", zIndex: 55, opacity, pointerEvents: "none" }}>
+      <div
+        style={{
+          transform: `scale(${0.4 + 0.6 * spr}) rotate(${(1 - spr) * 6}deg)`,
+          fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+          fontSize: `${size}px`,
+          lineHeight: 1,
+          color: "#FFFFFF",
+          letterSpacing: "2px",
+          WebkitTextStroke: "10px #000000",
+          paintOrder: "stroke fill",
+          textShadow: "0 12px 36px rgba(0,0,0,0.7), 0 0 50px rgba(255, 234, 0, 0.55)",
+          textAlign: "center",
+          padding: "0 40px",
+        }}
+      >
+        {pop.text}
+      </div>
+    </div>
+  );
+};
+
 const HookOverlay: React.FC<{ text: string; seconds: number; fps: number; frame: number }> = ({ text, seconds, fps, frame }) => {
   const t = frame / fps;
   if (t > seconds) return null;
@@ -1218,6 +1251,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   captionColor,
   captionEmoji = false,
   hookText,
+  statPops,
   hookSeconds = 2.8,
   zoomMoments,
   reelStyle,
@@ -1610,6 +1644,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
       )}
 
       {hookText && <HookOverlay text={hookText} seconds={hookSeconds} fps={fps} frame={frame} />}
+      {statPops && statPops.length > 0 && <StatPopOverlay pops={statPops} fps={fps} frame={frame} />}
 
       {/* 5. STYLISH CAPTIONS */}
       <Subtitles

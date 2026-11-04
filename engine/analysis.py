@@ -911,6 +911,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         
         video_outline = f_outline.result()
         audio_full, sr, global_audio_features = f_audio.result()
+    from engine.timing import mark
+    mark("highlights: video outline (LLM) + audio load")
 
     # 🟢 PHASE 2: Signal Pre-Ranking (Text + Audio)
     ENERGY_ALPHA = 0.3
@@ -935,6 +937,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             else: energy_baseline = ENERGY_ALPHA * raw_energy + (1 - ENERGY_ALPHA) * energy_baseline
             prev_energy = raw_energy
 
+    mark("highlights: text/audio pre-ranking")
     # 🟢 PHASE 16: Motion Analysis (on Pre-Ranked Candidates)
     if video_path:
         try:
@@ -954,6 +957,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         except Exception as e:
             print(f"[Warning] Outline/Motion analysis failed: {e}")
 
+    mark("highlights: motion analysis")
     # Extra signals: speech-rate change (from the words) and laughter / applause (needs --use_audio_detect). ~10% of the mix.
     if extra_signals and compressed_segments:
         try:
@@ -1554,7 +1558,10 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
+    from engine.timing import mark as _mark
+    _mark("start of analysis")
     transcript_path = transcribe_video(video_path, output_dir, keep_fillers=keep_fillers, language=language)
+    _mark("transcription (cached or Whisper)")
 
     # Load YouTube chapters if available
     chapters = []
@@ -1583,6 +1590,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
     if highlights is None:
         # Ask the first pass for more candidates than needed when the context ranking can choose between them
         pool_count = min(10, clip_count * 2) if (rerank and use_llm_scoring and mode == "shorts") else clip_count
+        _mark("before highlight selection")
         highlights = identify_highlights(
             transcript_path, video_path=video_path, clip_count=pool_count,
             mode=mode, target_duration=target_duration, min_duration=min_duration, use_audio_detect=use_audio_detect,
@@ -1590,6 +1598,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             extra_signals=extra_signals
         )
 
+        _mark("highlight selection (first-pass LLM + signals)")
         # Boost chapter-overlapping segments
         if chapters:
             print(f"[Log] Applying chapter-based score boosting to {len(highlights)} candidates...")
@@ -1616,6 +1625,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
                 highlights = ranked if ranked is not None else llm_score_highlights(highlights, transcript_data)
             except Exception as e:
                 print(f"[Warning] LLM scoring skipped: {e}")
+        _mark("context ranking / LLM scoring")
         if mode == "shorts":
             # Final geometry BEFORE choosing among the pool: snap, clamp to the video, and drop clips below the length floor
             # (ranking and snapping can shorten a clip, and a goodbye at the very end of a video can be left with a few seconds)
@@ -1657,6 +1667,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
     highlights = order_for_mode(highlights, mode)  # scoring re-sorts best-first; a narrative reel plays in story order
     highlights = clamp_highlights(highlights, probe_duration(video_path))
 
+    _mark("snapping, clamping, ordering")
     interest_points_cache_path = os.path.join(output_dir, "interest_points.json")
     interest_points = {}
     interest_points_loaded = False
@@ -1683,6 +1694,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
     elif not smart_crop:
         print("[Log] Smart crop disabled. Skipping interest point detection to speed up extraction.")
 
+    _mark("face tracking (interest points)")
     silence_intervals_cache_path = os.path.join(output_dir, "silence_intervals.json")
     silence_intervals = []
     silence_intervals_loaded = False
