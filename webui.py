@@ -510,8 +510,8 @@ def build_ui():
                         with gr.Row():
                             clip_count = gr.Number(value=3, minimum=1, precision=0, label="Number of clips", info="No limit.")
                             target_duration = gr.Slider(15, 90, value=30, step=5, label="Target length (s)")
-                        layout = gr.Radio(["single", "auto", "active", "split"], value="single", label="Framing",
-                                          info="auto = picks per clip (two-person shot -> cut to whoever talks, otherwise a tracked crop); active = always cut to the speaker")
+                        layout = gr.Radio(["single", "auto", "active", "split", "split_filler"], value="single", label="Framing",
+                                          info="split_filler = clip on top, looping satisfying/gameplay footage below (your own videos in assets/backgrounds/local, else Pexels); auto = picks per clip (two-person shot -> cut to whoever talks, otherwise a tracked crop); active = always cut to the speaker")
                         with gr.Row():
                             smart_crop = gr.Checkbox(value=True, label="Face-tracking 9:16 crop")
                             tighten = gr.Checkbox(value=True, label="Remove silences")
