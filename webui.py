@@ -699,21 +699,6 @@ def build_ui():
     return demo
 
 
-def resolve_auth(auth, share, host="127.0.0.1"):
-    """(username, password) or None. A shared (public) link, or an app listening on the network, must never be open to anyone
-    who finds the URL: it can process videos on this PC and the 'Save key' box writes to .env. So without --auth a
-    password is generated (and printed once)."""
-    if auth:
-        user, sep, pw = auth.partition(":")
-        if not sep or not user or not pw:
-            raise SystemExit("--auth must look like username:password")
-        return user, pw
-    if share or host not in ("127.0.0.1", "localhost", "::1"):
-        import secrets
-        return "shortsflow", secrets.token_urlsafe(9)
-    return None
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description="ShortsFlow AI Studio WebUI")
     parser.add_argument("--host", default=os.getenv("WEBUI_HOST", "127.0.0.1"))
@@ -734,7 +719,7 @@ def main(argv=None):
     except Exception:
         pass
 
-    creds = resolve_auth(cli.auth, cli.share, cli.host)
+    creds = web_args.resolve_auth(cli.auth, cli.share, cli.host)
     if creds and not cli.auth:
         print(f"[Login] username: {creds[0]}   password: {creds[1]}   (new on every start; use --auth user:pass to choose your own)", flush=True)
     build_ui().queue(default_concurrency_limit=1).launch(

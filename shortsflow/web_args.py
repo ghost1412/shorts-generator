@@ -70,3 +70,18 @@ def find_dub_outputs(session_dir):
     videos = sorted(glob.glob(os.path.join(session_dir, "*_dub_*.mp4")), key=os.path.getmtime)
     srts = sorted(glob.glob(os.path.join(session_dir, "*.srt")), key=os.path.getmtime)
     return (videos[-1] if videos else None, srts[-1] if srts else None)
+
+
+def resolve_auth(auth, share, host="127.0.0.1"):
+    """(username, password) or None. A shared (public) link, or an app listening on the network, must never be open to anyone
+    who finds the URL: it can process videos on this PC and the 'Save key' box writes to .env. So without --auth a
+    password is generated (and printed once)."""
+    if auth:
+        user, sep, pw = auth.partition(":")
+        if not sep or not user or not pw:
+            raise SystemExit("--auth must look like username:password")
+        return user, pw
+    if share or host not in ("127.0.0.1", "localhost", "::1"):
+        import secrets
+        return "shortsflow", secrets.token_urlsafe(9)
+    return None

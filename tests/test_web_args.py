@@ -181,12 +181,12 @@ def test_cold_open_flag_in_extras():
 
 
 def test_shared_or_network_webui_always_gets_a_login():
+    from shortsflow import web_args
     import pytest
-    import webui
-    assert webui.resolve_auth(None, False, "127.0.0.1") is None                      # local only: no login needed
-    user, pw = webui.resolve_auth(None, True, "127.0.0.1")                          # --share: generated
+    assert web_args.resolve_auth(None, False, "127.0.0.1") is None                      # local only: no login needed
+    user, pw = web_args.resolve_auth(None, True, "127.0.0.1")                          # --share: generated
     assert user == "shortsflow" and len(pw) >= 8
-    assert webui.resolve_auth(None, False, "0.0.0.0")[0] == "shortsflow"             # listening on the network: generated
-    assert webui.resolve_auth("me:secret", True) == ("me", "secret")
+    assert web_args.resolve_auth(None, False, "0.0.0.0")[0] == "shortsflow"             # listening on the network: generated
+    assert web_args.resolve_auth("me:secret", True) == ("me", "secret")
     with pytest.raises(SystemExit):
-        webui.resolve_auth("nopassword", True)
+        web_args.resolve_auth("nopassword", True)
