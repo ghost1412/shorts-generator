@@ -136,7 +136,7 @@ def _count(value):
 
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
                caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider,
-               clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None, auto_zoom=False):
+               clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None, auto_zoom=False, cold_open=False):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
@@ -147,7 +147,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
         if on:
             cmd.append(flag)
     cmd += _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider)
-    cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, use_remotion, auto_zoom=auto_zoom)
+    cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, use_remotion, auto_zoom=auto_zoom, cold_open=cold_open)
     cmd += web_args.filler_args(layout, filler_video)
     yield from _run(cmd)
 
@@ -265,7 +265,7 @@ def clear_brand():
 
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
-               clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False):
+               clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -292,7 +292,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                "--clip_count", str(_count(clip_count)), "--smart_crop", "--tighten", "--layout", layout, "--skip-upload",
                "--session_dir", session, "--output_json", results]
         cmd += web_args.filler_args(layout, filler_video)
-        cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, bool(captions), broll=broll, auto_zoom=auto_zoom)
+        cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, bool(captions), broll=broll, auto_zoom=auto_zoom, cold_open=cold_open)
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
         if (find or "").strip():
@@ -512,6 +512,7 @@ def build_ui():
                             q_filler_file = gr.File(label="Footage for the bottom half (optional)", file_types=["video"], type="filepath")
                             q_broll = gr.Checkbox(label="Stock cutaways on key words (B-roll)", info="A short stock clip over the upper part of the picture when a thing like \"money\" or \"car\" is said. Needs a free Pexels key (PEXELS_API_KEY) or clips in assets/backgrounds/local; otherwise nothing is added.")
                             q_zoom = gr.Checkbox(label="Zoom in on key moments", info="A subtle punch-in on numbers and strong words. Needs animated captions; skipped with the satisfying-video layout.")
+                            q_cold = gr.Checkbox(label="Start with the best line (cold open)", info="The strongest sentence of each clip plays first as a 2-6 second teaser, then the clip starts from the beginning.")
                         with gr.Accordion("Your brand: logo, @handle, end card", open=False):
                             q_brand_on = gr.Checkbox(value=True, label="Add my brand to the shorts")
                             q_logo = gr.Image(label="Logo (PNG with a transparent background works best)", type="filepath",
@@ -606,7 +607,7 @@ def build_ui():
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold],
                             [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
@@ -634,6 +635,7 @@ def build_ui():
                                 clip_hook = gr.Checkbox(label="Hook title overlay", info="Needs Remotion captions")
                                 clip_emoji = gr.Checkbox(label="Caption emoji", info="Needs Remotion captions")
                                 clip_zoom = gr.Checkbox(label="Auto zoom", info="Punch-in on key words; needs Remotion captions, skipped for split_filler")
+                                clip_cold = gr.Checkbox(label="Cold open", info="Strongest line first as a short teaser, then the clip")
                             clip_filler = gr.File(label="Footage for the bottom half (Framing = split_filler)", file_types=["video"], type="filepath")
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                     with gr.Column():
@@ -642,7 +644,7 @@ def build_ui():
                 clip_btn.click(
                     clip_video,
                     [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
-                     clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom],
+                     clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom, clip_cold],
                     [clip_log, clip_videos],
                 )
 

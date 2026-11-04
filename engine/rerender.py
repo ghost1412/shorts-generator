@@ -168,6 +168,18 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         if settings.get("clean_audio"):              # --clean_audio: a re-render must not fall back to the raw sound
             from engine.audio_clean import clean_audio
             clean_audio(new_clip)
+        cold_info = None
+        if settings.get("cold_open"):                # --cold_open: the best line goes first again
+            try:
+                from engine.broll import clip_words
+                from engine.cold_open import apply_to_clip as apply_cold_open
+                with open(os.path.join(session_dir, "transcript.json"), "r", encoding="utf-8") as f_t:
+                    cold_words = clip_words(json.load(f_t), start, end, silence, tighten_mode=tighten_mode,
+                                            remove_fillers=bool(extra.get("remove_fillers")))
+                if cold_words is not None:
+                    cold_info = apply_cold_open(new_clip, cold_words, hint=clip.get("hook"))
+            except (OSError, ValueError) as e:
+                print(f"[Warning] Cold open skipped on re-render: {e}")
         brand_json = settings.get("brand")
         if use_brand and brand_json and not os.path.exists(brand_json):
             brand_json = None
@@ -225,7 +237,12 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
 
     # remember what the clip looked like so "undo" can put the numbers back together with the video
     clip["previous"] = {k: clip.get(k) for k in ("start", "end", "duration", "caption_style", "cuts")}
-    clip.update({"start": round(start, 2), "end": round(end, 2), "duration": round(end - start, 2), "caption_style": style})
+    clip.update({"start": round(start, 2), "end": round(end, 2),
+                 "duration": round(end - start + (cold_info or {}).get("duration", 0), 2), "caption_style": style})
+    if cold_info:
+        clip["cold_open"] = cold_info
+    else:
+        clip.pop("cold_open", None)
     if cuts:
         clip["cuts"] = [[round(s, 3), round(e, 3)] for s, e in cuts]
     else:

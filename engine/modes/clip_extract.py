@@ -292,6 +292,40 @@ def run(args, target_bitrate, target_preset):
             if clean_clips([f]):
                 mark_done(f, "clean", True)
 
+    # Cold open: the strongest line first, then the clip from its start (built from the finished clip, so captions come along)
+    cold_infos = {}
+    if getattr(args, "cold_open", False) and extracted_files:
+        if args.extract_mode == "long" or getattr(args, "mashup", False):
+            print("[Log] Cold open applies to short clips; skipped for the highlights video.")
+        else:
+            from engine.broll import clip_words
+            from engine.cold_open import apply_to_clip as apply_cold_open, load_applied, save_applied
+            words_source = os.path.join(session_dir, "transcript.json")
+            if not os.path.exists(words_source):
+                words_source = transcript_path
+            try:
+                with open(words_source, 'r', encoding='utf-8') as f:
+                    cold_transcript = json.load(f)
+            except (OSError, ValueError):
+                cold_transcript = {}
+            for i, clip_file in enumerate(extracted_files):
+                if i >= len(highlights):
+                    break
+                earlier = load_applied(clip_file)      # --use_cache gives back a clip that already has its teaser
+                if earlier:
+                    cold_infos[clip_file] = earlier
+                    continue
+                words = clip_words(cold_transcript, highlights[i]['start'], highlights[i]['end'], final_silence,
+                                   tighten_mode=args.tighten_mode, remove_fillers=getattr(args, "remove_fillers", False))
+                if words is None:
+                    print("[Warning] Cold open timing needs --tighten_mode cut when tightening; skipped.")
+                    break
+                info = apply_cold_open(clip_file, words, hint=highlights[i].get('hook_text'))
+                if info:
+                    cold_infos[clip_file] = info
+                    save_applied(clip_file, info)
+            print(f"[Log] Cold open: {len(cold_infos)} of {len(extracted_files)} clip(s) now start with their best line.")
+
     # Brand kit: logo watermark, @handle and end card (the kit was validated before the render started)
     if brand_kit and extracted_files:
         from engine.branding import apply_brand
@@ -321,6 +355,8 @@ def run(args, target_bitrate, target_preset):
                             continue
                         clip_segs.append(dict(seg, start=max(0.0, seg['start'] - hi['start']),
                                               end=min(hi['end'] - hi['start'], seg['end'] - hi['start'])))
+                    from engine.cold_open import shift_cues
+                    clip_segs = shift_cues(clip_segs, cold_infos.get(clip_file))     # a cold open moves every cue later
                     srt_path = clip_file.rsplit('.', 1)[0] + ".srt"
                     from engine.pipeline import export_srt
                     export_srt({'segments': clip_segs}, srt_path)
@@ -567,6 +603,7 @@ def run(args, target_bitrate, target_preset):
                 "auto_zoom": bool(getattr(args, "auto_zoom", False)),
                 "caption_color": getattr(args, "caption_color", None),
                 "caption_emoji": bool(getattr(args, "caption_emoji", False)),
+                "cold_open": bool(getattr(args, "cold_open", False)),
                 "remove_fillers": bool(getattr(args, "remove_fillers", False)),
                 "video_filter": getattr(args, "video_filter", None) if getattr(args, "video_filter", "none") not in (None, "none", "auto") else None,
                 "logo": getattr(args, "logo", None), "handle": getattr(args, "handle", None),
@@ -584,7 +621,8 @@ def run(args, target_bitrate, target_preset):
                 "video_path": clip_path,
                 "start": h.get("start"),
                 "end": h.get("end"),
-                "duration": round(h.get("end", 0) - h.get("start", 0), 2),
+                "duration": round(h.get("end", 0) - h.get("start", 0) + (cold_infos.get(clip_path) or {}).get("duration", 0), 2),
+                **({"cold_open": cold_infos[clip_path]} if clip_path in cold_infos else {}),
                 "viral_score": h.get("viral_score", 85),
                 "hook": h.get("hook_text", meta_item.get("title", "")),
                 "reason": h.get("reason", "High-engagement segment"),

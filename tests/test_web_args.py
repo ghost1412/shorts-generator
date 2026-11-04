@@ -172,3 +172,9 @@ def test_the_ui_has_the_dub_tab_and_extras():
     demo = w.build_ui()
     labels = {getattr(b, "label", None) for b in demo.blocks.values()}
     assert "Dub into" in labels and "Clean up the sound" in labels and "Clean audio" in labels
+
+
+def test_cold_open_flag_in_extras():
+    from shortsflow import web_args
+    assert "--cold_open" in web_args.extras_args(cold_open=True)
+    assert "--cold_open" not in web_args.extras_args()
