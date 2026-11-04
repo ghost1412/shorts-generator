@@ -54,6 +54,7 @@ def load_results(json_path):
             "title": (c.get("title") or f"Clip {i}").strip(),
             "description": (c.get("description") or "").strip(),
             "tags": [str(t) for t in (c.get("tags") or [])],
+            "title_variants": [v for v in (c.get("title_variants") or []) if isinstance(v, dict) and v.get("title")],
             "hook": (c.get("hook") or "").strip(),
             "reason": (c.get("reason") or "").strip(),
             "score": score,
@@ -78,6 +79,18 @@ def card_text(card):
     return "\n\n".join(p for p in parts if p)
 
 
+def variants_text(card):
+    """Copy-ready list of the alternative titles ('[Curiosity] ...' per line); empty when there are none."""
+    from engine.title_variants import variants_text as _vt
+    return _vt(card.get("title_variants"))
+
+
+def platform_texts(card):
+    """{'tiktok': ..., 'instagram': ..., 'youtube': ...} caption/description text cut to each platform's limits."""
+    from engine.platform_limits import LIMITS, fit_for_platform
+    return {p: fit_for_platform(p, card.get("title", ""), card.get("description", ""), card.get("tags")) for p in LIMITS}
+
+
 def safe_name(text, fallback="clip"):
     keep = "".join(ch if ch.isalnum() or ch in " -_" else "" for ch in (text or "")).strip()
     return (keep[:50].strip().replace(" ", "_")) or fallback
@@ -94,7 +107,8 @@ def build_zip(cards, dest_zip):
             z.write(c["video"], f"{stem}.mp4")
             if c.get("thumbnail"):
                 z.write(c["thumbnail"], f"{stem}.jpg")
-            z.writestr(f"{stem}.txt", card_text(c))
+            extra = f"\n\nOther title ideas:\n{variants_text(c)}" if c.get("title_variants") else ""
+            z.writestr(f"{stem}.txt", card_text(c) + extra)
     return dest_zip
 
 
