@@ -1535,7 +1535,7 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1566,8 +1566,10 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             print(f"[Warning] Failed to load cached highlights: {e}")
 
     if highlights is None:
+        # Ask the first pass for more candidates than needed when the context ranking can choose between them
+        pool_count = min(10, clip_count * 2) if (rerank and use_llm_scoring and mode == "shorts") else clip_count
         highlights = identify_highlights(
-            transcript_path, video_path=video_path, clip_count=clip_count,
+            transcript_path, video_path=video_path, clip_count=pool_count,
             mode=mode, target_duration=target_duration, min_duration=min_duration, use_audio_detect=use_audio_detect,
             style=style, user_context=user_context, style_context=style_context, diversity=diversity
         )
@@ -1591,9 +1593,16 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             try:
                 with open(transcript_path, 'r', encoding='utf-8') as f:
                     transcript_data = json.load(f)
-                highlights = llm_score_highlights(highlights, transcript_data)
+                ranked = None
+                if rerank and mode == "shorts":
+                    from engine.highlight_rank import rank_with_context
+                    ranked = rank_with_context(highlights, transcript_data)     # one request for all candidates, with context
+                highlights = ranked if ranked is not None else llm_score_highlights(highlights, transcript_data)
             except Exception as e:
                 print(f"[Warning] LLM scoring skipped: {e}")
+        if mode == "shorts" and len(highlights) > clip_count:
+            # the larger pool was only for choosing: keep the best ones
+            highlights = sorted(highlights, key=lambda h: float(h.get('final_score', h.get('viral_score', 0)) or 0), reverse=True)[:clip_count]
 
         try:
             with open(highlights_cache_path, "w", encoding="utf-8") as f:
