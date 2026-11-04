@@ -59,6 +59,7 @@ def parse_args():
     parser.add_argument("--no_rerank", action="store_true", help="Skip the second LLM pass that rates all clip candidates together with context (uses the older per-clip scoring).")
     parser.add_argument("--no_diversity", action="store_true", help="Do not skip near-duplicate clips or prefer different topics when choosing shorts.")
     parser.add_argument("--moments", help="Make shorts from these exact times instead of letting the AI choose (one per line or comma separated): 7:00-7:45, 1:01:40-1:02:30, 420-465. A single time (7:00) starts a short of --target_duration there. Good for cutscenes and any scene you already know.")
+    parser.add_argument("--visual_context", action="store_true", help="Let a local vision model (Ollama, e.g. gemma3:12b) look at a few frames of each candidate moment, so the story on screen counts and not only what is said. Slower; skipped with a note when no vision model is installed. Use --user_context to say what the video is about.")
     parser.add_argument("--no_snap", action="store_true", help="Keep the clip start/end exactly as chosen instead of moving them to sentence boundaries (shorts only).")
     parser.add_argument("--min_duration", type=int, default=15, help="Target minimum clip length in seconds (default 15). Clips can be up to 5 s shorter than this when a moment ends early.")
     parser.add_argument("--session_dir", help="Reuse session for transcription.")

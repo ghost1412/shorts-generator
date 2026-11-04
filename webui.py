@@ -358,7 +358,7 @@ def clear_brand():
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
-               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments=""):
+               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -392,6 +392,10 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
         if (find or "").strip():
             cmd += ["--find", find.strip()]
+        if (about or "").strip():
+            cmd += ["--user_context", about.strip()]
+        if visual:
+            cmd += ["--visual_context"]
         if (moments or "").strip():
             from engine.moments import parse_moments
             try:
@@ -663,6 +667,10 @@ def build_ui():
                                                 info="Describe the part you want. Leave empty to let the AI pick the best moments.")
                             q_moments = gr.Textbox(label="Or give exact times (one per line)", lines=3, placeholder="7:00-7:45",
                                                    info="Makes shorts from exactly these moments, like a cutscene you spotted. Use minutes:seconds, e.g. 7:00-7:45 or 1:01:40-1:02:30. Leave empty to let the AI choose.")
+                            q_about = gr.Textbox(label="What is this video about? (optional)", lines=2, placeholder="God of War 3 story playthrough",
+                                                info="Helps the AI judge which moments matter, for example when the speaker chats while the story happens on screen.")
+                            q_visual = gr.Checkbox(label="Look at the picture too (slower)", value=False,
+                                                   info="A local vision model looks at a few frames of each candidate so the story on screen counts, not only the words. Needs one in Ollama, e.g. ollama pull gemma3:12b.")
                             q_cut = gr.Textbox(label="Cut these words or phrases out (one per line)", lines=3, placeholder="you know, so basically",
                                                info="Every time it is said, that bit is removed from the short.")
                         with gr.Accordion("Languages (optional)", open=False):
@@ -798,7 +806,7 @@ def build_ui():
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)

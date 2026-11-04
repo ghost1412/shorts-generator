@@ -152,6 +152,7 @@ def run(args, target_bitrate, target_preset):
         rerank=not getattr(args, 'no_rerank', False),
         extra_signals=not getattr(args, 'no_signals', False),
         moments=getattr(args, 'moments', None),
+        visual_context=getattr(args, 'visual_context', False),
     )
     
     timing.mark("analysis done (all of process_source_video)")
@@ -584,8 +585,10 @@ def run(args, target_bitrate, target_preset):
             
             if active_cat != "gaming" and topic_name == "Viral Highlight":
                 from engine.social_gen import generate_clip_metadata
+                seen = str(h.get('visual') or '').strip()
                 meta = generate_clip_metadata(clip_transcript_text(transcript_segments, h['start'], h['end']),
-                                              hook=h.get('hook_text'), user_context=args.user_context)
+                                              hook=h.get('hook_text'),
+                                              user_context=" ".join(x for x in (args.user_context, f"On screen: {seen}" if seen else "") if x) or None)
             else:
                 meta = generate_viral_metadata(content_info, mode="STORY", category=active_cat, user_context=args.user_context)
             return {

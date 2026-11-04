@@ -31,22 +31,29 @@ def overview(spans, total, max_chars=700):
     return (f"Video length {int(total)}s. Sampled lines: " + " | ".join(pieces))[:max_chars]
 
 
-def build_prompt(candidates, spans, total):
+def build_prompt(candidates, spans, total, context=None):
     lines = []
     for i, h in enumerate(candidates, 1):
         s, e = float(h["start"]), float(h["end"])
         before = next((t for ss, ee, t in reversed(spans) if ee <= s + 0.05), "")
         after = next((t for ss, ee, t in spans if ss >= e - 0.05), "")
+        seen = str(h.get("visual") or "").strip()
         lines.append(f"CLIP {i} ({s:.0f}s-{e:.0f}s, {e - s:.0f}s long)\n"
-                     f"  before: {before[:160]}\n  CLIP TEXT: {_text_in(spans, s, e)[:650]}\n  after: {after[:160]}")
+                     f"  before: {before[:160]}\n  CLIP TEXT: {_text_in(spans, s, e)[:650]}\n  after: {after[:160]}"
+                     + (f"\n  ON SCREEN: {seen[:420]}" if seen else ""))
+    about = (f"About this video: {str(context).strip()[:400]}\n" if context and str(context).strip() else "")
+    story = ("\nWhere a clip has ON SCREEN, the picture matters as much as the words: a story beat, reveal or cutscene shown on screen "
+             "can make a clip strong even when the speaker is only chatting to the viewers.\n"
+             if any(h.get("visual") for h in candidates) else "")
     return (
-        f"{overview(spans, total)}\n\nCandidate clips for YouTube Shorts / TikTok:\n\n" + "\n\n".join(lines) + "\n\n"
+        f"{about}{overview(spans, total)}\n\nCandidate clips for YouTube Shorts / TikTok:\n\n" + "\n\n".join(lines) + "\n\n"
         "Rate every clip. Reply with a JSON list, one object per clip, exactly:\n"
         '[{"id": 1, "score": <1-10 viral potential vs the other clips>, "complete": <true if the payoff / end of the thought is '
         'inside the clip>, "extend_end": <0, 1 or 2 sentences to add at the end so the payoff is included>, '
         '"trim_start": <0 or 1: 1 if the first sentence is throat-clearing and should be dropped>, "reason": "<short>"}]\n'
         "Use the full 1-10 range; do not give every clip the same score. Score intros, outros, goodbyes (\"that's it for today\", "
         "\"thanks for watching\"), housekeeping and small talk LOW: a short needs a hook and a payoff."
+        + story
     )
 
 
@@ -112,7 +119,7 @@ def _adjust_edges(h, spans, info, min_len=MIN_LEN):
     return new_start, new_end
 
 
-def rank_with_context(highlights, transcript, ask=None, max_candidates=10, weight=0.6, min_len=MIN_LEN):
+def rank_with_context(highlights, transcript, ask=None, max_candidates=10, weight=0.6, min_len=MIN_LEN, context=None):
     """Re-scored copies of `highlights` (best first), or None when the LLM pass could not be used."""
     if not highlights:
         return None
@@ -127,7 +134,7 @@ def rank_with_context(highlights, transcript, ask=None, max_candidates=10, weigh
         def ask(prompt):
             return get_llm_response(prompt, SYSTEM, max_tokens=900)
     try:
-        raw = ask(build_prompt(candidates, spans, total))
+        raw = ask(build_prompt(candidates, spans, total, context))
     except Exception as e:
         print(f"[Warning] Context ranking skipped ({e}).")
         return None

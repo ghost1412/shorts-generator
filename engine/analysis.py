@@ -1554,7 +1554,7 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True, moments=None):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True, moments=None, visual_context=False):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1605,6 +1605,14 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
         )
 
         _mark("highlight selection (first-pass LLM + signals)")
+        if visual_context and mode == "shorts":
+            try:
+                from engine.visual_context import describe_candidates
+                highlights = describe_candidates(video_path, highlights, about=user_context or "",
+                                                 cache_path=os.path.join(output_dir, "visual_context.json"))
+            except Exception as e:
+                print(f"[Warning] Visual context skipped: {e}")
+            _mark("visual context")
         # Boost chapter-overlapping segments
         if chapters:
             print(f"[Log] Applying chapter-based score boosting to {len(highlights)} candidates...")
@@ -1627,7 +1635,7 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
                 ranked = None
                 if rerank and mode == "shorts":
                     from engine.highlight_rank import rank_with_context
-                    ranked = rank_with_context(highlights, transcript_data, min_len=max(8.0, min_duration - 5.0))   # one request, with context
+                    ranked = rank_with_context(highlights, transcript_data, min_len=max(8.0, min_duration - 5.0), context=user_context)   # one request, with context
                 highlights = ranked if ranked is not None else llm_score_highlights(highlights, transcript_data)
             except Exception as e:
                 print(f"[Warning] LLM scoring skipped: {e}")
