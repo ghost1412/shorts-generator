@@ -2,13 +2,10 @@ import os
 import sys
 import threading
 import subprocess
-import json
-import time
 
 # PyInstaller Subprocess Hook: If running as compiled executable and given our flag, run backend.
 if getattr(sys, 'frozen', False) and len(sys.argv) > 1 and sys.argv[1] == "--run-main-pipeline":
     sys.argv.pop(1)  # Remove flag
-    import main
     sys.exit(0)
 
 try:

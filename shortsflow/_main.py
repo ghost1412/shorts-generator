@@ -1,11 +1,7 @@
 import os
 import sys
 import io
-import time
-import random
 import argparse
-import json
-import re
 import subprocess
 from dotenv import load_dotenv
 
@@ -16,19 +12,12 @@ if sys.stdout.encoding != 'utf-8' or sys.platform == "win32":
 if sys.stderr.encoding != 'utf-8' or sys.platform == "win32":
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
 
-from supabase import create_client, Client
-from engine.utils import decrypt_secret, find_fact_start_times
-from engine.pipeline import POOL_SIZE, VIBE_VOICE_MAP, CARTOON_VOICE_MAP, CARTOON_AUDIO_CONFIG, report_status, export_srt, print_clip_score_table
 
 from engine.paths import project_root
 load_dotenv(os.path.join(project_root(), ".env"))
 load_dotenv()  # also honour a .env in the current folder
 
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
-from engine.voice_gen import generate_voice
-from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images, is_url, download_source_video_from_url
-from engine.video_gen import create_shorts_video
-from engine.storage import upload_to_storage
+from engine.media_gen import is_url
 
 
 

@@ -3,7 +3,6 @@ import os
 import asyncio
 import edge_tts
 import re
-from xml.sax.saxutils import escape as xml_escape
 
 def clean_for_tts(text):
     """

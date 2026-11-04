@@ -4,19 +4,14 @@ moved verbatim from main.py. Runs for every mode that is not a standalone pipeli
 """
 import os
 import sys
-import io
-import time
 import random
-import argparse
 import json
-import re
 import subprocess
-from dotenv import load_dotenv
 from engine.utils import decrypt_secret, find_fact_start_times
-from engine.pipeline import POOL_SIZE, VIBE_VOICE_MAP, CARTOON_VOICE_MAP, CARTOON_AUDIO_CONFIG, report_status, export_srt, print_clip_score_table
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
+from engine.pipeline import VIBE_VOICE_MAP, CARTOON_VOICE_MAP, CARTOON_AUDIO_CONFIG, report_status
+from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
-from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images, is_url, download_source_video_from_url
+from engine.media_gen import download_image, download_sfx, fetch_jwst_images, is_url, download_source_video_from_url
 from engine.video_gen import create_shorts_video
 from engine.storage import upload_to_storage
 

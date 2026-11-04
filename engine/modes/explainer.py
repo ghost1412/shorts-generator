@@ -1,20 +1,6 @@
 """explainer pipeline, moved verbatim from main.py (runs when: getattr(args, "mode", None) == "EXPLAINER")."""
 import os
 import sys
-import io
-import time
-import random
-import argparse
-import json
-import re
-import subprocess
-from dotenv import load_dotenv
-from engine.utils import decrypt_secret, find_fact_start_times
-from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_odd_one_out_script, generate_riddle, generate_jwst_script
-from engine.voice_gen import generate_voice
-from engine.media_gen import download_background_video, download_image, download_sfx, fetch_jwst_images, is_url, download_source_video_from_url
-from engine.video_gen import create_shorts_video
-from engine.storage import upload_to_storage
 from engine.pipeline import report_status
 
 
