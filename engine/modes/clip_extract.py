@@ -66,6 +66,13 @@ def run(args, target_bitrate, target_preset):
             print(f"[Error] {e}")
             sys.exit(2)
 
+    # Chinese captions in the script the user asked for (before the clips, captions and titles are made)
+    zh_script = getattr(args, "zh_script", "auto") or "auto"
+    if zh_script != "auto":
+        from engine.zh_script import convert_highlights, convert_transcript
+        transcript_path = convert_transcript(transcript_path, zh_script)
+        convert_highlights(highlights, zh_script)
+
     # 🟢 Print the beautiful new score table
     print_clip_score_table(highlights)
     
@@ -418,6 +425,15 @@ def run(args, target_bitrate, target_preset):
     with open(os.path.join(session_dir, "metadata.json"), "w", encoding="utf-8") as f:
         json.dump(highlights_meta, f, indent=4)
         
+    if getattr(args, "clip_report", None):
+        from engine.clip_report import build_rows, write_report
+        try:
+            report_rows = build_rows(highlights, [] if reel_mode else extracted_files, highlights_meta, session_dir)
+            for path in write_report(report_rows, session_dir, args.clip_report, source=str(args.source_video)):
+                print(f"[Log] Clip report: {path}")
+        except (OSError, ValueError) as e:
+            print(f"[Warning] Could not write the clip report: {e}")
+
     if getattr(args, "output_json", None):
         output_json_data = {
             "source_video": args.source_video,
@@ -429,7 +445,7 @@ def run(args, target_bitrate, target_preset):
                 "smart_crop": bool(args.smart_crop), "tighten": bool(args.tighten), "tighten_mode": args.tighten_mode,
                 "use_remotion": bool(args.use_remotion), "caption_style": args.caption_style,
                 "subtitle_y_pos": args.subtitle_y_pos, "brand": getattr(args, "brand", None),
-                "caption_lang": getattr(args, "caption_lang", None),
+                "caption_lang": getattr(args, "caption_lang", None), "zh_script": getattr(args, "zh_script", "auto"),
                 "clean_audio": bool(getattr(args, "clean_audio", False)), "hook_overlay": bool(getattr(args, "hook_overlay", False)),
                 "broll": bool(getattr(args, "broll", False)),
                 "auto_zoom": bool(getattr(args, "auto_zoom", False)),
