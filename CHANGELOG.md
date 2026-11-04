@@ -5,6 +5,10 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **Clip many videos at once**: `shortsflow clip A.mp4 B.mp4`, `shortsflow clip FOLDER` (every video directly inside it) or a mix of files and links. Each video is its own run in its own `sessions/batch_*` folder (the browser app lists them under "Open an earlier run"), a failed video does not stop the others, and a summary table (result, shorts, folder) is printed at the end.
+- **`shortsflow clip --watch FOLDER [--interval N]`**: keeps checking the folder and clips each new video once, after its size has stopped changing (so a file still being copied is not clipped half-way). The done list lives in `sessions/.watch_*.json`; Ctrl+C stops it.
+- **`--zh_script simplified|traditional|auto`**: Chinese captions (and the AI-written titles) in the script you want; `auto` keeps what Whisper wrote (it often writes Traditional for Simplified speech). Needs `pip install "shortsflow[zh]"` (OpenCC); without it the run goes on and says so. Timing is untouched because words are converted one by one.
+- **`--clip_report [md|csv|both]`**: writes `clip_report.md` and/or `clip_report.csv` into the session folder with each clip's title, time range, score label, file and thumbnail. Batch runs write the Markdown report by default.
 - **Browser app controls for the 0.3.0 options**: an "Extras" section on the Start here tab (clean up the sound, big title at the start, emoji next to key words, satisfying video underneath with an optional footage file) and the same options under Clip (advanced). The title and emoji are only passed when animated captions are on, since Remotion draws them.
 - **"Dub a video" tab**: pick a video or link, the language to dub into and the language spoken, optionally burn the translated subtitles in; shows plain-language progress and gives you the dubbed video and the translated `.srt`.
 
