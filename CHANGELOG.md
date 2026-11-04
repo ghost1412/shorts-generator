@@ -4,6 +4,8 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+## 0.4.1 (2026-11-04)
+
 ### New
 - **Use the browser app from a phone on another network**: `shortsflow webui --share` creates a temporary public link (Gradio tunnel). Shared links and apps listening on the network now always ask for a login: a password is generated and printed at start, or choose your own with `--auth user:password`.
 - **Cold open (`--cold_open`)**: each short can start with its strongest later sentence as a 1.5-6 s teaser, then play from the beginning. It is built from the finished clip, so the captions, B-roll and audio clean-up come along, and the .srt is shifted to match (teaser cue first). It skips clips under 14 s, clips that would pass a minute with the teaser, and `--tighten_mode speed`. Works with re-render and `--use_cache` (no double teaser); a checkbox in the browser app's Extras. Off by default.
