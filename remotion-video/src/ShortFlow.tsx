@@ -32,6 +32,17 @@ const isRtl = (s: string) =>
     return RTL_RANGES.some(([lo, hi]) => c >= lo && c <= hi);
   });
 
+// Scripts whose glyphs must not get letter-spacing: Arabic/Hebrew (breaks the joins), CJK (already full-width) and
+// Devanagari (spacing disables the conjunct ligatures).
+const NO_SPACING_RE = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff\u0900-\u097f]/;
+const noLetterSpacing = (s: string) => isRtl(s) || NO_SPACING_RE.test(s);
+
+// "#RRGGBB" + alpha (0..1) -> rgba(); used to derive glows from the --caption_color accent
+const withAlpha = (hex: string, a: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+};
+
 // --- HELPER FOR SAFE ASSET URLS ---
 const getAssetUrl = (url: string | undefined | null) => {
   if (!url) return "";
@@ -129,7 +140,8 @@ export const shortFlowSchema = z.object({
   category: z.string().default("general"),
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
-  captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]).default("HORMOZI"),
+  captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"]).default("HORMOZI"),
+  captionColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // --caption_color: accent colour of the active word (any style)
   captionEmoji: z.boolean().default(false), // keyword emoji, drawn from bundled Twemoji PNGs (public/emoji): no system font needed
   hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
   hookSeconds: z.number().default(2.8),
@@ -224,15 +236,202 @@ const HookOverlay: React.FC<{ text: string; seconds: number; fps: number; frame:
   );
 };
 
+// --- LINE-BASED CAPTION STYLES: KARAOKE (colour sweep), NEON (glow), BAR (subtitle bar) ---
+// The line (a chunk of a few words) stays put while the highlight moves along it, unlike the one-word styles.
+type LineStyle = "KARAOKE" | "NEON" | "BAR";
+const LINE_CFG: Record<LineStyle, { maxWords: number; maxChars: number; accent: string }> = {
+  KARAOKE: { maxWords: 4, maxChars: 24, accent: "#FFE600" },
+  NEON: { maxWords: 3, maxChars: 20, accent: "#00F0FF" },
+  BAR: { maxWords: 6, maxChars: 34, accent: "#FFD60A" },
+};
+
+// Split the transcript into lines: at most maxWords / maxChars per line, and a new line after a pause.
+const chunkRanges = (words: z.infer<typeof wordSchema>[], maxWords: number, maxChars: number) => {
+  const ranges: [number, number][] = [];
+  let start = 0;
+  let chars = 0;
+  for (let i = 0; i < words.length; i++) {
+    const len = Array.from(words[i].word).length + 1;
+    const pause = i > 0 ? words[i].start - words[i - 1].end : 0;
+    if (i > start && (i - start >= maxWords || chars + len > maxChars || pause > 0.8)) {
+      ranges.push([start, i - 1]);
+      start = i;
+      chars = 0;
+    }
+    chars += len;
+  }
+  if (words.length) ranges.push([start, words.length - 1]);
+  return ranges;
+};
+
+const LineCaptions: React.FC<{
+  words: z.infer<typeof wordSchema>[];
+  displayWordIdx: number;
+  currentWordIdx: number;
+  currentTime: number;
+  yPos: number;
+  captionStyle: LineStyle;
+  accent?: string;
+  captionEmoji: boolean;
+}> = ({ words, displayWordIdx, currentWordIdx, currentTime, yPos, captionStyle, accent, captionEmoji }) => {
+  const cfg = LINE_CFG[captionStyle];
+  const color = accent ?? cfg.accent;
+  const range = chunkRanges(words, cfg.maxWords, cfg.maxChars).find(([a, b]) => displayWordIdx >= a && displayWordIdx <= b);
+  if (!range) return null;
+  const line = words.slice(range[0], range[1] + 1);
+  const rtl = line.some((b) => isRtl(b.word));
+  const cjk = line.some((b) => NO_SPACING_RE.test(b.word));
+
+  const renderWord = (w: z.infer<typeof wordSchema>, i: number) => {
+    const idx = range[0] + i;
+    const isActive = idx === currentWordIdx;
+    const spacing = noLetterSpacing(w.word) ? "0px" : captionStyle === "NEON" ? "3px" : "-1px";
+    const emoji = isActive && captionEmoji ? <CaptionEmoji word={w.word} size={72} /> : null;
+    const span = Math.max(0.05, w.end - w.start);
+    const progress = Math.min(1, Math.max(0, (currentTime - w.start) / span)); // 0 = not yet spoken, 1 = spoken
+
+    if (captionStyle === "KARAOKE") {
+      const base: React.CSSProperties = {
+        fontFamily: CAPTION_FONT,
+        fontSize: "86px",
+        textTransform: "uppercase",
+        letterSpacing: spacing,
+        whiteSpace: "pre",
+        WebkitTextStroke: "10px #000000",
+        paintOrder: "stroke fill",
+      };
+      const pct = Math.round(progress * 1000) / 10;
+      return (
+        <React.Fragment key={idx}>
+          <span
+            style={{
+              position: "relative",
+              display: "inline-block",
+              transform: `scale(${isActive ? 1.08 : 1})`,
+              textShadow: "0px 10px 26px rgba(0,0,0,0.85), 5px 5px 0px #000000",
+            }}
+          >
+            <span style={{ ...base, color: "#FFFFFF" }}>{w.word}</span>
+            <span
+              aria-hidden
+              style={{
+                ...base,
+                color,
+                position: "absolute",
+                left: 0,
+                top: 0,
+                // the sweep runs with the reading direction: left->right, or right->left for Arabic/Hebrew words
+                clipPath: isRtl(w.word) ? `inset(0 0 0 ${100 - pct}%)` : `inset(0 ${100 - pct}% 0 0)`,
+              }}
+            >
+              {w.word}
+            </span>
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    if (captionStyle === "NEON") {
+      const t = Math.max(0, currentTime - w.start);
+      const flicker = isActive ? interpolate(t, [0, 0.04, 0.08, 0.12], [0.45, 1, 0.75, 1], { extrapolateRight: "clamp" }) : 1;
+      return (
+        <React.Fragment key={idx}>
+          <span
+            style={{
+              fontFamily: CAPTION_FONT,
+              fontSize: "80px",
+              textTransform: "uppercase",
+              letterSpacing: spacing,
+              whiteSpace: "pre",
+              display: "inline-block",
+              opacity: flicker,
+              color: isActive ? "#FFFFFF" : "transparent",
+              WebkitTextStroke: isActive ? "0px transparent" : `3px ${withAlpha(color, 0.75)}`,
+              textShadow: isActive
+                ? `0 0 8px ${color}, 0 0 20px ${color}, 0 0 42px ${color}, 0 0 84px ${withAlpha(color, 0.7)}`
+                : `0 0 14px ${withAlpha(color, 0.5)}`,
+            }}
+          >
+            {w.word}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    // BAR
+    return (
+      <React.Fragment key={idx}>
+        <span
+          style={{
+            display: "inline-block",
+            color: isActive ? color : progress >= 1 ? "#FFFFFF" : "rgba(255,255,255,0.68)",
+            transform: `scale(${isActive ? 1.06 : 1})`,
+            whiteSpace: "pre",
+          }}
+        >
+          {w.word}
+        </span>
+        {emoji}
+      </React.Fragment>
+    );
+  };
+
+  const words$ = line.map(renderWord);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: `${yPos}px`,
+        width: "100%",
+        display: "flex",
+        justifyContent: "center",
+        padding: "0 40px",
+        boxSizing: "border-box",
+        zIndex: 50,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          alignItems: "center",
+          direction: rtl ? "rtl" : "ltr",
+          gap: cjk ? "6px" : captionStyle === "BAR" ? "0.3em" : "16px",
+          ...(captionStyle === "BAR"
+            ? {
+                maxWidth: "940px",
+                background: "rgba(8, 10, 16, 0.78)",
+                borderRadius: "18px",
+                padding: "20px 36px",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+                fontFamily: "Arial, NotoDevanagari, NotoCyrillic, NotoArabic, NotoCJK, sans-serif",
+                fontWeight: 800,
+                fontSize: "60px",
+                lineHeight: 1.2,
+                textAlign: "center",
+              }
+            : {}),
+        }}
+      >
+        {words$}
+      </div>
+    </div>
+  );
+};
+
 // --- HELPER FOR INFLUENCER & PRESET SUBTITLES ---
 const Subtitles: React.FC<{
   words: z.infer<typeof wordSchema>[];
   currentTime: number;
   yPos: number;
   fps: number;
-  captionStyle?: "HORMOZI" | "GLOW_BOX" | "BOUNCE" | "MINIMAL";
+  captionStyle?: "HORMOZI" | "GLOW_BOX" | "BOUNCE" | "MINIMAL" | LineStyle;
   captionEmoji?: boolean;
-}> = ({ words, currentTime, yPos, fps, captionStyle = "HORMOZI", captionEmoji = false }) => {
+  accent?: string;
+}> = ({ words, currentTime, yPos, fps, captionStyle = "HORMOZI", captionEmoji = false, accent }) => {
   // Find current word index
   let currentWordIdx = words.findIndex(
     (w) => currentTime >= w.start && currentTime <= w.end
@@ -256,6 +455,21 @@ const Subtitles: React.FC<{
   }
 
   if (displayWordIdx === -1) return null;
+
+  if (captionStyle === "KARAOKE" || captionStyle === "NEON" || captionStyle === "BAR") {
+    return (
+      <LineCaptions
+        words={words}
+        displayWordIdx={displayWordIdx}
+        currentWordIdx={currentWordIdx}
+        currentTime={currentTime}
+        yPos={yPos}
+        captionStyle={captionStyle}
+        accent={accent}
+        captionEmoji={captionEmoji}
+      />
+    );
+  }
 
   // Grouping strategy based on style:
   // HORMOZI & BOUNCE: show only the active word centred (punch-word style)
@@ -314,7 +528,7 @@ const Subtitles: React.FC<{
               style={{
                 fontFamily: CAPTION_FONT,
                 fontSize: "100px",
-                color: isActive ? getHormoziColor(w.word) : "#FFFFFF",
+                color: isActive ? (accent ?? getHormoziColor(w.word)) : "#FFFFFF",
                 opacity: isActive ? 1.0 : 0.60,
                 textTransform: "uppercase",
                 transform: `scale(${scale}) rotate(${rotation}deg)`,
@@ -353,12 +567,12 @@ const Subtitles: React.FC<{
                 fontSize: "82px",
                 color: isActive ? "#FFFFFF" : "#CBD5E1",
                 background: isActive
-                  ? "linear-gradient(135deg, #FF007F, #7928CA)"
+                  ? (accent ? `linear-gradient(135deg, ${accent}, ${withAlpha(accent, 0.6)})` : "linear-gradient(135deg, #FF007F, #7928CA)")
                   : "rgba(15, 23, 42, 0.75)",
                 padding: "10px 28px",
                 borderRadius: "20px",
-                border: isActive ? "3px solid #FF007F" : "2px solid rgba(255,255,255,0.15)",
-                boxShadow: isActive ? "0 10px 30px rgba(255, 0, 127, 0.6)" : "0 5px 15px rgba(0,0,0,0.3)",
+                border: isActive ? `3px solid ${accent ?? "#FF007F"}` : "2px solid rgba(255,255,255,0.15)",
+                boxShadow: isActive ? `0 10px 30px ${accent ? withAlpha(accent, 0.6) : "rgba(255, 0, 127, 0.6)"}` : "0 5px 15px rgba(0,0,0,0.3)",
                 textTransform: "uppercase",
                 transform: `scale(${scale})`,
                 display: "inline-block",
@@ -390,13 +604,13 @@ const Subtitles: React.FC<{
               style={{
                 fontFamily: CAPTION_FONT,
                 fontSize: "92px",
-                color: isActive ? "#FFD700" : "#FFFFFF",
+                color: isActive ? (accent ?? "#FFD700") : "#FFFFFF",
                 opacity: isActive ? 1.0 : 0.7,
                 textTransform: "uppercase",
                 transform: `translateY(${translateY}px) scale(${scale})`,
                 display: "inline-block",
                 textShadow: isActive
-                  ? "0 0 20px #FFD700, 0 0 40px #FF4500, 4px 4px 0px #000000"
+                  ? `0 0 20px ${accent ?? "#FFD700"}, 0 0 40px ${accent ?? "#FF4500"}, 4px 4px 0px #000000`
                   : "3px 3px 0px #000000",
                 WebkitTextStroke: "8px #000000",
                 paintOrder: "stroke fill",
@@ -417,11 +631,11 @@ const Subtitles: React.FC<{
             style={{
               fontFamily: "Arial Black, NotoDevanagari, NotoCyrillic, NotoArabic, NotoCJK, sans-serif",
               fontSize: "78px",
-              color: isActive ? "#38BDF8" : "#F1F5F9",
+              color: isActive ? (accent ?? "#38BDF8") : "#F1F5F9",
               background: "rgba(0, 0, 0, 0.85)",
               padding: "8px 22px",
               borderRadius: "12px",
-              borderLeft: isActive ? "6px solid #38BDF8" : "none",
+              borderLeft: isActive ? `6px solid ${accent ?? "#38BDF8"}` : "none",
               textTransform: "uppercase",
               transform: `scale(${scale})`,
               display: "inline-block",
@@ -980,6 +1194,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   titleText,
   subtitleYPos,
   captionStyle = "HORMOZI",
+  captionColor,
   captionEmoji = false,
   hookText,
   hookSeconds = 2.8,
@@ -1381,6 +1596,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         fps={fps}
         captionStyle={captionStyle}
         captionEmoji={captionEmoji}
+        accent={captionColor}
       />
 
       {/* 6. CARTOON AVATAR OVERLAY (Big & Centered News Anchor / TV Window) */}

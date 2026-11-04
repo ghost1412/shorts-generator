@@ -27,7 +27,7 @@ app = FastAPI(title="ShortsFlow API", version="1.0.0",
 manager = JobManager(max_concurrent=int(os.getenv("SHORTSFLOW_MAX_CONCURRENT", "1")),
                      webhook_secret=os.getenv("SHORTSFLOW_WEBHOOK_SECRET"))
 
-CaptionStyle = Literal["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "AUTO", "RANDOM"]
+CaptionStyle = Literal["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "AUTO", "RANDOM"]
 
 
 def require_key(authorization: Optional[str] = Header(None), x_api_key: Optional[str] = Header(None)):

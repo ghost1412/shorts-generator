@@ -2,7 +2,8 @@
 
 Needs Node + `npm ci` in remotion-video. Re-run after changing caption styling:
 
-    python scripts/make_caption_previews.py
+    python scripts/make_caption_previews.py            # all styles
+    python scripts/make_caption_previews.py NEON BAR   # only these
 """
 import json
 import os
@@ -13,7 +14,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REMOTION = os.path.join(ROOT, "remotion-video")
 OUT = os.path.join(ROOT, "assets", "caption_previews")
-STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]
+STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"]
 BG_NAME = "_preview_bg.jpg"
 WORDS = [("Nobody", 0.1, 0.6), ("tells", 0.6, 1.0), ("you", 1.0, 1.3), ("this", 1.3, 1.8), ("about", 1.8, 2.3), ("light", 2.3, 3.0)]
 
@@ -41,7 +42,7 @@ def main():
     bg = os.path.join(REMOTION, "public", BG_NAME)
     make_backdrop(bg)
     try:
-        for style in STYLES:
+        for style in (sys.argv[1:] or STYLES):
             props = {"captionStyle": style, "titleText": "", "mode": "FACTS",
                      "words": [{"word": w, "start": s, "end": e} for w, s, e in WORDS],
                      "backgrounds": [{"path": BG_NAME, "start": 0, "end": 3, "type": "image"}]}
