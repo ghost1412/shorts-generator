@@ -80,32 +80,32 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 ### B. Automation API (new files: `api/` or `server.py` rewrite)
 | | Task | Owner | Notes |
 |---|---|---|---|
-| [ ] | B1. FastAPI server with OpenAPI docs: `POST /v1/shorts`, `POST /v1/clips`, `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/files` | | Reuse the subprocess pattern from `webui.py` |
-| [ ] | B2. Completion webhooks with optional HMAC signature | | |
-| [ ] | B3. API keys via env, job queue with concurrency limit | | |
-| [ ] | B4. `examples/n8n/` workflow JSON + README section | | Big star driver for openshorts / short-video-maker |
-| [ ] | B5. Expose the API from the Docker image (second port) | | Touches `Dockerfile`, `docker-compose.yml` |
+| [x] | B1. FastAPI server with OpenAPI docs: `POST /v1/shorts`, `POST /v1/clips`, `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/files` | | Reuse the subprocess pattern from `webui.py` |
+| [x] | B2. Completion webhooks with optional HMAC signature | | |
+| [x] | B3. API keys via env, job queue with concurrency limit | | |
+| [x] | B4. `examples/n8n/` workflow JSON + README section | | Big star driver for openshorts / short-video-maker |
+| [x] | B5. Expose the API from the Docker image (second port) | | Touches `Dockerfile`, `docker-compose.yml` |
 
 ### C. Clipping UX (`webui.py`, `engine/analysis.py`)
 | | Task | Owner | Notes |
 |---|---|---|---|
-| [ ] | C1. Show virality score + hook title per clip in the WebUI (scores already exist; use `--output_json`) | | Opus Clip's headline feature |
+| [x] | C1. Show virality score + hook title per clip in the WebUI (scores already exist; use `--output_json`) | | Opus Clip's headline feature |
 | [x] | C2. `--layout single/split/active`; active = speaker switching (issue #27) in `engine/speaker_focus.py` | Claude | YuNet face detector (bundled, Haar fallback); who-is-speaking from voice pitch when the two voices differ (92 % of speaking time right on a real interview vs 45 % for mouth motion), mouth motion x audio otherwise (weak on real footage). Same-gender pairs are unverified |
 | [ ] | C4. Active speaker: try MediaPipe Face Mesh lip landmarks instead of Haar + frame difference (more accurate, needs Python <= 3.12) | | Analysis takes ~0.8x clip length at 1280 px |
-| [ ] | C3. In-browser preview + re-render a single clip with a different caption style | | |
+| [x] | C3. In-browser preview + re-render a single clip with a different caption style | | |
 
 ### D. Distribution (`README.md`, new `spaces/`, packaging)
 | | Task | Owner | Notes |
 |---|---|---|---|
 | [ ] | D1. Hugging Face Space running `webui.py` (CPU, idea-to-video modes) | | |
 | [ ] | D2. WebUI demo GIF at the top of the README | | |
-| [ ] | D3. `pip install shortsflow`: move `main.py` + `engine/` into a package, resolve asset paths from the package, console script `shortsflow` | | Large; conflicts with anything touching `main.py` - schedule alone |
+| [x] | D3. `pip install shortsflow`: move `main.py` + `engine/` into a package, resolve asset paths from the package, console script `shortsflow` | | Large; conflicts with anything touching `main.py` - schedule alone |
 | [ ] | D4. Submit MCP server to awesome-mcp-servers / Smithery / Glama | | Human task |
 
 ### E. Voices & visuals (`engine/voice_gen.py`, `ShortFlow.tsx`)
 | | Task | Owner | Notes |
 |---|---|---|---|
-| [ ] | E1. Kokoro (local, free) TTS provider with word timestamps | | |
+| [x] | E1. Kokoro (local, free) TTS provider with word timestamps | | |
 | [ ] | E2. Fish Audio TTS provider | | |
 | [x] | E3. 0 tsc errors: `Html5Video` with `loop` for split/avatar clips | Claude | |
 | [x] | E4. Bundled OFL caption font (Anton) via `staticFile`; Impact stays as fallback | Claude | |
