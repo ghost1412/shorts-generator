@@ -111,9 +111,10 @@ TOOLS_DEFINITIONS = [
                                "description": "Follow the speaker's face when cropping the wide video to vertical."},
                 "tighten": {"type": "boolean", "default": True,
                             "description": "Cut out silences and dead air inside each short."},
-                "layout": {"type": "string", "enum": ["single", "split", "active"], "default": "single",
+                "layout": {"type": "string", "enum": ["single", "split", "active", "fit"], "default": "single",
                            "description": ("Framing: single = face-tracked crop; split = two speakers stacked; active = cut to "
-                                           "whoever is talking (stacked when unsure), best for podcasts and interviews.")},
+                                           "whoever is talking (stacked when unsure), best for podcasts and interviews; fit = the whole picture centred over a "
+                                           "blurred copy of itself, nothing cropped off the sides (screen recordings, gameplay).")},
                 "use_remotion": {"type": "boolean", "default": True,
                                  "description": "Animated captions (needs Node.js). False renders without animated captions."},
                 "caption_style": {"type": "string", "enum": CAPTION_STYLES, "default": "HORMOZI", "description": _CAPTION_HELP},

@@ -90,6 +90,27 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
 
     return f"{base_filter}crop='{crop_w}':'{crop_h}':'{x_expr}':'(ih-oh)/2'"
 
+FIT_CAPTION_Y = 1320       # Remotion caption top edge for --layout fit: just below a centred 16:9 picture
+
+
+def fit_caption_y(requested):
+    """Caption position for --layout fit. The default (1150) would sit on the centred picture, so it moves below it; an explicit
+    --subtitle_y_pos stays as the user set it."""
+    return FIT_CAPTION_Y if requested in (None, 1150) else requested
+
+
+def generate_ffmpeg_fit_filter(target_w=1080, target_h=1920, letterbox_crop=None):
+    """--layout fit: the WHOLE picture centred at full width (nothing cropped off the sides), over a blurred, darkened,
+    zoomed copy of itself that fills the 9:16 frame. Good for screen recordings and gameplay, where a centre crop loses the action."""
+    pre = f"{letterbox_crop}," if letterbox_crop else ""
+    radius = max(2, min(28, target_w // 4 - 1))              # boxblur refuses a radius above a quarter of the frame width
+    return (f"{pre}split=2[fitbg][fitfg];"
+            f"[fitbg]scale={target_w}:{target_h}:force_original_aspect_ratio=increase,crop={target_w}:{target_h},"
+            f"boxblur={radius}:3,eq=brightness=-0.1:saturation=1.1[fitb];"
+            f"[fitfg]scale={target_w}:{target_h}:force_original_aspect_ratio=decrease[fitf];"
+            f"[fitb][fitf]overlay=(W-w)/2:(H-h)/2,format=yuv420p")
+
+
 def generate_ffmpeg_split_screen_filter(target_w=1080, target_h=1920):
     """
     Generates an FFmpeg complex filter string for dual-speaker podcast split screen layout.
@@ -2582,6 +2603,9 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             from engine.filler import split_caption_y
             subtitle_y_pos = split_caption_y(subtitle_y_pos)   # keep Remotion captions off the filler half
 
+    if layout == "fit" and mode == "shorts":
+        subtitle_y_pos = fit_caption_y(subtitle_y_pos)       # captions below the centred picture
+
     for i, hi in enumerate(highlights):
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
         if use_cache and os.path.exists(target) and os.path.getsize(target) > 1000:
@@ -2618,6 +2642,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 vf_filter = build_active_speaker_filter(active_shots, w, h)
             elif layout == "split":
                 vf_filter = generate_ffmpeg_split_screen_filter(w, h)
+            elif layout == "fit":
+                vf_filter = generate_ffmpeg_fit_filter(w, h, letterbox_crop)
             elif interest_points:
                 crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)
                 vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"

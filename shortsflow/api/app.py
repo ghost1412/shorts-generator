@@ -101,7 +101,7 @@ class ClipRequest(Common):
     source_video: str = Field(..., description="YouTube URL or a path on the server")
     clip_count: int = Field(3, ge=1)
     target_duration: int = Field(45, ge=10, le=60, description="Seconds per short (never longer than 60)")
-    layout: Literal["single", "split", "active", "auto", "split_filler"] = "single"
+    layout: Literal["single", "split", "active", "auto", "split_filler", "fit"] = "single"
     smart_crop: bool = True
     tighten: bool = False
     logo: Optional[str] = Field(None, description="Logo PNG path on the server")

@@ -194,7 +194,7 @@ _Honest take: the paid tools have a nicer editor, hosted convenience and tested 
 | 🎥 **Motion & Visual Filters** | Punch-in zooms on emphasised words (`--auto_zoom`, also `--enable_zoom`), stock cutaways (`--broll`), 12 colour grade presets (`--video_filter cyberpunk`, `kurosawa`, `teal_orange`) |
 | 📦 **Batch Automation** | Automated queue execution from CSV / text lists (`--batch_file "topics.txt"`) |
 | 🌍 **Caption Languages** | Latin, Cyrillic (ru, uk, bg), Greek and Devanagari captions; `--caption_lang es` translates captions with your AI provider and keeps them timed |
-| 🧭 **Layouts** | `--layout auto` picks per clip: cut-to-speaker for two-person shots, tracked single crop otherwise; also `active`, `stacked` |
+| 🧭 **Layouts** | `--layout auto` picks per clip: cut-to-speaker for two-person shots, tracked single crop otherwise; also `active`, `stacked`; `fit` shows the whole landscape picture centred over a blurred copy (nothing cropped off the sides) |
 | 🎞️ **Highlights Video** | One landscape video of the best moments, any length, from the browser app |
 | 🎬 **Auto-edit director** | `--auto_edit podcast|hype|educational|vlog` with `--edit_strength subtle|medium|hyped`: one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, a teaser opening, colour and sound effects. Writes `edit_plan.json` and shows what it did on each clip |
 | 🪝 **Cold open** | `--cold_open` starts each short with its strongest line as a 1.5-6 s teaser, then plays the clip from the beginning (captions and subtitles stay in sync) |
