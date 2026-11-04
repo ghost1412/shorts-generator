@@ -80,11 +80,34 @@ def group_days(videos):
     return list(groups.values())
 
 
+def file_seconds(path):
+    """Seconds since the start of the day from a name like '083015_ab12cd34.mp4' (the album importer's names), else None."""
+    m = re.match(r"(\d{2})(\d{2})(\d{2})_", os.path.basename(path))
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3)) if m else None
+
+
+def split_by_gaps(files, n):
+    """n groups of `files` (in filming order) cut at the n-1 longest pauses between clips: the drives between places. None when the
+    files carry no times, or the pauses are not clearly longer than normal gaps (then the caller splits by count)."""
+    times = [file_seconds(f) for f in files]
+    if n < 2 or len(files) < n or any(t is None for t in times) or times != sorted(times):
+        return None
+    gaps = sorted(range(1, len(files)), key=lambda i: times[i] - times[i - 1], reverse=True)[:n - 1]
+    if min(times[i] - times[i - 1] for i in gaps) < 15 * 60:
+        return None
+    cuts = sorted(gaps)
+    return [files[a:b] for a, b in zip([0] + cuts, cuts + [len(files)])]
+
+
 def split_into(groups, n):
-    """Re-group the videos of `groups` (in order) into exactly n stops of nearly equal size. Used with --trip_stops, where the user
-    names the stops in order and the videos are in filming order, however the files were grouped."""
+    """Re-group the videos of `groups` (in order) into exactly n stops. Used with --trip_stops, where the user names the stops in
+    order and the videos are in filming order, however the files were grouped. The cuts go at the longest pauses between clips
+    when the files carry times (the drive between two places), else the stops get nearly equal numbers of videos."""
     files = [f for g in groups for f in g]
     n = max(1, min(int(n), len(files)))
+    by_gap = split_by_gaps(files, n)
+    if by_gap:
+        return by_gap
     size, extra = divmod(len(files), n)
     out, i = [], 0
     for k in range(n):
@@ -514,11 +537,28 @@ def infos_order(infos, f):
 
 def run(args, target_bitrate=None, target_preset=None):
     paths = getattr(args, "trip_videos", None) or ([args.source_video] if getattr(args, "source_video", None) else [])
-    if not paths:
-        print("[Error] TRIP mode needs --trip_videos (video files, or folders with one folder per day), e.g. "
-              "--mode TRIP --trip_videos day1 day2 --trip_name Almaty")
-        sys.exit(2)
     session_dir = args.session_dir if args.session_dir else f"sessions/trip_{int(time.time())}"
+    album = getattr(args, "trip_album", None)
+    if album:
+        from engine.gphotos_album import AlbumError, download_album
+        day = (getattr(args, "trip_day", "") or "").strip()
+        try:
+            got = download_album(album, os.path.join(session_dir, "videos"), only_days=[day] if day else None)
+        except (AlbumError, OSError) as e:
+            print(f"[Error] Could not read the Google Photos album: {e} Download the videos yourself and use --trip_videos.")
+            sys.exit(1)
+        if not got["folders"]:
+            print("[Error] The album has no videos" + (f" for '{day}'" if day else "") + " (shorter than 5 minutes).")
+            sys.exit(1)
+        if got["failed"]:
+            print(f"[Warning] {got['failed']} video(s) could not be downloaded and are left out.")
+        paths = list(paths) + got["folders"]
+        if not getattr(args, "trip_name", ""):
+            args.trip_name = got["title"]
+    if not paths:
+        print("[Error] TRIP mode needs --trip_videos (video files, or folders with one folder per day) or --trip_album (a shared "
+              "Google Photos link), e.g. --mode TRIP --trip_videos day1 day2 --trip_name Almaty")
+        sys.exit(2)
     layout = getattr(args, "layout", "auto")
     try:
         make_recap(paths, session_dir, trip_name=getattr(args, "trip_name", "") or "", note=getattr(args, "user_context", "") or "",

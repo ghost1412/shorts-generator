@@ -145,3 +145,12 @@ def test_stop_names_are_used_verbatim_and_prompt_forbids_inventing():
     assert "Never invent" in p and "Stop 1 = Kolsai Lake" in p
     assert tr.fallback_itinerary("", days, stops)["days"][1]["title"] == "Kaindy Lake"
     assert "## Stop 1: Kolsai Lake" in tr.itinerary_markdown(it, [{"moments": [{"file": "a.mp4", "start": 1}]}] * 2, "Stop")
+
+
+def test_stops_are_cut_at_the_longest_pauses():
+    names = ["083000_a.mp4", "083500_b.mp4", "102700_c.mp4", "105000_d.mp4", "132200_e.mp4", "134300_f.mp4", "161800_g.mp4", "171900_h.mp4"]
+    g = tr.split_into([names], 3)
+    assert [len(x) for x in g] == [4, 2, 2] and g[1][0] == "132200_e.mp4"
+    # no times in the names, or no clear pauses: equal counts as before
+    assert tr.split_by_gaps(["a.mp4", "b.mp4", "c.mp4"], 2) is None
+    assert tr.split_by_gaps(["080000_a.mp4", "080500_b.mp4", "081000_c.mp4"], 2) is None
