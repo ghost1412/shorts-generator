@@ -149,6 +149,12 @@ def run(args, target_bitrate, target_preset):
         reel_captions=getattr(args, 'reel_captions', False)
     )
     
+    # Audio clean-up (noise reduction + loudness normalisation); runs on the finished clips of every render path
+    if getattr(args, "clean_audio", False) and extracted_files:
+        from engine.audio_clean import clean_clips
+        print(f"[Log] Cleaning audio of {len(extracted_files)} clip(s)...")
+        clean_clips(extracted_files)
+
     # Brand kit: logo watermark, @handle and end card
     if any(getattr(args, k, None) for k in ("brand", "logo", "handle", "end_card")) and extracted_files:
         from engine.branding import apply_brand, load_brand

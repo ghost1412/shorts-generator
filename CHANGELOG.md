@@ -5,6 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **Audio clean-up**: `--clean_audio` removes rumble and background noise, evens out the volume and normalises loudness to about -14 LUFS on every finished clip (video is not re-encoded). Filters this FFmpeg lacks are skipped; on any failure the clip is left untouched.
 - **Captions in another language**: `--caption_lang es` (or the "Languages" box in the browser app) translates the captions with your AI provider and keeps them timed to the speech. Spanish, French, German, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian, Vietnamese, Hindi and Marathi (the bundled caption fonts cannot draw Japanese, Chinese, Korean, Arabic or Russian yet). Translation quality depends on the model; small local models are weaker in Hindi.
 - **Highlights video** option in the browser app (one landscape video made of the best moments, any length).
 - **"Pick the moments"** in the browser app: make shorts only about a topic you describe, and cut chosen words or phrases out.
