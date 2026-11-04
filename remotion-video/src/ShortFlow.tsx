@@ -132,10 +132,7 @@ export const shortFlowSchema = z.object({
   captionEmoji: z.boolean().default(false), // keyword emoji, drawn from bundled Twemoji PNGs (public/emoji): no system font needed
   hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
   hookSeconds: z.number().default(2.8),
-=======
   extraFont: z.object({ family: z.string(), url: z.string() }).optional(), // per-render CJK subset font (static file path)
-  captionEmoji: z.boolean().default(false), // needs an emoji font on the render machine (fonts-noto-color-emoji on Linux)
->>>>>>> worktree-agent-ac8c73b8aa50992a4
   avatarUrl: z.string().optional(),
   avatarAspect: z.number().optional(), // width / height of the avatar asset; square art is not cropped to 16:9
   avatarKeyed: z.boolean().optional(), // transparent cut-out (green screen removed): drawn without the framed window
