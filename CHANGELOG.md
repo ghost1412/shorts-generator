@@ -4,6 +4,8 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+## 0.3.0 (2026-11-04)
+
 ### New
 - **"Satisfying footage" layout**: `--layout split_filler` puts the clip on the top half and looping gameplay or satisfying footage underneath (also in the browser app's Framing choice and the REST API). `--filler_video FILE` picks the footage; otherwise a video from `assets/backgrounds/local/` is used, else a Pexels stock clip (needs `PEXELS_API_KEY`), else the normal crop.
 - **Audio clean-up**: `--clean_audio` removes rumble and background noise, evens out the volume and normalises loudness to about -14 LUFS on every finished clip (video is not re-encoded). Filters this FFmpeg lacks are skipped; on any failure the clip is left untouched.

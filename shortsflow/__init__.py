@@ -1,2 +1,2 @@
 """ShortsFlow: self-hosted Opus Clip alternative. CLI entry point: `shortsflow`."""
-__version__ = "0.2.0"
+__version__ = "0.3.0"
