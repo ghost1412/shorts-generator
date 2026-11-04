@@ -2598,6 +2598,22 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
+def finish_segment_processes(procs):
+    """Wait for the FFmpeg cut processes [(process, part_path, final_path)] and move every finished file to its final name.
+    A segment is written as `seg_N.part.mp4` and only renamed when FFmpeg exited cleanly, so a run that was stopped half way
+    never leaves a truncated `seg_N.mp4` that a later `--use_cache` run would trust."""
+    from engine.fsutil import replace_file
+    for proc, part, final in procs:
+        proc.wait()
+        try:
+            if proc.returncode == 0 and os.path.exists(part) and os.path.getsize(part) > 1000:
+                replace_file(part, final)
+            elif os.path.exists(part):
+                os.remove(part)
+        except OSError as e:
+            print(f"[Warning] Could not finish segment {os.path.basename(final)}: {e}")
+
+
 def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
@@ -2740,7 +2756,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         ] + quality_flags + [
             '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '192k',
-            target
+            target[:-4] + ".part.mp4"            # renamed to `target` by finish_segment_processes once FFmpeg succeeded
         ]
         
         # 🟢 OPTIMIZED: Reduce parallel I/O pressure for long videos. 
@@ -2749,13 +2765,13 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         
         # 🟢 FIXED: Added stdin=DEVNULL to prevent hangs on interactive prompts (e.g. overwriting)
         p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-        processes.append(p)
+        processes.append((p, cmd[-1], target))
         
         if len(processes) >= local_pool_size:
-            for proc in processes: proc.wait()
+            finish_segment_processes(processes)
             processes = []
 
-    for proc in processes: proc.wait()
+    finish_segment_processes(processes)
 
     # Generate thumbnails for all extracted segments
     for i, hi in enumerate(highlights):

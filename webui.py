@@ -9,7 +9,9 @@ Runs locally, in Docker, on Google Colab or on Hugging Face Spaces.
 
 import argparse
 import glob
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -84,6 +86,37 @@ def _snapshot_videos():
     return files
 
 
+_JOBS = []          # pipeline processes started by this app, so the Stop button can end them
+_STOPPED = set()    # process ids that were stopped on purpose (reported as "stopped", not as a failure)
+
+
+def _kill_tree(proc):
+    """End a pipeline process AND everything it started (FFmpeg, Node, the browser the animated captions use)."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True)   # only this process tree
+        else:
+            import signal
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
+def stop_jobs():
+    """Stop button: end every pipeline this app started. Whatever was already finished stays on disk."""
+    running = [p for p in list(_JOBS) if p.poll() is None]
+    for p in running:
+        _STOPPED.add(p.pid)
+        _kill_tree(p)
+    if not running:
+        return "Nothing is running right now."
+    return ("⏹ Stopped. Whatever was already finished is kept: open “Continue an unfinished run” on the Start here tab "
+            "to carry on from there.")
+
+
 def _run(cmd):
     """Run main.py, streaming its log; yields (log, videos) and finally the new videos."""
     before = _snapshot_videos()
@@ -94,18 +127,27 @@ def _run(cmd):
     proc = subprocess.Popen(
         cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace", env=env,
+        **({"start_new_session": True} if os.name != "nt" else {}),
     )
-    for line in proc.stdout:
-        log += line
-        yield log[-20000:], []
-    proc.wait()
+    _JOBS.append(proc)
+    try:
+        for line in proc.stdout:
+            log += line
+            yield log[-20000:], []
+        proc.wait()
+    finally:
+        if proc in _JOBS:
+            _JOBS.remove(proc)
 
     after = _snapshot_videos()
     new = sorted(
         (p for p, m in after.items() if p not in before or m > before[p]),
         key=lambda p: after[p],
     )
-    status = "✅ Done" if proc.returncode == 0 else f"❌ main.py exited with code {proc.returncode}"
+    if proc.pid in _STOPPED:
+        status = "⏹ Stopped"
+    else:
+        status = "✅ Done" if proc.returncode == 0 else f"❌ main.py exited with code {proc.returncode}"
     log += f"\n{status} - {len(new)} video(s) rendered.\n"
     yield log[-20000:], new
 
@@ -312,7 +354,6 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
-    from shortsflow import onboarding, review
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a video link or upload a video file first.")
@@ -350,6 +391,21 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         if logo or (handle or "").strip() or (end_card or "").strip():
             save_brand(logo, handle, end_card, color, position)   # what is typed in the form counts, even if "Save" was not pressed
         cmd += brand.cli_args(ROOT)
+    save_command(session, cmd)
+    yield from _stream_clip(cmd, results, long_form, minutes, find)
+
+def save_command(session, cmd):
+    """Remember the exact command of a run, so it can be continued after a stop or a crash."""
+    try:
+        with open(os.path.join(session, "command.json"), "w", encoding="utf-8") as f:
+            json.dump({"cmd": cmd}, f)
+    except OSError:
+        pass
+
+
+def _stream_clip(cmd, results, long_form, minutes, find):
+    """Run the clipping pipeline and stream plain-language progress. Yields (status, log, cards)."""
+    from shortsflow import onboarding, review
     progress, seen = onboarding.Progress(), 0
     status = progress.message
     yield status, "", []
@@ -378,6 +434,56 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         status = f"✅ Done! {len(cards)} short{'s' if len(cards) != 1 else ''} ready: review them below."
     yield status, log, cards
 
+
+
+def unfinished_runs(root):
+    """[(label, command.json path)] of the Start here runs that never produced results (stopped, crashed, closed), newest first."""
+    out = []
+    for d in sorted(glob.glob(os.path.join(root, "sessions", "web_*")), reverse=True)[:30]:
+        cmd_file = os.path.join(d, "command.json")
+        if not os.path.isfile(cmd_file) or os.path.isfile(os.path.join(d, "results.json")):
+            continue
+        try:
+            with open(cmd_file, "r", encoding="utf-8") as f:
+                cmd = json.load(f)["cmd"]
+            src = cmd[cmd.index("--source_video") + 1]
+        except (OSError, ValueError, KeyError, IndexError):
+            continue
+        m = re.match(r"web_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})", os.path.basename(d))
+        when = f"{m.group(3)}.{m.group(2)}.{m.group(1)} {m.group(4)}:{m.group(5)}" if m else os.path.basename(d)
+        out.append((f"{when} - {os.path.basename(src.rstrip('/'))[:50]}", cmd_file))
+    return out[:10]
+
+
+def unfinished_update():
+    return gr.update(choices=unfinished_runs(ROOT))
+
+
+def continue_run(choice):
+    """Continue an unfinished run in its own folder: the same command with --use_cache, so the transcript, the chosen moments and
+    every segment that was already cut are reused instead of being redone."""
+    if not choice:
+        raise gr.Error("Pick an unfinished run first.")
+    try:
+        with open(choice, "r", encoding="utf-8") as f:
+            cmd = list(json.load(f)["cmd"])
+    except (OSError, ValueError, KeyError):
+        raise gr.Error("That run's saved settings could not be read.")
+    if "--use_cache" not in cmd:
+        cmd.append("--use_cache")
+    src = cmd[cmd.index("--source_video") + 1] if "--source_video" in cmd else ""
+    if src and not src.startswith(("http://", "https://")) and not os.path.exists(src):
+        raise gr.Error("The video file is no longer where it was, so this run cannot be continued. Start it again from Start here.")
+    session = os.path.dirname(choice)
+    long_form = "--extract_mode" in cmd and cmd[cmd.index("--extract_mode") + 1] == "long"
+    minutes = 4
+    if long_form and "--target_duration" in cmd:
+        try:
+            minutes = max(1, round(int(cmd[cmd.index("--target_duration") + 1]) / 60))
+        except (ValueError, IndexError):
+            pass
+    find = cmd[cmd.index("--find") + 1] if "--find" in cmd and cmd.index("--find") + 1 < len(cmd) else ""
+    yield from _stream_clip(cmd, os.path.join(session, "results.json"), long_form, minutes, find)
 
 def open_earlier(choice):
     """Load an earlier run into the review screen."""
@@ -577,7 +683,8 @@ def build_ui():
                             with gr.Row():
                                 q_brand_save = gr.Button("Save my brand", variant="secondary")
                                 q_brand_clear = gr.Button("Remove brand")
-                        q_btn = gr.Button("✨ Make my shorts", variant="primary")
+                        q_btn = gr.Button("✨ Make my shorts", variant="primary")
+                        q_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         q_status = gr.Markdown("Waiting for a video...")
                 q_cards = gr.State([])
@@ -643,6 +750,11 @@ def build_ui():
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
                     q_zip = gr.File(label="Your download", interactive=False, visible=False)
+                with gr.Accordion("Continue an unfinished run", open=False):
+                    gr.Markdown("A run that was stopped, closed or crashed can carry on where it stopped: the analysis and the pieces "
+                                "already cut are reused.")
+                    q_unfinished = gr.Dropdown(label="Unfinished runs", choices=[], interactive=True)
+                    q_continue = gr.Button("Continue")
                 with gr.Accordion("Open an earlier run", open=False):
                     q_runs = gr.Dropdown(label="Earlier runs", choices=[], interactive=True)
                     q_open = gr.Button("Open")
@@ -663,9 +775,12 @@ def build_ui():
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
+                q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats],
                             [q_status, q_log, q_cards])
+                q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
+                q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
+                demo.load(unfinished_update, None, q_unfinished)
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
                 demo.load(earlier_runs, None, q_runs)
@@ -699,17 +814,19 @@ def build_ui():
                             with gr.Row():
                                 clip_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style")
                                 clip_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing")
-                        clip_btn = gr.Button("Find viral clips", variant="primary")
+                        clip_btn = gr.Button("Find viral clips", variant="primary")
+                        clip_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         clip_videos = gr.Files(label="Rendered clips")
                         clip_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
-                clip_btn.click(
+                clip_run = clip_btn.click(
                     clip_video,
                     [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
                      clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom, clip_cold,
                      clip_spoken, clip_edit, clip_edit_strength, clip_stats],
                     [clip_log, clip_videos],
                 )
+                clip_stop.click(stop_jobs, None, clip_log, cancels=[clip_run])
 
             with gr.Tab("🌍 Dub a video"):
                 gr.Markdown("### Re-voice a video in another language\n"
@@ -728,14 +845,16 @@ def build_ui():
                         d_original = gr.Dropdown(web_args.DUB_ORIGINAL_CHOICES, value="quiet", label="The video's own sound",
                                                  info="There is no way to remove only the voice, so the original voice stays faintly audible unless you remove all the sound.")
                         d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
-                        d_btn = gr.Button("🌍 Dub my video", variant="primary")
+                        d_btn = gr.Button("🌍 Dub my video", variant="primary")
+                        d_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         d_status = gr.Markdown("Waiting for a video...")
                         d_video = gr.Video(label="Dubbed video", interactive=False)
                         d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original], [d_status, d_log, d_video, d_srt])
+                d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original], [d_status, d_log, d_video, d_srt])
+                d_stop.click(stop_jobs, None, d_status, cancels=[d_run])
 
             with gr.Tab("📸 Photo reel"):
                 from engine.photo_reel_types import type_labels
@@ -752,13 +871,15 @@ def build_ui():
                                              placeholder="One line per photo, in order. Leave empty for automatic captions.")
                         p_music = gr.File(label="Music (optional, otherwise a built-in track)", file_types=["audio"], type="filepath")
                         p_len = gr.Slider(10, 60, value=24, step=2, label="Length (seconds)")
-                        p_btn = gr.Button("📸 Make my reel", variant="primary")
+                        p_btn = gr.Button("📸 Make my reel", variant="primary")
+                        p_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         p_status = gr.Markdown("Waiting for photos...")
                         p_video = gr.Video(label="Your reel", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     p_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                p_btn.click(photo_reel, [p_files, p_type, p_name, p_texts, p_music, p_len], [p_status, p_log, p_video])
+                p_run = p_btn.click(photo_reel, [p_files, p_type, p_name, p_texts, p_music, p_len], [p_status, p_log, p_video])
+                p_stop.click(stop_jobs, None, p_status, cancels=[p_run])
 
             with gr.Tab("🪄 Generate from an idea"):
                 with gr.Row():
@@ -772,15 +893,17 @@ def build_ui():
                             vibe = gr.Dropdown(VIBES, value="suspense", label="Music vibe")
                             voice = gr.Textbox(label="Voice (optional)", placeholder="en-US-GuyNeural")
                         gen_settings = _render_settings()
-                        gen_btn = gr.Button("Generate short", variant="primary")
+                        gen_btn = gr.Button("Generate short", variant="primary")
+                        gen_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         gen_videos = gr.Files(label="Rendered video")
                         gen_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
-                gen_btn.click(
+                gen_run = gen_btn.click(
                     generate_short,
                     [mode, category, prompt, script, vibe, voice, *gen_settings],
                     [gen_log, gen_videos],
                 )
+                gen_stop.click(stop_jobs, None, gen_log, cancels=[gen_run])
 
         gr.Markdown("API keys are read from `.env` (`GEMINI_API_KEY`, `PEXELS_API_KEY`, ...). "
                     "See `env.example`. Nothing is uploaded unless you run `main.py` without `--skip-upload`.")
