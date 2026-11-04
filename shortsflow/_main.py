@@ -64,7 +64,8 @@ def parse_args():
     parser.add_argument("--session_dir", help="Reuse session for transcription.")
     parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
     parser.add_argument("--style", choices=["sarcastic", "meme", "funny", "action", "stylish"], action="append", help="Optional viral editing styles (can be used multiple times).")
-    parser.add_argument("--caption_emoji", action="store_true", help="Pop an emoji next to keywords in HORMOZI/BOUNCE captions (needs an emoji font, e.g. fonts-noto-color-emoji on Linux).")
+    parser.add_argument("--caption_emoji", action="store_true", help="Pop an emoji next to keywords in HORMOZI/BOUNCE captions (bundled Twemoji images, no system emoji font needed; needs --use_remotion).")
+    parser.add_argument("--hook_overlay", action="store_true", help="Show the clip's hook as a big title for the first ~3 seconds (clipping with --use_remotion).")
     parser.add_argument("--brand", help="brand.json preset (logo, handle, end card) burned into finished clips.")
     parser.add_argument("--logo", help="Logo PNG watermark for finished clips.")
     parser.add_argument("--handle", help="@handle shown next to the logo and on the end card.")
@@ -150,6 +151,8 @@ def parse_args():
     args = parser.parse_args()
     if args.caption_emoji:
         os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
+    if args.hook_overlay:
+        os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
     return args
 
 
