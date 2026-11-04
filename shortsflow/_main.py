@@ -66,6 +66,7 @@ def parse_args():
     parser.add_argument("--style", choices=["sarcastic", "meme", "funny", "action", "stylish"], action="append", help="Optional viral editing styles (can be used multiple times).")
     parser.add_argument("--caption_emoji", action="store_true", help="Pop an emoji next to keywords in HORMOZI/BOUNCE captions (bundled Twemoji images, no system emoji font needed; needs --use_remotion).")
     parser.add_argument("--hook_overlay", action="store_true", help="Show the clip's hook as a big title for the first ~3 seconds (clipping with --use_remotion).")
+    parser.add_argument("--auto_zoom", action="store_true", help="Subtle punch-in / slow push-in on the picture at emphasised words and sentence starts (clipping with --use_remotion; not with --layout split_filler).")
     parser.add_argument("--brand", help="brand.json preset (logo, handle, end card) burned into finished clips.")
     parser.add_argument("--logo", help="Logo PNG watermark for finished clips.")
     parser.add_argument("--handle", help="@handle shown next to the logo and on the end card.")
@@ -156,6 +157,12 @@ def parse_args():
         os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
     if args.hook_overlay:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
+    if args.auto_zoom:
+        os.environ["SHORTSFLOW_AUTO_ZOOM"] = "1"
+        if not args.use_remotion:
+            print("[Warning] --auto_zoom needs --use_remotion (animated captions); it is ignored without it.")
+        if getattr(args, "layout", None) == "split_filler":
+            print("[Warning] --auto_zoom is skipped with --layout split_filler (it would move the seam).")
     return args
 
 

@@ -118,6 +118,10 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     prev_hook_env = os.environ.get("SHORTSFLOW_HOOK_OVERLAY")
     if hook_on:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
+    zoom_on = bool(settings.get("auto_zoom"))        # --auto_zoom: the same punch-ins again
+    prev_zoom_env = os.environ.get("SHORTSFLOW_AUTO_ZOOM")
+    if zoom_on:
+        os.environ["SHORTSFLOW_AUTO_ZOOM"] = "1"
     try:
         files = extract_segments(
             source, [window], transcript, tmp, mode=mode, bitrate="12M", preset="medium", codec="libx264",
@@ -164,6 +168,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                 os.environ.pop("SHORTSFLOW_HOOK_OVERLAY", None)
             else:
                 os.environ["SHORTSFLOW_HOOK_OVERLAY"] = prev_hook_env
+        if zoom_on:
+            if prev_zoom_env is None:
+                os.environ.pop("SHORTSFLOW_AUTO_ZOOM", None)
+            else:
+                os.environ["SHORTSFLOW_AUTO_ZOOM"] = prev_zoom_env
 
     thumb = clip.get("thumbnail")
     if thumb and not os.path.isabs(thumb):

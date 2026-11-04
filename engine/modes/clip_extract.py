@@ -432,6 +432,7 @@ def run(args, target_bitrate, target_preset):
                 "caption_lang": getattr(args, "caption_lang", None),
                 "clean_audio": bool(getattr(args, "clean_audio", False)), "hook_overlay": bool(getattr(args, "hook_overlay", False)),
                 "broll": bool(getattr(args, "broll", False)),
+                "auto_zoom": bool(getattr(args, "auto_zoom", False)),
             },
             "clips": []
         }

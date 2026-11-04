@@ -120,6 +120,7 @@ def render_with_remotion(
     teach_card=None,
     aspect_ratio="9:16",
     hook_text=None,     # str: headline shown big for the first ~3 s (--hook_overlay)
+    auto_zoom=False,    # bool: punch-in / slow push-in on the picture layer at emphasised words (--auto_zoom)
 ):
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
@@ -343,6 +344,15 @@ def render_with_remotion(
           "backgrounds": remotion_bg
         }
         
+        if auto_zoom:
+            try:
+                from engine.auto_zoom import choose_zoom_moments, energy_peaks
+                moments = choose_zoom_moments(words, duration, peaks=energy_peaks(audio_path))
+                if moments:
+                    props["zoomMoments"] = moments
+                    print(f"[Log] Auto zoom: {len(moments)} punch-in moment(s).")
+            except Exception as e:
+                print(f"[Warning] Auto zoom skipped ({e}).")
         if extra_font: props["extraFont"] = extra_font
         if remotion_tot: props["thisOrThat"] = remotion_tot
         if remotion_rank: props["rankIt"] = remotion_rank
