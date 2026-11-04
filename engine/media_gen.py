@@ -62,9 +62,11 @@ def download_background_video(fact_text, fallback_query="nature", output_path="a
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         if ext in [".png", ".jpg", ".jpeg", ".webp"]:
             try:
-                from moviepy.editor import ImageClip
-                clip = ImageClip(custom_bg).set_duration(60)
-                clip.write_videofile(output_path, fps=30, codec="libx264")
+                from moviepy import ImageClip   # MoviePy 2 has no moviepy.editor / set_duration
+                clip = ImageClip(custom_bg).with_duration(60)
+                # libx264 needs even dimensions and yuv420p for players to accept the file
+                clip.write_videofile(output_path, fps=30, codec="libx264", logger=None,
+                                     ffmpeg_params=["-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"])
                 clip.close()
                 return output_path
             except Exception as e:
@@ -484,27 +486,30 @@ SFX_LIBRARY = {
 import moviepy.audio.AudioClip
 AudioClip = moviepy.audio.AudioClip.AudioClip
 
+def _stereo_noise_clip(level, envelope, duration):
+    """Stereo noise AudioClip. MoviePy decides the channel count by calling make_frame with ONE time value, so for a scalar
+    t the frame must be a flat [left, right] pair; returning a (1, 2) array made it count one channel and play the
+    stereo samples as mono, i.e. twice as long and an octave low."""
+    def make_frame(t):
+        scalar = np.ndim(t) == 0
+        t = np.atleast_1d(t)
+        frame = np.random.normal(0, level, len(t)) * envelope(t)
+        out = np.vstack([frame, frame]).T
+        return out[0] if scalar else out
+    return AudioClip(make_frame, duration=duration, fps=44100)
+
+
 def generate_local_sfx(kind, output_path):
     """Synthesizes basic Foley sound effects mathematically (100% reliable, 0 server downtime)."""
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     if kind == "whoosh":
-        def make_whoosh(t):
-            t = np.atleast_1d(t)
-            noise = np.random.normal(0, 0.5, len(t))
-            # Sharp bell curve envelope
-            envelope = np.exp(-((t - 0.5) ** 2) / 0.02)
-            frame = noise * envelope
-            return np.vstack([frame, frame]).T
-        clip = AudioClip(make_whoosh, duration=1.0)
+        # Sharp bell curve envelope, 1 s long
+        clip = _stereo_noise_clip(0.5, lambda t: np.exp(-((t - 0.5) ** 2) / 0.02), 1.0)
         clip.write_audiofile(output_path, fps=44100, bitrate="192k", logger=None)
         return output_path
     elif kind == "rain" or kind == "static":
-        def make_rain(t):
-            t = np.atleast_1d(t)
-            # Low volume white noise acts as a great base for rain/static ambiance
-            noise = np.random.normal(0, 0.1, len(t))
-            return np.vstack([noise, noise]).T
-        clip = AudioClip(make_rain, duration=5.0)
+        # Low volume white noise acts as a great base for rain/static ambiance, 5 s long
+        clip = _stereo_noise_clip(0.1, lambda t: np.ones_like(t), 5.0)
         clip.write_audiofile(output_path, fps=44100, bitrate="192k", logger=None)
         return output_path
     return None

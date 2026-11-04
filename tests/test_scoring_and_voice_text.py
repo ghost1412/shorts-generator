@@ -76,3 +76,9 @@ def test_shorts_score_rewards_numbers_curiosity_and_direct_address():
 
 def test_long_scoring_has_no_content_specific_boosters():
     assert score_segment("zeus athena kratos pandora", "long", 0, 30) == score_segment("lorem ipsum dolor sit", "long", 0, 30)
+
+
+def test_dramatic_pauses_leave_numbers_alone():
+    out = add_dramatic_pauses("Pi is 3.14 and it costs 3,000 dollars at 10:30. Wow, really.")
+    assert "3.14" in out and "3,000" in out and "10:30" in out
+    assert "3... ..... 14" not in out

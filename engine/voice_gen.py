@@ -34,13 +34,14 @@ def clean_for_tts(text):
 def add_dramatic_pauses(text):
     """Injects punctuation-based breaks that edge-tts naturally interprets."""
     # Strong pause after each point/digit
-    text = re.sub(r'(\d+[:\.])\s*', r'\1 ... ', text)
+    # (only a list marker like "1. " or "2: ", never the dot of 3.14 or the colon of 10:30)
+    text = re.sub(r'(?<![\d.:,])(\d+[:\.])(?=\s|$)\s*', r'\1 ... ', text)
     # Long pause before reveal
     text = re.sub(r'(The real answer is)', r'... \1', text)
     # Natural breathing pauses at sentence ends
     text = re.sub(r'(\.\s+)', r'... ', text)
     # Comma for micro-pauses
-    text = re.sub(r',', ', ', text)
+    text = re.sub(r'(?<!\d),|,(?!\d)', ', ', text)   # not the comma inside 3,000
     return text
 
 def split_hook(text):

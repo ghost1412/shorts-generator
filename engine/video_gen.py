@@ -12,6 +12,32 @@ SAFE_TOP = 220
 SAFE_MID = 750
 SAFE_BOTTOM = 1600
 
+def smooth_focal_points(raw_pts, tau=0.4, max_vel_per_sec=0.5, deadband=0.04):
+    """Anti-blinking pass over (time, x) focal points (x = fraction of the frame width).
+
+    Deadband ignores tiny noise, an exponential smoother (time constant `tau` seconds, so the result does not depend on
+    how densely the points are sampled) rounds off the motion, and a speed cap (fraction of the width per second)
+    keeps pans calm. The old version capped the speed first and then blended 20% per sample on top of the cap, which
+    divided the real pan speed by about five (3% of the width per second): a subject that moved across the frame took
+    ten seconds to be followed."""
+    if not raw_pts:
+        return []
+    pts = [raw_pts[0]]
+    prev_t, prev_x = raw_pts[0]
+    for t, x in raw_pts[1:]:
+        dt = max(0.01, t - prev_t)
+        target = prev_x if abs(x - prev_x) < deadband else x
+        alpha = 1.0 - float(np.exp(-dt / tau))
+        step = alpha * (target - prev_x)
+        max_step = max_vel_per_sec * dt
+        if abs(step) > max_step:
+            step = float(np.sign(step)) * max_step
+        x_smooth = round(prev_x + step, 4)
+        pts.append((t, x_smooth))
+        prev_t, prev_x = t, x_smooth
+    return pts
+
+
 def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=1080, target_h=1920, orientation='landscape', letterbox_crop=None):
     """
     Generates an FFmpeg crop filter string for dynamic focal point tracking.
@@ -32,33 +58,7 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
     if not raw_pts:
         return f"{base_filter}crop=ih*9/16:ih:(iw-ow)/2:0"
         
-    # --- ANTI-BLINKING / SMOOTHING PASS ---
-    # Apply Exponential Moving Average (EMA) and velocity clamping to raw focal points
-    pts = []
-    prev_t, prev_x = raw_pts[0][0], raw_pts[0][1]
-    pts.append((prev_t, prev_x))
-
-    max_vel_per_sec = 0.15  # Max 15% width shift per second for buttery smooth panning
-    deadband = 0.04         # 4% movement threshold (hysteresis) to prevent micro-jittering
-
-    for t, x in raw_pts[1:]:
-        dt = max(0.01, t - prev_t)
-        # Apply deadband: ignore tiny position noise
-        if abs(x - prev_x) < deadband:
-            x_target = prev_x
-        else:
-            x_target = x
-
-        # Velocity cap
-        max_dist = max_vel_per_sec * dt
-        dx = x_target - prev_x
-        if abs(dx) > max_dist:
-            x_target = prev_x + np.sign(dx) * max_dist
-
-        # EMA blend (alpha=0.20 for highly smoothed tracking)
-        x_smooth = round(0.20 * x_target + 0.80 * prev_x, 4)
-        pts.append((t, x_smooth))
-        prev_t, prev_x = t, x_smooth
+    pts = smooth_focal_points(raw_pts)
 
     # Adaptive sampling to keep FFmpeg expression within CLI length limits
     duration = end_time - start_time
@@ -1209,7 +1209,7 @@ def create_shorts_video(audio_path, subs_path, video_paths, output_path="final_s
                 try:
                     # Extreme Safety: subclip to ensure we never exceed physical file duration
                     audio_dur = min(seg.audio.duration, seg.duration)
-                    seg_audio = seg.audio.subclip(0, audio_dur).with_start(seg.start)
+                    seg_audio = seg.audio.subclipped(0, audio_dur).with_start(seg.start)
                     bg_audios.append(seg_audio)
                 except Exception as ae:
                     print(f"[Warning] Failed to extract audio from background segment: {ae}")
@@ -1672,7 +1672,7 @@ def create_emoji_guess_video(audio_path, subs_path, emoji_data, bg_video_paths, 
     bg_paths = bg_video_paths if isinstance(bg_video_paths, list) else [bg_video_paths]
     bg_clip = VideoFileClip(bg_paths[0]).without_audio()
     if bg_clip.duration < duration:
-        bg_clip = vfx.loop(bg_clip, duration=duration)
+        bg_clip = bg_clip.with_effects([vfx.Loop(duration=duration)])   # MoviePy 2 (vfx.loop was MoviePy 1)
     else:
         if hasattr(bg_clip, 'subclipped'):
             bg_clip = bg_clip.subclipped(0, duration)
