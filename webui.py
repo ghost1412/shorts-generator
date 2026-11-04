@@ -66,7 +66,7 @@ GENERATE_MODES = [
     "TRUE_CRIME", "REDDIT", "TRIVIA", "QUOTE", "RIDDLE", "EMOJI_GUESS", "ODD_ONE_OUT",
     "NEWS", "BIBLE", "ARTICLE", "UGC", "FUNNY_EXPLAINER",
 ]
-CAPTION_STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "AUTO", "RANDOM"]
+CAPTION_STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "AUTO", "RANDOM"]
 VIBES = ["suspense", "spooky", "cinematic", "upbeat", "sarcastic", "funny"]
 ASPECTS = ["9:16", "16:9", "1:1", "4:5"]
 LLM_PROVIDERS = ["auto", "gemini", "ollama", "openai", "anthropic", "deepseek", "groq", "openrouter"]
@@ -219,7 +219,8 @@ def _cards_from_videos(videos):
 
 
 CAPTION_CHOICES = [("Bold yellow (Hormozi)", "HORMOZI"), ("Pink glow box", "GLOW_BOX"),
-                   ("Bouncy gold", "BOUNCE"), ("Clean dark boxes", "MINIMAL")]
+                   ("Bouncy gold", "BOUNCE"), ("Clean dark boxes", "MINIMAL"),
+                   ("Karaoke sweep", "KARAOKE"), ("Neon glow", "NEON"), ("Subtitle bar", "BAR")]
 SPOKEN_CHOICES = [("Detect it automatically", "auto"), ("English", "en"), ("Hindi", "hi"), ("Spanish", "es"), ("French", "fr"),
                   ("German", "de"), ("Portuguese", "pt"), ("Italian", "it"), ("Japanese", "ja"), ("Korean", "ko"),
                   ("Chinese", "zh"), ("Russian", "ru"), ("Arabic", "ar"), ("Turkish", "tr")]

@@ -118,6 +118,10 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     prev_hook_env = os.environ.get("SHORTSFLOW_HOOK_OVERLAY")
     if hook_on:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
+    caption_color = settings.get("caption_color")     # --caption_color: same accent colour again
+    prev_color_env = os.environ.get("SHORTSFLOW_CAPTION_COLOR")
+    if caption_color:
+        os.environ["SHORTSFLOW_CAPTION_COLOR"] = caption_color
     try:
         files = extract_segments(
             source, [window], transcript, tmp, mode=mode, bitrate="12M", preset="medium", codec="libx264",
@@ -152,6 +156,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                 os.environ.pop("SHORTSFLOW_HOOK_OVERLAY", None)
             else:
                 os.environ["SHORTSFLOW_HOOK_OVERLAY"] = prev_hook_env
+        if caption_color:
+            if prev_color_env is None:
+                os.environ.pop("SHORTSFLOW_CAPTION_COLOR", None)
+            else:
+                os.environ["SHORTSFLOW_CAPTION_COLOR"] = prev_color_env
 
     thumb = clip.get("thumbnail")
     if thumb and not os.path.isabs(thumb):
@@ -219,7 +228,7 @@ def main(argv=None):
     p.add_argument("clip_index", type=int)
     p.add_argument("--start", type=float)
     p.add_argument("--end", type=float)
-    p.add_argument("--style", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"])
+    p.add_argument("--style", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"])
     p.add_argument("--no-brand", action="store_true")
     p.add_argument("--cuts", help="spans of the original video to cut out, '1.2:1.8,3:3.5' (seconds); '' clears the cuts")
     a = p.parse_args(argv)

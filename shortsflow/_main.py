@@ -118,7 +118,8 @@ def parse_args():
     parser.add_argument("--cartoon", action="store_true", help="Enable cartoon-style news persona.")
     parser.add_argument("--persona", help="Select a specific cartoon persona (rabbit, robot, squirrel, superhero).")
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
-    parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "AUTO", "RANDOM"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI).")
+    parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "AUTO", "RANDOM"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI). KARAOKE = colour sweep along the line, NEON = glow, BAR = subtitle bar.")
+    parser.add_argument("--caption_color", type=str, default=None, help="Accent colour of the active caption word as hex, e.g. '#FF3366' (any caption style; needs --use_remotion).")
     parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for subtitles in Remotion (default: 1150).")
     parser.add_argument("--max_workers", type=int, default=None, help="Force number of parallel rendering worker threads (e.g. 2 or 4 for Remotion/FFmpeg).")
     
@@ -156,6 +157,12 @@ def parse_args():
         os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
     if args.hook_overlay:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
+    if args.caption_color:
+        from engine.remotion_renderer import normalize_caption_color
+        args.caption_color = normalize_caption_color(args.caption_color)
+        if not args.caption_color:
+            parser.error("--caption_color must be a hex colour such as '#FF3366'")
+        os.environ["SHORTSFLOW_CAPTION_COLOR"] = args.caption_color
     return args
 
 

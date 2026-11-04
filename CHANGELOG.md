@@ -5,6 +5,8 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **Three new caption styles** (`--caption_style KARAOKE|NEON|BAR`, also in the browser app's style picker with previews): KARAOKE sweeps the highlight colour across each word as it is spoken, NEON glows the active word, BAR puts the line in a clean subtitle bar. They show a short line (3-6 words) that stays put while the highlight moves, and work with Latin, Cyrillic, Arabic (right-to-left, sweep runs right to left), Chinese/Japanese/Korean (no letter-spacing) and `--caption_emoji`. AUTO and RANDOM still pick only from the original four styles.
+- **`--caption_color '#FF3366'`**: accent colour of the active caption word for every style (HORMOZI, GLOW_BOX, BOUNCE, MINIMAL and the new ones); a re-render keeps it.
 - **Browser app controls for the 0.3.0 options**: an "Extras" section on the Start here tab (clean up the sound, big title at the start, emoji next to key words, satisfying video underneath with an optional footage file) and the same options under Clip (advanced). The title and emoji are only passed when animated captions are on, since Remotion draws them.
 - **"Dub a video" tab**: pick a video or link, the language to dub into and the language spoken, optionally burn the translated subtitles in; shows plain-language progress and gives you the dubbed video and the translated `.srt`.
 

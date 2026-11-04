@@ -87,9 +87,28 @@ def clean_hook_text(text, max_words=9, max_chars=60):
     return text
 
 
+CAPTION_STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"]
+AUTO_CAPTION_STYLES = CAPTION_STYLES[:4]   # what AUTO / RANDOM pick from (the newer styles are opt-in)
+
+
+def normalize_caption_color(value):
+    """'#ff0 ' / 'FFE600' / '#FFE600' -> '#FFE600'; None when it is not a hex colour."""
+    if not isinstance(value, str):
+        return None
+    v = value.strip().lstrip("#")
+    if len(v) == 3:
+        v = "".join(c * 2 for c in v)
+    if len(v) != 6 or any(c not in "0123456789abcdefABCDEF" for c in v):
+        return None
+    return "#" + v.upper()
+
+
 def overlay_props(hook_text=None, hook_seconds=2.8):
-    """Caption-extra props for the Remotion composition: keyword emoji (env opt-in) and the hook overlay."""
+    """Caption-extra props for the Remotion composition: keyword emoji (env opt-in), the accent colour and the hook overlay."""
     props = {"captionEmoji": os.getenv("SHORTSFLOW_CAPTION_EMOJI", "") == "1"}
+    color = normalize_caption_color(os.getenv("SHORTSFLOW_CAPTION_COLOR", ""))
+    if color:
+        props["captionColor"] = color
     hook = clean_hook_text(hook_text)
     if hook:
         props["hookText"] = hook
@@ -124,15 +143,16 @@ def render_with_remotion(
     """
     Renders a Short using Remotion by preparing assets, creating props, and running npx remotion render.
     """
-    valid_styles = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]
-    if not caption_style or caption_style.upper() in ["AUTO", "RANDOM"] or caption_style.upper() not in valid_styles:
+    if caption_style and caption_style.upper() in CAPTION_STYLES:
+        caption_style = caption_style.upper()
+    else:   # missing, AUTO, RANDOM or unknown
         if mode in ["NEWS", "NEWS_SERIOUS"]:
             caption_style = "MINIMAL"
         elif mode in ["RIDDLE", "THIS_OR_THAT"]:
             caption_style = "BOUNCE"
         else:
             import random
-            caption_style = random.choice(valid_styles)
+            caption_style = random.choice(AUTO_CAPTION_STYLES)
     if subtitle_y_pos == 1150:
         if mode == "TEACH":
             subtitle_y_pos = 980
