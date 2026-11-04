@@ -178,3 +178,15 @@ def test_cold_open_flag_in_extras():
     from shortsflow import web_args
     assert "--cold_open" in web_args.extras_args(cold_open=True)
     assert "--cold_open" not in web_args.extras_args()
+
+
+def test_shared_or_network_webui_always_gets_a_login():
+    import pytest
+    import webui
+    assert webui.resolve_auth(None, False, "127.0.0.1") is None                      # local only: no login needed
+    user, pw = webui.resolve_auth(None, True, "127.0.0.1")                          # --share: generated
+    assert user == "shortsflow" and len(pw) >= 8
+    assert webui.resolve_auth(None, False, "0.0.0.0")[0] == "shortsflow"             # listening on the network: generated
+    assert webui.resolve_auth("me:secret", True) == ("me", "secret")
+    with pytest.raises(SystemExit):
+        webui.resolve_auth("nopassword", True)

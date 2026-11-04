@@ -699,11 +699,27 @@ def build_ui():
     return demo
 
 
+def resolve_auth(auth, share, host="127.0.0.1"):
+    """(username, password) or None. A shared (public) link, or an app listening on the network, must never be open to anyone
+    who finds the URL: it can process videos on this PC and the 'Save key' box writes to .env. So without --auth a
+    password is generated (and printed once)."""
+    if auth:
+        user, sep, pw = auth.partition(":")
+        if not sep or not user or not pw:
+            raise SystemExit("--auth must look like username:password")
+        return user, pw
+    if share or host not in ("127.0.0.1", "localhost", "::1"):
+        import secrets
+        return "shortsflow", secrets.token_urlsafe(9)
+    return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="ShortsFlow AI Studio WebUI")
     parser.add_argument("--host", default=os.getenv("WEBUI_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("WEBUI_PORT", "7860")))
-    parser.add_argument("--share", action="store_true", help="Create a public gradio.live link (useful on Colab).")
+    parser.add_argument("--share", action="store_true", help="Create a public gradio.live link (to use the app from a phone on another network). Protected by a password.")
+    parser.add_argument("--auth", metavar="USER:PASSWORD", help="Require a login. Generated automatically for --share or a non-local --host.")
     parser.add_argument("--open", action="store_true", help="Open the page in your browser once it is ready.")
     cli = parser.parse_args(argv)
 
@@ -718,8 +734,12 @@ def main(argv=None):
     except Exception:
         pass
 
+    creds = resolve_auth(cli.auth, cli.share, cli.host)
+    if creds and not cli.auth:
+        print(f"[Login] username: {creds[0]}   password: {creds[1]}   (new on every start; use --auth user:pass to choose your own)", flush=True)
     build_ui().queue(default_concurrency_limit=1).launch(
-        server_name=cli.host, server_port=cli.port, share=cli.share, inbrowser=cli.open, **_launch_theme()
+        server_name=cli.host, server_port=cli.port, share=cli.share, inbrowser=cli.open,
+        **({"auth": creds} if creds else {}), **_launch_theme()
     )
 
 
