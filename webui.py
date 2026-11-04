@@ -294,7 +294,8 @@ def clear_brand():
 
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
-               clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False):
+               clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
+               auto_edit="none", edit_strength="medium"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -322,6 +323,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                "--session_dir", session, "--output_json", results]
         cmd += web_args.filler_args(layout, filler_video)
         cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, bool(captions), broll=broll, auto_zoom=auto_zoom, cold_open=cold_open)
+        cmd += web_args.edit_args(auto_edit, edit_strength)
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
         if (find or "").strip():
@@ -528,6 +530,11 @@ def build_ui():
                             q_caption_lang = gr.Dropdown(CAPTION_LANG_CHOICES, value="", label="Captions in...",
                                                          info="Translates the captions with AI (a free Groq key or Ollama is needed). "
                                                               "Chinese, Japanese and Korean fonts download once, the first time you use them.")
+                        q_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style",
+                                             info="Edits like an editor: cuts pauses and ums, zooms, cutaways, a teaser opening, colour and sound effects, "
+                                                  "chosen for this kind of video. Turns on animated captions.")
+                        q_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
+                                                   info="Subtle keeps it quiet; Hyped uses everything.")
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
@@ -577,7 +584,8 @@ def build_ui():
                             with gr.Column(scale=2):
                                 score = f"{c['label'].title()} ({int(c['score'])}/100)" if c.get("score") is not None else "Not rated"
                                 dur = f" · {c['duration']:.0f}s" if c.get("duration") else ""
-                                gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else ""))
+                                gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else "")
+                                            + (f"  \n🎬 Edited: {c['edit_summary']}" if c.get("edit_summary") else ""))
                                 gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
                                            placeholder="No title or description was written (it needs an AI key or Ollama).")
                                 if c.get("title_variants"):
@@ -636,7 +644,7 @@ def build_ui():
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength],
                             [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])

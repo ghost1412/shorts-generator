@@ -382,9 +382,16 @@ def render_with_remotion(
         if auto_zoom:
             try:
                 from engine.auto_zoom import choose_zoom_moments, energy_peaks
-                moments = choose_zoom_moments(words, duration, peaks=energy_peaks(audio_path))
+                moments = choose_zoom_moments(words, duration, peaks=energy_peaks(audio_path),
+                                              intensity=float(os.getenv("SHORTSFLOW_ZOOM_INTENSITY") or 1.0),
+                                              min_spacing=float(os.getenv("SHORTSFLOW_ZOOM_SPACING") or 2.5))
                 if moments:
                     props["zoomMoments"] = moments
+                    try:   # the auto-edit sound effects read the chosen moments from here
+                        with open(f"{output_path}.zoom.json", "w", encoding="utf-8") as zf:
+                            json.dump(moments, zf)
+                    except OSError:
+                        pass
                     print(f"[Log] Auto zoom: {len(moments)} punch-in moment(s).")
             except Exception as e:
                 print(f"[Warning] Auto zoom skipped ({e}).")

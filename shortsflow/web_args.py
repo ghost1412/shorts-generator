@@ -29,6 +29,18 @@ def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_
     return args
 
 
+EDIT_STYLE_CHOICES = [("No auto-edit (pick my own options)", "none"), ("Podcast / interview", "podcast"),
+                      ("Hype / gaming / reaction", "hype"), ("Educational / explainer", "educational"), ("Vlog / lifestyle", "vlog")]
+EDIT_STRENGTH_CHOICES = [("Subtle", "subtle"), ("Medium", "medium"), ("Hyped", "hyped")]
+
+
+def edit_args(style, strength="medium"):
+    """`--auto_edit STYLE --edit_strength S` (nothing when no style is chosen)."""
+    if not style or style == "none":
+        return []
+    return ["--auto_edit", style, "--edit_strength", strength if strength in ("subtle", "medium", "hyped") else "medium"]
+
+
 def filler_args(layout, filler_video=None):
     """`--filler_video` only matters for the split_filler layout; an empty choice lets the pipeline pick footage."""
     path = (filler_video or "").strip() if isinstance(filler_video, str) else ""

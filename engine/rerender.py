@@ -135,6 +135,12 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     prev_zoom_env = os.environ.get("SHORTSFLOW_AUTO_ZOOM")
     if zoom_on:
         os.environ["SHORTSFLOW_AUTO_ZOOM"] = "1"
+    from engine import auto_edit
+    edit_cfg = auto_edit.cfg_from_settings(settings)  # --auto_edit: the same zoom strength and sound effects again
+    prev_zoom_strength = (os.environ.get("SHORTSFLOW_ZOOM_INTENSITY"), os.environ.get("SHORTSFLOW_ZOOM_SPACING"))
+    if edit_cfg:
+        os.environ["SHORTSFLOW_ZOOM_INTENSITY"] = str(edit_cfg["zoom_intensity"])
+        os.environ["SHORTSFLOW_ZOOM_SPACING"] = str(edit_cfg["zoom_spacing"])
     emoji_on = bool(settings.get("caption_emoji"))    # --caption_emoji: the same keyword emoji again
     prev_emoji_env = os.environ.get("SHORTSFLOW_CAPTION_EMOJI")
     if emoji_on:
@@ -153,6 +159,7 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         if not files or not os.path.exists(files[0]):
             raise RuntimeError("The re-render produced no video.")
         new_clip = files[0]
+        broll_events = []                            # cutaway times, for the auto-edit sound effects
         if settings.get("broll"):                    # --broll: the cutaways go back on (timing from the same retimed words as the captions)
             from engine.broll import apply_to_clip, clip_words
             try:
@@ -162,7 +169,7 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                 if broll_words is not None:
                     apply_to_clip(new_clip, broll_words, layout=settings.get("layout", "single"),
                                   caption_y=settings.get("subtitle_y_pos", 1150) if settings.get("use_remotion") else 1150,
-                                  hook_overlay=hook_on)
+                                  hook_overlay=hook_on, events=broll_events)
             except (OSError, ValueError) as e:
                 print(f"[Warning] B-roll skipped on re-render: {e}")
         if settings.get("clean_audio"):              # --clean_audio: a re-render must not fall back to the raw sound
@@ -180,6 +187,22 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                     cold_info = apply_cold_open(new_clip, cold_words, hint=clip.get("hook"))
             except (OSError, ValueError) as e:
                 print(f"[Warning] Cold open skipped on re-render: {e}")
+        edit_log = None
+        if edit_cfg:                                 # sound effects under the edits, and the summary for the review card
+            from engine import sfx_mix
+            from engine.broll import _ffmpeg, _probe
+            zooms = auto_edit.read_zoom_moments(new_clip) if zoom_on else []
+            events = auto_edit.build_sfx_events(edit_cfg, zooms, broll_events, cold_info)
+            mixed = sfx_mix.mix_events(new_clip, events, volume_db=edit_cfg["sfx_db"]) if events else []
+            try:
+                length = _probe(new_clip, _ffmpeg())[2]
+            except Exception:
+                length = 0.0
+            edit_log = {"tightened": bool(settings.get("tighten")), "zooms": len(zooms), "broll": len(broll_events),
+                        "cold_open": float(cold_info["duration"]) if cold_info else 0.0, "sfx": len(mixed), "sfx_events": mixed,
+                        "grade": settings.get("video_filter"), "captions": style if settings.get("use_remotion") else None,
+                        "rhythm": auto_edit.rhythm(zooms, broll_events, cold_info, length) if length else {}}
+            edit_log["summary"] = auto_edit.summarize(edit_log)
         brand_json = settings.get("brand")
         if use_brand and brand_json and not os.path.exists(brand_json):
             brand_json = None
@@ -214,6 +237,12 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                 os.environ.pop("SHORTSFLOW_AUTO_ZOOM", None)
             else:
                 os.environ["SHORTSFLOW_AUTO_ZOOM"] = prev_zoom_env
+        if edit_cfg:
+            for key, old in zip(("SHORTSFLOW_ZOOM_INTENSITY", "SHORTSFLOW_ZOOM_SPACING"), prev_zoom_strength):
+                if old is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = old
         if emoji_on:
             if prev_emoji_env is None:
                 os.environ.pop("SHORTSFLOW_CAPTION_EMOJI", None)
@@ -243,6 +272,8 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         clip["cold_open"] = cold_info
     else:
         clip.pop("cold_open", None)
+    if edit_log:
+        clip["edit"], clip["edit_summary"] = edit_log, edit_log["summary"]
     if cuts:
         clip["cuts"] = [[round(s, 3), round(e, 3)] for s, e in cuts]
     else:

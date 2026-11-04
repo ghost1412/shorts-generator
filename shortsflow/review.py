@@ -57,6 +57,7 @@ def load_results(json_path):
             "title_variants": [v for v in (c.get("title_variants") or []) if isinstance(v, dict) and v.get("title")],
             "hook": (c.get("hook") or "").strip(),
             "reason": (c.get("reason") or "").strip(),
+            "edit_summary": (c.get("edit_summary") or "").strip(),
             "score": score,
             "label": score_label(score),
             "start": c.get("start"),

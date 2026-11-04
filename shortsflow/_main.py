@@ -62,6 +62,8 @@ def parse_args():
     parser.add_argument("--extract_mode", choices=["shorts", "long"], default="shorts")
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
+    parser.add_argument("--auto_edit", choices=["podcast", "hype", "educational", "vlog"], help="Edit like an editor: one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, teaser opening, colour and sound effects for this kind of video. Your own flags still win. Writes edit_plan.json.")
+    parser.add_argument("--edit_strength", choices=["subtle", "medium", "hyped"], default="medium", help="With --auto_edit: how much of the edit shows (default medium).")
     parser.add_argument("--cold_open", action="store_true", help="Start each short with its strongest line (a 1.5-6 s teaser taken from the clip), then play the clip from its beginning. Shorts only.")
     parser.add_argument("--no_signals", action="store_true", help="Ignore the extra scoring signals (speech-rate change, and laughter/applause with --use_audio_detect).")
     parser.add_argument("--no_rerank", action="store_true", help="Skip the second LLM pass that rates all clip candidates together with context (uses the older per-clip scoring).")
@@ -176,6 +178,15 @@ def parse_args():
         print(f"[Warning] --aspect_ratio {args.aspect_ratio} is not implemented: output is 9:16 vertical (the highlights video is 16:9).")
     if getattr(args, "llm_model", None):
         os.environ["LLM_MODEL"] = args.llm_model      # was never read: only the LLM_MODEL env var worked
+    args.auto_edit_plan = None
+    if args.auto_edit and getattr(args, "source_video", None):
+        from engine.auto_edit import apply_preset
+        args.auto_edit_plan = apply_preset(args, args.auto_edit, args.edit_strength, sys.argv[1:])
+        on = [k for k, v in args.auto_edit_plan["flags"].items() if v is True and k != "use_remotion"]
+        print(f"[Log] 🎬 Auto-edit '{args.auto_edit_plan['label']}' ({args.edit_strength}): {', '.join(on)}; captions {args.caption_style}"
+              + (f"; note: {'; '.join(args.auto_edit_plan['notes'])}" if args.auto_edit_plan["notes"] else ""))
+    elif args.auto_edit:
+        print("[Warning] --auto_edit edits video clips (--source_video); it is ignored here.")
     if args.caption_emoji:
         os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
     if args.hook_overlay:

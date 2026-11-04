@@ -255,6 +255,7 @@ def run(args, target_bitrate, target_preset):
                                                               getattr(args, "mashup", False))
 
     # Auto B-roll: stock cutaways on spoken nouns, overlaid on the finished vertical clips (engine/broll.py)
+    broll_events = {}                      # clip file -> [{t, kind, keyword}] (the auto-edit sound effects use them)
     if getattr(args, "broll", False) and extracted_files:
         if args.extract_mode == "long" or getattr(args, "mashup", False):
             print("[Log] B-roll applies to short vertical clips; skipped for the highlights video.")
@@ -279,8 +280,9 @@ def run(args, target_bitrate, target_preset):
                 if words is None:
                     print("[Warning] B-roll timing needs --tighten_mode cut when tightening; skipped.")
                     break
+                broll_events[clip_file] = []
                 placed += apply_to_clip(clip_file, words, layout=getattr(args, "layout", "single"),
-                                        caption_y=caption_y, hook_overlay=hook_on)
+                                        caption_y=caption_y, hook_overlay=hook_on, events=broll_events[clip_file])
             print(f"[Log] B-roll: {placed} cutaway(s) added across {len(extracted_files)} clip(s).")
 
     # Audio clean-up (noise reduction + loudness normalisation); runs on the finished clips of every render path
@@ -325,6 +327,37 @@ def run(args, target_bitrate, target_preset):
                     cold_infos[clip_file] = info
                     save_applied(clip_file, info)
             print(f"[Log] Cold open: {len(cold_infos)} of {len(extracted_files)} clip(s) now start with their best line.")
+
+    # Auto-edit director: sound effects under the edits, then a record of what each clip got (edit_plan.json, review-card summary)
+    edit_logs = {}
+    cfg = getattr(args, "auto_edit_cfg", None)
+    if cfg and extracted_files and args.extract_mode != "long" and not getattr(args, "mashup", False):
+        from engine import auto_edit, sfx_mix
+        from engine.broll import _ffmpeg, _probe
+        for clip_file in extracted_files:
+            zooms = auto_edit.read_zoom_moments(clip_file) if getattr(args, "auto_zoom", False) else []
+            events = auto_edit.build_sfx_events(cfg, zooms, broll_events.get(clip_file), cold_infos.get(clip_file))
+            mixed = []
+            if events and not already_done(clip_file, "sfx", cfg):
+                mixed = sfx_mix.mix_events(clip_file, events, volume_db=cfg["sfx_db"])
+                if mixed:
+                    mark_done(clip_file, "sfx", cfg)
+            try:
+                duration = _probe(clip_file, _ffmpeg())[2]
+            except Exception:
+                duration = 0.0
+            cold = cold_infos.get(clip_file)
+            edit_logs[clip_file] = {
+                "tightened": bool(getattr(args, "tighten", False)), "zooms": len(zooms), "broll": len(broll_events.get(clip_file) or []),
+                "cold_open": float(cold["duration"]) if cold else 0.0, "sfx": len(mixed), "sfx_events": mixed,
+                "grade": getattr(args, "video_filter", None) if getattr(args, "video_filter", "none") not in (None, "none", "auto") else None,
+                "captions": args.caption_style if args.use_remotion else None,
+                "rhythm": auto_edit.rhythm(zooms, broll_events.get(clip_file), cold, duration) if duration else {},
+            }
+            edit_logs[clip_file]["summary"] = auto_edit.summarize(edit_logs[clip_file])
+            print(f"[Log] 🎬 {os.path.basename(clip_file)}: {edit_logs[clip_file]['summary']}")
+        if getattr(args, "auto_edit_plan", None):
+            auto_edit.write_plan(session_dir, args.auto_edit_plan, [dict(clip=os.path.basename(f), **log) for f, log in edit_logs.items()])
 
     # Brand kit: logo watermark, @handle and end card (the kit was validated before the render started)
     if brand_kit and extracted_files:
@@ -604,6 +637,7 @@ def run(args, target_bitrate, target_preset):
                 "caption_color": getattr(args, "caption_color", None),
                 "caption_emoji": bool(getattr(args, "caption_emoji", False)),
                 "cold_open": bool(getattr(args, "cold_open", False)),
+                "auto_edit": getattr(args, "auto_edit", None), "edit_strength": getattr(args, "edit_strength", None) if getattr(args, "auto_edit", None) else None,
                 "remove_fillers": bool(getattr(args, "remove_fillers", False)),
                 "video_filter": getattr(args, "video_filter", None) if getattr(args, "video_filter", "none") not in (None, "none", "auto") else None,
                 "logo": getattr(args, "logo", None), "handle": getattr(args, "handle", None),
@@ -623,6 +657,7 @@ def run(args, target_bitrate, target_preset):
                 "end": h.get("end"),
                 "duration": round(h.get("end", 0) - h.get("start", 0) + (cold_infos.get(clip_path) or {}).get("duration", 0), 2),
                 **({"cold_open": cold_infos[clip_path]} if clip_path in cold_infos else {}),
+                **({"edit": edit_logs[clip_path], "edit_summary": edit_logs[clip_path]["summary"]} if clip_path in edit_logs else {}),
                 "viral_score": h.get("viral_score", 85),
                 "hook": h.get("hook_text", meta_item.get("title", "")),
                 "reason": h.get("reason", "High-engagement segment"),

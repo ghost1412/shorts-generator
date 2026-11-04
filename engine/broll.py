@@ -263,8 +263,9 @@ def clip_words(transcript_data, start, end, keep_intervals=None, tighten_mode="c
 
 
 def apply_to_clip(video, words, layout="single", caption_y=DEFAULT_CAPTION_Y, hook_overlay=False, ask=None,
-                  fetch=fetch_footage):
-    """B-roll for one finished clip. Returns the number of cutaways placed (0 = clip untouched). Never raises."""
+                  fetch=fetch_footage, events=None):
+    """B-roll for one finished clip. Returns the number of cutaways placed (0 = clip untouched). Never raises.
+    `events`, when given, receives {"t", "kind", "keyword"} for every cutaway (the auto-edit sound effects use them)."""
     try:
         ffmpeg = _ffmpeg()
         width, height, duration = _probe(video, ffmpeg)
@@ -283,6 +284,8 @@ def apply_to_clip(video, words, layout="single", caption_y=DEFAULT_CAPTION_Y, ho
                   f"{LOCAL_DIR}); clip left as it was.")
             return 0
         if render_cutaways(video, items, region, ffmpeg):
+            if events is not None:
+                events.extend({"t": i["start"], "kind": "whoosh", "keyword": i["keyword"]} for i in items)
             print(f"[Log] B-roll: {len(items)} cutaway(s) in {os.path.basename(video)} ({', '.join(i['keyword'] for i in items)})")
             return len(items)
     except Exception as e:

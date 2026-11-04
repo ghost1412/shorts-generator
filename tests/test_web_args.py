@@ -208,3 +208,10 @@ def test_photo_reel_command_and_staging(tmp_path):
     assert cmd[cmd.index("--music") + 1] == "song.mp3" and cmd[cmd.index("--target_duration") + 1] == "30"
     plain = web_args.photo_reel_args(folder, "memories")
     assert "--prompt" not in plain and "--music" not in plain and "--reel_text" not in plain
+
+
+def test_edit_args():
+    from shortsflow import web_args
+    assert web_args.edit_args("none") == [] and web_args.edit_args("") == []
+    assert web_args.edit_args("hype", "hyped") == ["--auto_edit", "hype", "--edit_strength", "hyped"]
+    assert web_args.edit_args("vlog", "loud") == ["--auto_edit", "vlog", "--edit_strength", "medium"]
