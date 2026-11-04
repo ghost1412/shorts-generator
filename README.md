@@ -189,13 +189,17 @@ _Honest take: the paid tools have a nicer editor, hosted convenience and tested 
 | Capability | Supported Technologies & Flags |
 | :--- | :--- |
 | 🎙️ **Voice Synthesis & Cloning** | Local Kokoro TTS (`--tts_provider kokoro`, no key), Zero-Shot Voice Cloning (`--clone_voice "sample.wav"`), VoiceStudio Local REST (`--tts_provider voicestudio`), ElevenLabs, EdgeTTS |
-| 📐 **Aspect Ratios** | `9:16` (Vertical), `16:9` (Landscape), `1:1` (Square), `4:5` (Social Feed) via `--aspect_ratio` |
-| 🔊 **Audio Mastering & SFX** | Auto SFX (`whoosh`, `pop`, `riser`, `boom`), Dynamic BGM Audio Ducking (`--auto_ducking`), Studio Master Filter (`--enhance_audio`) |
-| 🎥 **Motion & Visual Filters** | Dynamic Camera Push-In Zoom (`--enable_zoom`), 12 Color Grade Presets (`--video_filter cyberpunk`, `kurosawa`, `teal_orange`) |
+| 📐 **Aspect Ratios** | 9:16 vertical shorts (the default), 16:9 for the highlights video. `--aspect_ratio` values other than 9:16 are not implemented yet and print a warning |
+| 🔊 **Audio & sound effects** | `--clean_audio` (noise reduction + loudness to about -14 LUFS; `--enhance_audio` is the same), soft whooshes / pops / hits under zooms, cutaways and the teaser cut with `--auto_edit`. `--auto_ducking` and `--sfx_preset` are not implemented yet |
+| 🎥 **Motion & Visual Filters** | Punch-in zooms on emphasised words (`--auto_zoom`, also `--enable_zoom`), stock cutaways (`--broll`), 12 colour grade presets (`--video_filter cyberpunk`, `kurosawa`, `teal_orange`) |
 | 📦 **Batch Automation** | Automated queue execution from CSV / text lists (`--batch_file "topics.txt"`) |
 | 🌍 **Caption Languages** | Latin, Cyrillic (ru, uk, bg), Greek and Devanagari captions; `--caption_lang es` translates captions with your AI provider and keeps them timed |
 | 🧭 **Layouts** | `--layout auto` picks per clip: cut-to-speaker for two-person shots, tracked single crop otherwise; also `active`, `stacked` |
 | 🎞️ **Highlights Video** | One landscape video of the best moments, any length, from the browser app |
+| 🎬 **Auto-edit director** | `--auto_edit podcast|hype|educational|vlog` with `--edit_strength subtle|medium|hyped`: one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, a teaser opening, colour and sound effects. Writes `edit_plan.json` and shows what it did on each clip |
+| 🪝 **Cold open** | `--cold_open` starts each short with its strongest line as a 1.5-6 s teaser, then plays the clip from the beginning (captions and subtitles stay in sync) |
+| 🎯 **Smarter clip picking** | Clips start and end on sentence boundaries (`--no_snap` to disable), repeated moments are skipped (`--no_diversity`), one LLM request ranks all candidates with context (`--no_rerank`), pace changes and laughter count a little (`--no_signals`) |
+| 📸 **Photo reels** | `--mode PHOTO_REEL --reel_type memories|travel|product|then_now|countdown|tribute`: skips blurry and duplicate photos, orders, times and captions them |
 | 🤖 **Multi-LLM Matrix** | Google Gemini, Local Ollama (`qwen2.5:7b`), DeepSeek, Groq, Anthropic, OpenRouter (`--llm_provider`) |
 
 ---
