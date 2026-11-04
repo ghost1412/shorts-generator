@@ -114,7 +114,8 @@ def apply_to_clip(video, words, hint=None, score_fn=None):
             if res.returncode != 0 or not os.path.isfile(tmp) or os.path.getsize(tmp) < 1000:
                 print(f"[Warning] Cold open failed: {res.stderr[-300:].strip()}")
                 return None
-            os.replace(tmp, video)
+            from engine.fsutil import replace_file
+            replace_file(tmp, video)
         finally:
             if os.path.exists(tmp):
                 os.remove(tmp)

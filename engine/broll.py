@@ -236,7 +236,8 @@ def render_cutaways(video, items, region, ffmpeg=None):
         if res.returncode != 0 or not os.path.isfile(tmp) or os.path.getsize(tmp) < 1000:
             print(f"[Warning] B-roll overlay failed: {res.stderr[-300:].strip()}")
             return False
-        os.replace(tmp, video)
+        from engine.fsutil import replace_file
+        replace_file(tmp, video)
         return True
     finally:
         if os.path.exists(tmp):

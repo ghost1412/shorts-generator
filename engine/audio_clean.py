@@ -127,10 +127,16 @@ def clean_audio(path, noise=True, compress=True, highpass=True, rnn_model=None, 
             if os.path.exists(tmp):
                 os.remove(tmp)
             return False
-        os.replace(tmp, path)
+        from engine.fsutil import replace_file
+        replace_file(tmp, path)
         return True
     except Exception as e:
         print(f"[Warning] --clean_audio failed for {os.path.basename(path)}: {e}")
+        try:
+            if os.path.exists(path + ".clean.mp4"):
+                os.remove(path + ".clean.mp4")         # never leave the temp copy behind
+        except OSError:
+            pass
         return False
 
 

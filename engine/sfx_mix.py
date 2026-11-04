@@ -113,7 +113,8 @@ def mix_events(video, events, volume_db=-16.0, folder=None):
             if res.returncode != 0 or not os.path.isfile(tmp) or os.path.getsize(tmp) < 1000:
                 print(f"[Warning] Sound effects failed: {res.stderr[-300:].strip()}")
                 return []
-            os.replace(tmp, video)
+            from engine.fsutil import replace_file
+            replace_file(tmp, video)
         finally:
             if os.path.exists(tmp):
                 os.remove(tmp)

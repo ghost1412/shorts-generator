@@ -165,7 +165,8 @@ def apply_brand(video_path, brand, output_path=None, ffmpeg_exe=None):
         if res.returncode != 0 or not os.path.exists(out):
             raise RuntimeError("FFmpeg branding failed: " + res.stderr[-400:])
     if output_path is None:
-        os.replace(out, video_path)
+        from engine.fsutil import replace_file
+        replace_file(out, video_path)
         return video_path
     return output_path
 
