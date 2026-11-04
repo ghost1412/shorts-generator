@@ -528,6 +528,9 @@ def build_ui():
                                 gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else ""))
                                 gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
                                            placeholder="No title or description was written (it needs an AI key or Ollama).")
+                                if c.get("title_variants"):
+                                    with gr.Accordion("Other title ideas", open=False):
+                                        gr.Textbox(value=review.variants_text(c), lines=3, interactive=False, show_label=False)
                                 rm = gr.Button("Remove this short", size="sm")
                                 rm.click(lambda cs, i=c["index"]: [x for x in cs if x["index"] != i], q_cards, q_cards)
                                 if c.get("can_rerender"):

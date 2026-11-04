@@ -6,6 +6,29 @@ from engine.media_gen import is_url, download_source_video_from_url
 from engine.pipeline import POOL_SIZE, print_clip_score_table
 
 
+def make_reel_chapters(highlights, transcript_path, reel_path, session_dir):
+    """YouTube chapters for the highlights reel (also written to <session>/chapters.txt), or [] when the reel is too short
+    or anything goes wrong: chapters are a bonus and must never fail the run."""
+    try:
+        from engine.analysis import probe_duration
+        from engine.chapters import chapters_for_reel, format_chapters
+        try:
+            with open(transcript_path, "r", encoding="utf-8") as f:
+                segments = json.load(f).get("segments", [])
+        except (OSError, ValueError, TypeError):
+            segments = []
+        total = probe_duration(reel_path) if reel_path and os.path.exists(reel_path) else None
+        chapters = chapters_for_reel(highlights, segments, total=total)
+        if chapters:
+            with open(os.path.join(session_dir, "chapters.txt"), "w", encoding="utf-8") as f:
+                f.write(format_chapters(chapters) + "\n")
+            print(f"[Log] {len(chapters)} YouTube chapters written to chapters.txt and the description")
+        return chapters
+    except Exception as e:
+        print(f"[Warning] Could not build chapters: {e}")
+        return []
+
+
 def run(args, target_bitrate, target_preset):
     import time
     from engine.video_gen import extract_segments
@@ -290,12 +313,20 @@ def run(args, target_bitrate, target_preset):
         summary_context = " ".join([h.get('context', h.get('reason', '')) for h in highlights[:5]])
         meta = generate_viral_metadata(summary_context, mode="STORY", category="gaming")
         filename = "mashup_reel.mp4" if getattr(args, "mashup", False) else "highlight_reel.mp4"
-        highlights_meta.append({
+        reel_item = {
             "file": filename,
             "title": meta.get('title', 'Viral Mashup' if getattr(args, "mashup", False) else 'Viral Highlight Reel'),
             "description": meta.get('description', ''),
             "tags": meta.get('tags', [])
-        })
+        }
+        if not getattr(args, "mashup", False):
+            reel_chapters = make_reel_chapters(highlights, transcript_path, extracted_files[0] if extracted_files else None, session_dir)
+            if reel_chapters:
+                from engine.chapters import format_chapters
+                block = format_chapters(reel_chapters)
+                reel_item["chapters"] = reel_chapters
+                reel_item["description"] = (reel_item["description"].rstrip() + "\n\nChapters:\n" + block).strip()
+        highlights_meta.append(reel_item)
     else:
         from concurrent.futures import ThreadPoolExecutor
         from engine.social_gen import clip_transcript_text
@@ -368,7 +399,8 @@ def run(args, target_bitrate, target_preset):
                 "file": os.path.basename(extracted_files[i]),
                 "title": meta.get('title', 'Viral Moment'),
                 "description": meta.get('description', ''),
-                "tags": meta.get('tags', [])
+                "tags": meta.get('tags', []),
+                "title_variants": meta.get('title_variants', [])
             }
 
         with ThreadPoolExecutor(max_workers=min(POOL_SIZE, len(highlights))) as executor:
@@ -410,6 +442,8 @@ def run(args, target_bitrate, target_preset):
             },
             "clips": []
         }
+        if highlights_meta and highlights_meta[0].get("chapters"):
+            output_json_data["chapters"] = highlights_meta[0]["chapters"]
         for i, h in enumerate(highlights):
             clip_path = extracted_files[i] if i < len(extracted_files) else ""
             meta_item = highlights_meta[i] if i < len(highlights_meta) else {}
@@ -425,6 +459,7 @@ def run(args, target_bitrate, target_preset):
                 "title": meta_item.get("title", f"Clip #{i+1}"),
                 "description": meta_item.get("description", ""),
                 "tags": meta_item.get("tags", []),
+                "title_variants": meta_item.get("title_variants", []),
                 "thumbnail": os.path.join(os.path.dirname(clip_path), meta_item["thumbnail"]) if meta_item.get("thumbnail") and clip_path else None
             })
         with open(args.output_json, "w", encoding="utf-8") as f_out:

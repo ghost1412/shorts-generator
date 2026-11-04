@@ -37,10 +37,11 @@ def build_fields(item, platforms, user, scheduled_at=None, timezone=None):
     """Form fields for one clip. TikTok/Instagram get a caption with hashtags, YouTube a clean title."""
     title = (item.get("title") or "New short").strip()
     tags = hashtags(item.get("tags"))
-    caption = f"{title} {tags}".strip()
+    from engine.platform_limits import LIMITS, join_caption, truncate_words
+    caption = join_caption(title, tags, LIMITS["tiktok"]["caption"])      # cut at a word, hashtags stay whole
     fields = [("user", user), ("title", title), ("description", item.get("description") or title),
-              ("tiktok_title", caption[:2200]), ("instagram_title", caption[:2200]),
-              ("youtube_title", title[:100]), ("async_upload", "true")]
+              ("tiktok_title", caption), ("instagram_title", join_caption(title, tags, LIMITS["instagram"]["caption"])),
+              ("youtube_title", truncate_words(title, LIMITS["youtube"]["title"])), ("async_upload", "true")]
     fields += [("platform[]", p) for p in platforms]
     if scheduled_at:
         fields.append(("scheduled_date", scheduled_at.strftime("%Y-%m-%dT%H:%M:%S")))

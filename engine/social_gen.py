@@ -135,6 +135,7 @@ def _fallback_clip_metadata(text, hook):
         "title": first[:80],
         "description": f"{text[:200].strip()}\n\nFollow for more. #shorts",
         "tags": ["shorts", "clips", "viral"],
+        "title_variants": [],
     }
 
 
@@ -143,6 +144,7 @@ def generate_clip_metadata(transcript_text, hook=None, user_context=None):
     text = (transcript_text or "").strip()
     if not text:
         return _fallback_clip_metadata("", hook)
+    from engine import title_variants
     from engine.script_gen import get_llm_response, robust_json_parse
     ctx = f"\nExtra context: {user_context}" if user_context else ""
     prompt = (
@@ -153,14 +155,17 @@ def generate_clip_metadata(transcript_text, hook=None, user_context=None):
         "- title: under 60 chars, a curiosity-driven hook taken from the clip's core claim, at most one emoji\n"
         "- description: 2 short lines, the first a question or hook, then 3-5 relevant hashtags\n"
         "- tags: 10-15 SEO keywords drawn from the topics actually discussed\n"
-        'Return ONLY JSON: {"title": "...", "description": "...", "tags": ["..."]}'
+        + title_variants.PROMPT_RULES +
+        'Return ONLY JSON: {"title": "...", "description": "...", "tags": ["..."], ' + title_variants.PROMPT_SCHEMA + '}'
     )
     try:
-        parsed = robust_json_parse(get_llm_response(prompt, temperature=0.7, max_tokens=800, timeout=30))
+        parsed = robust_json_parse(get_llm_response(prompt, temperature=0.7, max_tokens=1000, timeout=30))
         if isinstance(parsed, dict) and parsed.get("title"):
             parsed["title"] = str(parsed["title"])[:95]
             parsed.setdefault("description", "")
             parsed.setdefault("tags", [])
+            # alternative titles: only the ones whose numbers and names the clip actually says
+            parsed["title_variants"] = title_variants.parse_variants(parsed.get("title_variants"), text, parsed["title"], hook)
             return parsed
     except Exception as e:
         print(f"[Warning] Clip metadata generation failed ({e}); using transcript-based fallback.")
