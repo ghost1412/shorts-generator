@@ -15,6 +15,20 @@ LOCAL_DIR = os.path.join("assets", "backgrounds", "local")
 STOCK_QUERY = "oddly satisfying"
 
 
+DEFAULT_CAPTION_Y = 1150   # Remotion caption top edge used by every layout (--subtitle_y_pos default)
+SPLIT_CAPTION_Y = 740      # top edge just above the seam (y=960): lower part of the clip half
+
+
+def split_caption_y(requested):
+    """Remotion caption position for the split layout.
+
+    The default (1150) lands on the filler half, so it moves to just above the seam. An explicit
+    --subtitle_y_pos is kept as the user set it.
+    """
+    return SPLIT_CAPTION_Y if requested in (None, DEFAULT_CAPTION_Y) else requested
+
+
+
 def find_local_filler(local_dir=LOCAL_DIR, rng=random):
     """A random video from the local background library, or None."""
     files = [p for p in glob.glob(os.path.join(local_dir, "*")) if p.lower().endswith(VIDEO_EXTS)]

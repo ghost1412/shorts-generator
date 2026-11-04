@@ -406,6 +406,7 @@ def run(args, target_bitrate, target_preset):
                 "use_remotion": bool(args.use_remotion), "caption_style": args.caption_style,
                 "subtitle_y_pos": args.subtitle_y_pos, "brand": getattr(args, "brand", None),
                 "caption_lang": getattr(args, "caption_lang", None),
+                "clean_audio": bool(getattr(args, "clean_audio", False)), "hook_overlay": bool(getattr(args, "hook_overlay", False)),
             },
             "clips": []
         }

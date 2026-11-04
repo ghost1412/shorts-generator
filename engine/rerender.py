@@ -110,10 +110,17 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         extra["remove_fillers"] = True             # tight padding, so a short cut is not stitched back together
 
     from engine.video_gen import extract_segments
+    window = {"start": start, "end": end}
+    hook_on = bool(settings.get("hook_overlay") and clip.get("hook"))
+    if hook_on:
+        window["hook_text"] = clip["hook"]           # --hook_overlay: the same title again
     tmp = tempfile.mkdtemp(prefix="rerender_", dir=session_dir)
+    prev_hook_env = os.environ.get("SHORTSFLOW_HOOK_OVERLAY")
+    if hook_on:
+        os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
     try:
         files = extract_segments(
-            source, [{"start": start, "end": end}], transcript, tmp, mode=mode, bitrate="12M", preset="medium", codec="libx264",
+            source, [window], transcript, tmp, mode=mode, bitrate="12M", preset="medium", codec="libx264",
             interest_points=interest, silence_intervals=silence, tighten_mode=tighten_mode,
             use_remotion=bool(settings.get("use_remotion")), orientation=detect_orientation(source) if settings.get("smart_crop") else "landscape",
             letterbox_crop=detect_letterbox(source) if settings.get("smart_crop") else None,
@@ -121,6 +128,9 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         if not files or not os.path.exists(files[0]):
             raise RuntimeError("The re-render produced no video.")
         new_clip = files[0]
+        if settings.get("clean_audio"):              # --clean_audio: a re-render must not fall back to the raw sound
+            from engine.audio_clean import clean_audio
+            clean_audio(new_clip)
         brand_json = settings.get("brand")
         if use_brand and brand_json and os.path.exists(brand_json):
             from engine.branding import apply_brand, load_brand
@@ -137,6 +147,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         shutil.move(new_clip, target)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+        if hook_on:
+            if prev_hook_env is None:
+                os.environ.pop("SHORTSFLOW_HOOK_OVERLAY", None)
+            else:
+                os.environ["SHORTSFLOW_HOOK_OVERLAY"] = prev_hook_env
 
     thumb = clip.get("thumbnail")
     if thumb and not os.path.isabs(thumb):
@@ -188,7 +203,17 @@ def undo_rerender(session_dir, clip_index):
     return True
 
 
+def _utf8_console():
+    """Progress lines contain emoji; a cp1252 pipe (Windows, redirected output) would turn them into a failed re-render."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv=None):
+    _utf8_console()
     p = argparse.ArgumentParser(description="Re-render one clip with another caption style and/or trim window.")
     p.add_argument("session_dir")
     p.add_argument("clip_index", type=int)

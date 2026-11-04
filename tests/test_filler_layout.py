@@ -77,3 +77,9 @@ def test_extract_without_filler_falls_back_to_single(monkeypatch, tmp_path):
     monkeypatch.setattr(filler, "download_stock_filler", lambda out: None)
     cmd = _run_extract(monkeypatch, tmp_path, "split_filler", None)[0]
     assert "-vf" in cmd and "-filter_complex" not in cmd
+
+
+def test_split_caption_y_moves_default_above_the_seam_only():
+    assert filler.split_caption_y(1150) == filler.SPLIT_CAPTION_Y < 960
+    assert filler.split_caption_y(None) == filler.SPLIT_CAPTION_Y
+    assert filler.split_caption_y(300) == 300   # explicit user choice is kept

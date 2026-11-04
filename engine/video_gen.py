@@ -2622,6 +2622,9 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         if not filler_path:
             print("[Warning] split_filler: no filler footage found (--filler_video, assets/backgrounds/local or "
                   "PEXELS_API_KEY); using the regular single crop.")
+        else:
+            from engine.filler import split_caption_y
+            subtitle_y_pos = split_caption_y(subtitle_y_pos)   # keep Remotion captions off the filler half
 
     for i, hi in enumerate(highlights):
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
