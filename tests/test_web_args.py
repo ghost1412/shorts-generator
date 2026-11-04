@@ -215,3 +215,9 @@ def test_edit_args():
     assert web_args.edit_args("none") == [] and web_args.edit_args("") == []
     assert web_args.edit_args("hype", "hyped") == ["--auto_edit", "hype", "--edit_strength", "hyped"]
     assert web_args.edit_args("vlog", "loud") == ["--auto_edit", "vlog", "--edit_strength", "medium"]
+
+
+def test_stat_pops_flag_in_extras():
+    from shortsflow import web_args
+    assert "--stat_pops" in web_args.extras_args(stat_pops=True) and "--stat_pops" not in web_args.extras_args()
+    assert "--stat_pops" not in web_args.extras_args(use_remotion=False, stat_pops=True)    # drawn by Remotion only
