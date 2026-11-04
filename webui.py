@@ -152,7 +152,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     yield from _run(cmd)
 
 
-def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto"):
+def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto"):
     """Dub tab: translate a video's speech and re-voice it. Yields (status, log, video, srt)."""
     import time
     from shortsflow import onboarding
@@ -163,9 +163,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
         raise gr.Error("Choose the language to dub into.")
     session = os.path.join(ROOT, "sessions", time.strftime("dub_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session)]
-    if tts_provider and tts_provider != "auto":
-        cmd += ["--tts_provider", tts_provider]
+    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session, tts_provider, voice)]
     progress, seen = onboarding.Progress(steps=onboarding.DUB_STEPS), 0
     status = progress.message
     yield status, "", None, None
@@ -409,6 +407,22 @@ def cut_words_handler(index):
     return handler
 
 
+def tick_phrase_handler(index):
+    """Tick every occurrence of a typed phrase among the words shown for short `index` (keeps the words already ticked)."""
+    def handler(cards, phrase, ticked):
+        from shortsflow import word_edit
+        card = next((c for c in cards or [] if c["index"] == index), None)
+        if not card:
+            raise gr.Error("This short cannot be edited (the data of its run is missing).")
+        words = word_edit.load_words(card["session_dir"])
+        shown = [i for _label, i in word_edit.choices_for(words, card.get("start"), card.get("end"))[0]]
+        hits = word_edit.phrase_ticks(words, shown, phrase)
+        if not hits:
+            return gr.update(), "That phrase is not in this short." if (phrase or "").strip() else "Type the words to find first."
+        return gr.update(value=sorted(set(ticked or []) | set(hits))), "Ticked. Press 'Cut the ticked words' to remove them."
+    return handler
+
+
 def undo_handler(index):
     def handler(cards):
         return undo_card(cards, index)
@@ -447,6 +461,10 @@ def _render_settings(with_aspect=True):
     return [caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider]
 
 
+# the word tick boxes of a long short are a long list: keep them in a box that scrolls
+WORDS_CSS = "<style>.sf-words { max-height: 230px; overflow-y: auto; }</style>"
+
+
 def build_ui():
     tolerate_missing_ffprobe()
     with gr.Blocks(title="ShortsFlow AI Studio", **_blocks_theme()) as demo:
@@ -455,6 +473,7 @@ def build_ui():
             "Open-source, local-first Opus Clip alternative. "
             "[GitHub](https://github.com/ghost1412/shorts-generator) · ⭐ Star if it helps!"
         )
+        gr.HTML(WORDS_CSS)
         with gr.Tabs():
             with gr.Tab("🚀 Start here"):
                 gr.Markdown("### Make shorts from a video in one click\n"
@@ -554,8 +573,13 @@ def build_ui():
                                         choices, ticked, hint = word_choices(c)
                                         if choices:
                                             gr.Markdown(f"**Cut words out.** Tick the words you do not want, then press the button. {hint}")
-                                            wd = gr.CheckboxGroup(choices, value=ticked, label="Words in this short", interactive=True)
+                                            wd = gr.CheckboxGroup(choices, value=ticked, label="Words in this short", interactive=True,
+                                                                  elem_classes=["sf-words"])
+                                            with gr.Row():
+                                                wfind = gr.Textbox(label="Or type a phrase to tick", placeholder="for example: you know what", scale=3)
+                                                wfind_btn = gr.Button("Tick phrase", size="sm", scale=1)
                                             wgo = gr.Button("Cut the ticked words", size="sm", variant="secondary")
+                                            wfind_btn.click(tick_phrase_handler(c["index"]), [q_cards, wfind, wd], [wd, q_status])
                                             wgo.click(cut_words_handler(c["index"]), [q_cards, wd, st, t0, t1], [q_cards, q_status])
 
                 with gr.Row():
@@ -632,6 +656,10 @@ def build_ui():
                         d_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
                         d_lang = gr.Dropdown(web_args.dub_languages(), value="es", label="Dub into")
                         d_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
+                        with gr.Row():
+                            d_voice = gr.Dropdown(web_args.DUB_VOICE_CHOICES, value="auto", label="Voice")
+                            d_tts = gr.Dropdown(web_args.DUB_PROVIDER_CHOICES, value="auto", label="Voice engine",
+                                                info="Automatic uses Edge online; Kokoro runs on this PC but only speaks English.")
                         d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
                         d_btn = gr.Button("🌍 Dub my video", variant="primary")
                     with gr.Column():
@@ -640,7 +668,7 @@ def build_ui():
                         d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn], [d_status, d_log, d_video, d_srt])
+                d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice], [d_status, d_log, d_video, d_srt])
 
             with gr.Tab("🪄 Generate from an idea"):
                 with gr.Row():

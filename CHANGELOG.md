@@ -19,6 +19,13 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 - **`--auto_zoom` (punch-in zoom)**: a subtle zoom on the picture at numbers, strong words and loud moments (quick punch, about 8%) and a slow push across sentences that start after a pause (about 5%). Animated captions, the hook title and the brand never move, because only the picture layer zooms. Needs `--use_remotion`; skipped with `--layout split_filler` (clip and filler are one picture there, so zooming would move the seam). A checkbox in both Extras sections of the browser app; kept when you re-render a short. Moments come from `engine/auto_zoom.py`.
 - **"Dub a video" tab**: pick a video or link, the language to dub into and the language spoken, optionally burn the translated subtitles in; shows plain-language progress and gives you the dubbed video and the translated `.srt`.
 
+- **Dub tab: voice and voice engine**: choose female or male (`--dub_voice`) and the engine (automatic, Edge online, or Kokoro on this PC for English).
+- **Click-to-cut words: type a phrase to tick it** (any script, no spaces needed for Chinese or Japanese), and the word list now scrolls inside a fixed-height box instead of making a very long panel.
+
+### Improved
+- The "UI screenshots" workflow now also shows the Extras sections, the Dub tab and the word tick boxes (with a typed phrase ticked), from a small generated transcript.
+- Checked MINIMAL and BOUNCE captions with Arabic plus Chinese / Japanese in real renders: joined Arabic letters, CJK from the per-render subset font. The pinned Korean font hash was confirmed against a real download.
+
 ### Fixed
 - The caption-language hint in the browser app no longer says Japanese, Chinese, Korean and Arabic are unsupported.
 - `--layout split_filler` with animated (Remotion) captions: the captions sat on the filler half (default position 1150). They now sit just above the seam in the lower part of the clip half. An explicit `--subtitle_y_pos` is kept as you set it.

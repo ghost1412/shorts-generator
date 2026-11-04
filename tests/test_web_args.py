@@ -140,6 +140,24 @@ def test_dub_builds_the_command_and_reports_the_result(webui, tmp_path):
     assert video.endswith("talk_dub_es.mp4") and srt.endswith("talk_es.srt")
 
 
+def test_dub_voice_and_engine_choices_become_flags(webui):
+    base = web_args.dub_args("a.mp4", "es")
+    assert "--dub_voice" not in base and "--tts_provider" not in base
+    assert web_args.dub_args("a.mp4", "es", voice="male")[-2:] == ["--dub_voice", "male"]
+    both = web_args.dub_args("a.mp4", "en", tts_provider="kokoro", voice="female")
+    assert both[both.index("--dub_voice") + 1] == "female" and both[both.index("--tts_provider") + 1] == "kokoro"
+    assert [v for _, v in web_args.DUB_VOICE_CHOICES] == ["auto", "female", "male"]
+    assert [v for _, v in web_args.DUB_PROVIDER_CHOICES] == ["auto", "edgetts", "kokoro"]
+
+    def fake_run(cmd):
+        webui.seen["cmd"] = cmd
+        yield "[Error] stop\n", []
+    webui._run = fake_run
+    _drain(webui.dub_video(None, "http://x/y", "es", "en", False, "kokoro", "male"))
+    cmd = webui.seen["cmd"]
+    assert cmd[cmd.index("--dub_voice") + 1] == "male" and cmd[cmd.index("--tts_provider") + 1] == "kokoro"
+
+
 def test_dub_failure_shows_the_engine_error(webui):
     def fake_run(cmd):
         yield "[Error] The video is already in 'es'; choose another --target_lang.\n", []

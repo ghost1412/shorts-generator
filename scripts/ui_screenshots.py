@@ -47,6 +47,14 @@ for i, (title, score, color) in enumerate([("Which of these three facts is the l
                   "viral_score": score, "hook": title, "reason": "Strong opening line and a clear payoff" if score > 80 else "Decent moment, slower start",
                   "title": title, "description": "A quick quiz short: spot the lie before the answer comes up.",
                   "tags": ["facts", "quiz", "spotthelie"], "thumbnail": None})
+# a word-timed transcript covering both clips (12 s .. 48 s), so the click-to-cut word boxes show up in the edit panel
+_TEXT = ("which of these three facts is the lie the first one says that octopuses have three hearts the second says honey never "
+         "spoils and the third says goldfish forget everything after three seconds only one of them is false so take a moment "
+         "and think before the answer comes up on the screen you know what the sea god a roman emperor declared war on was "
+         "neptune and the emperor even ordered his soldiers to collect seashells as the spoils of that war").split()
+_words = [{"word": " " + w, "start": round(12.0 + 0.5 * i, 2), "end": round(12.0 + 0.5 * i + 0.4, 2)} for i, w in enumerate(_TEXT)]
+with open(os.path.join(session, "transcript.json"), "w", encoding="utf-8") as f:
+    json.dump({"language": "en", "segments": [{"start": _words[0]["start"], "end": _words[-1]["end"], "text": " ".join(_TEXT), "words": _words}]}, f)
 with open(os.path.join(session, "results.json"), "w", encoding="utf-8") as f:
     json.dump({"source_video": "demo.mp4", "session_dir": session, "total_clips": 2,
                "settings": {"extract_mode": "shorts", "layout": "single", "smart_crop": True, "tighten": True, "tighten_mode": "cut",
@@ -98,8 +106,24 @@ try:
         page.wait_for_timeout(1500)
         page.screenshot(path=os.path.join(out_dir, "01_start_here.png"), full_page=True)
 
+        # the new options: Extras on Start here, the Dub tab, and Extras on Clip (advanced)
+        page.get_by_text("Extras (optional)").first.click()
+        page.get_by_text("Clean up the sound").first.wait_for(timeout=15000)
+        page.screenshot(path=os.path.join(out_dir, "01c_extras.png"), full_page=True)
+        page.get_by_text("Extras (optional)").first.click()
+        page.get_by_role("tab", name="Dub a video").click()
+        page.get_by_text("Re-voice a video in another language").wait_for(timeout=15000)
+        assert page.get_by_label("Voice engine").count() >= 1 and page.get_by_label("Voice", exact=True).count() >= 1
+        page.screenshot(path=os.path.join(out_dir, "01d_dub_tab.png"), full_page=True)
+        page.get_by_role("tab", name="Clip (advanced)").click()
+        page.locator("text=Extras >> visible=true").first.click()
+        page.wait_for_timeout(600)
+        page.screenshot(path=os.path.join(out_dir, "01e_clip_extras.png"), full_page=True)
+        page.get_by_role("tab", name="Start here").click()
+        page.wait_for_timeout(300)
+
         page.get_by_text("Open an earlier run").click()
-        page.locator('input[aria-label="Earlier runs"]').click()      # the input itself: clicking the label does not open the list in Gradio 5
+        page.locator('input[aria-label="Earlier runs"]').click()     # the input itself: clicking the label does not open the list in Gradio 5
         page.wait_for_timeout(500)
         page.screenshot(path=os.path.join(out_dir, "01b_dropdown.png"), full_page=True)
         page.get_by_role("option", name="3 Nov 2026, 12:00 - 2 shorts").click()
@@ -123,6 +147,15 @@ try:
         assert page.get_by_label("Start (seconds in the original video)").first.input_value() in ("12", "12.0")
         page.screenshot(path=os.path.join(out_dir, "02b_edit_panel.png"), full_page=True)
         crop(page, "webui_edit.jpg", page.get_by_text("Your shorts", exact=True), page.get_by_role("button", name="Undo last change").first)
+        # click-to-cut words: the boxes are there, a typed phrase ticks its words
+        page.get_by_text("Words in this short").first.wait_for(timeout=15000)
+        assert page.get_by_role("checkbox").count() > 40, "the word tick boxes did not show"
+        page.get_by_label("Or type a phrase to tick").first.fill("honey never spoils")
+        page.get_by_role("button", name="Tick phrase").first.click()
+        page.wait_for_timeout(1200)
+        ticked = page.locator(".sf-words input[type=checkbox]:checked").count()
+        assert ticked == 3, f"the phrase should tick 3 words, ticked {ticked}"
+        page.screenshot(path=os.path.join(out_dir, "02c_word_cuts.png"), full_page=True)
         page.get_by_text("Edit this short: style, start and end").first.click()
 
         page.get_by_role("button", name="Remove this short").first.click()

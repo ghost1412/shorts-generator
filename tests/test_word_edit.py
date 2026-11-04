@@ -118,3 +118,31 @@ def test_browser_app_passes_the_ticked_words_as_cuts(tmp_path, monkeypatch):
     assert len(seen["cuts"]) == 1 and seen["cuts"][0][0] < 5.5 < seen["cuts"][0][1]
     with pytest.raises(Exception):
         list(webui.cut_words_handler(7)([card], [1], None, 5.0, 9.0))
+
+
+def test_phrase_ticks_match_across_case_punctuation_and_without_spaces():
+    words = [{"word": w, "start": float(i), "end": i + 0.5} for i, w in enumerate("So the cat, sat. The cat left".split())]
+    assert word_edit.phrase_ticks(words, range(len(words)), "the CAT") == [1, 2, 4, 5]
+    assert word_edit.phrase_ticks(words, [0, 1, 2, 3], "the cat") == [1, 2]     # only the words the boxes show
+    assert word_edit.phrase_ticks(words, range(len(words)), "dog") == []
+    assert word_edit.phrase_ticks(words, range(len(words)), "  ") == []
+    cjk = [{"word": w, "start": float(i), "end": i + 0.5} for i, w in enumerate(["今天", "我们", "来", "看"])]
+    assert word_edit.phrase_ticks(cjk, range(4), "我们来") == [1, 2]
+    ar = [{"word": w, "start": float(i), "end": i + 0.5} for i, w in enumerate(["مرحبا", "بكم", "جميعا"])]
+    assert word_edit.phrase_ticks(ar, range(3), "بكم جميعا") == [1, 2]
+
+
+def test_browser_app_ticks_a_typed_phrase_and_keeps_earlier_ticks(tmp_path):
+    pytest.importorskip("gradio")
+    import webui
+    seg = {"words": [dict(w, word=" " + w["word"]) for w in WORDS]}
+    (tmp_path / "transcript.json").write_text(json.dumps({"segments": [seg]}))
+    card = {"index": 1, "session_dir": str(tmp_path), "start": 5.0, "end": 9.0, "cuts": []}
+    update, msg = webui.tick_phrase_handler(1)([card], "so basically", [0])
+    assert update["value"] == [0, 2, 3] and msg.startswith("Ticked")
+    _update, msg = webui.tick_phrase_handler(1)([card], "nothing like it", [])
+    assert "not in this short" in msg
+    _update, msg = webui.tick_phrase_handler(1)([card], "", [])
+    assert "Type the words" in msg
+    with pytest.raises(Exception):
+        webui.tick_phrase_handler(9)([card], "so", [])

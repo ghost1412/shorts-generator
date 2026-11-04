@@ -6,6 +6,7 @@ without Gradio or a video.
 """
 import json
 import os
+import re
 
 from engine import transcript_edit
 
@@ -41,6 +42,33 @@ def choices_for(words, start, end, cuts=None):
     choices = [(w["word"], i) for i, w in window]
     ticked = [i for i, w in window if _inside(w, cuts or [])]
     return choices, ticked
+
+
+def _key(text):
+    """Comparison form that also works for non-Latin scripts: lower-case letters and digits of any script."""
+    return re.sub(r"[\W_]+", "", (text or "").lower())
+
+
+def phrase_ticks(words, window, phrase):
+    """Indices (positions in `words`) of every occurrence of `phrase` among the window's words, for the 'select phrase' box.
+
+    `window` is the list of word indices the tick boxes show. Matching ignores case and punctuation and works without
+    spaces (Chinese / Japanese words are 1-3 characters), by joining whole words until the phrase length is reached."""
+    target = _key(phrase)
+    if not target:
+        return []
+    window = [i for i in window if 0 <= i < len(words)]
+    found = []
+    for a in range(len(window)):
+        joined = ""
+        for b in range(a, len(window)):
+            joined += _key(words[window[b]]["word"])
+            if joined == target:
+                found.extend(window[a:b + 1])
+                break
+            if len(joined) >= len(target) or not target.startswith(joined):
+                break
+    return sorted(set(found))
 
 
 def spans_from_ticks(words, ticked):
