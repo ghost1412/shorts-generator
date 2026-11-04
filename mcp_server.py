@@ -299,7 +299,7 @@ def handle_tool_call(tool_name: str, args: dict) -> dict:
         try:
             from engine.social_gen import generate_viral_metadata
             metadata = generate_viral_metadata([{"fact": topic}], mode=mode, category=category)
-        except Exception as e:
+        except Exception:
             metadata = {
                 "title": f"Unbelievable {topic} Revealed! 💥 #Shorts",
                 "description": f"Check out this amazing video on {topic}! Like & Subscribe for more daily videos.",

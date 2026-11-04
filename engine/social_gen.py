@@ -1,14 +1,9 @@
 import os
 import requests
-import json
 import re
 from dotenv import load_dotenv
-import google.oauth2.credentials
-import google_auth_oauthlib.flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 
 load_dotenv()
 HF_API_KEY = os.getenv("HF_API_KEY")
@@ -18,13 +13,7 @@ def generate_pinterest_metadata(content_info, mode="FACTS", category="science"):
     Generates Pinterest-optimized metadata focusing on long-term search SEO.
     Pinterest metadata prioritizes keywords in titles and clear, helpful descriptions.
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
     
-    model = "meta-llama/Llama-3.1-8B-Instruct"
     
     if mode == "FACTS":
         input_text = "\n".join([f"- {f['fact']}" for f in content_info])
@@ -182,13 +171,7 @@ def generate_viral_metadata(content_info, mode="FACTS", category="science", user
     """
     Generates viral, content-accurate metadata for YouTube Shorts as a "Channel Manager".
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
     
-    model = "meta-llama/Llama-3.1-8B-Instruct"
     
     context_str = f" Context: {user_context}" if user_context else ""
     

@@ -16,7 +16,7 @@ def build_standalone_exe():
     
     # 1. Ensure PyInstaller is installed
     try:
-        import PyInstaller
+        import PyInstaller  # noqa: F401
         print("[Log] PyInstaller is already installed.")
     except ImportError:
         print("[Log] Installing PyInstaller...")

@@ -11,7 +11,6 @@ def test_category(category):
     try:
         res = generate_mixed_facts(category)
         facts = res["facts"]
-        hook = res["hook"]
         if not facts or len(facts) < 3:
             print(f"❌ Error: {category} returned less than 3 facts.")
             return False

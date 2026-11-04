@@ -1,4 +1,3 @@
-import requests
 from engine import comfy_bridge
 
 def list_ckpts():

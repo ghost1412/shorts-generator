@@ -23,7 +23,6 @@ def verify_interactivity():
         test_video = "assets/fallback.mp4" 
 
     # Mock voice and subs if they don't exist
-    voice_path = "assets/test_voice.mp3"
     subs_path = "assets/test_subs.json"
     
     # We'll assume the user has run the main script at least once or we use existing ones

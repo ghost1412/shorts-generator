@@ -3,7 +3,6 @@ import json
 import re
 import random
 import os
-import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -58,7 +57,7 @@ Choose the SINGLE BEST visual color grade filter from this list:
 
 Respond with raw JSON: {{"filter": "<preset_name>"}}
 """
-        response = get_llm_response(llm_prompt, system_prompt="You are a color grading expert. Return raw JSON only.")
+        get_llm_response(llm_prompt, system_prompt="You are a color grading expert. Return raw JSON only.")
     except Exception as e:
         print(f"[Warning] AI Auto Filter fallback: {e}")
         
@@ -1272,25 +1271,6 @@ def generate_funny_news(category="general", tone="funny", persona=None):
         elif category == "sports":
             rss_feeds.append("https://www.espn.com/espn/rss/news")
     
-    # 🟢 UPGRADE: Persona-Driven Funny News
-    persona_prompt = ""
-    if persona:
-        p = persona.lower()
-        if p == "rabbit":
-            persona_prompt = "ACT AS A HYPERACTIVE RABBIT: Use words like 'Boing!', 'Crunchy!', 'Hop to it!', and be EXTREMELY energetic and fast-paced."
-        elif p == "robot":
-            persona_prompt = "ACT AS A SARCASTIC ROBOT: Use technical jargon, beep-boop sounds, and be cold, calculated, and slightly condescending."
-        elif p == "squirrel":
-            persona_prompt = "ACT AS A PANICKED SQUIRREL: Mention nuts, be very distracted, use short sentences, and act like everything is a crisis."
-        elif p == "superhero":
-            persona_prompt = "ACT AS A BOOMING SUPERHERO: Be heroic, mention justice, use epic metaphors, and act like you're saving the world with this news."
-        elif p == "old_man":
-            persona_prompt = "ACT AS A GRUMPY OLD MAN: Complain about 'kids these days', mention 'the good old days', and be skeptical of everything."
-        elif p == "mafia_cat":
-            persona_prompt = "ACT AS A MAFIA CAT BOSS: Speak with a raspy voice, use 'family' metaphors, mention 'making an offer', and be cool, intimidating, and mysterious."
-        else:
-            persona_prompt = f"ACT AS A {persona.upper()}: Use appropriate slang, interjections, and personality traits."
-    
     from engine import news_feed
     headlines = []
     cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
@@ -1389,11 +1369,6 @@ def generate_movie_recap(title):
     """
     Generates a dramatic, high-tension cinematic recap/summary.
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
 
     prompt = f"""Generate a high-tension, cinematic STORY RECAP for: "{title}".
     
@@ -1429,11 +1404,6 @@ def generate_sound_challenge(category="animals"):
     """
     Generates a 'Guess the Sound' challenge script.
     """
-    url = "https://router.huggingface.co/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {HF_API_KEY}",
-        "Content-Type": "application/json"
-    }
     
     prompt = f"""Generate a 'Guess the Sound' viral challenge for category: {category}.
 

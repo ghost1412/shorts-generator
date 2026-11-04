@@ -1,7 +1,5 @@
 import os
 import sys
-import json
-from unittest.mock import patch, MagicMock
 
 # Add current dir to path
 sys.path.append(os.getcwd())
