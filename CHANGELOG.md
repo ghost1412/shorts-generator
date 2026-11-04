@@ -27,6 +27,25 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 - Checked MINIMAL and BOUNCE captions with Arabic plus Chinese / Japanese in real renders: joined Arabic letters, CJK from the per-render subset font. The pinned Korean font hash was confirmed against a real download.
 
 ### Fixed
+- **`--srt` wrote nothing** (it imported a function from the wrong module and the error was hidden); SRT segments are also cut per clip with the right offsets.
+- **`--add_commentary` and `--show_banner` never applied** (a misplaced `import subprocess`).
+- **`--mode STORY` crashed on every run**: `--setting` was read but never defined. Added.
+- **`--batch_file` now carries all your options** (the old loop that dropped them and shadowed the tested one is gone); topic lines still work with a `--mode`.
+- **A failed clip no longer shifts the others**: titles, thumbnails, SRTs and `results.json` stay with their own clip.
+- **Tall and portrait sources work**: any shape is cropped to 9:16 (a 1080x2400 phone video used to fail with "No videos were generated", 4:5 video was stretched).
+- **Smart crop follows a moving subject in seconds** instead of about ten (smoothing was applied twice).
+- **Sound effects played at the wrong speed** (synthesized whoosh/rain were twice as long and an octave low).
+- **`--quality` and `--bitrate` now reach the animated-caption (Remotion) output** (medium is still CRF 16).
+- **`--caption_lang` no longer switches off `--remove_fillers`**; chapters are found for URL sources; brand-kit errors show up before the render, and `--use_cache` no longer stamps the logo or normalises the audio twice.
+- **Re-render keeps** caption emoji, the colour grade, filler removal and ad-hoc `--logo/--handle/--end_card`.
+- **Number handling in narration**: `3.14`, `3,000` and `10:30` are no longer split by the dramatic pauses.
+- **Custom image backgrounds** become real videos; the emoji-guess loop and ambient audio no longer use MoviePy 1 calls that failed silently.
+- **Photo reel without `--music`** no longer stops with "Voice audio path not found" (bundled track or silence).
+- **Factual script modes (true crime, Bible, article, Top 5, ...) no longer publish a canned script** when no LLM answers: the run fails so a scheduled run is flagged. In AUTO, article/product/Bible/true-crime picks fall back to FACTS when there is no topic.
+- **Desktop GUI** only sends values the command line accepts (vibes, extraction formats), sends the chosen LLM provider, and no longer offers the non-existent Rank-It mode.
+- **MCP**: `extract_clips` without a source gives a clear error, errors always get a reply, and finished clips are reported with their real paths.
+- **`--cookies_from_browser` no longer force-closes Edge/Chrome** unless `SHORTSFLOW_CLOSE_BROWSER=1`.
+- `--enhance_audio` is now `--clean_audio` and `--enable_zoom` is `--auto_zoom`; `--llm_model` works; `--auto_ducking`, `--sfx_preset` and `--aspect_ratio` say they are not implemented instead of silently doing nothing; help texts for `--min_duration`, `--edit_transcript`, `--subtitle_y_pos` corrected.
 - The caption-language hint in the browser app no longer says Japanese, Chinese, Korean and Arabic are unsupported.
 - `--layout split_filler` with animated (Remotion) captions: the captions sat on the filler half (default position 1150). They now sit just above the seam in the lower part of the clip half. An explicit `--subtitle_y_pos` is kept as you set it.
 - Re-rendering a short (change style, trim, or cut words) dropped `--hook_overlay` and `--clean_audio`: the hook title disappeared and the loudness fell back from about -14 LUFS to about -20 LUFS. Both settings are now saved with the run and applied again.

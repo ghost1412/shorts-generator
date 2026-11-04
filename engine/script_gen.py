@@ -2258,18 +2258,8 @@ Return raw JSON only:
     except Exception as e:
         print(f"[Warning] Top 5 script generation failed: {e}")
         
-    return {
-        "title": f"Top 5 {category.title()}",
-        "hook": f"Here are the top 5 {category} you need to know about!",
-        "items": [
-            {"rank": 5, "name": "Item 5", "fact": "Rank 5 starts our list with an unexpected entry.", "search_term": category},
-            {"rank": 4, "name": "Item 4", "fact": "Rank 4 changed how experts view this field.", "search_term": category},
-            {"rank": 3, "name": "Item 3", "fact": "Rank 3 receives millions of searches every month.", "search_term": category},
-            {"rank": 2, "name": "Item 2", "fact": "Rank 2 was almost number one.", "search_term": category},
-            {"rank": 1, "name": "Item 1", "fact": "Number one is the undisputed champion of history.", "search_term": category}
-        ],
-        "narrator_script": f"Here are the top 5 {category}! At number 5, Item 5. At number 4, Item 4. At number 3, Item 3. At number 2, Item 2. And the number 1 undisputed champion is Item 1!"
-    }
+    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
+    raise RuntimeError("No LLM provider answered, so no Top 5 script was written (a fixed placeholder script is not published).")
 
 def generate_chat_story_script(topic="texting wrong number mystery"):
     """
@@ -2300,16 +2290,8 @@ Return raw JSON only:
     except Exception as e:
         print(f"[Warning] Chat story generation failed: {e}")
         
-    return {
-        "title": topic.title(),
-        "messages": [
-            {"sender": "Alex", "text": "Hey are you home yet?", "is_me": True},
-            {"sender": "Unknown", "text": "Who is this? Look outside your window right now.", "is_me": False},
-            {"sender": "Alex", "text": "Wait what?? That's not funny...", "is_me": True},
-            {"sender": "Unknown", "text": "Turn off your lights right now.", "is_me": False}
-        ],
-        "narrator_script": "Hey are you home yet? Who is this? Look outside your window right now. Wait what? That's not funny... Turn off your lights right now."
-    }
+    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
+    raise RuntimeError("No LLM provider answered, so no chat story script was written (a fixed placeholder script is not published).")
 
 def generate_horror_story_script(topic="abandoned cabin in the woods"):
     """Generates chilling, dark creepypasta horror story scripts."""
@@ -2332,11 +2314,8 @@ Return raw JSON only:
     except Exception as e:
         print(f"[Warning] Horror script generation failed: {e}")
         
-    return {
-        "title": f"THE {topic.upper()} 👁️",
-        "narrator_script": f"Deep in the woods, there stands a cabin that no map records. They say if you hear knocking inside... never look through the window.",
-        "search_term": "dark eerie horror forest cabin mist"
-    }
+    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
+    raise RuntimeError("No LLM provider answered, so no horror story script was written (a fixed placeholder script is not published).")
 
 def generate_true_crime_script(case_topic="unsolved mystery of the missing vessel"):
     """Generates documentary-style true crime case scripts."""
@@ -2359,11 +2338,8 @@ Return raw JSON only:
     except Exception as e:
         print(f"[Warning] True crime script generation failed: {e}")
         
-    return {
-        "title": f"UNSOLVED: {case_topic.title()} 🕵️",
-        "narrator_script": f"In 1984, an entire research team vanished without a single trace. Decades later, investigator files revealed one shocking detail that changes everything.",
-        "search_term": "crime scene investigation evidence dark history"
-    }
+    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
+    raise RuntimeError("No LLM provider answered, so no true crime script was written (a fixed placeholder script is not published).")
 
 def generate_bible_story_script(topic="David and Goliath"):
     """Generates epic painterly historical and biblical narrative scripts."""
@@ -2386,11 +2362,8 @@ Return raw JSON only:
     except Exception as e:
         print(f"[Warning] Bible story script generation failed: {e}")
         
-    return {
-        "title": f"{topic.title()} 📜",
-        "narrator_script": f"Against an army of giants, one young shepherd stood alone. Armed only with faith and five smooth stones, history was about to be rewritten.",
-        "search_term": "ancient epic cinematic landscape golden hour"
-    }
+    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
+    raise RuntimeError("No LLM provider answered, so no Bible story script was written (a fixed placeholder script is not published).")
 
 def generate_article_summary_script(article_url_or_text):
     """Summarizes any web article URL or raw text into a 45-second punchy narration script."""
@@ -2422,11 +2395,8 @@ Return raw JSON only:
     except Exception as e:
         print(f"[Warning] Article summary failed: {e}")
         
-    return {
-        "title": "BREAKING SUMMARY 📰",
-        "narrator_script": f"Here is what you need to know about this major story: {raw_content[:300]}",
-        "search_term": "technology news headline innovation"
-    }
+    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
+    raise RuntimeError("No LLM provider answered, so no article summary script was written (a fixed placeholder script is not published).")
 
 def generate_ugc_product_script(product_name="AI Video Generator"):
     """Generates viral TikTok/Reels user-generated marketing & product demo shorts."""
@@ -2449,11 +2419,8 @@ Return raw JSON only:
     except Exception as e:
         print(f"[Warning] UGC script generation failed: {e}")
         
-    return {
-        "title": f"TRY {product_name.upper()} 🚀",
-        "narrator_script": f"If you are still creating content manually in 2026, stop right now. {product_name} lets you generate complete viral shorts in under 60 seconds. Try it out now!",
-        "search_term": "modern technology smartphone product aesthetic"
-    }
+    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
+    raise RuntimeError("No LLM provider answered, so no product (UGC) script was written (a fixed placeholder script is not published).")
 
 
 

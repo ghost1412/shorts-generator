@@ -91,3 +91,20 @@ def test_photo_reel_without_music_gets_an_audio_file(tmp_path):
     from engine.modes.photo_reel import default_music_or_silence
     path = default_music_or_silence(str(tmp_path), 3)
     assert path and __import__("os").path.getsize(path) > 500
+
+
+def test_mcp_extract_clips_without_source_is_a_clean_error():
+    import mcp_server
+    res = mcp_server.handle_tool_call("extract_clips", {})
+    assert res.get("isError") and "source_video" in res["content"][0]["text"]
+
+
+def test_factual_modes_do_not_publish_canned_scripts(monkeypatch):
+    import pytest
+    from engine import script_gen
+    monkeypatch.setattr(script_gen, "get_llm_response", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no llm")))
+    for fn, arg in ((script_gen.generate_true_crime_script, "x"), (script_gen.generate_bible_story_script, "x"),
+                    (script_gen.generate_top5_script, "x"), (script_gen.generate_horror_story_script, "x"),
+                    (script_gen.generate_chat_story_script, "x"), (script_gen.generate_ugc_product_script, "x")):
+        with pytest.raises(RuntimeError):
+            fn(arg)

@@ -177,6 +177,12 @@ def run_main_command(job_id: str, args_list: list):
                                  "requirements). Clone https://github.com/ghost1412/shorts-generator and run mcp_server.py from it."})
         return
     cmd = [sys.executable, main_py, "--video_id", job_id, "--skip_upload"] + args_list
+    results_json = None
+    if "--source_video" in args_list and "--output_json" not in args_list:
+        # the clipping pipeline reports where the finished clips are; read that instead of guessing a file name
+        results_json = os.path.join(ROOT_DIR, "sessions", f"mcp_{job_id}.json")
+        os.makedirs(os.path.dirname(results_json), exist_ok=True)
+        cmd += ["--output_json", results_json]
     print(f"[MCP Worker] Starting command: {' '.join(cmd)}", file=sys.stderr)
 
     try:
@@ -205,8 +211,16 @@ def run_main_command(job_id: str, args_list: list):
                 JOBS[job_id]["status"] = "completed"
                 JOBS[job_id]["progress"] = 100
                 JOBS[job_id]["logs"] = log_lines[-20:]
-                # Check for output mp4 files
-                JOBS[job_id]["output"] = f"interactive_short_{job_id}.mp4"
+                JOBS[job_id]["output"] = None
+                if results_json and os.path.exists(results_json):
+                    try:
+                        with open(results_json, "r", encoding="utf-8") as f:
+                            clips = json.load(f).get("clips", [])
+                        paths = [c.get("video_path") for c in clips if c.get("video_path")]
+                        JOBS[job_id]["outputs"] = paths
+                        JOBS[job_id]["output"] = paths[0] if paths else None
+                    except (OSError, ValueError):
+                        pass
             else:
                 JOBS[job_id]["status"] = "failed"
                 JOBS[job_id]["error"] = "\n".join(log_lines[-10:])
@@ -259,6 +273,8 @@ def handle_tool_call(tool_name: str, args: dict) -> dict:
         }
 
     elif tool_name == "extract_clips":
+        if not str(args.get("source_video", "")).strip():
+            return {"isError": True, "content": [{"type": "text", "text": "extract_clips needs 'source_video' (a video URL or a file path)."}]}
         cli_args = [
             "--source_video", args["source_video"],
             "--extract_mode", "shorts",
@@ -360,6 +376,7 @@ def main():
     print("[MCP Server] ShortsFlow AI Studio MCP Server listening on stdio...", file=sys.stderr)
 
     while True:
+        req_id = None
         try:
             line = sys.stdin.readline()
             if not line:
@@ -436,6 +453,8 @@ def main():
 
         except Exception as e:
             print(f"[MCP Error] Exception handling request: {e}", file=sys.stderr)
+            if req_id is not None:   # answer anyway: a client that gets no reply waits forever
+                print(json.dumps({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32603, "message": f"Internal error: {e}"}}), flush=True)
 
 if __name__ == "__main__":
     main()

@@ -133,6 +133,9 @@ def persist_and_export(args, mode, category, metadata, final_video, output_filen
         print(f"[Warning] Failed to export .meta.json: {me}")
 
 
+TOPIC_MODES = ("ARTICLE", "UGC", "BIBLE", "TRUE_CRIME")   # modes that cannot work from a random category word
+
+
 def run(args, target_bitrate, target_preset):
     print("--- Starting Shorts Generator ---", flush=True)
 
@@ -156,6 +159,15 @@ def run(args, target_bitrate, target_preset):
                 weights=[15, 5, 10, 10, 20, 5, 5, 5, 5, 10, 10, 5, 10, 15, 10, 10, 10, 10, 10, 10, 10]
             )[0]
         if args.recap_title and not args.mode: mode = "MOVIE_RECAP"
+
+        # These modes need a real topic (an article, a product, a Bible story, a case). A random category word such as
+        # "science" made no sense as one, so AUTO picks another mode and a forced run asks for --prompt / --category.
+        if mode in TOPIC_MODES and not args.prompt and (not args.category or args.category.lower() == "random"):
+            if args.mode and args.mode != "AUTO":
+                print(f"[Error] --mode {mode} needs a topic: pass --prompt (or --category) with the article, product, story or case.")
+                sys.exit(2)
+            print(f"[Log] AUTO picked {mode}, which needs a topic of its own: using FACTS instead.")
+            mode = "FACTS"
 
         # 🟢 AUTO-CARTOON: Enforce character personas for all News modes
         if mode in ("NEWS", "NEWS_SERIOUS"):
