@@ -4,6 +4,13 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+### New
+- **Browser app controls for the 0.3.0 options**: an "Extras" section on the Start here tab (clean up the sound, big title at the start, emoji next to key words, satisfying video underneath with an optional footage file) and the same options under Clip (advanced). The title and emoji are only passed when animated captions are on, since Remotion draws them.
+- **"Dub a video" tab**: pick a video or link, the language to dub into and the language spoken, optionally burn the translated subtitles in; shows plain-language progress and gives you the dubbed video and the translated `.srt`.
+
+### Fixed
+- The caption-language hint in the browser app no longer says Japanese, Chinese, Korean and Arabic are unsupported.
+
 ## 0.3.0 (2026-11-04)
 
 ### New

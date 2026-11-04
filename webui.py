@@ -16,6 +16,8 @@ import sys
 
 import gradio as gr
 
+from shortsflow import web_args
+
 try:  # checkout: the repo; pip install: the workspace folder `shortsflow` sets in SHORTSFLOW_HOME
     from engine.paths import project_root
     ROOT = project_root()
@@ -133,7 +135,8 @@ def _count(value):
 
 
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
-               caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider):
+               caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider,
+               clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
@@ -144,7 +147,42 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
         if on:
             cmd.append(flag)
     cmd += _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider)
+    cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, use_remotion)
+    cmd += web_args.filler_args(layout, filler_video)
     yield from _run(cmd)
+
+
+def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto"):
+    """Dub tab: translate a video's speech and re-voice it. Yields (status, log, video, srt)."""
+    import time
+    from shortsflow import onboarding
+    source = upload or (url or "").strip()
+    if not source:
+        raise gr.Error("Paste a video link or upload a video file first.")
+    if not target_lang:
+        raise gr.Error("Choose the language to dub into.")
+    session = os.path.join(ROOT, "sessions", time.strftime("dub_%Y%m%d_%H%M%S"))
+    os.makedirs(session, exist_ok=True)
+    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session)]
+    if tts_provider and tts_provider != "auto":
+        cmd += ["--tts_provider", tts_provider]
+    progress, seen = onboarding.Progress(steps=onboarding.DUB_STEPS), 0
+    status = progress.message
+    yield status, "", None, None
+    log = ""
+    for log, _videos in _run(cmd):
+        lines = log.splitlines()
+        for line in lines[seen:]:
+            status = progress.feed(line)
+        seen = len(lines)
+        yield status, log, None, None
+    video, srt = web_args.find_dub_outputs(session)
+    if video:
+        name = {code: n for n, code in web_args.dub_languages()}.get(target_lang, target_lang)
+        yield f"✅ Done! Your video dubbed into {name} is ready below.", log, video, srt
+        return
+    reason = next((ln.split("]", 1)[1].strip() for ln in reversed(log.splitlines()) if ln.startswith("[Error]")), "")
+    yield "❌ No dubbed video was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
 
 
 def generate_short(mode, category, prompt, script, vibe, voice, caption_style, aspect_ratio,
@@ -227,7 +265,8 @@ def clear_brand():
 
 
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
-               logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang=""):
+               logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
+               clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -239,6 +278,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     results = os.path.join(session, "results.json")
     os.makedirs(session, exist_ok=True)
     long_form = mode == "long"
+    layout = "split_filler" if filler else "auto"
     lang_args = ["--language", (spoken or "auto")]
     if caption_lang:
         lang_args += ["--caption_lang", caption_lang]
@@ -250,8 +290,10 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--reel_captions"]
     else:
         cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
-               "--clip_count", str(_count(clip_count)), "--smart_crop", "--tighten", "--layout", "auto", "--skip-upload",
+               "--clip_count", str(_count(clip_count)), "--smart_crop", "--tighten", "--layout", layout, "--skip-upload",
                "--session_dir", session, "--output_json", results]
+        cmd += web_args.filler_args(layout, filler_video)
+        cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, bool(captions))
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
         if (find or "").strip():
@@ -436,12 +478,18 @@ def build_ui():
                             q_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
                             q_caption_lang = gr.Dropdown(CAPTION_LANG_CHOICES, value="", label="Captions in...",
                                                          info="Translates the captions with AI (a free Groq key or Ollama is needed). "
-                                                              "Japanese, Chinese, Korean and Arabic captions are not supported yet.")
+                                                              "Chinese, Japanese and Korean fonts download once, the first time you use them.")
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
                                            info="Only used when animated captions are on.")
                         q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
+                        with gr.Accordion("Extras (optional)", open=False):
+                            q_clean = gr.Checkbox(label="Clean up the sound", info="Removes background noise and evens out the volume.")
+                            q_hook = gr.Checkbox(label="Big title at the start", info="Shows the short's hook as a title for the first 3 seconds. Needs animated captions.")
+                            q_emoji = gr.Checkbox(label="Emoji next to key words in the captions", info="Needs animated captions.")
+                            q_filler = gr.Checkbox(label="Satisfying video underneath", info="Your clip on top, looping gameplay or satisfying footage below (shorts only). Without a file below, a video from assets/backgrounds/local or a free stock clip is used.")
+                            q_filler_file = gr.File(label="Footage for the bottom half (optional)", file_types=["video"], type="filepath")
                         with gr.Accordion("Your brand: logo, @handle, end card", open=False):
                             q_brand_on = gr.Checkbox(value=True, label="Add my brand to the shorts")
                             q_logo = gr.Image(label="Logo (PNG with a transparent background works best)", type="filepath",
@@ -527,7 +575,8 @@ def build_ui():
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
-                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang],
+                q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file],
                             [q_status, q_log, q_cards])
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
@@ -549,15 +598,42 @@ def build_ui():
                             broll = gr.Checkbox(label="Auto B-roll")
                             srt = gr.Checkbox(label="Export .srt")
                         clip_settings = _render_settings(with_aspect=False)
+                        with gr.Accordion("Extras", open=False):
+                            with gr.Row():
+                                clip_clean = gr.Checkbox(label="Clean audio", info="Noise reduction + loudness to about -14 LUFS")
+                                clip_hook = gr.Checkbox(label="Hook title overlay", info="Needs Remotion captions")
+                                clip_emoji = gr.Checkbox(label="Caption emoji", info="Needs Remotion captions")
+                            clip_filler = gr.File(label="Footage for the bottom half (Framing = split_filler)", file_types=["video"], type="filepath")
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                     with gr.Column():
                         clip_videos = gr.Files(label="Rendered clips")
                         clip_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
                 clip_btn.click(
                     clip_video,
-                    [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings],
+                    [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
+                     clip_clean, clip_hook, clip_emoji, clip_filler],
                     [clip_log, clip_videos],
                 )
+
+            with gr.Tab("🌍 Dub a video"):
+                gr.Markdown("### Re-voice a video in another language\n"
+                            "Translates what is said and records it with a computer voice, over the original sound. "
+                            "One voice for everyone, no lip-sync. Needs internet for the voice, and a free Groq key or Ollama for the translation.")
+                with gr.Row():
+                    with gr.Column():
+                        d_url = gr.Textbox(label="Video link (YouTube or other)", placeholder="https://www.youtube.com/watch?v=...")
+                        d_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
+                        d_lang = gr.Dropdown(web_args.dub_languages(), value="es", label="Dub into")
+                        d_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
+                        d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
+                        d_btn = gr.Button("🌍 Dub my video", variant="primary")
+                    with gr.Column():
+                        d_status = gr.Markdown("Waiting for a video...")
+                        d_video = gr.Video(label="Dubbed video", interactive=False)
+                        d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
+                with gr.Accordion("Technical details", open=False):
+                    d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
+                d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn], [d_status, d_log, d_video, d_srt])
 
             with gr.Tab("🪄 Generate from an idea"):
                 with gr.Row():

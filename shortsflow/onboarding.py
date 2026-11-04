@@ -12,16 +12,24 @@ _STEPS = [
     (r"Viral thumbnail|thumbnail badge", "✍️ Writing titles and thumbnails..."),
     (r"SUCCESS! Extracted videos|Skip Upload flag detected", "✅ Done! Your shorts are ready below."),
 ]
+# Dubbing (Dub tab): the same forward-only idea with its own milestones.
+DUB_STEPS = [
+    (r"Detected Video URL|Downloading(?! the speech model)", "📥 Getting your video ready..."),
+    (r"Downloading the speech model", "📥 Downloading the speech model (first time only, a few minutes)..."),
+    (r"Transcrib", "👂 Listening to the video (turning speech into text)..."),
+    (r"Dubbing \d+ spoken segment", "🌍 Translating, recording the new voice and mixing it in..."),
+    (r"\[Success\] Dubbed video ready", "✅ Done! Your dubbed video is ready below."),
+]
 _WARN_WORDS = ("credits", "rejected the API key", "rate limiting", "Could not reach")
 
 
-def friendly_step(line):
+def friendly_step(line, steps=None):
     """(rank, message) for a pipeline log line that marks progress, or None."""
     if not line:
         return None
     if line.lstrip().startswith("[Warning]") and any(w in line for w in _WARN_WORDS):
         return (-1, "⚠️ " + line.split("]", 1)[1].strip())
-    for rank, (pattern, message) in enumerate(_STEPS):
+    for rank, (pattern, message) in enumerate(steps or _STEPS):
         if re.search(pattern, line):
             return (rank, message)
     return None
@@ -30,11 +38,11 @@ def friendly_step(line):
 class Progress:
     """Turns a stream of log lines into one status message that only moves forward (warnings are shown as they come)."""
 
-    def __init__(self, start="📥 Getting your video ready..."):
-        self.rank, self.message = 0, start
+    def __init__(self, start="📥 Getting your video ready...", steps=None):
+        self.rank, self.message, self.steps = 0, start, steps
 
     def feed(self, line):
-        hit = friendly_step(line)
+        hit = friendly_step(line, self.steps)
         if hit:
             rank, message = hit
             if rank == -1:
