@@ -136,7 +136,8 @@ def _count(value):
 
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
                caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider,
-               clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None, auto_zoom=False, cold_open=False):
+               clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None, auto_zoom=False, cold_open=False,
+               spoken="en", auto_edit="none", edit_strength="medium"):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
@@ -149,6 +150,9 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     cmd += _common_args(caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider)
     cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, use_remotion, auto_zoom=auto_zoom, cold_open=cold_open)
     cmd += web_args.filler_args(layout, filler_video)
+    if spoken and spoken != "en":
+        cmd += ["--language", spoken]            # the command line assumes English unless told otherwise
+    cmd += web_args.edit_args(auto_edit, edit_strength)
     yield from _run(cmd)
 
 
@@ -657,7 +661,7 @@ def build_ui():
                         upload = gr.File(label="...or upload a video", file_types=["video"], type="filepath")
                         with gr.Row():
                             clip_count = gr.Number(value=3, minimum=1, precision=0, label="Number of clips", info="No limit.")
-                            target_duration = gr.Slider(15, 90, value=30, step=5, label="Target length (s)")
+                            target_duration = gr.Slider(15, 60, value=30, step=5, label="Target length (s)", info="Shorts are never longer than 60 seconds.")
                         layout = gr.Radio(["single", "auto", "active", "split", "split_filler"], value="single", label="Framing",
                                           info="split_filler = clip on top, looping satisfying/gameplay footage below (your own videos in assets/backgrounds/local, else Pexels); auto = picks per clip (two-person shot -> cut to whoever talks, otherwise a tracked crop); active = always cut to the speaker")
                         with gr.Row():
@@ -674,6 +678,10 @@ def build_ui():
                                 clip_zoom = gr.Checkbox(label="Auto zoom", info="Punch-in on key words; needs Remotion captions, skipped for split_filler")
                                 clip_cold = gr.Checkbox(label="Cold open", info="Strongest line first as a short teaser, then the clip")
                             clip_filler = gr.File(label="Footage for the bottom half (Framing = split_filler)", file_types=["video"], type="filepath")
+                            clip_spoken = gr.Dropdown(SPOKEN_CHOICES, value="en", label="Language spoken in the video")
+                            with gr.Row():
+                                clip_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style")
+                                clip_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing")
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                     with gr.Column():
                         clip_videos = gr.Files(label="Rendered clips")
@@ -681,7 +689,8 @@ def build_ui():
                 clip_btn.click(
                     clip_video,
                     [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
-                     clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom, clip_cold],
+                     clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom, clip_cold,
+                     clip_spoken, clip_edit, clip_edit_strength],
                     [clip_log, clip_videos],
                 )
 

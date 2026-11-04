@@ -100,7 +100,7 @@ class ShortRequest(Common):
 class ClipRequest(Common):
     source_video: str = Field(..., description="YouTube URL or a path on the server")
     clip_count: int = Field(3, ge=1)
-    target_duration: int = Field(45, ge=10, le=180)
+    target_duration: int = Field(45, ge=10, le=60, description="Seconds per short (never longer than 60)")
     layout: Literal["single", "split", "active", "auto", "split_filler"] = "single"
     smart_crop: bool = True
     tighten: bool = False
@@ -108,8 +108,14 @@ class ClipRequest(Common):
     handle: Optional[str] = Field(None, description="@handle shown with the logo and on the end card")
     end_card: Optional[str] = Field(None, description="Closing end card text")
     find: Optional[str] = Field(None, description='Only clip moments matching this request, e.g. "where they discuss pricing"')
+    language: Optional[str] = Field(None, description="Language spoken in the video (en, hi, es, ...; 'auto' detects it). Default: English")
+    caption_lang: Optional[str] = Field(None, description="Translate the captions into this language")
+    auto_edit: Optional[Literal["podcast", "hype", "educational", "vlog"]] = Field(None, description="Edit like an editor (see --auto_edit)")
+    edit_strength: Literal["subtle", "medium", "hyped"] = "medium"
+    cold_open: bool = False
+    clean_audio: bool = False
 
-    @field_validator("source_video", "logo", "handle", "end_card", "find")
+    @field_validator("source_video", "logo", "handle", "end_card", "find", "language", "caption_lang")
     @classmethod
     def _no_flag_ok(cls, v):
         return _no_flag(v)
@@ -141,6 +147,12 @@ def create_clips(r: ClipRequest):
     args += [f for f, on in (("--smart_crop", r.smart_crop), ("--tighten", r.tighten)) if on]
     if r.find:
         args += ["--find", r.find]
+    for flag, value in (("--language", r.language), ("--caption_lang", r.caption_lang)):
+        if value:
+            args += [flag, value]
+    if r.auto_edit:
+        args += ["--auto_edit", r.auto_edit, "--edit_strength", r.edit_strength]
+    args += [f for f, on in (("--cold_open", r.cold_open), ("--clean_audio", r.clean_audio)) if on]
     for flag, value in (("--logo", r.logo), ("--handle", r.handle), ("--end_card", r.end_card)):
         if value:
             args += [flag, value]

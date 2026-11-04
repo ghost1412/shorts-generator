@@ -117,6 +117,12 @@ TOOLS_DEFINITIONS = [
                 "use_remotion": {"type": "boolean", "default": True,
                                  "description": "Animated captions (needs Node.js). False renders without animated captions."},
                 "caption_style": {"type": "string", "enum": CAPTION_STYLES, "default": "HORMOZI", "description": _CAPTION_HELP},
+                "language": {"type": "string", "default": "en",
+                             "description": "Language spoken in the video (en, hi, es, fr, ...; 'auto' detects it)."},
+                "auto_edit": {"type": "string", "enum": ["podcast", "hype", "educational", "vlog"],
+                              "description": "Edit like an editor: cuts, zooms, cutaways, teaser opening, colour and sound effects for this kind of video."},
+                "edit_strength": {"type": "string", "enum": ["subtle", "medium", "hyped"], "default": "medium",
+                                  "description": "With auto_edit: how much of the edit shows (subtle keeps it quiet, hyped uses everything)."},
             },
             "required": ["source_video"],
         },
@@ -290,6 +296,11 @@ def handle_tool_call(tool_name: str, args: dict) -> dict:
             cli_args.append("--use_remotion")
         if args.get("layout"):
             cli_args.extend(["--layout", args["layout"]])
+        if args.get("language"):
+            cli_args.extend(["--language", str(args["language"])])
+        if args.get("auto_edit") in ("podcast", "hype", "educational", "vlog"):
+            cli_args.extend(["--auto_edit", args["auto_edit"], "--edit_strength",
+                             args.get("edit_strength") if args.get("edit_strength") in ("subtle", "medium", "hyped") else "medium"])
 
         thread = threading.Thread(target=run_main_command, args=(job_id, cli_args))
         thread.start()

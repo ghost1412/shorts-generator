@@ -247,6 +247,20 @@ Claude Desktop / Cursor: add this under `mcpServers` in the tool's config JSON (
 
 ---
 
+### Defaults differ by surface (on purpose)
+
+The same clipping job starts from different defaults depending on where you launch it, so pass the flag you want explicitly when it matters:
+
+| | face-tracking crop | cut silences | animated captions | clips | length |
+|---|---|---|---|---|---|
+| `python main.py` | off | off | off | 5 | 30 s |
+| `shortsflow clip` | on | on | off (`--captions`) | 3 | 30 s |
+| Browser app, Clip tab | on | on | on | 3 | 30 s |
+| REST API (`/v1/clips`) | on | off | on | 3 | 45 s |
+| MCP `extract_clips` | on | on | on | 3 | 30 s |
+
+Shorts are never longer than 60 s; the API now rejects a longer `target_duration` instead of silently capping it.
+
 ## 🔌 REST API & Webhooks
 
 ```bash
