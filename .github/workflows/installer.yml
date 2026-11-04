@@ -105,8 +105,14 @@ jobs:
         shell: pwsh
         run: |
           $v = "${{ steps.ver.outputs.version }}"
+          # the JSON page can show a release before the simple index that pip/uv install from lists it: wait for BOTH
           for ($i = 0; $i -lt 60; $i++) {
-            try { Invoke-RestMethod "https://pypi.org/pypi/shortsflow/$v/json" | Out-Null; Write-Host "PyPI has $v"; exit 0 } catch { Start-Sleep -Seconds 30 }
+            try {
+              Invoke-RestMethod "https://pypi.org/pypi/shortsflow/$v/json" | Out-Null
+              $simple = (Invoke-WebRequest "https://pypi.org/simple/shortsflow/" -UseBasicParsing).Content
+              if ($simple -match "shortsflow-$([regex]::Escape($v))") { Write-Host "PyPI has $v (JSON page and simple index)"; Start-Sleep -Seconds 20; exit 0 }
+            } catch { }
+            Start-Sleep -Seconds 30
           }
           throw "shortsflow $v never appeared on PyPI"
 
@@ -150,7 +156,14 @@ jobs:
             throw "the .exe installer did not finish a working install"
           }
           foreach ($f in @("ShortsFlow.cmd", "ffmpeg\bin\ffprobe.exe", "node\node.exe")) {
-            if (-not (Test-Path "$dir\$f")) { throw "missing after install: $f" }
+            if (-not (Test-Path "$dir\$f")) {
+              Write-Host "=== install.log (whole file) ==="
+              if (Test-Path "$dir\install.log") { Get-Content "$dir\install.log" }
+              Write-Host "=== installer log (last 80 lines) ==="
+              if (Test-Path $inno) { Get-Content $inno -Tail 80 }
+              Get-ChildItem $dir -ErrorAction SilentlyContinue | Select-Object Name, Length | Format-Table | Out-String | Write-Host
+              throw "missing after install: $f"
+            }
           }
           $desktopLink = Join-Path ([Environment]::GetFolderPath("Desktop")) "ShortsFlow.lnk"
           if (-not (Test-Path $desktopLink)) { throw "no Desktop shortcut was created" }
