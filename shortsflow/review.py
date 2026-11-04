@@ -65,6 +65,7 @@ def load_results(json_path):
             "results_path": os.path.abspath(json_path),
             "caption_style": c.get("caption_style") or settings.get("caption_style") or "HORMOZI",
             "animated_captions": bool(settings.get("use_remotion")),
+            "cuts": [tuple(x) for x in (c.get("cuts") or [])],
             "can_rerender": bool(settings and data.get("source_video")),
         })
     return cards
