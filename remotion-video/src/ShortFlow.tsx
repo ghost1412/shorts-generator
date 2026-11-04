@@ -12,9 +12,24 @@ import {
   interpolate,
   spring,
   staticFile,
+  delayRender,
+  continueRender,
 } from "remotion";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { z } from "zod";
+
+// Bundled fonts first (fonts.ts), then the per-render CJK subset ("NotoCJK", see useExtraFont), then system fonts.
+const CAPTION_FONT = "Anton, NotoDevanagari, NotoCyrillic, NotoArabic, NotoCJK, Impact, Arial Black, sans-serif";
+
+// Hebrew/Arabic-script text. Such words need direction:rtl on the caption row (first spoken word on the right) and no
+// letter-spacing (any spacing breaks the cursive joins between Arabic letters).
+// ranges: Hebrew..Arabic Extended (0590-08FF), Hebrew/Arabic presentation forms A (FB1D-FDFF) and B (FE70-FEFF)
+const RTL_RANGES: [number, number][] = [[0x0590, 0x08ff], [0xfb1d, 0xfdff], [0xfe70, 0xfeff]];
+const isRtl = (s: string) =>
+  Array.from(s).some((ch) => {
+    const c = ch.codePointAt(0) ?? 0;
+    return RTL_RANGES.some(([lo, hi]) => c >= lo && c <= hi);
+  });
 
 // --- HELPER FOR SAFE ASSET URLS ---
 const getAssetUrl = (url: string | undefined | null) => {
@@ -114,6 +129,7 @@ export const shortFlowSchema = z.object({
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
   captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL"]).default("HORMOZI"),
+  extraFont: z.object({ family: z.string(), url: z.string() }).optional(), // per-render CJK subset font (static file path)
   captionEmoji: z.boolean().default(false), // needs an emoji font on the render machine (fonts-noto-color-emoji on Linux)
   avatarUrl: z.string().optional(),
   avatarAspect: z.number().optional(), // width / height of the avatar asset; square art is not cropped to 16:9
@@ -186,6 +202,7 @@ const Subtitles: React.FC<{
         justifyContent: "center",
         alignItems: "center",
         flexWrap: "wrap",
+        direction: burstWords.some((b) => isRtl(b.word)) ? "rtl" : "ltr",
         gap: captionStyle === "GLOW_BOX" ? "20px" : "16px",
         padding: "0 40px",
         zIndex: 50,
@@ -222,14 +239,14 @@ const Subtitles: React.FC<{
             <span
               key={index}
               style={{
-                fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                fontFamily: CAPTION_FONT,
                 fontSize: "100px",
                 color: isActive ? getHormoziColor(w.word) : "#FFFFFF",
                 opacity: isActive ? 1.0 : 0.60,
                 textTransform: "uppercase",
                 transform: `scale(${scale}) rotate(${rotation}deg)`,
                 display: "inline-block",
-                letterSpacing: "-4px",
+                letterSpacing: isRtl(w.word) ? "0px" : "-4px",
                 textShadow: isActive 
                   ? "0px 20px 45px rgba(0,0,0,1.0), 8px 8px 0px #000000" 
                   : "0px 10px 25px rgba(0,0,0,0.9), 5px 5px 0px #000000",
@@ -259,7 +276,7 @@ const Subtitles: React.FC<{
             <span
               key={index}
               style={{
-                fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                fontFamily: CAPTION_FONT,
                 fontSize: "82px",
                 color: isActive ? "#FFFFFF" : "#CBD5E1",
                 background: isActive
@@ -298,7 +315,7 @@ const Subtitles: React.FC<{
             <span
               key={index}
               style={{
-                fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                fontFamily: CAPTION_FONT,
                 fontSize: "92px",
                 color: isActive ? "#FFD700" : "#FFFFFF",
                 opacity: isActive ? 1.0 : 0.7,
@@ -325,7 +342,7 @@ const Subtitles: React.FC<{
           <span
             key={index}
             style={{
-              fontFamily: "Arial Black, sans-serif",
+              fontFamily: "Arial Black, NotoDevanagari, NotoCyrillic, NotoArabic, NotoCJK, sans-serif",
               fontSize: "78px",
               color: isActive ? "#38BDF8" : "#F1F5F9",
               background: "rgba(0, 0, 0, 0.85)",
@@ -451,7 +468,7 @@ const BackgroundSegment: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+              fontFamily: CAPTION_FONT,
               fontSize: "54px",
               color: "#000000",
               background: "#FFEA00",
@@ -680,7 +697,7 @@ const PhotoReelSegment: React.FC<{
           >
             <span
               style={{
-                fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                fontFamily: CAPTION_FONT,
                 fontSize: "36px",
                 color: "#ffffff",
                 letterSpacing: "1.5px",
@@ -746,7 +763,7 @@ const EmojiGuessOverlay: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+              fontFamily: CAPTION_FONT,
               fontSize: "48px",
               color: "#ffffff",
               letterSpacing: "2px",
@@ -799,7 +816,7 @@ const EmojiGuessOverlay: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+              fontFamily: CAPTION_FONT,
               fontSize: "36px",
               color: "#ff0055",
               textTransform: "uppercase",
@@ -810,7 +827,7 @@ const EmojiGuessOverlay: React.FC<{
           </span>
           <span
             style={{
-              fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+              fontFamily: CAPTION_FONT,
               fontSize: "100px",
               color: "#ffffff",
               textShadow: "0 0 20px #ff0055",
@@ -836,7 +853,7 @@ const EmojiGuessOverlay: React.FC<{
         >
           <span
             style={{
-              fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+              fontFamily: CAPTION_FONT,
               fontSize: "44px",
               color: "#ffff00",
               textTransform: "uppercase",
@@ -847,7 +864,7 @@ const EmojiGuessOverlay: React.FC<{
           </span>
           <span
             style={{
-              fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+              fontFamily: CAPTION_FONT,
               fontSize: "55px",
               color: "#ffffff",
               textShadow: "2px 4px 10px rgba(0,0,0,0.5)",
@@ -862,6 +879,21 @@ const EmojiGuessOverlay: React.FC<{
   );
 };
 
+// Loads the CJK subset font that the Python side wrote for this render (too big to bundle for all of zh/ja/ko).
+const useExtraFont = (extra?: { family: string; url: string }) => {
+  const [handle] = useState(() => (extra ? delayRender("Loading CJK caption font") : null));
+  useEffect(() => {
+    if (!extra || handle === null) return;
+    new FontFace("NotoCJK", `url(${staticFile(extra.url)})`)
+      .load()
+      .then((font) => {
+        document.fonts.add(font);
+        continueRender(handle);
+      })
+      .catch(() => continueRender(handle));
+  }, []);
+};
+
 export const ShortFlow: React.FC<ShortFlowProps> = ({
   audioUrl,
   bgMusicUrl,
@@ -873,6 +905,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   subtitleYPos,
   captionStyle = "HORMOZI",
   captionEmoji = false,
+  extraFont,
   avatarUrl,
   avatarAspect,
   avatarKeyed,
@@ -884,6 +917,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   funnyExplainer,
   teachCard,
 }) => {
+  useExtraFont(extraFont);
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const currentTime = frame / fps;
@@ -943,7 +977,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             >
               <h2
                 style={{
-                  fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                  fontFamily: CAPTION_FONT,
                   fontSize: "65px",
                   color: "#ffffff",
                   margin: 0,
@@ -987,7 +1021,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             >
               <h2
                 style={{
-                  fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                  fontFamily: CAPTION_FONT,
                   fontSize: "65px",
                   color: "#ffffff",
                   margin: 0,
@@ -1017,7 +1051,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           >
             <span
               style={{
-                fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                fontFamily: CAPTION_FONT,
                 fontSize: "100px",
                 color: "#000000",
                 fontWeight: "bold",
@@ -1063,7 +1097,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   >
                     <span
                       style={{
-                        fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                        fontFamily: CAPTION_FONT,
                         fontSize: "120px",
                         color: "#000000",
                         textShadow: "2px 2px 0px rgba(255,255,255,0.4)",
@@ -1085,7 +1119,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
                   >
                     <h2
                       style={{
-                        fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                        fontFamily: CAPTION_FONT,
                         fontSize: "65px",
                         color: "#ffffff",
                         margin: 0,
@@ -1125,7 +1159,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           >
             <span
               style={{
-                fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                fontFamily: CAPTION_FONT,
                 fontSize: "80px",
                 color: "#000000",
                 textTransform: "uppercase",
@@ -1242,7 +1276,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           >
             <h1
               style={{
-                fontFamily: "Anton, NotoDevanagari, NotoCyrillic, Impact, Arial Black, sans-serif",
+                fontFamily: CAPTION_FONT,
                 fontSize: "75px",
                 color: "#ffff00",
                 margin: 0,

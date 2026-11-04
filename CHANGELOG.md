@@ -5,13 +5,14 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
-- **Captions in another language**: `--caption_lang es` (or the "Languages" box in the browser app) translates the captions with your AI provider and keeps them timed to the speech. Spanish, French, German, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian, Vietnamese, Hindi and Marathi (the bundled caption fonts cannot draw Japanese, Chinese, Korean, Arabic or Russian yet). Translation quality depends on the model; small local models are weaker in Hindi.
+- **Captions in another language**: `--caption_lang es` (or the "Languages" box in the browser app) translates the captions with your AI provider and keeps them timed to the speech. Spanish, French, German, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian, Vietnamese, Hindi and Marathi (see below for Russian, Greek, Arabic, Chinese, Japanese and Korean). Translation quality depends on the model; small local models are weaker in Hindi.
 - **Highlights video** option in the browser app (one landscape video made of the best moments, any length).
 - **"Pick the moments"** in the browser app: make shorts only about a topic you describe, and cut chosen words or phrases out.
 - The browser app has a **spoken-language** box (default: detect it automatically).
 - **`--layout auto`**: per clip, a two-person shot gets the cut-to-whoever-is-talking layout, anything else the tracked single crop. Used by default on the browser app's Start here tab.
 
 - **Captions in Russian, Ukrainian, Bulgarian and Greek** (bundled Noto Sans, Cyrillic/Greek subset); verified in a real Remotion render. The highlights video uses the same font.
+- **Captions in Chinese, Japanese, Korean and Arabic** (`--caption_lang zh|ja|ko|ar`, and for sources already spoken in them). Arabic uses a small bundled Noto Sans Arabic and is laid out right to left with joined letters. Chinese/Japanese/Korean fonts are 10-18 MB each, so they are downloaded once (`~/.cache/shortsflow/fonts`) and cut down per video to a ~100 KB font with just the characters used; offline they still show empty boxes. Both the animated (Remotion) captions and the highlights-video captions use them. Han-only text is treated as Chinese.
 - The **number of shorts has no limit** any more (browser app, REST API, MCP); the highlights video length has no limit either (a number box).
 
 ### Fixed

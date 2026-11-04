@@ -190,7 +190,8 @@ try:
 except Exception:   # engine not importable yet in some installs: the same list, written out
     CAPTION_LANGUAGES = {"en": "English", "es": "Spanish", "fr": "French", "de": "German", "pt": "Portuguese", "it": "Italian",
                          "nl": "Dutch", "pl": "Polish", "tr": "Turkish", "id": "Indonesian", "vi": "Vietnamese",
-                         "hi": "Hindi", "mr": "Marathi"}
+                         "hi": "Hindi", "mr": "Marathi", "ru": "Russian", "uk": "Ukrainian", "bg": "Bulgarian", "el": "Greek",
+                         "ar": "Arabic", "zh": "Chinese", "ja": "Japanese", "ko": "Korean"}
 CAPTION_LANG_CHOICES = [("Same as the video (no translation)", "")] + [(name, code) for code, name in CAPTION_LANGUAGES.items()]
 BRAND_POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left"]
 

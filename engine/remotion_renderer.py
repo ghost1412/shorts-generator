@@ -203,6 +203,17 @@ def render_with_remotion(
         # Filter words to only those starting before video ends
         words = [w for w in words if w['start'] < duration]
                 
+        # CJK captions: write a per-render bold subset of Noto Sans CJK next to the other temp assets (Arabic is bundled)
+        extra_font = None
+        try:
+            from engine.script_fonts import cjk_subset
+            caption_text = " ".join([w["word"] for w in words] + [str(title_text or "")] + [str(c) for c in (captions or []) if c])
+            subset = cjk_subset(caption_text, out_dir=run_assets_dir)
+            if subset:
+                extra_font = {"family": subset[0], "url": f"temp_assets/{run_id}/{os.path.basename(subset[1])}"}
+        except Exception as e:
+            print(f"[Warning] CJK caption font setup failed ({e}); continuing without it.")
+
         # 4. Mode-specific assets
         remotion_tot = None
         remotion_rank = None
@@ -306,6 +317,7 @@ def render_with_remotion(
           "backgrounds": remotion_bg
         }
         
+        if extra_font: props["extraFont"] = extra_font
         if remotion_tot: props["thisOrThat"] = remotion_tot
         if remotion_rank: props["rankIt"] = remotion_rank
         if remotion_cap: props["captionThis"] = remotion_cap
