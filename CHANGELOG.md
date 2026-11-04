@@ -5,6 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **Basic AI dubbing**: `--mode DUB --source_video talk.mp4 --target_lang es` transcribes the video, translates it sentence by sentence with your AI provider, speaks it with edge-tts (internet needed; Kokoro for English), fits each line to its time slot, lowers the original audio under the new voice and writes a translated `.srt` (`--dub_captions` burns it in). One voice for every speaker, no voice cloning or lip-sync; translation and voice quality depend on the model and voice.
 - **Captions in another language**: `--caption_lang es` (or the "Languages" box in the browser app) translates the captions with your AI provider and keeps them timed to the speech. Spanish, French, German, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian, Vietnamese, Hindi and Marathi (the bundled caption fonts cannot draw Japanese, Chinese, Korean, Arabic or Russian yet). Translation quality depends on the model; small local models are weaker in Hindi.
 - **Highlights video** option in the browser app (one landscape video made of the best moments, any length).
 - **"Pick the moments"** in the browser app: make shorts only about a topic you describe, and cut chosen words or phrases out.

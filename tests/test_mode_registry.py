@@ -30,7 +30,8 @@ def test_every_cli_mode_has_a_handler_or_is_marked_not_implemented():
 
 def test_not_implemented_modes_are_still_listed_so_users_get_the_clear_error():
     assert not_implemented() <= set(cli_modes())
-    assert {"DUB", "PODCAST", "SPLIT_SCREEN"} <= not_implemented()
+    assert {"PODCAST", "SPLIT_SCREEN"} <= not_implemented()
+    assert "DUB" not in not_implemented()
 
 
 def test_docs_do_not_advertise_not_implemented_modes_as_working():
