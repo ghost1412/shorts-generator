@@ -4,6 +4,11 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+### Improved
+- **Dubbing captions in every script**: `--dub_captions` now burns an ASS file instead of a plain SRT, naming a font with the glyphs for each word, so Hindi, Arabic (joined and right-to-left), Cyrillic, Greek, Chinese, Japanese and Korean no longer show empty boxes (the SRT is still written). Long Chinese/Japanese lines are cut to fit the frame; the Hindi and Arabic fonts are scaled up a little because they look small next to Latin.
+- **Dubbing voices**: `--dub_voice female|male|<edge-tts name>` (for example `es-ES-AlvaroNeural`) picks the voice for the target language; every supported language has a female (default) and a male choice. A misspelt voice fails before any work is done.
+- **CJK caption font download is pinned**: the Noto Sans SC/JP/KR files come from one fixed google/fonts commit and are checked against a SHA256; a file that does not match (or a stale cached copy) is discarded and the captions fall back to the old behaviour with a warning, instead of using whatever the `main` branch held.
+
 ## 0.3.0 (2026-11-04)
 
 ### New

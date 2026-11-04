@@ -23,6 +23,14 @@ EDGE_VOICES = {
     "en": "en-US-AvaNeural", "tr": "tr-TR-EmelNeural", "nl": "nl-NL-ColetteNeural", "pl": "pl-PL-ZofiaNeural",
     "uk": "uk-UA-PolinaNeural", "id": "id-ID-GadisNeural",
 }
+EDGE_VOICES_MALE = {
+    "es": "es-ES-AlvaroNeural", "hi": "hi-IN-MadhurNeural", "de": "de-DE-ConradNeural", "fr": "fr-FR-HenriNeural",
+    "ja": "ja-JP-KeitaNeural", "pt": "pt-BR-AntonioNeural", "zh": "zh-CN-YunxiNeural",
+    "it": "it-IT-DiegoNeural", "ru": "ru-RU-DmitryNeural", "ko": "ko-KR-InJoonNeural", "ar": "ar-SA-HamedNeural",
+    "en": "en-US-AndrewNeural", "tr": "tr-TR-AhmetNeural", "nl": "nl-NL-MaartenNeural", "pl": "pl-PL-MarekNeural",
+    "uk": "uk-UA-OstapNeural", "id": "id-ID-ArdiNeural",
+}
+VOICE_NAME_RE = re.compile(r"^[a-z]{2,3}-[A-Z]{2}-[A-Za-z]+Neural$")
 CHARS_PER_SECOND = 14.0   # rough spoken rate, tells the LLM how long a translation may be
 BATCH = 20
 SOFT_SPEEDUP = 1.35       # speed-up allowed to fit the segment's own time slot
@@ -37,8 +45,19 @@ def supported_languages():
     return sorted(EDGE_VOICES)
 
 
-def voice_for(lang):
-    return EDGE_VOICES.get(normalize_lang(lang))
+def voice_for(lang, voice=None):
+    """Default edge-tts voice for `lang`. `voice` overrides it: "female" / "male" pick that gender's default voice for
+    the language, a full name such as "es-ES-AlvaroNeural" is used as given (anything else raises ValueError)."""
+    lang = normalize_lang(lang)
+    choice = str(voice or "").strip()
+    if choice.lower() in ("", "auto", "female"):
+        return EDGE_VOICES.get(lang)
+    if choice.lower() == "male":
+        return EDGE_VOICES_MALE.get(lang)
+    if VOICE_NAME_RE.match(choice):
+        return choice
+    raise ValueError(f"Unknown voice '{voice}'. Use male, female or a full edge-tts name like es-ES-AlvaroNeural "
+                     f"(run `edge-tts --list-voices` to see them).")
 
 
 def srt_time(seconds):
@@ -134,13 +153,79 @@ def media_duration(path):
     return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 0.0
 
 
+def video_size(path, default=(1280, 720)):
+    """(width, height) of the first video stream, `default` when it cannot be read."""
+    if not path or not os.path.exists(path):
+        return default
+    import imageio_ffmpeg
+    err = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-i", path], capture_output=True, text=True).stderr
+    for line in err.splitlines():
+        if "Video:" in line:
+            m = re.search(r"[,\s](\d{2,5})x(\d{2,5})[,\s\[]", line + " ")
+            if m:
+                return int(m.group(1)), int(m.group(2))
+    return default
+
+
+def _scoped_font(token):
+    """A word that starts with a `{\\fn...}` override: scale the small-looking Devanagari / Arabic fonts up a little and
+    `{\\r}` back to the style afterwards, so the Latin words that follow do not inherit that font."""
+    if not token.startswith("{\\fn"):
+        return token
+    from engine import reel_captions as rc
+    from engine.script_fonts import ARABIC_FONT
+    end = token.index("}")
+    scale = {rc.DEVANAGARI_FONT: 118, ARABIC_FONT: 120}.get(token[4:end])
+    tag = token[:end] + (f"\\fscx{scale}\\fscy{scale}" if scale else "") + "}"
+    return tag + token[end + 1:] + "{\\r}"
+
+
+def build_ass(segments, size=(1280, 720)):
+    """Sentence captions as an ASS document. Unlike the SRT `subtitles=` filter (one default font), each word that is
+    Devanagari / Arabic / Cyrillic / Greek / Chinese / Japanese / Korean names a font that has its glyphs, so non-Latin
+    dubs do not show empty boxes. The CJK font is a small per-transcript subset (downloaded once, see script_fonts)."""
+    from engine import reel_captions as rc
+    from engine.script_fonts import cjk_language, cjk_subset
+    w, h = size
+    font_size = round(min(w, h) * 0.06)
+    outline = max(2, round(font_size / 14))
+    side = round(w * 0.06)
+    head = (
+        "[Script Info]\nScriptType: v4.00+\n"
+        f"PlayResX: {w}\nPlayResY: {h}\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, "
+        "StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Default,Arial,{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,"
+        f"{outline},1,2,{side},{side},{round(h * 0.08)},1\n\n"
+        "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    subset = cjk_subset(" ".join(seg["text"] for seg in segments))  # None unless the text has Chinese/Japanese/Korean
+    family = subset[0] if subset else None
+    # libass only breaks lines at spaces, and Chinese/Japanese have none: cut long CJK runs ourselves (a CJK glyph is
+    # about one font size wide) so a sentence never runs off the frame.
+    max_cjk = max(6, int((w - 2 * side) / font_size))
+    lines = []
+    for seg in segments:
+        parts = []
+        for tok in seg["text"].split():
+            if family and len(tok) > max_cjk and cjk_language(tok):
+                chunks = [tok[i:i + max_cjk] for i in range(0, len(tok), max_cjk)]
+                parts.append("\\N".join(_scoped_font(rc._clean(c, family, upper=False)) for c in chunks))
+            else:
+                parts.append(_scoped_font(rc._clean(tok, family, upper=False, tag_cyrillic=True)))
+        text = " ".join(parts)
+        lines.append(f"Dialogue: 0,{rc._ts(seg['start'])},{rc._ts(seg['end'])},Default,,0,0,0,,{text}")
+    return head + "\n".join(lines) + "\n"
+
+
 def has_audio(path):
     import imageio_ffmpeg
     err = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-i", path], capture_output=True, text=True).stderr
     return bool(re.search(r"Stream #.*Audio", err))
 
 
-def synthesize(text, lang, out_path, provider="auto"):
+def synthesize(text, lang, out_path, provider="auto", voice=None):
     """Speak `text` to an audio file. edge-tts by default; local Kokoro (English only) when asked for or as fallback."""
     lang = normalize_lang(lang)
     if provider == "kokoro" and lang == "en":
@@ -148,13 +233,13 @@ def synthesize(text, lang, out_path, provider="auto"):
         if kokoro_tts.is_available():
             kokoro_tts.generate_voice_kokoro(text, out_path, out_path + ".json", download=False)
             return out_path
-    voice = voice_for(lang)
-    if not voice:
+    voice_name = voice_for(lang, voice)
+    if not voice_name:
         raise ValueError(f"No voice for language '{lang}'. Supported: {', '.join(supported_languages())}")
     try:
         import asyncio
         import edge_tts
-        asyncio.run(edge_tts.Communicate(text, voice).save(out_path))
+        asyncio.run(edge_tts.Communicate(text, voice_name).save(out_path))
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
             return out_path
         raise RuntimeError("edge-tts wrote no audio")
@@ -208,8 +293,14 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None):
         cmd += ["-i", os.path.abspath(c["path"])]
     cmd += ["-filter_complex_script", os.path.abspath(script), "-map", "0:v:0", "-map", "[aout]"]
     if burn_srt:
-        cmd += ["-vf", f"subtitles={os.path.basename(burn_srt)}:force_style='FontSize=18,Outline=2,MarginV=40'",
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]
+        ass = os.path.splitext(burn_srt)[0] + ".ass"
+        if os.path.exists(ass):  # script-aware captions written by dub_video; staged fonts sit next to it
+            from engine.reel_captions import _stage_fonts
+            _stage_fonts(session_dir, ass)
+            vf = f"ass={os.path.basename(ass)}:fontsdir=."
+        else:
+            vf = f"subtitles={os.path.basename(burn_srt)}:force_style='FontSize=18,Outline=2,MarginV=40'"
+        cmd += ["-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20"]
     else:
         cmd += ["-c:v", "copy"]
     cmd += ["-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}", os.path.abspath(output_path)]
@@ -220,12 +311,13 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None):
 
 
 def dub_video(source_video, target_lang, session_dir, output_path=None, language="en", provider="auto",
-              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4):
+              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None):
     """Full pipeline. Returns {"video", "srt", "json", "segments", "failed_translations", "failed_voices"}.
     transcribe/llm/synth/mixer can be replaced (tests, custom backends)."""
     target = normalize_lang(target_lang)
     if target not in EDGE_VOICES:
         raise ValueError(f"Unsupported dub language '{target_lang}'. Supported: {', '.join(supported_languages())}")
+    voice_for(target, voice)  # a bad --dub_voice fails here, before any transcription / LLM work is spent
     os.makedirs(session_dir, exist_ok=True)
     if transcribe is None:
         from engine.analysis import transcribe_video
@@ -246,7 +338,7 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
                            "(see `shortsflow doctor`); nothing was dubbed.")
     translated = [dict(s, text=t) for s, t in zip(segments, texts)]
 
-    synth = synth or (lambda text, out: synthesize(text, target, out, provider))
+    synth = synth or (lambda text, out: synthesize(text, target, out, provider, voice))
     clips_dir = os.path.join(session_dir, "dub_clips")
     os.makedirs(clips_dir, exist_ok=True)
 
@@ -277,6 +369,9 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
     srt_path = os.path.join(session_dir, f"{base}_{target}.srt")
     with open(srt_path, "w", encoding="utf-8") as f:
         f.write(build_srt(translated))
+    if captions:
+        with open(os.path.join(session_dir, f"{base}_{target}.ass"), "w", encoding="utf-8") as f:
+            f.write(build_ass(translated, video_size(source_video)))
     json_path = os.path.join(session_dir, f"{base}_{target}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({"target_lang": target, "source_lang": source_lang, "segments": translated}, f, ensure_ascii=False, indent=2)
