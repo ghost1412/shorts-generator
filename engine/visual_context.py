@@ -173,6 +173,57 @@ def rate_scenery(frames, key=None, timeout=120):
     return None
 
 
+ROTATION_PROMPT = ("These are {n} frames from different phone videos, numbered in order. Some videos are stored sideways or upside down. "
+                   "For each frame say on which side of the PICTURE the TOP of the real scene is (where the sky, the top of the trees or "
+                   "buildings, a person's head or hair would be): \"top\" if the picture is upright, \"right\", \"left\" or \"bottom\" if it "
+                   "is turned. Judge by people, faces, sky, horizon, buildings and text. If you cannot tell (a close-up of the ground, a "
+                   "blurry or abstract frame, a camera pointing straight up), answer \"top\". "
+                   'Reply with JSON only: [{{"id": 1, "up": "top"}}, ...] with exactly {n} entries.')
+
+UP_TO_ROTATION = {"top": 0, "left": 90, "bottom": 180, "right": 270}      # clockwise turn that puts the top of the scene at the top
+
+
+def check_rotation(frames, key=None, timeout=120, batch=12):
+    """[0|90|180|270 for each JPEG frame] from Gemini (clockwise degrees to make the frame upright), None when it cannot be done."""
+    key = key or gemini_key()
+    if not frames or not key or (os.getenv("SHORTSFLOW_VISION") or "").lower() == "ollama":
+        return None
+    import time
+    result = []
+    for lo in range(0, len(frames), batch):
+        chunk = frames[lo:lo + batch]
+        parts = [{"text": ROTATION_PROMPT.format(n=len(chunk))}]
+        for i, f in enumerate(chunk, 1):
+            parts += [{"text": f"Frame {i}:"}, {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(f).decode()}}]
+        body = json.dumps({"contents": [{"parts": parts}], "generationConfig": {"temperature": 0, "maxOutputTokens": 4000}}).encode()
+        got = None
+        for name, attempt in [(n, a) for n in GEMINI_MODELS for a in range(3)]:
+            req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{name}:generateContent", body,
+                                         {"Content-Type": "application/json", "x-goog-api-key": key})
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as r:
+                    data = json.load(r)
+                text = "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
+                from engine.script_gen import robust_json_parse
+                rows = robust_json_parse(text)
+                if isinstance(rows, dict):
+                    rows = rows.get("frames") or rows.get("rotations") or []
+                    
+                by_id = {int(r["id"]): r for r in rows if isinstance(r, dict) and "id" in r}
+                if len(by_id) >= max(1, len(chunk) // 2):
+                    got = [UP_TO_ROTATION.get(str(by_id.get(i, {}).get("up", "top")).strip().lower(), 0) for i in range(1, len(chunk) + 1)]
+                    break
+            except Exception as e:
+                if "429" in str(e) or "503" in str(e):
+                    time.sleep(20 * (attempt + 1))
+                    continue
+                print(f"[Warning] Checking the picture rotation with Gemini failed ({str(e)[:80]}).")
+        if got is None:
+            return None
+        result += got
+    return result
+
+
 def choose_backend():
     """(model name, ask function, label) or (None, None, why): Gemini if a key exists (unless SHORTSFLOW_VISION=ollama), else Ollama."""
     want = (os.getenv("SHORTSFLOW_VISION") or "auto").strip().lower()

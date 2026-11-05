@@ -113,7 +113,7 @@ def stop_jobs():
         _kill_tree(p)
     if not running:
         return "Nothing is running right now."
-    return ("⏹ Stopped. Whatever was already finished is kept: open “Continue an unfinished run” on the Start here tab "
+    return ("⏹ Stopped. Whatever was already finished is kept: open “Earlier runs” → “Continue one that stopped” on the Start here tab "
             "to carry on from there.")
 
 
@@ -237,14 +237,22 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
     yield "❌ No dubbed video was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
 
 
-def trip_recap(files, name, stops, note, hook, length, style, music):
+def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False):
     """Trip recap tab: several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
+    from shortsflow import reuse as _reuse
+    if reuse and not files:
+        files = [v for v in _reuse.trip_videos_of(reuse) if os.path.exists(v)]      # the earlier recap's videos
     if not files:
         raise gr.Error("Add your trip videos first (in the order you filmed them).")
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music)]
+    cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance)]
+    if reuse:
+        copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
+        if copied:
+            print(f"[Log] Reusing {len(copied)} saved result(s) from the earlier recap (picture descriptions, place names).")
+    save_command(session, cmd)
     yield "Working on your recap...", "", None, None
     log = ""
     for log, _videos in _run(cmd):
@@ -252,7 +260,13 @@ def trip_recap(files, name, stops, note, hook, length, style, music):
         yield f"Working... {last}"[:200], log, None, None
     video, md = web_args.find_trip_outputs(session)
     if video:
-        yield "✅ Done! Your trip recap is ready below.", log, video, md
+        videos = web_args.find_trip_videos(session)
+        downloads = ([md] if md else []) + (videos if len(videos) > 1 else [])          # the itinerary, and both versions when there are two
+        done = "✅ Done! Your trip recap is ready below." + (" Both versions are in the download box." if len(videos) > 1 else "")
+        yield done, log, video, downloads
+        if (drive or "").strip():
+            yield done + "\n\n☁️ Uploading to Google Drive...", log, video, downloads
+            yield done + "\n\n" + drive_upload_message(videos, drive), log, video, downloads
         return
     reason = next((ln.split("]", 1)[1].strip() for ln in reversed(log.splitlines()) if ln.startswith("[Error]")), "")
     yield "❌ No recap was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
@@ -379,11 +393,14 @@ def clear_brand():
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
-               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False):
+               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive=""):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
     source = upload or (url or "").strip()
+    from shortsflow import reuse as _reuse
+    if reuse and not source:
+        source = _reuse.source_of(reuse)                  # the earlier run's video, so it does not have to be added again
     if not source:
         raise gr.Error("Paste a video link or upload a video file first.")
     session = os.path.join(ROOT, "sessions", time.strftime("web_%Y%m%d_%H%M%S"))
@@ -433,8 +450,42 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         if logo or (handle or "").strip() or (end_card or "").strip():
             save_brand(logo, handle, end_card, color, position)   # what is typed in the form counts, even if "Save" was not pressed
         cmd += brand.cli_args(ROOT)
+    if reuse:
+        keep = reuse_all in (True, "all")
+        copied = _reuse.seed_session(os.path.dirname(reuse), session, keep_moments=keep)
+        if copied:
+            if keep and "--use_cache" not in cmd:
+                cmd.append("--use_cache")
+            print(f"[Log] Reusing {len(copied)} saved result(s) from the earlier run ({'transcript and all cache' if keep else 'transcript only'}).")
     save_command(session, cmd)
-    yield from _stream_clip(cmd, results, long_form, minutes, find)
+    yield from _with_drive(_stream_clip(cmd, results, long_form, minutes, find), drive)
+
+def drive_upload_message(paths, folder):
+    """Upload finished videos to a Google Drive folder; returns one plain-language line (never raises)."""
+    from engine import drive_upload
+    if not drive_upload.folder_id(folder):
+        return "⚠️ Not uploaded: that is not a Google Drive folder link."
+    try:
+        done = drive_upload.upload([p for p in paths if p], folder)
+    except Exception as e:
+        return f"⚠️ Could not upload to Google Drive: {str(e)[:120]}"
+    wanted = len(drive_upload.files_to_send(paths))
+    if done and len(done) == wanted:
+        return f"☁️ Uploaded {len(done)} video{'s' if len(done) != 1 else ''} to your Google Drive folder."
+    return ("⚠️ Not uploaded to Google Drive (sign-in or access failed). One-time set-up: see the top of engine/drive_upload.py."
+            if not done else f"⚠️ Uploaded {len(done)} of {wanted} videos to Google Drive.")
+
+
+def _with_drive(stream, folder):
+    """Pass a clip run's (status, log, cards) through; when it ends with cards and a Drive folder was given, upload them and say so."""
+    last = None
+    for last in stream:
+        yield last
+    if folder and (folder or "").strip() and last and last[2]:
+        status, log, cards = last
+        yield f"{status}\n\n☁️ Uploading to Google Drive...", log, cards
+        yield f"{status}\n\n{drive_upload_message([c.get('video') for c in cards], folder)}", log, cards
+
 
 def save_command(session, cmd):
     """Remember the exact command of a run, so it can be continued after a stop or a crash."""
@@ -495,6 +546,15 @@ def unfinished_runs(root):
         when = f"{m.group(3)}.{m.group(2)}.{m.group(1)} {m.group(4)}:{m.group(5)}" if m else os.path.basename(d)
         out.append((f"{when} - {os.path.basename(src.rstrip('/'))[:50]}", cmd_file))
     return out[:10]
+
+
+def reusable_update(kind="clip"):
+    return gr.update(choices=_reuse_choices(kind))
+
+
+def _reuse_choices(kind):
+    from shortsflow import reuse
+    return reuse.earlier_runs(ROOT, kind)
 
 
 def unfinished_update():
@@ -733,7 +793,7 @@ def build_ui():
                             with gr.Row():
                                 q_brand_save = gr.Button("Save my brand", variant="secondary")
                                 q_brand_clear = gr.Button("Remove brand")
-                        q_btn = gr.Button("✨ Make my shorts", variant="primary")
+                        q_btn = gr.Button("✨ Make my shorts", variant="primary")
                         q_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         q_status = gr.Markdown("Waiting for a video...")
@@ -800,14 +860,28 @@ def build_ui():
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
                     q_zip = gr.File(label="Your download", interactive=False, visible=False)
-                with gr.Accordion("Continue an unfinished run", open=False):
-                    gr.Markdown("A run that was stopped, closed or crashed can carry on where it stopped: the analysis and the pieces "
-                                "already cut are reused.")
-                    q_unfinished = gr.Dropdown(label="Unfinished runs", choices=[], interactive=True)
-                    q_continue = gr.Button("Continue")
-                with gr.Accordion("Open an earlier run", open=False):
-                    q_runs = gr.Dropdown(label="Earlier runs", choices=[], interactive=True)
-                    q_open = gr.Button("Open")
+                with gr.Accordion("Earlier runs: open, continue or reuse", open=False):
+                    with gr.Tabs():
+                        with gr.Tab("Open a finished run"):
+                            q_runs = gr.Dropdown(label="Earlier runs", choices=[], interactive=True)
+                            q_open = gr.Button("Open")
+                        with gr.Tab("Continue one that stopped"):
+                            gr.Markdown("A run that was stopped, closed or crashed carries on where it stopped: the analysis and the pieces "
+                                        "already cut are reused.")
+                            q_unfinished = gr.Dropdown(label="Unfinished runs", choices=[], interactive=True)
+                            q_continue = gr.Button("Continue")
+                        with gr.Tab("Run again, reusing its work"):
+                            gr.Markdown("Pick an earlier run, change any setting above (captions, brand, extras...) and press the start button. "
+                                        "The slow steps are skipped, so only the final rendering is done again, and you do not have to add the video again.")
+                            q_reuse = gr.Dropdown(label="Earlier run to reuse", choices=[], interactive=True, value=None)
+                            q_reuse_all = gr.Radio([("Skip transcription only (pick the moments again)", "transcript"),
+                                                    ("Skip everything already done (transcript, moments, cut pieces)", "all")],
+                                                   value="all", label="What to skip",
+                                                   info="Choose \"Skip transcription only\" when you change the clip count, length or layout.")
+                with gr.Accordion("Upload the finished videos to Google Drive (optional)", open=False):
+                    gr.Markdown("Paste a Drive folder link; the finished videos are uploaded when the run is done. The first time you sign in with Google "
+                                "(one-time set-up: see the top of `engine/drive_upload.py`). Nothing is uploaded unless you fill this in.")
+                    q_drive = gr.Textbox(label="Google Drive folder link", placeholder="https://drive.google.com/drive/folders/...")
                 with gr.Accordion("Is my computer ready?", open=False):
                     q_check = gr.Markdown(setup_status())
                     gr.Button("Check again").click(setup_status, None, q_check)
@@ -827,11 +901,12 @@ def build_ui():
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
                 demo.load(unfinished_update, None, q_unfinished)
+                demo.load(lambda: reusable_update('clip'), None, q_reuse)
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
                 demo.load(earlier_runs, None, q_runs)
@@ -865,7 +940,7 @@ def build_ui():
                             with gr.Row():
                                 clip_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style")
                                 clip_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing")
-                        clip_btn = gr.Button("Find viral clips", variant="primary")
+                        clip_btn = gr.Button("Find viral clips", variant="primary")
                         clip_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         clip_videos = gr.Files(label="Rendered clips")
@@ -896,7 +971,7 @@ def build_ui():
                         d_original = gr.Dropdown(web_args.DUB_ORIGINAL_CHOICES, value="music", label="The video's own sound",
                                                  info="The first choice separates the voice from the music (needs 'pip install demucs'; about a minute per minute of video on the CPU) and removes only the voice. Without it the original is kept faintly.")
                         d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
-                        d_btn = gr.Button("🌍 Dub my video", variant="primary")
+                        d_btn = gr.Button("🌍 Dub my video", variant="primary")
                         d_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         d_status = gr.Markdown("Waiting for a video...")
@@ -925,17 +1000,30 @@ def build_ui():
                         t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],
                                            value="hype", label="Style")
                         t_music = gr.File(label="Music (optional)", file_types=["audio"], type="filepath")
+                        t_look = gr.Checkbox(value=False, label="Look at the pictures too (better captions, fixes sideways clips; slower)",
+                                             info="Uses Gemini if you have a key (small frames are sent to Google), otherwise a local vision model if installed. Off = nothing leaves your PC for this.")
+                        t_enhance = gr.Checkbox(value=False, label="Auto-enhance the video (like an editor: brightness, colour, sharpness)",
+                                                info="Each video is measured and corrected only where needed: dark clips lifted, a colour cast reduced, dull clips given a little colour. Done on your PC; it cannot add detail that is not there.")
+                        t_both = gr.Checkbox(value=False, label="Make a portrait AND a landscape version",
+                                             info="Portrait uses your vertical clips, landscape your wide clips, so nothing is cropped small.")
+                        t_places = gr.Checkbox(value=True, label="Name the places from the videos' GPS",
+                                               info="Sends the rounded GPS position (about 100 m) to the free OpenStreetMap service and shows tourist-place names. Untick to keep it all on your PC.")
+                        t_reuse = gr.Dropdown(label="Reuse an earlier recap (optional)", choices=[], interactive=True, value=None,
+                                              info="Picture descriptions and place names are reused, and its videos too if you add none above.")
+                        t_drive = gr.Textbox(label="Upload to a Google Drive folder (optional)", placeholder="https://drive.google.com/drive/folders/...",
+                                             info="Needs a one-time Google sign-in; see the top of engine/drive_upload.py.")
                         t_btn = gr.Button("🧳 Make my recap", variant="primary")
                         t_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         t_status = gr.Markdown("Waiting for your videos...")
                         t_video = gr.Video(label="Trip recap", interactive=False)
-                        t_md = gr.File(label="Itinerary (.md)", interactive=False)
+                        t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance],
                                     [t_status, t_log, t_video, t_md])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])
+                demo.load(lambda: reusable_update('trip'), None, t_reuse)
 
             with gr.Tab("📸 Photo reel"):
                 from engine.photo_reel_types import type_labels
@@ -952,7 +1040,7 @@ def build_ui():
                                              placeholder="One line per photo, in order. Leave empty for automatic captions.")
                         p_music = gr.File(label="Music (optional, otherwise a built-in track)", file_types=["audio"], type="filepath")
                         p_len = gr.Slider(10, 60, value=24, step=2, label="Length (seconds)")
-                        p_btn = gr.Button("📸 Make my reel", variant="primary")
+                        p_btn = gr.Button("📸 Make my reel", variant="primary")
                         p_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         p_status = gr.Markdown("Waiting for photos...")
@@ -974,7 +1062,7 @@ def build_ui():
                             vibe = gr.Dropdown(VIBES, value="suspense", label="Music vibe")
                             voice = gr.Textbox(label="Voice (optional)", placeholder="en-US-GuyNeural")
                         gen_settings = _render_settings()
-                        gen_btn = gr.Button("Generate short", variant="primary")
+                        gen_btn = gr.Button("Generate short", variant="primary")
                         gen_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         gen_videos = gr.Files(label="Rendered video")

@@ -87,8 +87,10 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
     return args
 
 
-def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None):
-    """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out."""
+def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False):
+    """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
+    look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
+    recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
     args = ["--mode", "TRIP", "--trip_videos", *[str(v) for v in videos], "--session_dir", session_dir,
             "--recap_length", str(max(20, min(300, int(length or 60))))]
     for flag, value in (("--trip_name", name), ("--trip_stops", stops), ("--user_context", note), ("--recap_hook", hook)):
@@ -98,13 +100,32 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--recap_style", "plain"]
     if music:
         args += ["--music", str(music)]
+    if look:
+        args += ["--visual_context"]
+    if both:
+        args += ["--recap_versions", "both"]
+    if not name_places:
+        args += ["--recap_no_geocode"]
+    if enhance:
+        args += ["--enhance", "auto"]
     return args
 
 
 def find_trip_outputs(session_dir):
-    """(recap video, itinerary .md) in a trip session folder; either is None when missing."""
-    video, md = os.path.join(session_dir, "recap.mp4"), os.path.join(session_dir, "itinerary.md")
-    return (video if os.path.isfile(video) else None, md if os.path.isfile(md) else None)
+    """(recap video, itinerary .md) in a trip session folder; either is None when missing. With both versions the portrait recap
+    is the one returned (find_trip_videos lists them all)."""
+    videos = find_trip_videos(session_dir)
+    for name in ("itinerary.md", os.path.join("portrait", "itinerary.md"), os.path.join("landscape", "itinerary.md")):
+        md = os.path.join(session_dir, name)
+        if os.path.isfile(md):
+            return (videos[0] if videos else None, md)
+    return (videos[0] if videos else None, None)
+
+
+def find_trip_videos(session_dir):
+    """Every finished recap video of a trip session: recap.mp4, or recap_portrait.mp4 and recap_landscape.mp4 (portrait first)."""
+    names = ("recap.mp4", "recap_portrait.mp4", "recap_landscape.mp4")
+    return [p for p in (os.path.join(session_dir, n) for n in names) if os.path.isfile(p)]
 
 
 def find_dub_outputs(session_dir):

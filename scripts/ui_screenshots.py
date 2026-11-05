@@ -122,7 +122,7 @@ try:
         page.get_by_role("tab", name="Start here").click()
         page.wait_for_timeout(300)
 
-        page.get_by_text("Open an earlier run").click()
+        page.get_by_text("Earlier runs: open, continue or reuse").click()
         page.locator('input[aria-label="Earlier runs"]').click()     # the input itself: clicking the label does not open the list in Gradio 5
         page.wait_for_timeout(500)
         page.screenshot(path=os.path.join(out_dir, "01b_dropdown.png"), full_page=True)

@@ -116,6 +116,14 @@ python gui_app.py
 | `engine/pipeline.py` | Shared helpers used by `main.py` and mode pipelines (status reporting, SRT export, voice maps) |
 | `engine/modes/*.py` | Pipelines, each with `run(args, target_bitrate, target_preset)`: `generate` (idea-to-video, all content modes), `clip_extract`, `music`, `explainer`, `photo_reel`, `video_filter` |
 | `engine/speaker_focus.py` | Active-speaker shot planning for `--layout active` |
+| `engine/trip_recap.py` | `--mode TRIP` (own `run(args, ...)`): several travel videos -> one recap (hook, glimpses, day/stop cards, closing card, itinerary); look auto-decided from the footage; portrait + landscape versions; look-alike shot removal; sideways-clip fix |
+| `engine/enhance.py` | Auto-enhance: measures frames of a video (tones, colour cast, saturation, noise) and builds an FFmpeg correction chain (`plan`, `build_filter`, `enhance_filter`); used by the trip recap via `--enhance auto` |
+| `engine/geo.py` | GPS from a video's `location` tag, grouping into places, OpenStreetMap name/attraction lookup (cached; `SHORTSFLOW_GEOCODE=off` or `--recap_no_geocode` disables it) |
+| `engine/visual_context.py` | Picture descriptions for story-aware picking and the trip recap: Gemini when `GEMINI_API_KEY` is set (frames leave the PC), else local Ollama (`SHORTSFLOW_VISION=ollama` forces local); also scenery rating and sideways-frame check |
+| `engine/drive_upload.py` | Optional upload of finished videos to a Google Drive folder (`--upload_drive`, `python -m engine.drive_upload`); needs the user's own OAuth client, never commit `client_secrets_drive.json` / `token_drive.json` |
+| `engine/gphotos_album.py` | Download the videos of a Google Photos shared-album link (unofficial page parsing) for the trip recap |
+| `shortsflow/reuse.py` | Browser app: seed a new run with an earlier run's transcript, descriptions, moments and cut pieces (never finished clips) |
+| `webui.py` / `shortsflow/web_args.py` | Gradio browser app (tabs: Start here, Clip, Dub, Trip recap, Photo reel, Generate) and the pure functions that turn its form values into CLI arguments (testable without gradio) |
 | `tests/` | Offline pytest suite (`python -m pytest`), run in CI on every push/PR |
 | `remotion-video/src/` | React video components & animated subtitle spring physics |
 
@@ -131,6 +139,9 @@ python gui_app.py
    * Maintain the Multi-LLM fallback order: **Gemini API -> Local Ollama -> HuggingFace**.
 3. **Subtitles & Caption Positioning**:
    * Remotion captions use vertical `y_pos` offset defaulting to `1150` for 9:16 vertical resolution (1080x1920).
-4. **Task Board & Parallel Work**:
+4. **Privacy of the optional cloud helpers**:
+   * Everything runs locally by default. Only these leave the PC, and each is optional: Gemini/Groq/HF LLM calls (`--llm_provider`), Gemini picture descriptions (`--visual_context` with a key), OpenStreetMap place names (trip recap; off with `--recap_no_geocode`), Google Drive upload (only when asked). Say so in any docs or UI text you add about them.
+   * Personal footage, its recaps and any user-pasted links (Drive, Photos) never go into the README, docs, tests or the CHANGELOG; use made-up ids in tests.
+5. **Task Board & Parallel Work**:
    * Open work, workstream ownership, hot-spot files and verification steps live in **[ROADMAP.md](ROADMAP.md)**. Claim a task there before starting.
    * Verify rendering without an LLM key: `python scripts/offline_facts_render.py`.

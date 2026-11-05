@@ -229,3 +229,26 @@ def test_trip_args():
     assert "--trip_name" in a and a[a.index("--trip_name") + 1] == "Almaty"
     assert "--user_context" not in a and a[a.index("--recap_length") + 1] == "20"      # empty note left out, length clamped
     assert "--recap_style" in a and web_args.trip_args(["a.mp4"], "s").count("--recap_style") == 0
+
+
+def test_trip_args_picture_versions_and_place_naming_options():
+    base = web_args.trip_args(["a.mp4"], "s")
+    assert "--visual_context" not in base and "--recap_versions" not in base and "--recap_no_geocode" not in base      # default: places named, nothing else extra
+    a = web_args.trip_args(["a.mp4"], "s", look=True, both=True, name_places=False)
+    assert "--visual_context" in a and a[a.index("--recap_versions") + 1] == "both" and "--recap_no_geocode" in a
+
+
+def test_find_trip_videos_lists_both_versions_and_the_itinerary_of_either(tmp_path):
+    s = str(tmp_path)
+    assert web_args.find_trip_videos(s) == [] and web_args.find_trip_outputs(s) == (None, None)
+    (tmp_path / "recap_landscape.mp4").write_bytes(b"x")
+    (tmp_path / "recap_portrait.mp4").write_bytes(b"x")
+    (tmp_path / "portrait").mkdir()
+    (tmp_path / "portrait" / "itinerary.md").write_text("# t", encoding="utf-8")
+    assert [os.path.basename(v) for v in web_args.find_trip_videos(s)] == ["recap_portrait.mp4", "recap_landscape.mp4"]
+    video, md = web_args.find_trip_outputs(s)
+    assert os.path.basename(video) == "recap_portrait.mp4" and md.endswith("itinerary.md")
+    single = tmp_path / "one"
+    single.mkdir()
+    (single / "recap.mp4").write_bytes(b"x")
+    assert web_args.find_trip_outputs(str(single))[0].endswith("recap.mp4")

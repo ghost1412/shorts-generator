@@ -11,7 +11,7 @@ Ready-made ways to shape a video. Each is a choice, not a fixed layout: where it
 | `hype` | A hook line over fast glimpses of the most beautiful shots, then the trip title card and a card per day or stop. | Phone clips, shorts |
 | `plain` | Day 1 first, no opening. | Plain diary |
 
-`--recap_aspect 9:16|16:9|2.35:1` overrides the frame shape. `--music file` makes cinematic cuts land on whole beats. `--recap_hook "Woke up at 4 AM just for this view"` sets the opening line. `--trip_stops "A, B, C"` names the stops of a one-day tour.
+`--recap_aspect 9:16|16:9|2.35:1` overrides the frame shape. `--music file` makes cinematic cuts land on whole beats. `--recap_hook "Woke up at 4 AM just for this view"` sets the opening line. `--trip_stops "A, B, C"` names the stops of a one-day tour. Without it, places are read from the videos' GPS and named as attractions (`--recap_no_geocode` turns the name lookup off). `--recap_versions both` renders a portrait and a landscape recap.
 
 How a cinematic title is decided: the tool reads a frame of the shot under it, puts the text in the calmest area (centre, left, lower or upper), uses light or dark text by brightness there, takes the accent colour from the shot, and rotates the layout (centred, left-aligned, stacked words) so the titles are not all alike.
 

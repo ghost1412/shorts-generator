@@ -20,7 +20,7 @@ def test_stop_button_ends_a_running_pipeline_and_says_so():
                 break
             time.sleep(0.1)
         assert proc.poll() is not None, "the process was not ended"
-        assert proc.pid in webui._STOPPED and msg.startswith("⏹ Stopped") and "Continue an unfinished run" in msg
+        assert proc.pid in webui._STOPPED and msg.startswith("⏹ Stopped") and "Continue one that stopped" in msg
     finally:
         if proc.poll() is None:
             proc.kill()
