@@ -5,6 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- Recap gets the Start-here editing options: the Auto-edit director (`--auto_edit` + `--edit_strength`: a slow push-in or pull-out on every shot, sound effects at the cuts, the style's colour look), a colour filter (`--video_filter`; Automatic gives a look only when the footage suits it, otherwise none) and `--clean_audio` for the clips' own sound. The web recap length is no longer capped at 5 minutes (up to 60; the engine has no limit).
 - Recap is no longer only for trips: the tab (now "Recap (trip, wedding, event)") has a "What kind of videos are these?" choice - trip, wedding, event or party, family memories (`--recap_kind`). The wording, the section names (Part 1, Part 2 or your own function names via `--trip_stops`) and the options change with it; non-trip recaps never look up places, and `--recap_keep_sound` keeps the clips' own sound (vows, speeches) under the music.
 - Start here: a "Colour filter" dropdown (12 looks, "Let the AI choose", or none). Left on Automatic, the Auto-edit style still picks its own look.
 - Review card: a "Caption height" slider in "Edit this short" moves the animated captions up or down and re-renders that one short (`python -m engine.rerender RUN INDEX --caption_y 900`); the height is remembered for later edits and undo restores it.

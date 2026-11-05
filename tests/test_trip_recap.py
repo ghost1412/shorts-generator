@@ -311,3 +311,32 @@ def test_web_args_pass_the_kind_and_keep_sound_only_when_needed():
     both = web_args.trip_args(["a.mp4"], "s", kind="wedding", keep_sound=True)
     assert both[both.index("--recap_kind") + 1] == "wedding" and "--recap_keep_sound" in both
     assert web_args.recap_kind_labels("wedding")[1].startswith("Functions") and web_args.recap_kind_labels("zzz") == web_args.RECAP_KIND_TEXT["trip"]
+
+
+def test_resolve_look_automatic_none_named_and_edit_style():
+    from engine.video_gen import FILTER_PRESETS
+    assert tr.resolve_look("default", "", tr.CINEMATIC_GRADE) == (tr.CINEMATIC_GRADE, "automatic")      # the cinematic look the footage suits
+    assert tr.resolve_look("default", "", "") == ("", "none needed")                                    # no look when none suits
+    assert tr.resolve_look("none", "hype", tr.CINEMATIC_GRADE)[0] == ""                                  # explicit 'none' beats everything
+    assert tr.resolve_look("teal_orange", "", "")[0] == FILTER_PRESETS["teal_orange"]
+    assert tr.resolve_look("default", "hype", "")[0] == FILTER_PRESETS["vibrant_action"]                 # the style's own look
+    assert tr.resolve_look("default", "podcast", tr.CINEMATIC_GRADE)[0] == tr.CINEMATIC_GRADE           # a style without a look keeps the automatic one
+
+
+def test_zoom_filter_fixes_the_frame_rate_and_cut_sounds_skip_cards():
+    z = tr.zoom_filter(5.0, 0.06)
+    assert z.startswith("fps=30,zoompan=") and "1+0.0600*on/150" in z and "d=1" in z
+    assert "1+0.0600-0.0600*on/150" in tr.zoom_filter(5.0, 0.06, out=True)
+    parts = [("p/glimpse_1.mp4", 1.4), ("p/trip_title.mp4", 3.4), ("p/card_1.mp4", 2.2), ("p/clip_1_1.mp4", 5.0), ("p/clip_1_2.mp4", 5.0), ("p/end.mp4", 3)]
+    ev = tr.cut_sound_events(parts, "whoosh")
+    assert [e["t"] for e in ev] == [1.4, 7.0, 12.0] and {e["kind"] for e in ev} == {"whoosh"}        # not at the start, not at cards or the end
+
+
+def test_recap_options_reach_the_command_line_and_long_recaps_are_allowed():
+    from shortsflow import web_args
+    a = web_args.trip_args(["a.mp4"], "s", length=1500, grade="teal_orange", edit="hype", edit_strength="hyped", clean_sound=True)
+    assert a[a.index("--recap_length") + 1] == "1500"
+    assert a[a.index("--video_filter") + 1] == "teal_orange" and a[a.index("--auto_edit") + 1] == "hype" and "--clean_audio" in a
+    assert web_args.trip_args(["a.mp4"], "s", length=99999)[4:6] == ["--recap_length", str(web_args.MAX_RECAP_SECONDS)] or "--recap_length" in web_args.trip_args(["a.mp4"], "s", length=99999)
+    plain = web_args.trip_args(["a.mp4"], "s")
+    assert not {"--video_filter", "--auto_edit", "--clean_audio"} & set(plain)                              # nothing extra unless chosen

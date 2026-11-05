@@ -237,7 +237,8 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
     yield "❌ No dubbed video was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
 
 
-def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False):
+def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
+               grade="default", edit="none", edit_strength="medium", clean_sound=False):
     """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
@@ -247,7 +248,8 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
         raise gr.Error("Add your trip videos first (in the order you filmed them).")
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound)]
+    cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound,
+                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound)]
     if reuse:
         copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
         if copied:
@@ -1033,11 +1035,21 @@ def build_ui():
                                             placeholder="We booked a 17 hour tour from Almaty. We left at 5 am and went first to Kolsai Lake.")
                         t_hook = gr.Textbox(label="Opening line (optional)", placeholder="Woke up at 4 AM just for this view",
                                             info="Shown over the first glimpses. Empty: written from your note.")
-                        t_length = gr.Slider(30, 180, value=60, step=5, label="Recap length (seconds)")
+                        t_length = gr.Slider(30, web_args.MAX_RECAP_SECONDS, value=60, step=15, label="Recap length (seconds)",
+                                             info="A trip: 60-120. A wedding or event film can be 10-30 minutes (600-1800). Longer recaps take longer to make.")
                         t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],
                                            value="hype", label="Style")
                         t_music = gr.File(label="Music (optional)", file_types=["audio"], type="filepath")
-                        t_look = gr.Checkbox(value=False, label="Look at the pictures too (better captions, fixes sideways clips; slower)",
+                        t_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style (the director)",
+                                             info="Like on Start here: a slow push-in or pull-out on every shot, sound effects at the cuts and the style's own colour look. "
+                                                  "Hype / gaming is the punchiest; Vlog is warm and gentle.")
+                        t_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
+                                                   info="Subtle keeps it quiet; Hyped uses everything.")
+                        t_grade = gr.Dropdown(web_args.RECAP_GRADE_CHOICES, value="default", label="Colour filter",
+                                              info="Automatic gives the cinematic look when the footage suits it and none otherwise. Pick one to force a look, or None to leave the colours as filmed.")
+                        t_clean = gr.Checkbox(value=False, label="Clean up the sound (noise, volume)",
+                                              info="Only matters when the clips' own sound is in the recap (no music, or 'keep the original sound' ticked).")
+                        t_look =gr.Checkbox(value=False, label="Look at the pictures too (better captions, fixes sideways clips; slower)",
                                              info="Uses Gemini if you have a key (small frames are sent to Google), otherwise a local vision model if installed. Off = nothing leaves your PC for this.")
                         t_enhance = gr.Checkbox(value=False, label="Auto-enhance the video (like an editor: brightness, colour, sharpness)",
                                                 info="Each video is measured and corrected only where needed: dark clips lifted, a colour cast reduced, dull clips given a little colour. Done on your PC; it cannot add detail that is not there.")
@@ -1059,7 +1071,7 @@ def build_ui():
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean],
                                     [t_status, t_log, t_video, t_md])
                 t_kind.change(recap_kind_changed, t_kind, [t_name, t_stops, t_note, t_places, t_keep])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])
