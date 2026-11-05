@@ -59,3 +59,18 @@ def test_hashtags_alone_are_not_treated_as_claims():
     ask = fake_llm(meta("Lost only twelve percent", description="Is the battery really that good?\n#Samsung #Pixel #tech"))
     out = social_gen.generate_clip_metadata(TEXT, hook="Twelve percent", ask=ask)
     assert out["description"].startswith("Is the battery") and len(ask.calls) == 1
+
+
+def test_capitalised_style_words_are_not_mistaken_for_invented_names():
+    # Title Case titles, sentence openers, calls to action and contractions are capitals of style, not names
+    assert title_variants.grounding_problems("Battery Test: Charging Speed Surprised Me", TEXT) == []
+    assert title_variants.ungrounded_names("Is it good? Follow for more. Like and share. I've tested it", TEXT) == []
+    assert title_variants.ungrounded_names("Stay tuned.\nFollow for more", TEXT) == []
+    # ...while a name in the middle of an ordinary title is still caught
+    assert title_variants.ungrounded_names("Why the Samsung beat it", TEXT) == ["Samsung"]
+
+
+def test_a_description_is_checked_for_invented_figures_but_not_for_capitalised_keywords():
+    d = "Is it the best battery? Follow for more Pixel and Galaxy tests. Part 2 soon. #battery"
+    assert title_variants.grounding_problems(d, TEXT, names=False, min_digits=2) == []          # "Galaxy" and "2" are not claims here
+    assert title_variants.grounding_problems("Apple admits 500 units failed.", TEXT, names=False, min_digits=2)   # 500 is

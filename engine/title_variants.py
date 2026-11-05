@@ -30,6 +30,11 @@ _COMMON = {
     "nobody", "everyone", "everything", "secret", "truth", "real", "biggest", "best", "worst", "one", "if", "and", "but",
     "or", "so", "just", "only", "most", "more", "all", "every", "inside", "behind", "before", "after", "in", "on", "at",
     "to", "for", "of", "from", "with", "without", "about", "i'm", "it's", "don't", "here's", "that's", "let's",
+    # calls to action and contractions that open a sentence in a description
+    "follow", "like", "subscribe", "stay", "share", "comment", "tap", "click", "join", "check", "learn", "discover", "get", "see",
+    "find", "listen", "read", "try", "remember", "imagine", "meet", "tune", "tuned", "part", "new", "now", "today", "yes",
+    "i've", "i'll", "i'd", "you're", "you've", "you'll", "we're", "we've", "they're", "he's", "she's", "isn't", "can't",
+    "won't", "wasn't", "aren't", "didn't", "doesn't", "wouldn't", "couldn't", "shouldn't",
 }
 
 
@@ -54,17 +59,27 @@ def ungrounded_numbers(variant, source_text):
     return sorted(n for n in _numbers(variant) if n not in have)
 
 
+def _is_title_case(text):
+    """True when most longer words start with a capital ("Resident Evil Combat Masterclass"): then a capital says nothing about names."""
+    longer = [t for t in re.findall(r"[A-Za-z][\w'’]*", text or "") if len(t) > 3]
+    return len(longer) >= 3 and sum(t[0].isupper() for t in longer) / len(longer) >= 0.7
+
+
 def ungrounded_names(variant, source_text):
-    """Capitalised words (not at the start, not common words) that the source never says."""
+    """Capitalised words (not at the start of a sentence, not common words) that the source never says. A Title Case text is not
+    checked for names at all: every word is capitalised there, so a capital proves nothing."""
+    if _is_title_case(variant):
+        return []
     src = set(_words(source_text))
     src_stems = {w.rstrip("s") for w in src}
     out = []
-    tokens = re.findall(r"[\w'’]+", variant or "")
-    for i, tok in enumerate(tokens):
-        low = tok.lower()
-        # the first word is skipped: any title starts with a capital, so it says nothing (a known gap: an invented name in
-        # first position is not caught, the other checks and the model's own instruction have to cover it)
-        if i == 0 or not tok[0].isupper():
+    text = variant or ""
+    for i, m in enumerate(re.finditer(r"[\w'’]+", text)):
+        tok, low = m.group(0), m.group(0).lower()
+        # the first word and any word that opens a sentence or a line are skipped: they start with a capital anyway (a known gap: an
+        # invented name in first position is not caught, the other checks and the model's own instruction have to cover it)
+        before = text[:m.start()].rstrip(" \t\"'“”([")
+        if i == 0 or not before or before[-1] in ".!?:\n" or text[:m.start()].endswith("\n") or not tok[0].isupper():
             continue
         if low in _COMMON or tok.isdigit():
             continue
@@ -74,17 +89,19 @@ def ungrounded_names(variant, source_text):
     return out
 
 
-def grounding_problems(text, transcript, extra_sources=()):
+def grounding_problems(text, transcript, extra_sources=(), names=True, min_digits=1):
     """Numbers and names in `text` that neither the transcript nor the extra sources (hook, context) say. [] when it is grounded.
-    Used for a clip's main title and description as well as for the alternative titles."""
+    Used for a clip's main title and description as well as for the alternative titles. A description is checked with names=False
+    (it is full of capitalised keywords) and min_digits=2 (so "part 2" is fine but an invented "500 units" is caught)."""
     source = " ".join([transcript or ""] + [s for s in extra_sources if s])
     problems = []
-    nums = ungrounded_numbers(text, source)
+    nums = [n for n in ungrounded_numbers(text, source) if len(re.sub(r"\D", "", n)) >= min_digits]
     if nums:
         problems.append("numbers not in the transcript: " + ", ".join(nums))
-    names = ungrounded_names(text, source)
     if names:
-        problems.append("names not in the transcript: " + ", ".join(names))
+        found = ungrounded_names(text, source)
+        if found:
+            problems.append("names not in the transcript: " + ", ".join(found))
     return problems
 
 

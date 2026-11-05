@@ -154,7 +154,7 @@ def ground_clip_metadata(parsed, text, hook=None, user_context=None, ask=None):
 
     def problems_of(title, description):
         found = title_variants.grounding_problems(title, text, extras)
-        found += title_variants.grounding_problems(_description_lead(description), text, extras)
+        found += title_variants.grounding_problems(_description_lead(description), text, extras, names=False, min_digits=2)
         return found
     problems = problems_of(parsed.get("title", ""), parsed.get("description", ""))
     if not problems:
@@ -177,7 +177,7 @@ def ground_clip_metadata(parsed, text, hook=None, user_context=None, ask=None):
     # fall back to what is certainly true: the hook (a stated claim from the clip) or the first sentence said
     first = (hook or text.split(".")[0] or "Must-watch moment").strip()
     parsed["title"] = first[:80]
-    if title_variants.grounding_problems(_description_lead(parsed.get("description", "")), text, extras):
+    if title_variants.grounding_problems(_description_lead(parsed.get("description", "")), text, extras, names=False, min_digits=2):
         hashtags = " ".join(w for w in str(parsed.get("description", "")).split() if w.startswith("#"))
         parsed["description"] = (text[:200].strip() + ("\n\n" + hashtags if hashtags else "")).strip()
     return parsed
