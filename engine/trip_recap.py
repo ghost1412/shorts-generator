@@ -1464,6 +1464,26 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     return {"video": video, "itinerary_md": md_path, "itinerary_json": js_path, "days": len(days)}
 
 
+def share_place_names(src_dir, dst_dir):
+    """Copy the place names decided for one version into the other's folder (the first version's names win), so the same spot has the same
+    name in the portrait and the landscape recap. Returns how many names were carried over."""
+    def load(d):
+        try:
+            with open(os.path.join(d, "place_names.json"), "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+    names = load(src_dir)
+    if not names:
+        return 0
+    merged = {**load(dst_dir), **names}
+    os.makedirs(dst_dir, exist_ok=True)
+    with open(os.path.join(dst_dir, "place_names.json"), "w", encoding="utf-8") as fh:
+        json.dump(merged, fh, indent=1, ensure_ascii=False)
+    return len(names)
+
+
 def make_recap_versions(paths, session_dir, aspect=None, style="auto", **kw):
     """One recap for portrait devices (9:16, only the vertical videos) and one for landscape (16:9 unless `aspect` is given, only the
     landscape videos). Returns {"portrait": result, "landscape": result}; the videos are session_dir/recap_portrait.mp4 and recap_landscape.mp4."""
@@ -1473,6 +1493,10 @@ def make_recap_versions(paths, session_dir, aspect=None, style="auto", **kw):
     for name, asp, ori in (("portrait", "9:16", "portrait"), ("landscape", aspect or "16:9", "landscape")):
         sub = os.path.join(session_dir, name)
         print(f"[Log] === {name.capitalize()} version ({asp}) ===")
+        if out:                                                    # the second version reuses the first one's place names
+            carried = share_place_names(os.path.join(session_dir, next(iter(out))), sub)
+            if carried:
+                print(f"[Log] {carried} place name(s) carried over from the {next(iter(out))} version.")
         res = make_recap(paths, sub, aspect=asp, style=style, orientation=ori, **kw)
         final = os.path.join(session_dir, f"recap_{name}.mp4")
         shutil.copyfile(res["video"], final)

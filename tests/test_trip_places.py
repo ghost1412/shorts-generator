@@ -437,3 +437,15 @@ def test_a_place_the_ai_is_unsure_about_keeps_the_maps_own_name():
     finally:
         g.place_name, g.nearby_attractions = orig
     assert places[0]["name"] == "Kolsay Lakes Town"                        # a named map feature beats leaving the stop unnamed
+
+
+def test_the_second_version_reuses_the_first_versions_place_names(tmp_path):
+    a, b = tmp_path / "portrait", tmp_path / "landscape"
+    a.mkdir()
+    b.mkdir()
+    (a / "place_names.json").write_text(json.dumps({"v3:42.985,78.465": "Kaindy Lake", "v3:43.354,79.058": "Charyn Canyon"}), encoding="utf-8")
+    (b / "place_names.json").write_text(json.dumps({"v3:42.985,78.465": "Something Else", "v3:43.111,77.111": "Shymbulak"}), encoding="utf-8")
+    assert tr.share_place_names(str(a), str(b)) == 2
+    merged = json.loads((b / "place_names.json").read_text(encoding="utf-8"))
+    assert merged == {"v3:42.985,78.465": "Kaindy Lake", "v3:43.354,79.058": "Charyn Canyon", "v3:43.111,77.111": "Shymbulak"}   # the first version's names win
+    assert tr.share_place_names(str(tmp_path / "none"), str(b)) == 0
