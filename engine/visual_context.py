@@ -261,7 +261,9 @@ def describe_candidates(video, highlights, about="", cache_path=None, model=None
     out, done = [], 0
     for i, h in enumerate(highlights):
         h = dict(h)
-        key = f"{float(h['start']):.1f}-{float(h['end']):.1f}"
+        # the video's name is part of the key: the trip recap describes moments of MANY videos into one cache file, and many of them share
+        # the same window (0.0-4.8 s), so a key of only the times gave one video's description to another
+        key = f"{os.path.basename(str(video))}|{float(h['start']):.1f}-{float(h['end']):.1f}"
         text = cache.get(key, "")
         if not text and i < max_clips:
             text = ask(grab(video, h["start"], h["end"]), model, about)

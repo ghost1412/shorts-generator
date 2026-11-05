@@ -37,7 +37,7 @@ def test_describe_candidates_caches_and_skips_failures(tmp_path):
     out = vc.describe_candidates("v.mp4", hl, cache_path=str(cache), model="m", grab=grab, ask=ask)
     assert out[0]["visual"] == "A cutscene" and "visual" not in out[1]
     assert "visual" not in hl[0]                       # input untouched
-    assert json.loads(cache.read_text())["10.0-40.0"] == "A cutscene"
+    assert json.loads(cache.read_text())["v.mp4|10.0-40.0"] == "A cutscene"
     calls.clear()
     vc.describe_candidates("v.mp4", hl, cache_path=str(cache), model="m", grab=grab, ask=ask)
     assert len(calls) == 1                             # only the one without a cached answer is asked again
@@ -128,3 +128,14 @@ def test_rate_scenery_parses_one_request(monkeypatch):
     assert out == [{"score": 9.0, "overlay": False}, {"score": 3.0, "overlay": True}] and len(calls) == 1
     monkeypatch.setattr(vc, "gemini_key", lambda: None)
     assert vc.rate_scenery([b"a"]) is None                     # no key: callers keep the colour score
+
+
+def test_two_videos_with_the_same_window_do_not_share_a_cached_description(tmp_path):
+    cache = tmp_path / "vc.json"
+    ask = lambda frames, model, about: f"described {frames[0].decode()}"  # noqa: E731
+    grab = lambda video, start, end: [video.encode()]
+    window = [{"start": 0.0, "end": 4.8}]
+    a = vc.describe_candidates("day1/airplane.mp4", window, cache_path=str(cache), model="m", grab=grab, ask=ask)
+    b = vc.describe_candidates("day2/lake.mp4", window, cache_path=str(cache), model="m", grab=grab, ask=ask)
+    assert a[0]["visual"] == "described day1/airplane.mp4" and b[0]["visual"] == "described day2/lake.mp4"      # not the first video's text again
+    assert len(json.loads(cache.read_text())) == 2

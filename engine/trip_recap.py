@@ -237,9 +237,84 @@ def drop_repeats(moments, spares, describe_one):
     return out
 
 
-def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_path=None):
-    """Give every place of `places` ({"center", "files", "visuals"}) a "name": the GPS looked up on OpenStreetMap, then a landmark
-    name from the LLM only when the coordinates and the pictures agree with a place it knows. Missing names stay ''."""
+PLAIN_AREA = ("district", "region", "oblast", "province", "county")
+CACHE_PREFIX = "v3:"          # v3: names from the no-guessing prompt with the conflict check (older prefixes held wrong names)
+CONFLICT_KM = 2.5             # one name on two places this far apart is a mistake (two different lakes cannot both be "Kolsay Lakes")
+
+
+def is_plain_area(name):
+    """True for no name or an administrative area ("Kegen District"): fine for the itinerary, never shown on screen."""
+    return not str(name or "").strip() or str(name).strip().lower().endswith(PLAIN_AREA)
+
+
+def parse_place_overrides(text):
+    """[(lat, lon, name)] from '42.985,78.465=Kaindy Lake; 42.991,78.326=Kolsay Lakes' (names you know to be right)."""
+    out = []
+    for item in re.split(r"[;\n]+", str(text or "")):
+        m = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*=\s*(.+?)\s*", item)
+        if m and m.group(3):
+            out.append((float(m.group(1)), float(m.group(2)), m.group(3)[:60]))
+    return out
+
+
+def apply_place_overrides(places, overrides, radius_km=1.5):
+    """Give each place the name you typed for the nearest override within radius_km. Returns the indices that were set."""
+    from engine.geo import distance_km
+    done = []
+    for i, p in enumerate(places):
+        if not p.get("center"):
+            continue
+        best = min(((distance_km(p["center"], (la, lo)), n) for la, lo, n in overrides), default=None)
+        if best and best[0] <= radius_km:
+            p["name"], p["_done"], p["manual"] = best[1], True, True
+            done.append(i)
+    return done
+
+
+_FLIGHT = re.compile(r"\b(airplane|aeroplane|plane window|from a plane|aerial view from|above the clouds|wing of)\b", re.I)
+
+
+def name_conflicts(places, min_km=CONFLICT_KM):
+    """[[indices]] of places that got the same name although they are more than min_km apart (a naming mistake)."""
+    from engine.geo import distance_km
+    groups = {}
+    for i, p in enumerate(places):
+        if p.get("center") and p.get("name") and not is_plain_area(p["name"]):
+            groups.setdefault(p["name"].strip().lower(), []).append(i)
+    out = []
+    for idx in groups.values():
+        if len(idx) > 1 and any(distance_km(places[a]["center"], places[b]["center"]) > min_km for a in idx for b in idx if a < b):
+            out.append(idx)
+    return out
+
+
+def _place_line(i, p, f):
+    seen = "; ".join(v for v in p.get("visuals", [])[:3] if v) or "no description"
+    near = "; ".join(f.get("near") or []) or "none found"
+    return (f"[{i}] GPS {p['center'][0]:.4f}, {p['center'][1]:.4f}; address: {f.get('hint') or 'nothing useful'}; "
+            f"named places on the map within ~3 km (may be in the local language): {near}; pictures show: {seen}")
+
+
+def _apply_rows(rows, places, saved, key_of, only=None):
+    if isinstance(rows, dict):
+        rows = rows.get("places") or []
+    for r in rows if isinstance(rows, list) else []:
+        try:
+            i = int(r.get("id", 0)) - 1
+        except (TypeError, ValueError):
+            continue
+        name = re.sub(r"\s+", " ", str(r.get("name") or "")).strip()
+        if 0 <= i < len(places) and (only is None or i in only) and not places[i].get("manual") and name and len(name) <= 60:
+            places[i]["name"] = name                      # a blank answer means "not sure": the map's own name stays
+            if places[i].get("center"):
+                saved[key_of(places[i])] = name
+
+
+def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_path=None, overrides=()):
+    """Give every place of `places` ({"center", "files", "visuals"}) a "name" a tourist would use. Order of trust:
+    names you typed (`overrides`) > "in flight" for shots from a plane > the AI choosing from the map's named places or a famous
+    attraction it is sure of > the map's own feature or area. The AI is told to answer '' when unsure; one name on two places more than
+    2.5 km apart is a mistake and gets one corrective request, then only the first keeps the name. Missing names stay ''."""
     from engine.geo import nearby_attractions, place_name
     facts = []
     for p in places:
@@ -247,65 +322,107 @@ def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_pat
         f = dict(f or {})
         f["near"] = nearby_attractions(p["center"], cache_path=cache_path) if (geocode and p.get("center")) else []
         facts.append(f)
-        p["name"] = (f or {}).get("name") or (f or {}).get("area") or ""
+        p["name"] = f.get("name") or f.get("area") or ""
     if not any(p.get("center") for p in places):
         return places
     names_path = os.path.join(os.path.dirname(cache_path), "place_names.json") if cache_path else None
     saved = {}
     if names_path and os.path.isfile(names_path):
         try:
-            with open(names_path, "r", encoding="utf-8") as f:
-                saved = json.load(f)
+            with open(names_path, "r", encoding="utf-8") as fh:
+                saved = json.load(fh)
         except (OSError, ValueError):
             saved = {}
-    key_of = lambda p: f"v2:{p['center'][0]:.3f},{p['center'][1]:.3f}" if p.get("center") else ""  # noqa: E731   (v2: names from the attraction-first prompt)
+    key_of = lambda p: f"{CACHE_PREFIX}{p['center'][0]:.3f},{p['center'][1]:.3f}" if p.get("center") else ""  # noqa: E731
     for p in places:
-        if key_of(p) in saved:
+        if p.get("center") and key_of(p) in saved:
             p["name"], p["_done"] = saved[key_of(p)], True              # the same answer as the last run
-    if all(p.get("_done") or not p.get("center") for p in places):
-        return places
-    if ask is None:
+    for i in apply_place_overrides(places, list(overrides or [])):
+        saved[key_of(places[i])] = places[i]["name"]                   # what you typed is remembered too
+    for p in places:
+        if not p.get("_done") and any(_FLIGHT.search(v or "") for v in p.get("visuals", [])):
+            p["name"], p["_done"] = "In flight", True
+    pending = [i for i, p in enumerate(places) if p.get("center") and not p.get("_done")]
+    if pending:
+        if ask is None:
+            try:
+                from engine.script_gen import get_llm_response
+                ask = lambda q: get_llm_response(q, "You name places for a travel video. Reply with raw JSON only.", max_tokens=4000)  # noqa: E731
+            except Exception:
+                ask = None
+        if ask is not None:
+            lines = [_place_line(i + 1, places[i], facts[i]) for i in pending]
+            prompt = (f"Trip: {trip_name or 'a trip'}. Traveller's note: {note or '(none)'}\n"
+                      "Name each place where videos were filmed, as a TOURIST would call it: the attraction (lake, canyon, waterfall, viewpoint, "
+                      "mountain, trail, park, famous square or landmark), not an administrative area. Choose from the named places on the map, or "
+                      "a well-known attraction you are SURE is within about 2 km of that GPS position and matches the pictures; translate local "
+                      "names to English. NEVER answer with a district, region or province name. Two places that are more than 2 km apart cannot "
+                      "have the same name. If you are not sure, answer an empty string \"\": do not guess a famous name. At most 4 words, in English.\n"
+                      + "\n".join(lines) + '\nReply with JSON only: [{"id": 1, "name": "Kaindy Lake"}, {"id": 2, "name": ""}, ...]')
+            try:
+                from engine.script_gen import robust_json_parse
+                _apply_rows(robust_json_parse(ask(prompt)), places, saved, key_of, only=set(pending))
+                clash = name_conflicts(places)
+                if clash:
+                    ids = sorted({i for grp in clash for i in grp})
+                    print(f"[Log] Place names: the same name was given to places far apart ({len(ids)} places); asking again.")
+                    prompt2 = ("These places were given the SAME name although they are different places (several km apart). Give each its own "
+                               "correct name from the map's named places or a famous attraction you are sure of, or an empty string if you are not sure.\n"
+                               + "\n".join(_place_line(i + 1, places[i], facts[i]) + f"; wrongly named: {places[i]['name']}" for i in ids)
+                               + '\nReply with JSON only: [{"id": 1, "name": "..."}, ...]')
+                    for i in ids:
+                        places[i]["name"] = ""
+                    _apply_rows(robust_json_parse(ask(prompt2)), places, saved, key_of, only=set(ids))
+                    for grp in name_conflicts(places):                      # still the same name: only the first keeps it
+                        for i in grp[1:]:
+                            places[i]["name"] = ""
+                            saved.pop(key_of(places[i]), None)
+            except Exception as e:
+                print(f"[Warning] Could not ask the AI for place names ({str(e)[:80]}); using the map's names.")
+    if names_path and saved:
         try:
-            from engine.script_gen import get_llm_response
-            ask = lambda q: get_llm_response(q, "You name places for a travel video. Reply with raw JSON only.", max_tokens=4000)  # noqa: E731
-        except Exception:
-            return places
-    lines = []
-    for i, (p, f) in enumerate(zip(places, facts), 1):
-        if not p.get("center") or p.get("_done"):
-            continue
-        seen = "; ".join(v for v in p.get("visuals", [])[:3] if v) or "no description"
-        near = "; ".join(f.get("near") or []) or "none found"
-        lines.append(f"[{i}] GPS {p['center'][0]:.4f}, {p['center'][1]:.4f}; address: {f.get('hint') or 'nothing useful'}; "
-                     f"named places on the map within ~3 km (may be in the local language): {near}; pictures show: {seen}")
-    prompt = (f"Trip: {trip_name or 'a trip'}. Traveller's note: {note or '(none)'}\n"
-              "Name each place where videos were filmed, as a TOURIST would call it: the attraction (lake, canyon, waterfall, viewpoint, "
-              "mountain, trail, park, famous square or landmark), not an administrative area. Choose from the named places on the map or "
-              "a well-known attraction you are sure is at that GPS position (within about 2 km) and matches the pictures; translate local "
-              "names to English. NEVER answer with a district, region or province name (not 'Kegen District'). If no attraction is known, "
-              "name what the pictures show in plain words (for example 'Pine forest trail', 'Mountain viewpoint', 'City park'). "
-              "Never invent a famous name you are not sure of. At most 4 words per name, in English.\n"
-              + "\n".join(lines) + '\nReply with JSON only: [{"id": 1, "name": "Kaindy Lake"}, ...]')
-    try:
-        from engine.script_gen import robust_json_parse
-        rows = robust_json_parse(ask(prompt))
-        if isinstance(rows, dict):
-            rows = rows.get("places") or []
-        for r in rows if isinstance(rows, list) else []:
-            i = int(r.get("id", 0)) - 1
-            name = re.sub(r"\s+", " ", str(r.get("name") or "")).strip()
-            if 0 <= i < len(places) and name and len(name) <= 60:
-                places[i]["name"] = name
-                if places[i].get("center"):
-                    saved[key_of(places[i])] = name
-        if names_path and saved:
-            with open(names_path, "w", encoding="utf-8") as f:
-                json.dump(saved, f, indent=1, ensure_ascii=False)
-    except Exception as e:
-        print(f"[Warning] Could not ask the AI for place names ({str(e)[:80]}); using the map's names.")
+            with open(names_path, "w", encoding="utf-8") as fh:
+                json.dump(saved, fh, indent=1, ensure_ascii=False)
+        except OSError:
+            pass
     for p in places:
         p.pop("_done", None)
+        if not p.get("name") or is_plain_area(p["name"]):
+            p["name"] = p.get("name") or ""
     return places
+
+
+def write_places_review(path, places, trip_name=""):
+    """places_review.md: every place with its GPS, a map link and the name used, so wrong names can be corrected with --place_names."""
+    lines = [f"# Places{(' of ' + trip_name) if trip_name else ''}", "",
+             "Check the names. To correct one, run again with `--place_names \"LAT,LON=Right name; LAT,LON=Another\"` (or edit place_names.json).", ""]
+    for i, p in enumerate(places, 1):
+        if not p.get("center"):
+            continue
+        la, lo = p["center"]
+        shown = p.get("name") or "(no name)"
+        flag = "" if not is_plain_area(p.get("name")) else "  <- not shown on screen"
+        seen = next((v for v in p.get("visuals", []) if v), "")
+        lines.append(f"{i}. **{shown}**{flag}  \n   {la:.4f},{lo:.4f}  [map](https://www.google.com/maps?q={la:.4f},{lo:.4f})  ·  {len(p.get('files', []))} video(s)"
+                     + (f"  ·  e.g. {seen[:90]}" if seen else ""))
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
+    return path
+
+
+def moment_labels(days, cine):
+    """Per day, per moment: the text to show on the shot. Cinematic: the place name, only when the place changes (clean, like a travel
+    film). Other looks: the place name on every shot that has one. Administrative areas are never shown."""
+    out, prev = [], None
+    for d in days:
+        row = []
+        for m in d["moments"]:
+            place = m.get("place") if not is_plain_area(m.get("place")) else ""
+            row.append((place if (place and (not cine or place != prev)) else ""))
+            if place:
+                prev = place
+        out.append(row)
+    return out
 
 
 def landmarks_first(names):
@@ -399,6 +516,37 @@ def loudness_per_second(video, ffmpeg=None, run=subprocess.run):
         v = m.group(1)
         vals.append(-90.0 if v == "-inf" else float(v))
     return vals
+
+
+def load_avoid(spec):
+    """{(file name, start, end)} of the moments that earlier recaps used, from `spec`: itinerary.json files or recap folders (the folder
+    itself and its portrait/ and landscape/ sub-folders), separated by commas. Missing or unreadable ones are skipped."""
+    found = set()
+    for part in re.split(r"[,;]+", str(spec or "")):
+        part = part.strip().strip('"')
+        if not part:
+            continue
+        paths = [part] if os.path.isfile(part) else [os.path.join(part, n) for n in ("itinerary.json", os.path.join("portrait", "itinerary.json"),
+                                                                                       os.path.join("landscape", "itinerary.json"))]
+        for pth in paths:
+            try:
+                with open(pth, "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+            except (OSError, ValueError):
+                continue
+            for day in data.get("days", []) if isinstance(data, dict) else []:
+                for m in day.get("moments", []):
+                    try:
+                        found.add((os.path.basename(str(m["file"])), float(m["start"]), float(m["end"])))
+                    except (KeyError, TypeError, ValueError):
+                        continue
+    return found
+
+
+def was_used(path, start, end, avoid, min_overlap=0.4):
+    """True when [start, end] of this video overlaps a moment from `avoid` by at least min_overlap of its length."""
+    name, length = os.path.basename(str(path)), max(0.1, float(end) - float(start))
+    return any(n == name and max(0.0, min(end, b) - max(start, a)) / length >= min_overlap for n, a, b in avoid)
 
 
 def pick_windows(duration, n, length, levels=None, skip=0.04):
@@ -1013,7 +1161,7 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate=""):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid=""):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1."""
     global W, H
@@ -1030,13 +1178,13 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
     if style == "cinematic":
         QUALITY.update(crf="17", preset="fast")
     try:
-        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate)
+        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate, place_names, avoid)
     finally:
         W, H = old
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate=""):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid=""):
     videos = collect_videos(list(paths))
     days_paths = group_days(videos)
     if not days_paths:
@@ -1108,6 +1256,9 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         return fixes[path]
     if enhance not in (None, "", "off"):
         print(f"[Log] Auto enhance ({enhance_strength}): each video is measured and corrected where needed (exposure, colour cast, dullness, sharpness).")
+    avoid = load_avoid(avoid) if isinstance(avoid, str) else set(avoid or ())
+    if avoid:
+        print(f"[Log] Picking new moments: {len(avoid)} moment(s) from earlier recaps are avoided.")
     counts, clip_len = plan_days([len(i) for i in all_infos], max(float(total_seconds) - opening, len(all_infos) * 6.0),
                                  card=0.0 if cine else CARD_SECONDS)          # the cinematic look puts the titles over the footage: no card time to reserve
     glimpse_s, title_s, first_min, music_start = GLIMPSE_SECONDS, 3.4, 3.2, 0.0
@@ -1135,12 +1286,15 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     for di, infos in enumerate(all_infos, 1):
         n_clips = counts[di - 1]
         total_dur = sum(i[1] for i in infos)
-        cands = []
+        cands, reused = [], []
         for f, dur, w, h in infos:
             share = max(1, int(round(n_clips * dur / total_dur))) if len(infos) > 1 else n_clips
             levels = loudness_per_second(f, ffmpeg=ffmpeg)
-            for s_, e_ in pick_windows(dur, share + (share + 1) // 2, clip_len, levels):          # a few spares for the repeat check
-                cands.append({"file": f, "start": s_, "end": e_, "size": (w, h), "loc": locs.get(f)})
+            for s_, e_ in pick_windows(dur, (share + (share + 1) // 2) * (2 if avoid else 1), clip_len, levels):      # a few spares for the repeat check
+                m_ = {"file": f, "start": s_, "end": e_, "size": (w, h), "loc": locs.get(f)}
+                (reused if avoid and was_used(f, s_, e_, avoid) else cands).append(m_)
+        if avoid and len(cands) < n_clips + 2:
+            cands += reused[:n_clips + 2 - len(cands)]                       # not enough new moments: a repeat beats a missing shot
         cands.sort(key=lambda m: (infos_order(infos, m["file"]), m["start"]))
         moments, spares = spread_moments(cands, n_clips)
         print(f"[Log] Day {di}: {len(moments)} moment(s) from {len(infos)} video(s).")
@@ -1174,16 +1328,19 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         for p in d["places"]:
             p["visuals"] = [m.get("visual", "") for m in d["moments"] if m["file"] in p["files"]]
             all_places.append(p)
-    if geocode and any(p.get("center") for p in all_places):
-        name_places(all_places, trip_name=trip_name, note=note, ask=ask, geocode=True, cache_path=os.path.join(session_dir, "places.json"))
-        names = [p["name"] for p in all_places if p.get("name")]
+    typed = parse_place_overrides(place_names)
+    if (geocode or typed) and any(p.get("center") for p in all_places):
+        name_places(all_places, trip_name=trip_name, note=note, ask=ask if geocode else (lambda q: "[]"), geocode=geocode,
+                    cache_path=os.path.join(session_dir, "places.json"), overrides=typed)
+        names = [p["name"] for p in all_places if p.get("name") and not is_plain_area(p["name"])]
         print(f"[Log] Places from GPS: {', '.join(dict.fromkeys(names)) or 'none named'}.")
+        write_places_review(os.path.join(session_dir, "places_review.md"), all_places, trip_name)
     for d in days:
         for m in d["moments"]:
             for p in d["places"]:
                 if m["file"] in p["files"] and p.get("name"):
                     m["place"] = p["name"]
-    trip_places = landmarks_first(dict.fromkeys(p["name"] for p in all_places if p.get("name")))
+    trip_places = landmarks_first(dict.fromkeys(p["name"] for p in all_places if p.get("name") and not is_plain_area(p["name"])))
 
     rot_known = {}
     turned = fix_rotation([m for d in days for m in d["moments"]], ffmpeg=ffmpeg, known=rot_known) if visual else 0      # sends frames to Gemini: only with --visual_context
@@ -1230,6 +1387,11 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             card = os.path.join(parts_dir, "trip_title.mp4")
             render_card(ffmpeg, title, card)
             parts.append(card)
+    labels = moment_labels(days, cine)
+    for d, row in zip(days, it["days"]):
+        day_places = list(dict.fromkeys(m["place"] for m in d["moments"] if m.get("place") and not is_plain_area(m["place"])))
+        if day_places:
+            row["title"] = " · ".join(day_places[:2 if cine else 3])[:50]           # the real places, not a vague "Day 3 Almaty"
     for di, (d, row) in enumerate(zip(days, it["days"]), 1):
         if cine:
             card_png = None      # the title appears over the day's first shot instead of a card
@@ -1242,7 +1404,8 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             render_card(ffmpeg, card_png, card)
             parts.append(card)
         for mi, (m, cap) in enumerate(zip(d["moments"], row["captions"]), 1):
-            cap_png = caption_png(os.path.join(parts_dir, f"cap_{di}_{mi}.png"), cap, lower=cine) if cap and not (cine and mi == 1) else None
+            label = labels[di - 1][mi - 1] or ("" if cine else cap)             # cinematic: the place name only; no vague picture captions
+            cap_png = caption_png(os.path.join(parts_dir, f"cap_{di}_{mi}.png"), label, lower=cine) if label and not (cine and mi == 1) else None
             out = os.path.join(parts_dir, f"clip_{di}_{mi}.mp4")
             lay, secs = None, m["end"] - m["start"]
             if cine and mi == 1:
@@ -1328,7 +1491,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
                       stops=getattr(args, "trip_stops", None), geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
-                      manual_rotate=getattr(args, "recap_rotate", "") or "", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                      manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
         style = getattr(args, "recap_style", "auto") or "auto"
         if getattr(args, "recap_versions", "one") == "both":
             made = make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)

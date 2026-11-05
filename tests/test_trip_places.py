@@ -112,7 +112,7 @@ def test_name_places_uses_the_map_first_and_the_llm_only_to_improve_it(tmp_path,
         return '[{"id": 1, "name": "Kaindy Lake"}]'
     tr.name_places(places, "Almaty", "", ask=ask)
     assert places[0]["name"] == "Kaindy Lake" and places[1]["name"] == ""
-    assert "42.9900, 78.4600" in seen[0] and "Turquoise lake" in seen[0] and "Never invent" in seen[0]
+    assert "42.9900, 78.4600" in seen[0] and "Turquoise lake" in seen[0] and "do not guess" in seen[0]
     assert "Каинды" in seen[0] and "NEVER answer with a district" in seen[0]          # map attractions are offered, districts are ruled out
     tr.name_places(places, "Almaty", "", ask=lambda p: "not json")        # a bad answer keeps the map's name
     assert places[0]["name"] == "Kegen District"
@@ -261,3 +261,112 @@ def test_the_cinematic_plan_does_not_reserve_time_for_title_cards():
     with_cards, _ = tr.plan_days([5, 5, 5, 5, 5], 80)
     without, _ = tr.plan_days([5, 5, 5, 5, 5], 80, card=0.0)
     assert sum(without) > sum(with_cards)
+
+
+def _no_network(monkeypatch, near=()):
+    monkeypatch.delenv("SHORTSFLOW_GEOCODE", raising=False)
+    monkeypatch.setattr(geo, "place_name", lambda loc, cache_path=None, **k: {"name": "", "area": "Kegen District", "region": "Almaty Region", "hint": "Kegen District"})
+    monkeypatch.setattr(geo, "nearby_attractions", lambda loc, cache_path=None, **k: list(near))
+
+
+def test_place_overrides_parse_and_win_over_the_ai(monkeypatch):
+    assert tr.parse_place_overrides("42.985,78.465=Kaindy Lake; 42.991, 78.326 = Kolsay Lakes;bad;1,2=") == [(42.985, 78.465, "Kaindy Lake"), (42.991, 78.326, "Kolsay Lakes")]
+    _no_network(monkeypatch)
+    places = [{"center": (42.9851, 78.4652), "files": ["a"], "visuals": []}, {"center": (43.35, 79.05), "files": ["b"], "visuals": []}]
+    asked = []
+    tr.name_places(places, ask=lambda p: asked.append(p) or '[{"id": 1, "name": "Wrong"}, {"id": 2, "name": "Charyn Canyon"}]', overrides=tr.parse_place_overrides("42.985,78.465=Kaindy Lake"))
+    assert [p["name"] for p in places] == ["Kaindy Lake", "Charyn Canyon"]                  # typed name kept, the other asked
+    assert len(asked) == 1 and "[1]" not in asked[0] and "[2]" in asked[0]               # the typed place was not even put to the AI
+
+
+def test_shots_from_a_plane_are_named_in_flight_without_asking():
+    places = [{"center": (43.29, 75.6), "files": ["a"], "visuals": ["Aerial view from airplane window over clouds"]}]
+    import engine.geo as g
+    orig_p, orig_n = g.place_name, g.nearby_attractions
+    g.place_name, g.nearby_attractions = (lambda *a, **k: None), (lambda *a, **k: [])
+    try:
+        tr.name_places(places, ask=lambda p: (_ for _ in ()).throw(AssertionError("must not ask")))
+    finally:
+        g.place_name, g.nearby_attractions = orig_p, orig_n
+    assert places[0]["name"] == "In flight"
+
+
+def test_the_same_name_on_two_far_places_is_corrected_or_dropped(monkeypatch):
+    _no_network(monkeypatch)
+    places = [{"center": (42.985, 78.465), "files": ["a"], "visuals": []}, {"center": (42.991, 78.326), "files": ["b"], "visuals": []}]
+    answers = iter(['[{"id": 1, "name": "Kolsay Lakes"}, {"id": 2, "name": "Kolsay Lakes"}]', '[{"id": 1, "name": "Kaindy Lake"}, {"id": 2, "name": "Kolsay Lakes"}]'])
+    prompts = []
+    tr.name_places(places, ask=lambda p: prompts.append(p) or next(answers))
+    assert [p["name"] for p in places] == ["Kaindy Lake", "Kolsay Lakes"] and "SAME name" in prompts[1]
+    # still the same name after the corrective request: only the first keeps it
+    places2 = [{"center": (42.985, 78.465), "files": ["a"], "visuals": []}, {"center": (42.991, 78.326), "files": ["b"], "visuals": []}]
+    both = '[{"id": 1, "name": "Kolsay Lakes"}, {"id": 2, "name": "Kolsay Lakes"}]'
+    tr.name_places(places2, ask=lambda p: both)
+    assert places2[0]["name"] == "Kolsay Lakes" and places2[1]["name"] == ""
+    assert tr.name_conflicts([{"center": (1.0, 1.0), "name": "A Lake"}, {"center": (1.001, 1.001), "name": "A Lake"}]) == []      # same lake, 150 m
+
+
+def test_an_unsure_ai_answers_blank_and_the_map_fallback_stays(monkeypatch):
+    _no_network(monkeypatch)
+    places = [{"center": (43.0, 77.0), "files": ["a"], "visuals": []}]
+    tr.name_places(places, ask=lambda p: '[{"id": 1, "name": ""}]')
+    assert places[0]["name"] == "Kegen District" and tr.is_plain_area(places[0]["name"])          # kept for the itinerary, never shown on screen
+
+
+def test_old_cached_names_are_not_trusted_and_new_ones_are_remembered(tmp_path, monkeypatch):
+    _no_network(monkeypatch)
+    cache = tmp_path / "places.json"
+    (tmp_path / "place_names.json").write_text('{"v2:43.000,77.000": "Wrong Old Name"}', encoding="utf-8")
+    places = [{"center": (43.0, 77.0), "files": ["a"], "visuals": []}]
+    tr.name_places(places, ask=lambda p: '[{"id": 1, "name": "Big Almaty Lake"}]', cache_path=str(cache))
+    assert places[0]["name"] == "Big Almaty Lake"
+    saved = json.loads((tmp_path / "place_names.json").read_text(encoding="utf-8"))
+    assert saved["v3:43.000,77.000"] == "Big Almaty Lake"
+    again = [{"center": (43.0, 77.0), "files": ["a"], "visuals": []}]
+    tr.name_places(again, ask=lambda p: (_ for _ in ()).throw(AssertionError("cached: no request")), cache_path=str(cache))
+    assert again[0]["name"] == "Big Almaty Lake"
+
+
+def test_on_screen_labels_are_place_names_only_and_only_when_the_place_changes_in_the_cinematic_look():
+    days = [{"moments": [{"place": "Kaindy Lake"}, {"place": "Kaindy Lake"}, {"place": "Kegen District"}, {"place": "Kolsay Lakes"}]},
+            {"moments": [{"place": "Kolsay Lakes"}, {}]}]
+    assert tr.moment_labels(days, cine=True) == [["Kaindy Lake", "", "", "Kolsay Lakes"], ["", ""]]
+    assert tr.moment_labels(days, cine=False) == [["Kaindy Lake", "Kaindy Lake", "", "Kolsay Lakes"], ["Kolsay Lakes", ""]]
+
+
+def test_places_review_lists_names_coordinates_and_map_links(tmp_path):
+    places = [{"center": (42.985, 78.465), "name": "Kaindy Lake", "files": ["a", "b"], "visuals": ["A turquoise lake"]},
+              {"center": (43.0, 77.0), "name": "Kegen District", "files": ["c"], "visuals": []}, {"center": None, "name": "", "files": []}]
+    path = tr.write_places_review(str(tmp_path / "places_review.md"), places, "Almaty")
+    text = open(path, encoding="utf-8").read()
+    assert "google.com/maps?q=42.9850,78.4650" in text and "**Kaindy Lake**" in text and "2 video(s)" in text
+    assert "not shown on screen" in text and "--place_names" in text
+
+
+def test_avoid_reads_earlier_recaps_and_skips_moments_that_overlap_them(tmp_path):
+    for sub in ("", "portrait", "landscape"):
+        d = tmp_path / "recap" / sub
+        d.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "recap" / "portrait" / "itinerary.json").write_text(json.dumps({"days": [{"moments": [{"file": "C:" + chr(92) + "v" + chr(92) + "104340_a.mp4", "start": 4.0, "end": 8.8}]}]}), encoding="utf-8")
+    (tmp_path / "recap" / "landscape" / "itinerary.json").write_text(json.dumps({"days": [{"moments": [{"file": "/v/day3/090000_b.mp4", "start": 0.0, "end": 4.8}]}, {"moments": []}]}), encoding="utf-8")
+    avoid = tr.load_avoid(f"{tmp_path / 'recap'}, {tmp_path / 'missing'}")
+    assert avoid == {("104340_a.mp4", 4.0, 8.8), ("090000_b.mp4", 0.0, 4.8)}
+    assert tr.was_used("/other/folder/104340_a.mp4", 4.5, 9.3, avoid)           # mostly the same stretch
+    assert not tr.was_used("/x/104340_a.mp4", 9.0, 13.8, avoid)                 # a different stretch of the same video
+    assert not tr.was_used("/x/other.mp4", 4.0, 8.8, avoid) and tr.load_avoid("") == set()
+    direct = tr.load_avoid(str(tmp_path / "recap" / "portrait" / "itinerary.json"))
+    assert direct == {("104340_a.mp4", 4.0, 8.8)}                                # a single itinerary.json works too
+
+
+@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="needs ffmpeg")
+def test_a_second_recap_with_avoid_uses_different_stretches_of_the_footage(tmp_path):
+    ff = __import__("shutil").which("ffmpeg")
+    (tmp_path / "day1").mkdir()
+    for n, tone in (("a.mp4", 300), ("b.mp4", 500), ("c.mp4", 700)):
+        subprocess.run([ff, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=10:duration=40", "-f", "lavfi", "-i", f"sine=f={tone}:d=40",
+                        "-shortest", "-pix_fmt", "yuv420p", str(tmp_path / "day1" / n)], check=True)
+    first = tr.make_recap([str(tmp_path / "day1")], str(tmp_path / "one"), total_seconds=30, style="plain", aspect="16:9", ask=lambda p: "{}", geocode=False)
+    second = tr.make_recap([str(tmp_path / "day1")], str(tmp_path / "two"), total_seconds=30, style="plain", aspect="16:9", ask=lambda p: "{}", geocode=False,
+                           avoid=str(tmp_path / "one"))
+    used = lambda r: {(os.path.basename(m["file"]), round(m["start"])) for d in json.load(open(r["itinerary_json"], encoding="utf-8"))["days"] for m in d["moments"]}   # noqa: E731
+    assert used(first) and used(second) and not (used(first) & used(second))
