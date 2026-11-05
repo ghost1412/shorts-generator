@@ -164,3 +164,35 @@ def test_start_here_enhance_checkbox_adds_the_flag(tmp_path, monkeypatch):
     time.sleep(1.1)
     list(webui.quick_clip("https://example.com/v", None, 3, True))
     assert "--enhance" not in seen["cmd"]
+
+
+def test_start_here_colour_filter_adds_the_flag_only_when_chosen(tmp_path, monkeypatch):
+    from shortsflow import web_args
+    assert web_args.grade_args("default") == [] and web_args.grade_args("") == [] and web_args.grade_args("nonsense") == []
+    assert web_args.grade_args("none") == ["--video_filter", "none"]       # an explicit 'none' beats the Auto-edit style's grade
+    from engine.video_gen import FILTER_PRESETS
+    names = {v for _label, v in web_args.COLOR_GRADE_CHOICES} - {"default", "none", "auto"}
+    assert names == set(FILTER_PRESETS)                                      # every look in the engine is offered
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_stream(cmd, results, long_form, minutes, find):
+        seen["cmd"] = cmd
+        yield "ok", "", []
+    monkeypatch.setattr(webui, "_stream_clip", fake_stream)
+    monkeypatch.setattr(webui, "_pipeline_cmd", lambda: ["py"])
+    list(webui.quick_clip("https://example.com/v", None, 3, True, grade="teal_orange"))
+    assert seen["cmd"][seen["cmd"].index("--video_filter") + 1] == "teal_orange"
+
+
+def test_ai_titles_box_saves_the_key_under_the_providers_name(tmp_path, monkeypatch):
+    from shortsflow import web_args
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    for provider, expected in [("groq", "GROQ_API_KEY"), ("gemini", "GEMINI_API_KEY"), ("huggingface", "HF_API_KEY"), ("openrouter", "OPENROUTER_API_KEY")]:
+        assert web_args.llm_key_env_name(provider) == expected
+        monkeypatch.delenv(expected, raising=False)
+        assert webui.save_llm_key(provider, "abc123").startswith("✅")
+        assert f"{expected}=abc123" in (tmp_path / ".env").read_text()
+        monkeypatch.delenv(expected, raising=False)
+    assert webui.save_llm_key("nope", "abc").startswith("⚠️") and webui.save_llm_key("groq", "has space").startswith("⚠️")
+    assert "aistudio.google.com" in web_args.llm_key_help("gemini") and web_args.llm_key_help("nope") == ""

@@ -123,7 +123,7 @@ python gui_app.py
 | `engine/drive_upload.py` | Optional upload of finished videos to a Google Drive folder (`--upload_drive`, `python -m engine.drive_upload`); needs the user's own OAuth client, never commit `client_secrets_drive.json` / `token_drive.json` |
 | `engine/gphotos_album.py` | Download the videos of a Google Photos shared-album link (unofficial page parsing) for the trip recap |
 | `shortsflow/reuse.py` | Browser app: seed a new run with an earlier run's transcript, descriptions, moments and cut pieces (never finished clips) |
-| `webui.py` / `shortsflow/web_args.py` | Gradio browser app (tabs: Start here, Clip, Dub, Trip recap, Photo reel, Generate) and the pure functions that turn its form values into CLI arguments (testable without gradio) |
+| `webui.py` / `shortsflow/web_args.py` | Gradio browser app (tabs: Start here, Clip, Dub, Recap (trip, wedding, event, family), Photo reel, Generate) and the pure functions that turn its form values into CLI arguments (testable without gradio) |
 | `tests/` | Offline pytest suite (`python -m pytest`), run in CI on every push/PR |
 | `remotion-video/src/` | React video components & animated subtitle spring physics |
 

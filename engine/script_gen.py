@@ -23,21 +23,25 @@ LLM_BASE_URL_ENV = os.getenv("LLM_BASE_URL")
 def auto_detect_video_filter(user_context=None, style_context=None, category=None, prompt=None):
     """Analyzes context text and determines the optimal visual color grade filter preset."""
     text_corpus = f"{user_context or ''} {style_context or ''} {category or ''} {prompt or ''}".lower()
-    
+    if not text_corpus.strip():
+        return "none"                      # nothing to judge from: no look is better than a random one
+    _words = set(re.findall(r"[a-z0-9]+", text_corpus))
+    _has = lambda *keys: any((k in text_corpus) if " " in k else (k in _words) for k in keys)   # whole words, so 'attempt' is not 'emp'
+
     # 1. Fast Keyword Heuristics (Generic Visual & Genre Terms)
-    if any(k in text_corpus for k in ["samurai", "katana", "kurosawa", "bushido", "feudal", "black and white", "monochrome", "sword duel"]):
+    if _has(*["samurai", "katana", "kurosawa", "bushido", "feudal", "black and white", "monochrome", "sword duel"]):
         return "kurosawa"
-    if any(k in text_corpus for k in ["cyberpunk", "neon", "synthwave", "night race", "high speed drift", "futuristic", "sci-fi"]):
+    if _has(*["cyberpunk", "neon", "synthwave", "night race", "high speed drift", "futuristic", "sci-fi"]):
         return "cyberpunk"
-    if any(k in text_corpus for k in ["action", "pursuit", "crash", "combat", "emp", "explosion", "strike", "rally", "fast cuts", "chase"]):
+    if _has(*["action", "pursuit", "crash", "combat", "emp", "explosion", "strike", "rally", "fast cuts", "chase"]):
         return "vibrant_action"
-    if any(k in text_corpus for k in ["scenery", "landscape", "vista", "golden hour", "sunset", "nature", "peaceful", "serene", "scenic"]):
+    if _has(*["scenery", "landscape", "vista", "golden hour", "sunset", "nature", "peaceful", "serene", "scenic"]):
         return "cinematic_warm"
-    if any(k in text_corpus for k in ["vhs", "retro", "90s", "80s", "analog", "nostalgic", "camcorder", "scanlines"]):
+    if _has(*["vhs", "retro", "90s", "80s", "analog", "nostalgic", "camcorder", "scanlines"]):
         return "vintage_vhs"
-    if any(k in text_corpus for k in ["horror", "spooky", "scary", "dark fantasy", "shadow", "thriller", "creepy"]):
+    if _has(*["horror", "spooky", "scary", "dark fantasy", "shadow", "thriller", "creepy"]):
         return "moody_dark"
-    if any(k in text_corpus for k in ["movie recap", "cinematic film", "blockbuster", "trailer", "dramatic story"]):
+    if _has(*["movie recap", "cinematic film", "blockbuster", "trailer", "dramatic story"]):
         return "teal_orange"
 
     # 2. LLM Fallback Classifier
@@ -57,11 +61,26 @@ Choose the SINGLE BEST visual color grade filter from this list:
 
 Respond with raw JSON: {{"filter": "<preset_name>"}}
 """
-        get_llm_response(llm_prompt, system_prompt="You are a color grading expert. Return raw JSON only.")
+        reply = get_llm_response(llm_prompt, system_prompt="You are a color grading expert. Return raw JSON only.")
+        picked = _parse_filter_reply(reply)
+        if picked:
+            return picked
     except Exception as e:
         print(f"[Warning] AI Auto Filter fallback: {e}")
-        
+
     return "none"
+
+
+_AUTO_FILTER_NAMES = ("kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark")
+
+
+def _parse_filter_reply(reply):
+    """The preset name in the model's reply ('{"filter": "moody_dark"}' or the bare name), or None when it is not one we offer."""
+    import re
+    text = str(reply or "").lower()
+    match = re.search(r'"filter"\s*:\s*"([a-z_]+)"', text)
+    name = match.group(1) if match else next((n for n in _AUTO_FILTER_NAMES if n in text), None)
+    return name if name in _AUTO_FILTER_NAMES else None
 
 def generate_clip_commentary_hook(transcript_text, category="general"):
     """Generates a dynamic 8-15 word contextual AI commentary reaction for video clips."""

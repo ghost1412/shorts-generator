@@ -601,8 +601,30 @@ def pick_windows(duration, n, length, levels=None, skip=0.04):
     return out
 
 
-def build_prompt(trip_name, note, days, stops=None):
-    unit = "Stop" if stops else "Day"
+_NOT_GEO = {"geo": False, "unit": "Part", "stop_unit": "Part", "by": "Part by part", "note": "Note from the person who filmed",
+            "invent": "Never invent names, relationships, places, times, speeches or feelings.", "writer": "warm"}
+KINDS = {
+    "trip": {"label": "Trip", "recap": "travel recap", "writer": "travel", "note": "Traveller's note", "geo": True, "unit": "Day", "stop_unit": "Stop",
+             "by": "Day by day", "tagline": "A travel film", "hook": "Woke up at 4 AM just for this view", "hook_none": "You have to see this place",
+             "facts": "the traveller's note, the stop names, the place names (read from the videos' GPS, reliable) or the descriptions",
+             "invent": "Never invent places, times, weather, food or feelings."},
+    "wedding": {**_NOT_GEO, "label": "Wedding", "recap": "wedding film", "tagline": "A wedding film", "hook": "The day we had been waiting for",
+                "hook_none": "The day we had been waiting for", "facts": "the note, the names of the parts (functions) or the descriptions"},
+    "event": {**_NOT_GEO, "label": "Event", "recap": "event recap", "tagline": "An event recap", "hook": "You had to be there",
+              "hook_none": "You had to be there", "facts": "the note, the names of the parts or the descriptions"},
+    "family": {**_NOT_GEO, "label": "Memories", "recap": "family memories film", "tagline": "Our memories", "hook": "These are the moments we keep",
+               "hook_none": "These are the moments we keep", "facts": "the note, the names of the parts or the descriptions"},
+}
+
+
+def get_kind(kind):
+    """The settings for a recap kind (trip, wedding, event, family); an unknown or empty name means a trip."""
+    return KINDS.get(str(kind or "trip").strip().lower(), KINDS["trip"])
+
+
+def build_prompt(trip_name, note, days, stops=None, kind="trip"):
+    K = get_kind(kind)
+    unit = K["stop_unit"] if stops else K["unit"]
     lines = []
     for i, d in enumerate(days, 1):
         moms = "; ".join(f"[{j}] {('(at ' + m['place'] + ') ') if m.get('place') else ''}{m.get('visual') or 'no description'}"
@@ -611,38 +633,41 @@ def build_prompt(trip_name, note, days, stops=None):
         seen = list(dict.fromkeys(m["place"] for m in d["moments"] if m.get("place")))
         where = f" (places visited, from GPS: {', '.join(seen)})" if seen else ""
         lines.append(f"{unit} {i}{name}{where}: {moms}")
-    return (f"Write a travel recap itinerary for a short video.\nTrip: {trip_name or 'my trip'}\n"
-            "STRICT: use only facts that are in the traveller's note, the stop names, the place names (read from the videos' GPS, reliable) or the descriptions. Never invent places, "
-            "times, weather, food or feelings. When a moment has no description, leave its caption empty (\"\").\n"
-            f"Traveller's note: {note or '(none)'}\n\nWhat each day's moments show (the pictures were described automatically, "
-            "some descriptions may be missing or wrong; never invent places the descriptions or note do not support):\n"
+    trip = K is KINDS["trip"]
+    return (f"Write a {K['recap']} itinerary for a short video.\n{K['label']}: {trip_name or ('my trip' if trip else 'our ' + K['label'].lower())}\n"
+            f"STRICT: use only facts that are in {K['facts']}. {K['invent']} "
+            "When a moment has no description, leave its caption empty (\"\").\n"
+            f"{K['note']}: {note or '(none)'}\n\nWhat each {'day' if trip else 'part'}'s moments show (the pictures were described automatically, "
+            f"some descriptions may be missing or wrong; never invent {'places' if trip else 'names or people'} the descriptions or note do not support):\n"
             + "\n".join(lines) + "\n\n"
             'Reply with JSON only: {"title": "<recap title, max 5 words>", "hook": "<one excited first-person line of at most 9 words '
-            'that opens the video, e.g. Woke up at 4 AM just for this view. Use only facts from the traveller\'s note; with no usable note '
-            'write a neutral line like You have to see this place>", "days": [{"title": "<day title, max 5 words>", '
+            f'that opens the video, e.g. {K["hook"]}. Use only facts from the {"traveller" if trip else "person who filmed"}\'s note; with no usable note '
+            f'write a neutral line like {K["hook_none"]}>", "days": [{{"title": "<{"day" if trip else "part"} title, max 5 words>", '
             '"summary": "<one sentence>", "captions": ["<caption for moment 1, max 6 words>", ...]}]}. '
             f"Exactly {len(days)} {unit.lower()}s, and for each {unit.lower()} one caption per moment."
             + (" The stop names are given: use each one exactly as its title." if stops else ""))
 
 
-def fallback_itinerary(trip_name, days, stops=None):
-    return {"title": trip_name or "Trip recap", "hook": "",
-            "days": [{"title": stops[i - 1] if stops and i <= len(stops) else f"Day {i}", "summary": "",
+def fallback_itinerary(trip_name, days, stops=None, kind="trip"):
+    K = get_kind(kind)
+    return {"title": trip_name or f"{K['label']} recap", "hook": "",
+            "days": [{"title": stops[i - 1] if stops and i <= len(stops) else f"{K['unit']} {i}", "summary": "",
                       "captions": ["" for _ in d["moments"]]} for i, d in enumerate(days, 1)]}
 
 
-def write_itinerary(trip_name, note, days, ask=None, stops=None):
-    """The itinerary dict {title, days:[{title, summary, captions}]}; never fails (falls back to plain 'Day N')."""
-    fb = fallback_itinerary(trip_name, days, stops)
+def write_itinerary(trip_name, note, days, ask=None, stops=None, kind="trip"):
+    """The itinerary dict {title, days:[{title, summary, captions}]}; never fails (falls back to plain 'Day N' / 'Part N')."""
+    K = get_kind(kind)
+    fb = fallback_itinerary(trip_name, days, stops, kind)
     if ask is None:
         try:
             from engine.script_gen import get_llm_response
-            ask = lambda p: get_llm_response(p, "You write short, honest travel captions. Reply with raw JSON only.", max_tokens=4000)  # noqa: E731
+            ask = lambda p: get_llm_response(p, f"You write short, honest, {K['writer']} captions. Reply with raw JSON only.", max_tokens=4000)  # noqa: E731
         except Exception:
             return fb
     try:
         from engine.script_gen import robust_json_parse
-        data = robust_json_parse(ask(build_prompt(trip_name, note, days, stops)))
+        data = robust_json_parse(ask(build_prompt(trip_name, note, days, stops, kind)))
         rows = data.get("days") if isinstance(data, dict) else None
         if not isinstance(rows, list) or not rows:
             return fb
@@ -651,7 +676,7 @@ def write_itinerary(trip_name, note, days, ask=None, stops=None):
             row = rows[i] if i < len(rows) and isinstance(rows[i], dict) else {}
             caps = [str(c)[:60] for c in (row.get("captions") or []) if isinstance(c, (str, int, float))]
             caps += [""] * (len(d["moments"]) - len(caps))
-            title = stops[i] if stops and i < len(stops) else str(row.get("title") or f"Day {i + 1}")
+            title = stops[i] if stops and i < len(stops) else str(row.get("title") or f"{K['unit']} {i + 1}")
             out["days"].append({"title": title[:50], "summary": str(row.get("summary") or "")[:160],
                                 "captions": caps[:len(d["moments"])]})
         return out
@@ -1186,10 +1211,14 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid=""):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
-    aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1."""
+    aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1.
+    kind: "trip" (default), "wedding", "event" or "family" - the wording, the section names and whether places are looked up from GPS.
+    keep_sound: keep the clips' own sound under the music (vows, speeches, laughter) instead of a music-only soundtrack."""
     global W, H
+    if not get_kind(kind)["geo"]:
+        geocode = False                       # no map lookups for a wedding or a party (the GPS never leaves the PC)
     if style == "auto":
         style, auto_aspect, why = decide_look(paths)
         aspect = aspect or auto_aspect
@@ -1203,13 +1232,14 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
     if style == "cinematic":
         QUALITY.update(crf="17", preset="fast")
     try:
-        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate, place_names, avoid)
+        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate, place_names, avoid, kind=kind, keep_sound=keep_sound)
     finally:
         W, H = old
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid=""):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False):
+    K = get_kind(kind)
     videos = collect_videos(list(paths))
     days_paths = group_days(videos)
     if not days_paths:
@@ -1219,7 +1249,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         days_paths = split_into(days_paths, len(stops))
         stops = stops[:len(days_paths)]
         print(f"[Log] {len(stops)} stop(s): {', '.join(stops)}.")
-    unit = "Stop" if stops else "Day"
+    unit = K["stop_unit"] if stops else K["unit"]
     os.makedirs(session_dir, exist_ok=True)
     if ffmpeg is None:
         import imageio_ffmpeg
@@ -1287,7 +1317,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     counts, clip_len = plan_days([len(i) for i in all_infos], max(float(total_seconds) - opening, len(all_infos) * 6.0),
                                  card=0.0 if cine else CARD_SECONDS)          # the cinematic look puts the titles over the footage: no card time to reserve
     glimpse_s, title_s, first_min, music_start = GLIMPSE_SECONDS, 3.4, 3.2, 0.0
-    mute_orig = bool(cine and music)        # the song carries the edit: the clips' own sound would break it at every cut
+    mute_orig = bool(cine and music and not keep_sound)      # the song carries the edit: the clips' own sound would break it at every cut
     if cine and music:
         grid = beat_grid(music)
         if grid:
@@ -1377,11 +1407,11 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
 
     # the trip title is shown over a shot of its own: the same shot must not open Day 1 again right after it
     title_m = days[0]["moments"].pop(0) if cine and len(days[0]["moments"]) > 1 else None
-    it = write_itinerary(trip_name, note, days, ask=ask, stops=stops)
+    it = write_itinerary(trip_name, note, days, ask=ask, stops=stops, kind=kind)
     parts = []
     parts_dir = os.path.join(session_dir, "recap_parts")
     os.makedirs(parts_dir, exist_ok=True)
-    it["hook"] = (hook or it.get("hook") or "").strip() or (f"{trip_name}: you have to see this" if trip_name else "You have to see this place")
+    it["hook"] = (hook or it.get("hook") or "").strip() or ((f"{trip_name}: you have to see this" if K is KINDS["trip"] else trip_name) if trip_name else K["hook_none"])
     if hype:
         rate = None
         if visual:
@@ -1403,12 +1433,12 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         if cine:
             m0 = title_m or days[0]["moments"][0]
             out = os.path.join(parts_dir, "trip_title.mp4")
-            lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else (" · ".join(trip_places[:4]) or "A travel film"), "",
+            lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else (" · ".join(trip_places[:4]) or K["tagline"]), "",
                                    look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0)
             render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]))
             parts.append(out)
         else:
-            title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else "Day by day", "")
+            title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else K["by"], "")
             card = os.path.join(parts_dir, "trip_title.mp4")
             render_card(ffmpeg, title, card)
             parts.append(card)
@@ -1422,9 +1452,9 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         if cine:
             card_png = None      # the title appears over the day's first shot instead of a card
         elif stops:
-            card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), row["title"], f"Stop {di} of {len(days)}", row["summary"])
+            card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), row["title"], f"{K['stop_unit']} {di} of {len(days)}", row["summary"])
         else:
-            card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), f"Day {di}", row["title"], row["summary"])
+            card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), f"{K['unit']} {di}", row["title"], row["summary"])
         if card_png:
             card = os.path.join(parts_dir, f"card_{di}.mp4")
             render_card(ffmpeg, card_png, card)
@@ -1440,7 +1470,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
                 secs = max(secs, first_min)
             render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]))
             parts.append(out)
-        print(f"[Log] Day {di} rendered.")
+        print(f"[Log] {K['unit']} {di} rendered.")
     # a closing card, so the recap does not just fade out on the last shot
     end_line = " · ".join(trip_places[:4]) if trip_places else (" · ".join(stops) if stops else "")
     end_png = os.path.join(parts_dir, "end.png")
@@ -1541,7 +1571,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
                       stops=getattr(args, "trip_stops", None), geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
-                      manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                      manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)), layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
         style = getattr(args, "recap_style", "auto") or "auto"
         if getattr(args, "recap_versions", "one") == "both":
             made = make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)

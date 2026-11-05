@@ -287,3 +287,27 @@ def test_long_titles_and_captions_stay_inside_a_vertical_frame(tmp_path):
         assert box[2] <= t.W - 20
     finally:
         t.W, t.H = old
+
+
+def test_recap_kinds_change_the_wording_and_default_to_the_trip():
+    days = [{"moments": [{"visual": "a groom on a horse", "file": "a.mp4", "start": 1}]},
+            {"moments": [{"visual": "a couple dancing", "file": "b.mp4", "start": 2}]}]
+    trip = tr.build_prompt("Almaty", "note", days)
+    wed = tr.build_prompt("Asha and Ravi", "note", days, ["Haldi", "Wedding"], kind="wedding")
+    assert "travel recap" in trip and "Day 1" in trip and "traveller" in trip
+    assert "wedding film" in wed and "Part 1 = Haldi" in wed and "travel" not in wed.lower() and "GPS" not in wed
+    assert tr.get_kind("nonsense") is tr.KINDS["trip"] and tr.get_kind(None) is tr.KINDS["trip"]
+    fb = tr.fallback_itinerary("", days, kind="wedding")
+    assert fb["title"] == "Wedding recap" and fb["days"][1]["title"] == "Part 2"
+    assert tr.fallback_itinerary("", days)["days"][0]["title"] == "Day 1"            # trips are unchanged
+    good = '{"title": "x", "hook": "h", "days": [{"title": "", "summary": "", "captions": ["a"]}, {"title": "", "summary": "", "captions": ["b"]}]}'
+    assert tr.write_itinerary("", "", days, ask=lambda p: good, kind="event")["days"][0]["title"] == "Part 1"
+
+
+def test_web_args_pass_the_kind_and_keep_sound_only_when_needed():
+    from shortsflow import web_args
+    plain = web_args.trip_args(["a.mp4"], "s")
+    assert "--recap_kind" not in plain and "--recap_keep_sound" not in plain
+    both = web_args.trip_args(["a.mp4"], "s", kind="wedding", keep_sound=True)
+    assert both[both.index("--recap_kind") + 1] == "wedding" and "--recap_keep_sound" in both
+    assert web_args.recap_kind_labels("wedding")[1].startswith("Functions") and web_args.recap_kind_labels("zzz") == web_args.RECAP_KIND_TEXT["trip"]

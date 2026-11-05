@@ -43,6 +43,48 @@ def edit_args(style, strength="medium"):
     return ["--auto_edit", style, "--edit_strength", strength if strength in ("subtle", "medium", "hyped") else "medium"]
 
 
+# (label, name of the .env key the engine reads, where to get a key, note) for the "AI-written titles" box
+LLM_KEY_PROVIDERS = {
+    "groq": ("Groq (free, no card)", "GROQ_API_KEY", "https://console.groq.com", "sign in, then API Keys"),
+    "gemini": ("Google Gemini (free tier)", "GEMINI_API_KEY", "https://aistudio.google.com/apikey", "sign in with a Google account"),
+    "huggingface": ("Hugging Face", "HF_API_KEY", "https://huggingface.co/settings/tokens", "create a token with read access"),
+    "openrouter": ("OpenRouter", "OPENROUTER_API_KEY", "https://openrouter.ai/keys", "some models are free"),
+    "deepseek": ("DeepSeek (paid, cheap)", "DEEPSEEK_API_KEY", "https://platform.deepseek.com/api_keys", "needs a little credit"),
+    "openai": ("OpenAI (paid)", "OPENAI_API_KEY", "https://platform.openai.com/api-keys", "needs credit"),
+    "anthropic": ("Anthropic Claude (paid)", "ANTHROPIC_API_KEY", "https://console.anthropic.com/settings/keys", "needs credit"),
+}
+LLM_KEY_CHOICES = [(v[0], k) for k, v in LLM_KEY_PROVIDERS.items()]
+
+
+def llm_key_help(provider):
+    """One line telling where to get the key for `provider` (empty for an unknown one)."""
+    item = LLM_KEY_PROVIDERS.get(provider)
+    return f"Get a key at [{item[2].split('//')[1]}]({item[2]}) ({item[3]}), paste it below and save." if item else ""
+
+
+def llm_key_env_name(provider):
+    item = LLM_KEY_PROVIDERS.get(provider)
+    return item[1] if item else None
+
+
+COLOR_GRADE_CHOICES = [
+    ("Automatic (the Auto-edit style decides; none without one)", "default"), ("None", "none"),
+    ("Let the AI choose for this video", "auto"), ("Teal and orange (film look)", "teal_orange"),
+    ("Cinematic warm", "cinematic_warm"), ("Vibrant action", "vibrant_action"), ("HDR pop", "hdr_pop"),
+    ("Moody and dark", "moody_dark"), ("Cold thriller", "cold_thriller"), ("Cyberpunk", "cyberpunk"),
+    ("Anime vivid", "anime_vivid"), ("Vintage VHS", "vintage_vhs"), ("Black and white film (Kurosawa)", "kurosawa"),
+    ("Sepia western", "sepia_western"), ("Matrix green", "matrix_green")]
+_GRADE_VALUES = {value for _label, value in COLOR_GRADE_CHOICES}
+
+
+def grade_args(grade):
+    """`--video_filter NAME` for a colour grade picked in the browser. 'default' / empty adds nothing, so the Auto-edit style's own grade
+    (if any) still applies; an explicit choice, including 'none', wins over it."""
+    if not grade or grade == "default" or grade not in _GRADE_VALUES:
+        return []
+    return ["--video_filter", grade]
+
+
 def filler_args(layout, filler_video=None):
     """`--filler_video` only matters for the split_filler layout; an empty choice lets the pipeline pick footage."""
     path = (filler_video or "").strip() if isinstance(filler_video, str) else ""
@@ -87,7 +129,24 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
     return args
 
 
-def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False):
+RECAP_KIND_CHOICES = [("Trip (days, places named from GPS)", "trip"), ("Wedding (one part per function)", "wedding"),
+                      ("Event or party", "event"), ("Family memories", "family")]
+# what each kind changes in the form: (name label, parts label + example, note label + example)
+RECAP_KIND_TEXT = {
+    "trip": ("Trip name", "Stops (optional): one per line or comma separated, e.g. Kolsai Lake, Kaindy Lake", "A note about the trip (optional)"),
+    "wedding": ("Names or title (optional)", "Functions in the order they happened, e.g. Haldi, Mehendi, Sangeet, Wedding, Reception",
+                "A note (optional): who is getting married, what each function was, favourite moments"),
+    "event": ("Event name", "Parts of the event in order (optional), e.g. Arrival, Cake, Dancing", "A note about the event (optional)"),
+    "family": ("Title (optional)", "Parts in order (optional), e.g. Summer, Diwali, New Year", "A note (optional): who is in the videos, what happened"),
+}
+
+
+def recap_kind_labels(kind):
+    """(name label, parts label, note label) for the chosen kind of recap."""
+    return RECAP_KIND_TEXT.get(kind) or RECAP_KIND_TEXT["trip"]
+
+
+def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -108,6 +167,10 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--recap_no_geocode"]
     if enhance:
         args += ["--enhance", "auto"]
+    if kind in ("wedding", "event", "family"):
+        args += ["--recap_kind", kind]
+    if keep_sound:
+        args += ["--recap_keep_sound"]
     return args
 
 

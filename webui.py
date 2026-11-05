@@ -237,8 +237,8 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
     yield "❌ No dubbed video was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
 
 
-def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False):
-    """Trip recap tab: several videos in filming order -> one recap with a hook, title cards and an itinerary."""
+def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False):
+    """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
     if reuse and not files:
@@ -247,7 +247,7 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
         raise gr.Error("Add your trip videos first (in the order you filmed them).")
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance)]
+    cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound)]
     if reuse:
         copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
         if copied:
@@ -270,6 +270,14 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
         return
     reason = next((ln.split("]", 1)[1].strip() for ln in reversed(log.splitlines()) if ln.startswith("[Error]")), "")
     yield "❌ No recap was made." + (f" {reason}" if reason else " Open 'Technical details' for the reason."), log, None, None
+
+
+def recap_kind_changed(kind):
+    """Relabel the Recap form for the chosen kind; the place lookup only exists for trips, and the original sound defaults on for events."""
+    name_label, parts_label, note_label = web_args.recap_kind_labels(kind)
+    trip = kind in (None, "", "trip")
+    return (gr.update(label=name_label), gr.update(label=parts_label), gr.update(label=note_label),
+            gr.update(visible=trip, value=trip), gr.update(value=not trip))
 
 
 def rate_clip(card, liked):
@@ -329,11 +337,20 @@ def setup_status():
         return f"Could not check the setup automatically ({e})."
 
 
-def save_groq_key(key):
+def save_llm_key(provider, key):
+    """Save the key typed in the 'AI-written titles' box under the right name in .env."""
     from shortsflow import onboarding
-    if onboarding.save_env_key(os.path.join(ROOT, ".env"), "GROQ_API_KEY", key):
-        return "✅ Saved. AI titles and descriptions will use your free Groq key from the next run."
-    return "⚠️ That does not look like a key. Copy it again from console.groq.com (no spaces)."
+    name = web_args.llm_key_env_name(provider)
+    if not name:
+        return "⚠️ Choose a provider first."
+    label = web_args.LLM_KEY_PROVIDERS[provider][0]
+    if onboarding.save_env_key(os.path.join(ROOT, ".env"), name, key):
+        return f"✅ Saved. AI titles and descriptions can use your {label} key from the next run."
+    return "⚠️ That does not look like a key. Copy it again from the provider's page (no spaces)."
+
+
+def save_groq_key(key):
+    return save_llm_key("groq", key)
 
 
 def _cards_from_videos(videos):
@@ -393,7 +410,7 @@ def clear_brand():
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
-               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False):
+               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -426,6 +443,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         cmd += web_args.filler_args(layout, filler_video)
         cmd += web_args.extras_args(clean_audio, hook_overlay, caption_emoji, bool(captions), broll=broll, auto_zoom=auto_zoom, cold_open=cold_open, stat_pops=stat_pops)
         cmd += web_args.edit_args(auto_edit, edit_strength)
+        cmd += web_args.grade_args(grade)
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
         if (find or "").strip():
@@ -773,6 +791,9 @@ def build_ui():
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
                                            info="Only used when animated captions are on.")
                         q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
+                        q_grade = gr.Dropdown(web_args.COLOR_GRADE_CHOICES, value="default", label="Colour filter",
+                                              info="A colour look for the whole short. Automatic uses the Auto-edit style's own look (Hype: vibrant action, "
+                                                   "Vlog: cinematic warm); pick one here to override it.")
                         with gr.Accordion("Extras (optional)", open=False):
                             q_clean = gr.Checkbox(label="Clean up the sound", info="Removes background noise and evens out the volume.")
                             q_enhance = gr.Checkbox(label="Auto-enhance the picture", info="Like an editor: each short is measured and a dark clip is lifted, a colour cast reduced, a dull one given a little colour, plus light sharpening. Only what is off is corrected. On your PC; it cannot add detail that is not there.")
@@ -897,11 +918,14 @@ def build_ui():
                     q_check = gr.Markdown(setup_status())
                     gr.Button("Check again").click(setup_status, None, q_check)
                 with gr.Accordion("Want AI-written titles and descriptions? (optional, free)", open=False):
-                    gr.Markdown("Get a free key at [console.groq.com](https://console.groq.com) (sign in, then *API Keys*), paste it here and save. "
-                                "You can skip this; your shorts are made either way.")
-                    q_key = gr.Textbox(label="Groq API key", type="password", placeholder="gsk_...")
+                    gr.Markdown("Pick any AI provider you have a key for. You can skip this; your shorts are made either way "
+                                "(with Ollama running on this PC no key is needed). The key is saved in your local `.env` file.")
+                    q_key_provider = gr.Dropdown(web_args.LLM_KEY_CHOICES, value="groq", label="Provider")
+                    q_key_help = gr.Markdown(web_args.llm_key_help("groq"))
+                    q_key = gr.Textbox(label="API key", type="password")
                     q_key_msg = gr.Markdown()
-                    gr.Button("Save key").click(save_groq_key, q_key, q_key_msg)
+                    q_key_provider.change(web_args.llm_key_help, q_key_provider, q_key_help)
+                    gr.Button("Save key").click(save_llm_key, [q_key_provider, q_key], q_key_msg)
                 with gr.Accordion("Technical details", open=False):
                     q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 q_style.change(style_preview, q_style, q_style_img)
@@ -912,7 +936,7 @@ def build_ui():
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
@@ -993,17 +1017,19 @@ def build_ui():
                 d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original], [d_status, d_log, d_video, d_srt])
                 d_stop.click(stop_jobs, None, d_status, cancels=[d_run])
 
-            with gr.Tab("🧳 Trip recap"):
-                gr.Markdown("### Turn your trip videos into one recap\n"
-                            "It opens with a hook over fast glimpses of the most beautiful shots, then shows the whole trip stop by stop (or day by day) "
-                            "with a title card for each, and writes the itinerary. Add the videos in the order you filmed them.")
+            with gr.Tab("🎞 Recap (trip, wedding, event)"):
+                gr.Markdown("### Turn many videos into one recap\n"
+                            "Pick what the videos are. It opens with a hook over fast glimpses of the best shots, then shows everything part by part "
+                            "(day by day for a trip) with a title card for each, and writes a summary. Add the videos in the order you filmed them.")
                 with gr.Row():
                     with gr.Column():
-                        t_files = gr.File(label="Your trip videos (in filming order)", file_count="multiple", file_types=["video"], type="filepath")
+                        t_kind = gr.Dropdown(web_args.RECAP_KIND_CHOICES, value="trip", label="What kind of videos are these?",
+                                             info="Changes the wording and the options below. Wedding, event and family recaps never look up places.")
+                        t_files = gr.File(label="Your videos (in filming order)", file_count="multiple", file_types=["video"], type="filepath")
                         t_name = gr.Textbox(label="Trip name", placeholder="Almaty: Kolsai, Kaindy and Charyn")
-                        t_stops = gr.Textbox(label="Stops, in order (optional)", placeholder="Kolsai Lake, Kaindy Lake, Charyn Canyon",
-                                             info="Use this for a one-day tour. Leave empty for a trip of several days: name the files or folders day1, day2...")
-                        t_note = gr.Textbox(label="What happened (the AI only uses what you write here)", lines=3,
+                        t_stops = gr.Textbox(label="Stops (optional): one per line or comma separated, e.g. Kolsai Lake, Kaindy Lake", placeholder="Kolsai Lake, Kaindy Lake, Charyn Canyon",
+                                             info="Use this for a one-day tour or to name the parts. Leave empty for a trip of several days: name the files or folders day1, day2...")
+                        t_note = gr.Textbox(label="A note about the trip (optional)", lines=3, info="The AI only uses facts you write here and what it sees in the pictures.",
                                             placeholder="We booked a 17 hour tour from Almaty. We left at 5 am and went first to Kolsai Lake.")
                         t_hook = gr.Textbox(label="Opening line (optional)", placeholder="Woke up at 4 AM just for this view",
                                             info="Shown over the first glimpses. Empty: written from your note.")
@@ -1019,6 +1045,8 @@ def build_ui():
                                              info="Portrait uses your vertical clips, landscape your wide clips, so nothing is cropped small.")
                         t_places = gr.Checkbox(value=True, label="Name the places from the videos' GPS",
                                                info="Sends the rounded GPS position (about 100 m) to the free OpenStreetMap service and shows tourist-place names. Untick to keep it all on your PC.")
+                        t_keep = gr.Checkbox(value=False, label="Keep the original sound under the music (vows, speeches, laughter)",
+                                             info="Off = the song alone carries the edit. Only matters when you add music.")
                         t_reuse = gr.Dropdown(label="Reuse an earlier recap (optional)", choices=[], interactive=True, value=None,
                                               info="Picture descriptions and place names are reused, and its videos too if you add none above.")
                         t_drive = gr.Textbox(label="Upload to a Google Drive folder (optional)", placeholder="https://drive.google.com/drive/folders/...",
@@ -1027,12 +1055,13 @@ def build_ui():
                         t_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         t_status = gr.Markdown("Waiting for your videos...")
-                        t_video = gr.Video(label="Trip recap", interactive=False)
+                        t_video = gr.Video(label="Your recap", interactive=False)
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep],
                                     [t_status, t_log, t_video, t_md])
+                t_kind.change(recap_kind_changed, t_kind, [t_name, t_stops, t_note, t_places, t_keep])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])
                 demo.load(lambda: reusable_update('trip'), None, t_reuse)
 
