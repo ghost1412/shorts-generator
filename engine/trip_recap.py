@@ -53,11 +53,27 @@ def collect_videos(paths):
     return out
 
 
-def group_days(videos):
+def folder_names(videos):
+    """Readable section names from the folders the videos came from, in the order the folders were given: 'henna evening one' ->
+    'Henna evening one'. [] unless the videos come from at least two folders."""
+    seen = list(dict.fromkeys(h for _p, h in videos if h))
+    if len(seen) < 2:
+        return []
+    return [re.sub(r"\s+", " ", re.sub(r"[_]+", " ", h)).strip().capitalize() for h in seen]
+
+
+def group_days(videos, by_folder=False):
     """[[path, ...], ...] one list per day, in day order.
 
     A day number in the folder or file name ("day2", "Day 02") wins; else the date the file was modified; videos that share neither
-    form one day each in name order."""
+    form one day each in name order.
+    by_folder (weddings, parties: one folder per part): one group per folder, in the order the folders were given, whatever the
+    file dates are. Falls back to the normal grouping when the videos come from fewer than two folders."""
+    if by_folder and len(folder_names(videos)) >= 2:
+        groups = {}
+        for path, hint in videos:
+            groups.setdefault(hint or "", []).append(path)
+        return [sorted(files, key=natural_key) for files in groups.values()]
     keyed = []
     for path, hint in videos:
         text = f"{hint or ''} {os.path.splitext(os.path.basename(path))[0]}"
@@ -601,7 +617,7 @@ def pick_windows(duration, n, length, levels=None, skip=0.04):
     return out
 
 
-_NOT_GEO = {"geo": False, "unit": "Part", "stop_unit": "Part", "by": "Part by part", "note": "Note from the person who filmed",
+_NOT_GEO = {"geo": False, "sample": 3.0, "unit": "Part", "stop_unit": "Part", "by": "Part by part", "note": "Note from the person who filmed",
             "invent": "Never invent names, relationships, places, times, speeches or feelings.", "writer": "warm"}
 KINDS = {
     "trip": {"label": "Trip", "recap": "travel recap", "writer": "travel", "note": "Traveller's note", "geo": True, "unit": "Day", "stop_unit": "Stop",
@@ -609,12 +625,38 @@ KINDS = {
              "facts": "the traveller's note, the stop names, the place names (read from the videos' GPS, reliable) or the descriptions",
              "invent": "Never invent places, times, weather, food or feelings."},
     "wedding": {**_NOT_GEO, "label": "Wedding", "recap": "wedding film", "tagline": "A wedding film", "hook": "The day we had been waiting for",
-                "hook_none": "The day we had been waiting for", "facts": "the note, the names of the parts (functions) or the descriptions"},
+                "hook_none": "The day we had been waiting for", "facts": "the note, the names of the parts (the events of the day) or the descriptions"},
     "event": {**_NOT_GEO, "label": "Event", "recap": "event recap", "tagline": "An event recap", "hook": "You had to be there",
               "hook_none": "You had to be there", "facts": "the note, the names of the parts or the descriptions"},
     "family": {**_NOT_GEO, "label": "Memories", "recap": "family memories film", "tagline": "Our memories", "hook": "These are the moments we keep",
                "hook_none": "These are the moments we keep", "facts": "the note, the names of the parts or the descriptions"},
 }
+
+
+def sample_factor(sample, kind_default):
+    """Videos to look at per shot: `sample` is "auto" (the recap kind's own default: weddings and events sample, trips look at everything),
+    "all" (every video), or a number such as 3 (about 3 videos per shot). Returns None for everything."""
+    s = str(sample if sample is not None else "auto").strip().lower()
+    if s in ("", "auto"):
+        return kind_default
+    if s in ("all", "none", "0", "off"):
+        return None
+    try:
+        return max(1.0, float(s))
+    except ValueError:
+        raise ValueError(f"--recap_sample must be auto, all or a number (videos per shot), not {sample!r}.")
+
+
+def sample_videos(infos, n_clips, factor, extra=6):
+    """`infos` (in filming order) thinned to videos spread evenly over the whole list when there are far more videos than shots to pick
+    (about `factor` videos per shot), so a part made of 600 videos is not scanned end to end. Everything is kept when `factor` is falsy,
+    when there are not many more videos than needed, or when n_clips is unknown."""
+    keep = int(factor * max(1, n_clips)) if factor else 0
+    if not keep or len(infos) <= keep + extra:
+        return list(infos)
+    keep = max(2, keep)
+    picks = sorted({round(i * (len(infos) - 1) / (keep - 1)) for i in range(keep)})
+    return [infos[i] for i in picks]
 
 
 def get_kind(kind):
@@ -1259,14 +1301,16 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto"):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1.
     kind: "trip" (default), "wedding", "event" or "family" - the wording, the section names and whether places are looked up from GPS.
     keep_sound: keep the clips' own sound under the music (vows, speeches, laughter) instead of a music-only soundtrack.
     grade_name: colour look ("default" = automatic, "none", "ai" or a named look); edit / edit_strength: the Auto-edit director style
     (podcast, hype, educational, vlog; subtle, medium, hyped) - its look, a slow zoom on every shot and sound effects at the cuts;
-    clean_sound: remove noise from the clips' own sound (only matters with keep_sound or without music)."""
+    clean_sound: remove noise from the clips' own sound (only matters with keep_sound or without music).
+    sample: how many videos to look at when a part has far more videos than shots: "auto" (weddings/events sample about 3 videos per shot,
+    trips look at everything), "all", or a number of videos per shot."""
     global W, H
     if not get_kind(kind)["geo"]:
         geocode = False                       # no map lookups for a wedding or a party (the GPS never leaves the PC)
@@ -1284,25 +1328,32 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
         QUALITY.update(crf="17", preset="fast")
     try:
         return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate, place_names, avoid, kind=kind, keep_sound=keep_sound,
-                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound)
+                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample)
     finally:
         W, H = old
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto"):
     K = get_kind(kind)
+    factor = sample_factor(sample, K.get("sample"))
     from engine import auto_edit
     if edit and edit not in auto_edit.PRESETS:
         raise ValueError(f"Unknown auto-edit style {edit!r}. Choose one of: {', '.join(auto_edit.PRESETS)}")
     director = auto_edit.PRESETS.get(edit) if edit else None
     strength = auto_edit.STRENGTHS.get(edit_strength) or auto_edit.STRENGTHS["medium"]
     videos = collect_videos(list(paths))
-    days_paths = group_days(videos)
+    by_folder = not K["geo"]                              # a wedding or party: one folder per part
+    days_paths = group_days(videos, by_folder=by_folder)
     if not days_paths:
         raise ValueError("No videos found. Give video files, or folders with one folder per day.")
     stops = parse_stops(stops)
-    if stops:
+    folder_parts = by_folder and len(folder_names(videos)) >= 2
+    if folder_parts and not stops:
+        stops = folder_names(videos)                      # the folder names are the part names
+    if stops and folder_parts and len(stops) == len(days_paths):
+        print(f"[Log] {len(stops)} part(s), one per folder: {', '.join(stops)}.")      # names given for the folders: keep the folders as they are
+    elif stops:
         days_paths = split_into(days_paths, len(stops))
         stops = stops[:len(days_paths)]
         print(f"[Log] {len(stops)} stop(s): {', '.join(stops)}.")
@@ -1408,6 +1459,10 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     days = []
     for di, infos in enumerate(all_infos, 1):
         n_clips = counts[di - 1]
+        sampled = sample_videos(infos, n_clips, factor)
+        if len(sampled) < len(infos):
+            print(f"[Log] {K['unit']} {di}: {len(infos)} videos for {n_clips} shot(s): looking at {len(sampled)} of them, spread over the whole part.")
+            infos = sampled
         total_dur = sum(i[1] for i in infos)
         cands, reused = [], []
         for f, dur, w, h in infos:
@@ -1661,7 +1716,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
                       manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)),
                       grade_name=_explicit_filter(args), edit=getattr(args, "auto_edit", "") if getattr(args, "auto_edit", "none") != "none" else "",
-                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), sample=getattr(args, "recap_sample", "auto") or "auto", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
         style = getattr(args, "recap_style", "auto") or "auto"
         if getattr(args, "recap_versions", "one") == "both":
             made = make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)

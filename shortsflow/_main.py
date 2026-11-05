@@ -71,7 +71,8 @@ def parse_args():
     parser.add_argument("--recap_versions", choices=["one", "both"], default="one", help="--mode TRIP: both = two recaps, recap_portrait.mp4 (9:16, only the vertical videos) and recap_landscape.mp4 (16:9, only the landscape videos), so nothing is shown small or cropped.")
     parser.add_argument("--recap_orientation", choices=["any", "landscape", "portrait"], default="any", help="--mode TRIP: use only landscape or only portrait videos (as shown on screen, phone rotation included).")
     parser.add_argument("--recap_no_geocode", action="store_true", help="--mode TRIP: do not look up place names. By default the videos' GPS (rounded to ~100 m) is sent to the free OpenStreetMap service to name the places; with this flag (or SHORTSFLOW_GEOCODE=off) the places stay unnamed unless you give --trip_stops.")
-    parser.add_argument("--recap_kind", choices=["trip", "wedding", "event", "family"], default="trip", help="--mode TRIP: what the footage is. trip (default) = travel wording, Day sections, places named from GPS; wedding / event / family = Part sections (name them with --trip_stops, e.g. \"Haldi, Mehendi, Sangeet, Wedding\"), event-style wording and no place lookup.")
+    parser.add_argument("--recap_kind", choices=["trip", "wedding", "event", "family"], default="trip", help="--mode TRIP: what the footage is. trip (default) = travel wording, Day sections, places named from GPS; wedding / event / family = Part sections (name them with --trip_stops, e.g. \"Ceremony, Dinner, Dancing\"), event-style wording and no place lookup.")
+    parser.add_argument("--recap_sample", default="auto", metavar="auto|all|N", help="--mode TRIP: how many videos to scan when a part has far more videos than shots. auto (default): wedding/event/family recaps look at about 3 videos per shot, spread over the whole part (fast); trips look at everything. all: scan every video (thorough, slower: every file is read once). A number: that many videos per shot.")
     parser.add_argument("--recap_keep_sound", action="store_true", help="--mode TRIP: keep the clips' own sound (vows, speeches, laughter) under the music instead of a music-only soundtrack.")
     parser.add_argument("--upload_drive", default=None, metavar="FOLDER", help="--mode TRIP: upload the finished recap video(s) to this Google Drive folder (link or id). Needs a one-time sign-in; see engine/drive_upload.py. Also: python -m engine.drive_upload FILE... --folder LINK.")
     parser.add_argument("--recap_avoid", default="", metavar="PATH[,PATH]", help="--mode TRIP: pick NEW moments: skip the moments that earlier recaps used (their itinerary.json files or recap folders, comma separated). Without it the same footage gives the same picks every time.")
@@ -198,7 +199,7 @@ def parse_args():
         on = [k for k, v in args.auto_edit_plan["flags"].items() if v is True and k != "use_remotion"]
         print(f"[Log] 🎬 Auto-edit '{args.auto_edit_plan['label']}' ({args.edit_strength}): {', '.join(on)}; captions {args.caption_style}"
               + (f"; note: {'; '.join(args.auto_edit_plan['notes'])}" if args.auto_edit_plan["notes"] else ""))
-    elif args.auto_edit:
+    elif args.auto_edit and str(getattr(args, "mode", "") or "").upper() != "TRIP":      # the recap (TRIP) applies the style itself
         print("[Warning] --auto_edit edits video clips (--source_video); it is ignored here.")
     if args.stat_pops:
         os.environ["SHORTSFLOW_STAT_POPS"] = "1"

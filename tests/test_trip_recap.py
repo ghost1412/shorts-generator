@@ -293,9 +293,9 @@ def test_recap_kinds_change_the_wording_and_default_to_the_trip():
     days = [{"moments": [{"visual": "a groom on a horse", "file": "a.mp4", "start": 1}]},
             {"moments": [{"visual": "a couple dancing", "file": "b.mp4", "start": 2}]}]
     trip = tr.build_prompt("Almaty", "note", days)
-    wed = tr.build_prompt("Asha and Ravi", "note", days, ["Haldi", "Wedding"], kind="wedding")
+    wed = tr.build_prompt("Alex and Sam", "note", days, ["Ceremony", "Dinner"], kind="wedding")
     assert "travel recap" in trip and "Day 1" in trip and "traveller" in trip
-    assert "wedding film" in wed and "Part 1 = Haldi" in wed and "travel" not in wed.lower() and "GPS" not in wed
+    assert "wedding film" in wed and "Part 1 = Ceremony" in wed and "travel" not in wed.lower() and "GPS" not in wed
     assert tr.get_kind("nonsense") is tr.KINDS["trip"] and tr.get_kind(None) is tr.KINDS["trip"]
     fb = tr.fallback_itinerary("", days, kind="wedding")
     assert fb["title"] == "Wedding recap" and fb["days"][1]["title"] == "Part 2"
@@ -310,7 +310,7 @@ def test_web_args_pass_the_kind_and_keep_sound_only_when_needed():
     assert "--recap_kind" not in plain and "--recap_keep_sound" not in plain
     both = web_args.trip_args(["a.mp4"], "s", kind="wedding", keep_sound=True)
     assert both[both.index("--recap_kind") + 1] == "wedding" and "--recap_keep_sound" in both
-    assert web_args.recap_kind_labels("wedding")[1].startswith("Functions") and web_args.recap_kind_labels("zzz") == web_args.RECAP_KIND_TEXT["trip"]
+    assert web_args.recap_kind_labels("wedding")[1].startswith("Parts of the day") and web_args.recap_kind_labels("zzz") == web_args.RECAP_KIND_TEXT["trip"]
 
 
 def test_resolve_look_automatic_none_named_and_edit_style():
@@ -340,3 +340,41 @@ def test_recap_options_reach_the_command_line_and_long_recaps_are_allowed():
     assert web_args.trip_args(["a.mp4"], "s", length=99999)[4:6] == ["--recap_length", str(web_args.MAX_RECAP_SECONDS)] or "--recap_length" in web_args.trip_args(["a.mp4"], "s", length=99999)
     plain = web_args.trip_args(["a.mp4"], "s")
     assert not {"--video_filter", "--auto_edit", "--clean_audio"} & set(plain)                              # nothing extra unless chosen
+
+
+def test_wedding_folders_become_parts_in_the_order_given_whatever_the_file_dates(tmp_path):
+    for name in ("henna evening one", "music night + dance", "farewell part"):
+        d = tmp_path / name
+        d.mkdir()
+        for i in (10, 2, 1):
+            (d / f"C{i:04d}.mp4").write_bytes(b"x")
+    paths = [str(tmp_path / n) for n in ("henna evening one", "music night + dance", "farewell part")]
+    videos = tr.collect_videos(paths)
+    groups = tr.group_days(videos, by_folder=True)
+    assert [os.path.basename(os.path.dirname(g[0])) for g in groups] == ["henna evening one", "music night + dance", "farewell part"]
+    assert [os.path.basename(f) for f in groups[0]] == ["C0001.mp4", "C0002.mp4", "C0010.mp4"]         # natural order inside a folder
+    assert tr.folder_names(videos) == ["Henna evening one", "Music night + dance", "Farewell part"]
+    assert len(tr.group_days(videos)) == 1                                                             # trips: still grouped by date (all files made now)
+    assert tr.folder_names(tr.collect_videos(paths[:1])) == [] and len(tr.group_days(tr.collect_videos(paths[:1]), by_folder=True)) == 1
+
+
+def test_sample_videos_thins_big_parts_only_when_asked():
+    infos = [(f"v{i}.mp4", 10.0, 1920, 1080) for i in range(600)]
+    s = tr.sample_videos(infos, 20, 3.0)
+    assert len(s) == 60 and s[0] == infos[0] and s[-1] == infos[-1] and s == sorted(s, key=lambda x: int(x[0][1:-4]))     # spread, in order
+    assert tr.sample_videos(infos, 20, None) == infos and tr.sample_videos(infos, 20, 0) == infos                         # trips: everything
+    few = infos[:40]
+    assert tr.sample_videos(few, 20, 3.0) == few                                                                          # not many more than needed
+    assert tr.get_kind("trip").get("sample") is None and tr.get_kind("wedding")["sample"] == 3.0
+
+
+def test_sampling_is_a_choice_not_hard_coded():
+    from shortsflow import web_args
+    kd = tr.get_kind("wedding").get("sample")
+    assert tr.sample_factor("auto", kd) == 3.0 and tr.sample_factor(None, kd) == 3.0 and tr.sample_factor("auto", None) is None
+    assert tr.sample_factor("all", kd) is None and tr.sample_factor("6", kd) == 6.0 and tr.sample_factor("0", kd) is None
+    with pytest.raises(ValueError):
+        tr.sample_factor("lots", kd)
+    assert "--recap_sample" not in web_args.trip_args(["a.mp4"], "s")
+    a = web_args.trip_args(["a.mp4"], "s", sample="all")
+    assert a[a.index("--recap_sample") + 1] == "all"

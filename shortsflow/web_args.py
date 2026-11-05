@@ -131,13 +131,13 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
 
 MAX_RECAP_SECONDS = 3600      # a wedding film can run 20-30 minutes; the engine itself has no limit
 
-RECAP_KIND_CHOICES = [("Trip (days, places named from GPS)", "trip"), ("Wedding (one part per function)", "wedding"),
+RECAP_KIND_CHOICES = [("Trip (days, places named from GPS)", "trip"), ("Wedding (one part per event of the day)", "wedding"),
                       ("Event or party", "event"), ("Family memories", "family")]
 # what each kind changes in the form: (name label, parts label + example, note label + example)
 RECAP_KIND_TEXT = {
     "trip": ("Trip name", "Stops (optional): one per line or comma separated, e.g. Kolsai Lake, Kaindy Lake", "A note about the trip (optional)"),
-    "wedding": ("Names or title (optional)", "Functions in the order they happened, e.g. Haldi, Mehendi, Sangeet, Wedding, Reception",
-                "A note (optional): who is getting married, what each function was, favourite moments"),
+    "wedding": ("Names or title (optional)", "Parts of the day in the order they happened, e.g. Getting ready, Ceremony, Dinner, Dancing",
+                "A note (optional): who is getting married, what each part was, favourite moments"),
     "event": ("Event name", "Parts of the event in order (optional), e.g. Arrival, Cake, Dancing", "A note about the event (optional)"),
     "family": ("Title (optional)", "Parts in order (optional), e.g. Summer, Diwali, New Year", "A note (optional): who is in the videos, what happened"),
 }
@@ -148,11 +148,16 @@ def recap_kind_labels(kind):
     return RECAP_KIND_TEXT.get(kind) or RECAP_KIND_TEXT["trip"]
 
 
-RECAP_GRADE_CHOICES = [("Automatic: a look only if the footage suits, otherwise none", "default")] + COLOR_GRADE_CHOICES[1:]
+RECAP_SAMPLE_CHOICES = [("Automatic: weddings and events sample big folders, trips look at everything", "auto"),
+                        ("Sample: about 3 videos per shot, spread over the whole folder (fast)", "3"),
+                        ("Sample: about 6 videos per shot (more choice, slower)", "6"),
+                        ("All videos (thorough: every file is read once, much slower for hundreds of videos)", "all")]
+
+RECAP_GRADE_CHOICES =[("Automatic: a look only if the footage suits, otherwise none", "default")] + COLOR_GRADE_CHOICES[1:]
 
 
 def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-              grade="default", edit="none", edit_strength="medium", clean_sound=False):
+              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto"):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -180,6 +185,8 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
     args += grade_args(grade) + edit_args(edit, edit_strength)
     if clean_sound:
         args += ["--clean_audio"]
+    if sample and str(sample) != "auto":
+        args += ["--recap_sample", str(sample)]
     return args
 
 
