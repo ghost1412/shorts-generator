@@ -224,6 +224,40 @@ def check_rotation(frames, key=None, timeout=120, batch=12):
     return result
 
 
+def sky_side(jpeg):
+    """Which side of the picture the sky seems to be on, from the four edge bands: 'top', 'left', 'bottom', 'right', or None when it
+    cannot be told (indoors, close-ups, no clear sky). A bright, bluish, smooth band that clearly beats the others is the sky. Used when
+    Gemini is not available; it must be right or silent, so the thresholds are strict."""
+    import io
+    try:
+        import numpy as np
+        from PIL import Image
+        img = Image.open(io.BytesIO(jpeg)).convert("RGB")
+        img.thumbnail((120, 120))
+        a = np.asarray(img, dtype=np.float32) / 255.0
+    except Exception:
+        return None
+    h, w, _ = a.shape
+    t = max(2, int(min(h, w) * 0.12))
+    bands = {"top": a[:t], "bottom": a[-t:], "left": a[:, :t], "right": a[:, -t:]}
+    scores = {}
+    for side, band in bands.items():
+        px = band.reshape(-1, 3)
+        luma = px @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+        blue = float(np.mean(px[:, 2] - px[:, 0]))
+        scores[side] = (float(np.mean(luma)) * (1 + max(0.0, blue) * 3) - float(np.std(luma)) * 1.5, blue)
+    order = sorted(scores, key=lambda k: -scores[k][0])
+    best, second = order[0], order[1]
+    if scores[best][0] >= 0.5 and scores[best][0] >= 1.3 * max(scores[second][0], 0.01) and scores[best][1] > 0.03:
+        return best
+    return None
+
+
+def local_rotation(frames):
+    """[0|90|180|270 for each JPEG frame] from sky_side (0 when it cannot be told), the same meaning as check_rotation."""
+    return [UP_TO_ROTATION.get(sky_side(f) or "top", 0) for f in frames]
+
+
 def choose_backend():
     """(model name, ask function, label) or (None, None, why): Gemini if a key exists (unless SHORTSFLOW_VISION=ollama), else Ollama."""
     want = (os.getenv("SHORTSFLOW_VISION") or "auto").strip().lower()

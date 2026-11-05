@@ -123,25 +123,41 @@ def test_rotate_filter_values():
     assert tr.rotate_filter(180).count("transpose=1") == 2
 
 
-def test_fix_rotation_needs_both_frames_to_agree_and_asks_once_per_video():
-    items = [{"file": "a", "start": 5, "end": 9, "size": (1920, 1080)}, {"file": "a", "start": 9, "end": 13, "size": (1920, 1080)},
-             {"file": "b", "start": 5, "end": 9, "size": (1080, 1920)}, {"file": "c", "start": 5, "end": 9, "size": (1080, 1920)}]
+def test_fix_rotation_judges_every_moment_on_its_own_and_needs_both_frames_to_agree():
+    # a phone turned sideways in the middle of ONE video: only the later moment is wrong
+    items = [{"file": "a", "start": 2.0, "end": 6.0, "size": (1080, 1920)}, {"file": "a", "start": 30.0, "end": 34.0, "size": (1080, 1920)},
+             {"file": "b", "start": 5.0, "end": 9.0, "size": (1080, 1920)}, {"file": "c", "start": 5.0, "end": 9.0, "size": (1080, 1920)}]
+    answers = {("a", 2): [0, 0], ("a", 30): [270, 270], ("b", 5): [90, 0], ("c", 5): [0, 0]}      # b: the two frames disagree
+
+    def grab(f, lo, hi):
+        return [f"{f}|{round(lo)}".encode()]
+
     asked = []
-    answers = {"a": [90, 90], "b": [90, 0], "c": [0, 0]}          # b: the frames disagree (a camera pointing up): leave it alone
 
     def check(frames):
         asked.append(len(frames))
         out = []
-        for f in frames:
-            out.append(answers[f.decode()].pop(0))
+        for fr in frames:
+            name, lo = fr.decode().split("|")
+            key = (name, (2 if float(lo) < 20 else 30) if name == "a" else 5)
+            out.append(answers[key].pop(0))
         return out
     known = {}
-    n = tr.fix_rotation(items, check=check, grab=lambda f, s, e: [f.encode()], known=known)
-    assert n == 1 and asked == [6]                                    # two frames for each of the three videos, in one request
-    assert [i.get("rotate", 0) for i in items] == [90, 90, 0, 0]
-    assert items[0]["size"] == (1080, 1920) and items[2]["size"] == (1080, 1920)
-    tr.fix_rotation([{"file": "a", "start": 30, "end": 34, "size": (1920, 1080)}], check=check, grab=lambda f, s, e: [f.encode()], known=known)
-    assert asked == [6]                                               # the answers are remembered: nothing is asked again
+    n = tr.fix_rotation(items, check=check, grab=grab, known=known)
+    assert n == 1 and asked == [8]                                   # two frames for each of the four moments, in one request
+    assert [i.get("rotate", 0) for i in items] == [0, 270, 0, 0]
+    assert items[1]["size"] == (1920, 1080) and items[0]["size"] == (1080, 1920)
+    tr.fix_rotation([{"file": "a", "start": 30.0, "end": 34.0, "size": (1080, 1920)}], check=check, grab=grab, known=known)
+    assert asked == [8]                                              # remembered: nothing is asked again for that moment
+
+
+def test_when_gemini_cannot_answer_the_local_sky_check_decides():
+    items = [{"file": "a", "start": 0.0, "end": 4.0, "size": (1080, 1920)}]
+    tr.fix_rotation(items, check=lambda frames: None, grab=lambda f, lo, hi: [b"x"], local=lambda frames: [270] * len(frames))
+    assert items[0]["rotate"] == 270
+    quiet = [{"file": "b", "start": 0.0, "end": 4.0, "size": (1080, 1920)}]
+    tr.fix_rotation(quiet, check=lambda frames: None, grab=lambda f, lo, hi: [b"x"], local=lambda frames: [90, 0])        # frames disagree
+    assert "rotate" not in quiet[0]
 
 
 def test_check_rotation_maps_where_the_top_is_to_a_clockwise_turn(monkeypatch):
@@ -302,7 +318,7 @@ def test_the_same_name_on_two_far_places_is_corrected_or_dropped(monkeypatch):
     places2 = [{"center": (42.985, 78.465), "files": ["a"], "visuals": []}, {"center": (42.991, 78.326), "files": ["b"], "visuals": []}]
     both = '[{"id": 1, "name": "Kolsay Lakes"}, {"id": 2, "name": "Kolsay Lakes"}]'
     tr.name_places(places2, ask=lambda p: both)
-    assert places2[0]["name"] == "Kolsay Lakes" and places2[1]["name"] == ""
+    assert places2[0]["name"] == "Kolsay Lakes" and tr.is_plain_area(places2[1]["name"])      # the loser falls back to the map's area name, which is never shown
     assert tr.name_conflicts([{"center": (1.0, 1.0), "name": "A Lake"}, {"center": (1.001, 1.001), "name": "A Lake"}]) == []      # same lake, 150 m
 
 
@@ -370,3 +386,54 @@ def test_a_second_recap_with_avoid_uses_different_stretches_of_the_footage(tmp_p
                            avoid=str(tmp_path / "one"))
     used = lambda r: {(os.path.basename(m["file"]), round(m["start"])) for d in json.load(open(r["itinerary_json"], encoding="utf-8"))["days"] for m in d["moments"]}   # noqa: E731
     assert used(first) and used(second) and not (used(first) & used(second))
+
+
+def _jpeg_with_bands(top=None, bottom=None, left=None, right=None, size=96):
+    import io
+    from PIL import Image
+    img = Image.new("RGB", (size, size), (70, 60, 40))                       # brown ground everywhere
+    px = img.load()
+    band = 14
+    for x in range(size):
+        for y in range(size):
+            for side, cond in (("top", y < band), ("bottom", y >= size - band), ("left", x < band), ("right", x >= size - band)):
+                if cond and {"top": top, "bottom": bottom, "left": left, "right": right}[side]:
+                    px[x, y] = (150, 190, 245)                                # bright smooth blue sky
+    buf = io.BytesIO()
+    img.save(buf, "JPEG")
+    return buf.getvalue()
+
+
+def test_sky_side_finds_a_clear_sky_edge_and_is_silent_otherwise():
+    from engine import visual_context as vc
+    assert vc.sky_side(_jpeg_with_bands(top=True)) == "top"
+    assert vc.sky_side(_jpeg_with_bands(right=True)) == "right" and vc.sky_side(_jpeg_with_bands(left=True)) == "left"
+    assert vc.sky_side(_jpeg_with_bands(bottom=True)) == "bottom"
+    assert vc.sky_side(_jpeg_with_bands()) is None                            # no sky anywhere
+    assert vc.sky_side(_jpeg_with_bands(top=True, right=True)) is None        # two equal candidates: not sure
+    assert vc.sky_side(b"not an image") is None
+    assert vc.local_rotation([_jpeg_with_bands(right=True), _jpeg_with_bands(top=True), _jpeg_with_bands()]) == [270, 0, 0]
+
+
+def test_the_same_spot_on_different_days_is_named_once_and_shares_the_name(monkeypatch):
+    _no_network(monkeypatch)
+    places = [{"center": (43.2575, 76.9414), "files": ["d1"], "visuals": ["Night park path with fallen leaves"]},
+              {"center": (43.2576, 76.9415), "files": ["d4"], "visuals": ["A woman hiking near a small waterfall"]},
+              {"center": (42.99, 78.33), "files": ["d2"], "visuals": []}]
+    prompts = []
+    answers = iter(['[{"id": 1, "name": "Republic Square"}, {"id": 3, "name": "Kolsay Lakes"}]'])
+    tr.name_places(places, ask=lambda p: prompts.append(p) or next(answers))
+    assert places[0]["name"] == places[1]["name"] == "Republic Square" and places[2]["name"] == "Kolsay Lakes"
+    assert len(prompts) == 1 and "[2]" not in prompts[0] and "waterfall" in prompts[0]      # one question for the spot, with both days' pictures
+
+
+def test_a_place_the_ai_is_unsure_about_keeps_the_maps_own_name():
+    import engine.geo as g
+    orig = g.place_name, g.nearby_attractions
+    g.place_name, g.nearby_attractions = (lambda *a, **k: {"name": "Kolsay Lakes Town", "area": "Kegen District", "hint": "x"}), (lambda *a, **k: [])
+    try:
+        places = [{"center": (42.9913, 78.3261), "files": ["a"], "visuals": []}]
+        tr.name_places(places, ask=lambda p: '[{"id": 1, "name": ""}]')
+    finally:
+        g.place_name, g.nearby_attractions = orig
+    assert places[0]["name"] == "Kolsay Lakes Town"                        # a named map feature beats leaving the stop unnamed

@@ -337,12 +337,21 @@ def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_pat
     for p in places:
         if p.get("center") and key_of(p) in saved:
             p["name"], p["_done"] = saved[key_of(p)], True              # the same answer as the last run
+    # the same spot filmed on different days is ONE place: it is named once (from all its pictures) and every entry gets that name
+    from engine.geo import distance_km
+    group_of = list(range(len(places)))
+    for i, p in enumerate(places):
+        for j in range(i):
+            if p.get("center") and places[j].get("center") and group_of[j] == j and distance_km(p["center"], places[j]["center"]) < 1.0:
+                group_of[i] = j
+                places[j]["visuals"] = list(places[j].get("visuals", [])) + [v for v in p.get("visuals", []) if v]
+                break
     for i in apply_place_overrides(places, list(overrides or [])):
         saved[key_of(places[i])] = places[i]["name"]                   # what you typed is remembered too
     for p in places:
         if not p.get("_done") and any(_FLIGHT.search(v or "") for v in p.get("visuals", [])):
             p["name"], p["_done"] = "In flight", True
-    pending = [i for i, p in enumerate(places) if p.get("center") and not p.get("_done")]
+    pending = [i for i, p in enumerate(places) if p.get("center") and not p.get("_done") and group_of[i] == i]
     if pending:
         if ask is None:
             try:
@@ -379,6 +388,14 @@ def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_pat
                             saved.pop(key_of(places[i]), None)
             except Exception as e:
                 print(f"[Warning] Could not ask the AI for place names ({str(e)[:80]}); using the map's names.")
+    for i, p in enumerate(places):
+        rep = places[group_of[i]]
+        if group_of[i] != i:
+            p["name"] = rep.get("name", "")                           # the same spot on another day: the same name
+        if not p.get("name") and p.get("center"):
+            p["name"] = facts[i].get("name") or facts[i].get("area") or ""      # the AI was unsure or lost a conflict: the map's own name
+        if p.get("center") and p.get("name") and not is_plain_area(p["name"]):
+            saved[key_of(p)] = p["name"]
     if names_path and saved:
         try:
             with open(names_path, "w", encoding="utf-8") as fh:
@@ -387,8 +404,6 @@ def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_pat
             pass
     for p in places:
         p.pop("_done", None)
-        if not p.get("name") or is_plain_area(p["name"]):
-            p["name"] = p.get("name") or ""
     return places
 
 
@@ -465,42 +480,52 @@ def rotate_filter(deg):
     return {90: "transpose=1", 270: "transpose=2", 180: "transpose=1,transpose=1"}.get(int(deg or 0) % 360, "")
 
 
-def fix_rotation(items, ffmpeg=None, check=None, grab=None, known=None):
+def fix_rotation(items, ffmpeg=None, check=None, grab=None, known=None, local=None):
     """Sets item["rotate"] (clockwise degrees) on moments/glimpses whose picture is sideways although the file says otherwise, and swaps
-    their size for 90/270. Gemini looks at two frames per distinct video (the start and the moment itself) and the video is only turned
-    when both say the same, so a camera pointing at the sky is not "fixed". `known` {file: degrees} remembers earlier answers across
-    calls; without a key nothing changes. Returns how many videos are turned."""
+    their size for 90/270. Every MOMENT is judged on its own (a phone turned sideways in the middle of a video is only wrong for the later
+    stretch): two frames inside the moment are looked at by Gemini, or by the local sky check when Gemini cannot answer, and the moment
+    is only turned when both frames say the same. `known` {(file, second): degrees} remembers answers across calls. Returns how many
+    moments are turned."""
     known = {} if known is None else known
     if check is None:
         from engine.visual_context import check_rotation as check
+    if local is None:
+        from engine.visual_context import local_rotation as local
     if grab is None:
         from engine.visual_context import grab_frames
         grab = lambda f, s, e: grab_frames(f, s, e, n=1, ffmpeg=ffmpeg)  # noqa: E731
+
+    def key_of(it):
+        return (it["file"], int(round(float(it["start"]))))
     first = {}
     for it in items:
-        if it["file"] not in known:
-            first.setdefault(it["file"], it)
+        if key_of(it) not in known:
+            first.setdefault(key_of(it), it)
     frames, owners = [], []
-    for f, it in first.items():
-        for lo, hi in ((0.0, 4.0), (it["start"], it["end"])):
-            got = grab(f, lo, hi)
+    for k, it in first.items():
+        s0, e0 = float(it["start"]), float(it["end"])
+        mid = (s0 + e0) / 2.0
+        for lo, hi in ((s0, mid), (mid, e0)):                          # the middles of the two halves: 25% and 75% of the moment
+            got = grab(it["file"], lo, hi)
             if got:
                 frames.append(got[0])
-                owners.append(f)
-    turns = check(frames) if frames else None
-    if turns and len(turns) == len(owners):
+                owners.append(k)
+    if frames:
+        turns = check(frames)
+        if turns is None or len(turns) != len(owners):                  # Gemini is not available (no key, busy): the local sky check
+            turns = local(frames)
         votes = {}
-        for f, d in zip(owners, turns):
-            votes.setdefault(f, []).append(d)
-        for f, v in votes.items():
-            known[f] = v[0] if len(set(v)) == 1 else 0              # both frames must agree
+        for k, d in zip(owners, turns):
+            votes.setdefault(k, []).append(d)
+        for k, v in votes.items():
+            known[k] = v[0] if len(v) >= 2 and len(set(v)) == 1 else 0       # two frames, and both must agree
     for it in items:
-        d = known.get(it["file"], 0)
+        d = known.get(key_of(it), 0)
         if d and not it.get("rotate"):
             it["rotate"] = d
             if d % 180 == 90 and it.get("size"):
                 it["size"] = (it["size"][1], it["size"][0])
-    return len([f for f, d in known.items() if d])
+    return len({k for k, d in known.items() if d})
 
 
 def loudness_per_second(video, ffmpeg=None, run=subprocess.run):
@@ -1340,7 +1365,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             for p in d["places"]:
                 if m["file"] in p["files"] and p.get("name"):
                     m["place"] = p["name"]
-    trip_places = landmarks_first(dict.fromkeys(p["name"] for p in all_places if p.get("name") and not is_plain_area(p["name"])))
+    trip_places = landmarks_first(dict.fromkeys(p["name"] for p in all_places if p.get("name") and not is_plain_area(p["name"]) and p["name"] != "In flight"))
 
     rot_known = {}
     turned = fix_rotation([m for d in days for m in d["moments"]], ffmpeg=ffmpeg, known=rot_known) if visual else 0      # sends frames to Gemini: only with --visual_context
@@ -1389,9 +1414,10 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             parts.append(card)
     labels = moment_labels(days, cine)
     for d, row in zip(days, it["days"]):
-        day_places = list(dict.fromkeys(m["place"] for m in d["moments"] if m.get("place") and not is_plain_area(m["place"])))
+        day_places = list(dict.fromkeys(m["place"] for m in d["moments"] if m.get("place") and not is_plain_area(m["place"]) and m["place"] != "In flight"))
         if day_places:
-            row["title"] = " · ".join(day_places[:2 if cine else 3])[:50]           # the real places, not a vague "Day 3 Almaty"
+            three = " · ".join(day_places[:3])
+            row["title"] = (three if len(three) <= 40 else " · ".join(day_places[:2]))[:50]           # the real places, not a vague "Day 3 Almaty"
     for di, (d, row) in enumerate(zip(days, it["days"]), 1):
         if cine:
             card_png = None      # the title appears over the day's first shot instead of a card
