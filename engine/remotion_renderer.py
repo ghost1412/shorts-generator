@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import json
 import shutil
@@ -117,6 +118,54 @@ def overlay_props(hook_text=None, hook_seconds=2.8):
 
 
 CRF_BY_QUALITY = {"low": 23, "medium": 16, "high": 12, "ultra": 8}
+
+
+def _ram_gb():
+    """Installed RAM in GB, None when it cannot be found (psutil if present, else the Windows API)."""
+    try:
+        import psutil
+        return psutil.virtual_memory().total / 2 ** 30
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong), ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong), ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong), ("sullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            st = MEMORYSTATUSEX()
+            st.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
+                return st.ullTotalPhys / 2 ** 30
+        except Exception:
+            pass
+    return None
+
+
+def auto_workers(cpu_threads=None, ram_gb=None):
+    """Remotion workers for a GPU-encoding PC: half the CPU threads, at least 2 and at most 8 (beyond that the gain is small), and
+    no more than one per 2 GB of RAM (each worker is a headless Chrome tab). Measured on a 16-thread PC with an RTX 4060: 2 workers
+    6.8 frames/s, 6 workers 18.8, 10 workers 22.8."""
+    threads = cpu_threads or os.cpu_count() or 4
+    n = max(2, min(8, threads // 2))
+    if ram_gb:
+        n = min(n, max(2, int(ram_gb // 2)))
+    return n
+
+
+def concurrency_flag(use_nvenc=False, is_ci=False, env=None, cpu_threads=None, ram_gb=None):
+    """Remotion `--concurrency=` for this machine. Default: with an NVIDIA GPU auto_workers() (the encoder is on the GPU, so the CPU
+    threads are free for rendering frames), 1 on CI runners, half the CPU threads otherwise. SHORTSFLOW_REMOTION_CONCURRENCY (a number
+    like 4, or a percentage like 75%) overrides it, e.g. set 2 to keep the PC free while you game."""
+    env = os.environ if env is None else env
+    raw = (env.get("SHORTSFLOW_REMOTION_CONCURRENCY") or "").strip()
+    if re.fullmatch(r"\d{1,2}|\d{1,3}%", raw) and raw not in ("0", "0%"):
+        return f"--concurrency={raw}"
+    if use_nvenc:
+        return f"--concurrency={auto_workers(cpu_threads, ram_gb if ram_gb is not None else _ram_gb())}"
+    return "--concurrency=1" if is_ci else "--concurrency=50%"
 
 
 def quality_flags(env=None):
@@ -454,13 +503,9 @@ def render_with_remotion(
         
         if use_nvenc:
             gl_flag = "--hardware-acceleration=if-possible"
-            concurrency_flag = "--concurrency=2"
-        elif is_ci:
-            gl_flag = "--gl=angle"
-            concurrency_flag = "--concurrency=1"
         else:
             gl_flag = "--gl=angle"
-            concurrency_flag = "--concurrency=50%"
+        concurrency = concurrency_flag(use_nvenc, is_ci)
 
         ASPECT_MAP = {
             "9:16": (1080, 1920),
@@ -484,7 +529,7 @@ def render_with_remotion(
             gl_flag,
             "--chromium-options=--no-sandbox --disable-dev-shm-usage",
             "--timeout=180000",
-            concurrency_flag
+            concurrency
         ]
 
         
