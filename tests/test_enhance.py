@@ -91,7 +91,7 @@ FF = shutil.which("ffmpeg")
 @pytest.mark.skipif(not FF, reason="needs ffmpeg")
 def test_the_filter_chain_runs_in_ffmpeg_and_really_brightens_a_dark_clip(tmp_path):
     src = str(tmp_path / "dark.mp4")
-    subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "gradients=s=320x180:d=2:r=10:c0=0x000000:c1=0x585858", "-pix_fmt", "yuv420p", src], check=True)
+    subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=s=320x180:d=2:r=10,lutyuv=y=val*0.4", "-pix_fmt", "yuv420p", src], check=True)       # a dark but varied picture, the same on every FFmpeg
     vf, plan, stats = enhance.enhance_filter(src, "medium", FF)
     assert vf and "too dark, lifted" in plan["notes"]
     out = str(tmp_path / "fixed.mp4")
@@ -128,7 +128,7 @@ def test_cli_and_web_options_exist():
 @pytest.mark.skipif(not FF, reason="needs ffmpeg")
 def test_make_recap_with_enhance_brightens_a_dark_trip_video(tmp_path):
     (tmp_path / "day1").mkdir()
-    subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "gradients=s=640x360:d=20:r=10:c0=0x000000:c1=0x4a4a4a", "-f", "lavfi", "-i", "sine=f=300:d=20",
+    subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=s=640x360:d=20:r=10,lutyuv=y=val*0.4", "-f", "lavfi", "-i", "sine=f=300:d=20",
                     "-shortest", "-pix_fmt", "yuv420p", str(tmp_path / "day1" / "a.mp4")], check=True)
     results = {}
     for mode in ("off", "auto"):
