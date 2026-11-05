@@ -120,13 +120,12 @@ CRF_BY_QUALITY = {"low": 23, "medium": 16, "high": 12, "ultra": 8}
 
 
 def quality_flags(env=None):
-    """Remotion encoder flags from --quality / --bitrate (the CLI exports them as SHORTSFLOW_QUALITY / SHORTSFLOW_BITRATE).
-    They used to be ignored here: the CRF was fixed at 16. `medium` (the default) is still CRF 16, so existing output is
-    unchanged. A manual bitrate replaces the CRF, because Remotion does not accept both."""
+    """Remotion encoder flags from --quality (the CLI exports it as SHORTSFLOW_QUALITY): the CRF. `medium` (the default) is CRF 16.
+
+    A manual --bitrate is deliberately NOT passed to Remotion as --video-bitrate: on the Linux runner that made Remotion's encoder exit
+    a few frames into the render ("write EPIPE") and stopped the daily channel (the daily job always passes --bitrate 12000k). The
+    bitrate still applies to the FFmpeg stages; Remotion output is set by --quality."""
     env = os.environ if env is None else env
-    bitrate = (env.get("SHORTSFLOW_BITRATE") or "").strip()
-    if bitrate:
-        return [f"--video-bitrate={bitrate}"]
     return [f"--crf={CRF_BY_QUALITY.get((env.get('SHORTSFLOW_QUALITY') or 'medium').lower(), 16)}"]
 
 

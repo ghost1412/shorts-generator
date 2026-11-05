@@ -73,7 +73,11 @@ def test_remotion_quality_flags():
     from engine.remotion_renderer import quality_flags
     assert quality_flags({}) == ["--crf=16"]                                         # default output unchanged
     assert quality_flags({"SHORTSFLOW_QUALITY": "high"}) == ["--crf=12"]
-    assert quality_flags({"SHORTSFLOW_QUALITY": "ultra", "SHORTSFLOW_BITRATE": "9000k"}) == ["--video-bitrate=9000k"]
+    # a manual bitrate is never handed to Remotion: --video-bitrate made its encoder exit mid-render on Linux (write EPIPE), which
+    # stopped the daily channel because the daily job always passes --bitrate 12000k
+    assert quality_flags({"SHORTSFLOW_QUALITY": "ultra", "SHORTSFLOW_BITRATE": "9000k"}) == ["--crf=8"]
+    assert quality_flags({"SHORTSFLOW_BITRATE": "12000k"}) == ["--crf=16"]
+    assert not any("bitrate" in f for f in quality_flags({"SHORTSFLOW_BITRATE": "12000k"}))
     assert quality_flags({"SHORTSFLOW_QUALITY": "nonsense"}) == ["--crf=16"]
 
 
