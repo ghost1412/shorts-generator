@@ -15,10 +15,8 @@ chose. Nothing here calls an LLM or the network.
 """
 import json
 import os
-import re
 
 BOUNDARY_SLOP = 0.6          # seconds between a clip edge and the nearest sentence edge that still counts as "at the boundary"
-SENTENCE_END = re.compile(r"[.!?…]['\")\]]*\s*$")
 
 
 def load_run(session_dir):
@@ -34,19 +32,11 @@ def load_run(session_dir):
 
 
 def sentence_edges(segments):
-    """(starts, ends): times where a sentence begins / ends. A segment start counts when the segment before it ended a sentence (or it is
-    the first); a segment end counts when its text ends with sentence punctuation."""
-    starts, ends = [], []
-    prev_ended = True
-    for s in sorted(segments, key=lambda x: x["start"]):
-        text = str(s.get("text") or "")
-        if prev_ended:
-            starts.append(float(s["start"]))
-        ended = bool(SENTENCE_END.search(text))
-        if ended:
-            ends.append(float(s["end"]))
-        prev_ended = ended
-    return starts, ends
+    """(starts, ends): times where a sentence begins / ends, found the same way the clip snapper finds them (engine.highlight_quality):
+    word-level punctuation, and a pause of 0.9 s or more also separates sentences. Falls back to segment text without word times."""
+    from engine.highlight_quality import sentence_spans
+    spans = sentence_spans({"segments": list(segments)})
+    return [float(s[0]) for s in spans], [float(s[1]) for s in spans]
 
 
 def _near(t, edges, slop=BOUNDARY_SLOP):

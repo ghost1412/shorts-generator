@@ -71,3 +71,11 @@ def test_the_benchmark_script_prints_a_table_and_skips_unreadable_folders(tmp_pa
     printed = capsys.readouterr().out
     assert "run_a" in printed and "skipped" in printed and json.loads(out.read_text(encoding="utf-8"))[0]["clips"] == 1
     assert mod.main([str(tmp_path / "nope")]) == 1
+
+
+def test_a_long_pause_counts_as_a_sentence_edge_like_in_the_snapper():
+    words = [{"word": " so", "start": 0.0, "end": 0.3}, {"word": " we", "start": 0.4, "end": 0.6}, {"word": " tried", "start": 0.7, "end": 1.1},
+             {"word": " it", "start": 1.2, "end": 1.5},                                  # no punctuation, then a 1.5 s pause
+             {"word": " it", "start": 3.0, "end": 3.2}, {"word": " worked.", "start": 3.3, "end": 3.9}]
+    starts, ends = q.sentence_edges([{"start": 0.0, "end": 3.9, "text": " so we tried it it worked.", "words": words}])
+    assert starts == [0.0, 3.0] and ends == [1.5, 3.9]
