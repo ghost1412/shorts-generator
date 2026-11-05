@@ -139,8 +139,53 @@ def _fallback_clip_metadata(text, hook):
     }
 
 
-def generate_clip_metadata(transcript_text, hook=None, user_context=None):
-    """Title, description and tags for a clip cut from a long video, written from what is actually said."""
+def _description_lead(description):
+    """The description without its hashtag line(s): hashtags are keywords, the sentences are claims that must be grounded."""
+    lines = [ln for ln in str(description or "").splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    return " ".join(lines)
+
+
+def ground_clip_metadata(parsed, text, hook=None, user_context=None, ask=None):
+    """Make sure the title and the description's sentences say nothing the clip does not: no number or name that is missing from the
+    transcript, the hook and the user's own note. A problem gets ONE rewrite request that names what to remove; if that still invents
+    something, the title falls back to the hook or the first sentence said and the invented description line is dropped."""
+    from engine import title_variants
+    extras = (hook, user_context)
+
+    def problems_of(title, description):
+        found = title_variants.grounding_problems(title, text, extras)
+        found += title_variants.grounding_problems(_description_lead(description), text, extras)
+        return found
+    problems = problems_of(parsed.get("title", ""), parsed.get("description", ""))
+    if not problems:
+        return parsed
+    print(f"[Log] Title/description check: {'; '.join(problems)}. Asking for a rewrite without them.")
+    if ask is not None:
+        try:
+            from engine.script_gen import robust_json_parse
+            retry = robust_json_parse(ask(
+                f"The clip says only this:\n\"{text}\"\n\nYour title and description contained details the clip does not say: {'; '.join(problems)}.\n"
+                f"Title: {parsed.get('title')}\nDescription: {parsed.get('description')}\n\n"
+                "Rewrite both so they use ONLY numbers, names and facts from the clip. Keep the title under 60 characters and keep the hashtags. "
+                'Return ONLY JSON: {"title": "...", "description": "..."}'))
+            if isinstance(retry, dict) and retry.get("title") and not problems_of(str(retry["title"]), str(retry.get("description") or "")):
+                parsed["title"] = str(retry["title"])[:95]
+                parsed["description"] = str(retry.get("description") or parsed.get("description") or "")
+                return parsed
+        except Exception as e:
+            print(f"[Warning] The rewrite request failed ({str(e)[:70]}).")
+    # fall back to what is certainly true: the hook (a stated claim from the clip) or the first sentence said
+    first = (hook or text.split(".")[0] or "Must-watch moment").strip()
+    parsed["title"] = first[:80]
+    if title_variants.grounding_problems(_description_lead(parsed.get("description", "")), text, extras):
+        hashtags = " ".join(w for w in str(parsed.get("description", "")).split() if w.startswith("#"))
+        parsed["description"] = (text[:200].strip() + ("\n\n" + hashtags if hashtags else "")).strip()
+    return parsed
+
+
+def generate_clip_metadata(transcript_text, hook=None, user_context=None, ask=None):
+    """Title, description and tags for a clip cut from a long video, written from what is actually said.
+    `ask(prompt, **kw)` is the LLM call (tests pass a fake one); the default is the normal provider chain."""
     text = (transcript_text or "").strip()
     if not text:
         return _fallback_clip_metadata("", hook)
@@ -158,12 +203,14 @@ def generate_clip_metadata(transcript_text, hook=None, user_context=None):
         + title_variants.PROMPT_RULES +
         'Return ONLY JSON: {"title": "...", "description": "...", "tags": ["..."], ' + title_variants.PROMPT_SCHEMA + '}'
     )
+    ask = ask or get_llm_response
     try:
-        parsed = robust_json_parse(get_llm_response(prompt, temperature=0.7, max_tokens=1000, timeout=30))
+        parsed = robust_json_parse(ask(prompt, temperature=0.7, max_tokens=1000, timeout=30))
         if isinstance(parsed, dict) and parsed.get("title"):
             parsed["title"] = str(parsed["title"])[:95]
             parsed.setdefault("description", "")
             parsed.setdefault("tags", [])
+            parsed = ground_clip_metadata(parsed, text, hook, user_context, ask=lambda p: ask(p, temperature=0.2, max_tokens=500, timeout=30))
             # alternative titles: only the ones whose numbers and names the clip actually says
             parsed["title_variants"] = title_variants.parse_variants(parsed.get("title_variants"), text, parsed["title"], hook)
             return parsed

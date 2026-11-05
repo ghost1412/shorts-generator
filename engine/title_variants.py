@@ -74,6 +74,20 @@ def ungrounded_names(variant, source_text):
     return out
 
 
+def grounding_problems(text, transcript, extra_sources=()):
+    """Numbers and names in `text` that neither the transcript nor the extra sources (hook, context) say. [] when it is grounded.
+    Used for a clip's main title and description as well as for the alternative titles."""
+    source = " ".join([transcript or ""] + [s for s in extra_sources if s])
+    problems = []
+    nums = ungrounded_numbers(text, source)
+    if nums:
+        problems.append("numbers not in the transcript: " + ", ".join(nums))
+    names = ungrounded_names(text, source)
+    if names:
+        problems.append("names not in the transcript: " + ", ".join(names))
+    return problems
+
+
 def check_variant(title, transcript, extra_sources=()):
     """List of problems with a variant: [] when it is grounded and usable."""
     title = (title or "").strip()
@@ -81,15 +95,7 @@ def check_variant(title, transcript, extra_sources=()):
         return ["empty"]
     if len(title) > MAX_LEN:
         return ["too long"]
-    source = " ".join([transcript or ""] + [s for s in extra_sources if s])
-    problems = []
-    nums = ungrounded_numbers(title, source)
-    if nums:
-        problems.append("numbers not in the transcript: " + ", ".join(nums))
-    names = ungrounded_names(title, source)
-    if names:
-        problems.append("names not in the transcript: " + ", ".join(names))
-    return problems
+    return grounding_problems(title, transcript, extra_sources)
 
 
 def parse_variants(raw, transcript, base_title="", hook=None, max_variants=3):
