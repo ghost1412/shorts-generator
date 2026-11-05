@@ -52,8 +52,20 @@ def validate_window(start, end, source_seconds=None):
     return start, end
 
 
-def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=None, use_brand=True, cuts=None):
+def validate_caption_y(value):
+    """Caption top edge in a 1080x1920 frame (pixels); None keeps what the clip had."""
+    if value is None:
+        return None
+    value = int(round(float(value)))
+    if not 300 <= value <= 1700:
+        raise ValueError("The caption height must be between 300 and 1700 (pixels from the top of a 1920 px tall short).")
+    return value
+
+
+def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=None, use_brand=True, cuts=None, caption_y=None):
     """Re-render a clip in place. Returns the updated clip dict (from results.json).
+
+    `caption_y` = caption top edge in pixels (1080x1920); None keeps the clip's own value (else the run's setting).
 
     `cuts` = [(start, end)] spans of the ORIGINAL video (seconds) to remove from the clip (click-to-cut words).
     None keeps the cuts the clip already has, [] clears them."""
@@ -82,6 +94,8 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     start, end = validate_window(clip["start"] if start is None else start, clip["end"] if end is None else end, probe_duration(source))
     style = caption_style or settings.get("caption_style") or "HORMOZI"
     mode = settings.get("extract_mode", "shorts")
+    new_caption_y = validate_caption_y(caption_y)
+    cap_y = new_caption_y if new_caption_y is not None else clip.get("caption_y", settings.get("subtitle_y_pos", 1150))
 
     interest = None
     if settings.get("smart_crop"):
@@ -160,7 +174,7 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             interest_points=interest, silence_intervals=silence, tighten_mode=tighten_mode,
             use_remotion=bool(settings.get("use_remotion")), orientation=detect_orientation(source) if settings.get("smart_crop") else "landscape",
             letterbox_crop=detect_letterbox(source) if settings.get("smart_crop") else None,
-            caption_style=style, subtitle_y_pos=settings.get("subtitle_y_pos", 1150), layout=settings.get("layout", "single"), **extra)
+            caption_style=style, subtitle_y_pos=cap_y, layout=settings.get("layout", "single"), **extra)
         if not files or not os.path.exists(files[0]):
             raise RuntimeError("The re-render produced no video.")
         new_clip = files[0]
@@ -173,7 +187,7 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
                                              remove_fillers=bool(extra.get("remove_fillers")))
                 if broll_words is not None:
                     apply_to_clip(new_clip, broll_words, layout=settings.get("layout", "single"),
-                                  caption_y=settings.get("subtitle_y_pos", 1150) if settings.get("use_remotion") else 1150,
+                                  caption_y=cap_y if settings.get("use_remotion") else 1150,
                                   hook_overlay=hook_on, events=broll_events)
             except (OSError, ValueError) as e:
                 print(f"[Warning] B-roll skipped on re-render: {e}")
@@ -276,9 +290,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             print(f"[Warning] Thumbnail not refreshed: {e}")
 
     # remember what the clip looked like so "undo" can put the numbers back together with the video
-    clip["previous"] = {k: clip.get(k) for k in ("start", "end", "duration", "caption_style", "cuts")}
+    clip["previous"] = {k: clip.get(k) for k in ("start", "end", "duration", "caption_style", "cuts", "caption_y")}
     clip.update({"start": round(start, 2), "end": round(end, 2),
                  "duration": round(end - start + (cold_info or {}).get("duration", 0), 2), "caption_style": style})
+    if new_caption_y is not None:
+        clip["caption_y"] = new_caption_y
     if cold_info:
         clip["cold_open"] = cold_info
     else:
@@ -340,6 +356,7 @@ def main(argv=None):
     p.add_argument("--end", type=float)
     p.add_argument("--style", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"])
     p.add_argument("--no-brand", action="store_true")
+    p.add_argument("--caption_y", type=int, help="caption top edge in pixels of a 1080x1920 short (300-1700; default 1150)")
     p.add_argument("--cuts", help="spans of the original video to cut out, '1.2:1.8,3:3.5' (seconds); '' clears the cuts")
     a = p.parse_args(argv)
     try:
@@ -347,7 +364,7 @@ def main(argv=None):
         if a.cuts is not None:
             from shortsflow.word_edit import parse_spans_arg
             cuts = parse_spans_arg(a.cuts)
-        clip = rerender_clip(a.session_dir, a.clip_index, a.start, a.end, a.style, use_brand=not a.no_brand, cuts=cuts)
+        clip = rerender_clip(a.session_dir, a.clip_index, a.start, a.end, a.style, use_brand=not a.no_brand, cuts=cuts, caption_y=a.caption_y)
     except (ValueError, RuntimeError) as e:
         print(f"[Error] {e}")
         return 1

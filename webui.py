@@ -603,7 +603,7 @@ def earlier_runs():
     return gr.update(choices=[(name, path) for name, path in review.recent_runs(ROOT)])
 
 
-def rerender_card(cards, index, style, start, end, cuts=None):
+def rerender_card(cards, index, style, start, end, cuts=None, caption_y=None):
     """Re-render one short (new caption style and/or start/end) with the run's cached analysis, then refresh its card.
     `cuts` = spans of the original video to remove (click-to-cut words); None leaves the short's cuts as they are."""
     from shortsflow import review
@@ -622,6 +622,8 @@ def rerender_card(cards, index, style, start, end, cuts=None):
     if cuts is not None:
         from shortsflow import word_edit
         cmd += ["--cuts", word_edit.spans_arg(cuts)]
+    if caption_y is not None and card.get("animated_captions") and int(caption_y) != int(card.get("caption_y") or 1150):
+        cmd += ["--caption_y", str(int(caption_y))]      # only when the slider was moved
     env =dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     if r.returncode != 0:
@@ -636,8 +638,8 @@ def rerender_card(cards, index, style, start, end, cuts=None):
 
 def rerender_handler(index):
     """A real generator function for one card (a lambda that returns a generator is not treated as streaming by Gradio)."""
-    def handler(cards, style, start, end):
-        yield from rerender_card(cards, index, style, start, end)
+    def handler(cards, style, start, end, caption_y=None):
+        yield from rerender_card(cards, index, style, start, end, caption_y=caption_y)
     return handler
 
 
@@ -651,13 +653,13 @@ def word_choices(card):
 
 def cut_words_handler(index):
     """Re-render short `index` without the ticked words (an empty tick list brings every word back)."""
-    def handler(cards, ticked, style, start, end):
+    def handler(cards, ticked, style, start, end, caption_y=None):
         from shortsflow import word_edit
         card = next((c for c in cards or [] if c["index"] == index), None)
         if not card:
             raise gr.Error("This short cannot be edited (the data of its run is missing).")
         words = word_edit.load_words(card["session_dir"])
-        yield from rerender_card(cards, index, style, start, end, cuts=word_edit.spans_from_ticks(words, ticked))
+        yield from rerender_card(cards, index, style, start, end, cuts=word_edit.spans_from_ticks(words, ticked), caption_y=caption_y)
     return handler
 
 
@@ -843,10 +845,16 @@ def build_ui():
                                         with gr.Row():
                                             t0 = gr.Number(value=c.get("start"), label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
                                             t1 = gr.Number(value=c.get("end"), label="End (seconds)", precision=1, minimum=0, interactive=True)
+                                        if c.get("animated_captions"):
+                                            cy = gr.Slider(300, 1700, value=c.get("caption_y") or 1150, step=10,
+                                                           label="Caption height (pixels from the top of the 1920 px tall short; lower number = higher up)",
+                                                           interactive=True)
+                                        else:
+                                            cy = gr.State(None)
                                         with gr.Row():
                                             go = gr.Button("Re-render this short", size="sm", variant="secondary")
                                             back = gr.Button("Undo last change", size="sm")
-                                        go.click(rerender_handler(c["index"]), [q_cards, st, t0, t1], [q_cards, q_status])
+                                        go.click(rerender_handler(c["index"]), [q_cards, st, t0, t1, cy], [q_cards, q_status])
                                         back.click(undo_handler(c["index"]), q_cards, [q_cards, q_status])
                                         choices, ticked, hint = word_choices(c)
                                         if choices:
@@ -858,7 +866,7 @@ def build_ui():
                                                 wfind_btn = gr.Button("Tick phrase", size="sm", scale=1)
                                             wgo = gr.Button("Cut the ticked words", size="sm", variant="secondary")
                                             wfind_btn.click(tick_phrase_handler(c["index"]), [q_cards, wfind, wd], [wd, q_status])
-                                            wgo.click(cut_words_handler(c["index"]), [q_cards, wd, st, t0, t1], [q_cards, q_status])
+                                            wgo.click(cut_words_handler(c["index"]), [q_cards, wd, st, t0, t1, cy], [q_cards, q_status])
 
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")

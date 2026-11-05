@@ -110,11 +110,12 @@ def test_browser_app_passes_the_ticked_words_as_cuts(tmp_path, monkeypatch):
 
     seen = {}
 
-    def fake_rerender(cards, index, style, start, end, cuts=None):
-        seen["cuts"] = cuts
+    def fake_rerender(cards, index, style, start, end, cuts=None, caption_y=None):
+        seen["cuts"], seen["caption_y"] = cuts, caption_y
         yield cards, "ok"
     monkeypatch.setattr(webui, "rerender_card", fake_rerender)
-    list(webui.cut_words_handler(1)([card], [1], None, 5.0, 9.0))
+    list(webui.cut_words_handler(1)([card], [1], None, 5.0, 9.0, 800))
+    assert seen["caption_y"] == 800
     assert len(seen["cuts"]) == 1 and seen["cuts"][0][0] < 5.5 < seen["cuts"][0][1]
     with pytest.raises(Exception):
         list(webui.cut_words_handler(7)([card], [1], None, 5.0, 9.0))

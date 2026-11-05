@@ -90,6 +90,38 @@ def test_rerender_replaces_the_clip_keeps_the_old_one_and_undo_restores_the_numb
     assert rerender.undo_rerender(str(session), 1) is False            # nothing left to undo
 
 
+def test_caption_height_is_applied_remembered_and_undone(tmp_path, monkeypatch):
+    session = _session(tmp_path)
+    calls = {}
+    _fake_engine(monkeypatch, calls)
+    monkeypatch.chdir(tmp_path)
+
+    rerender.rerender_clip(str(session), 1, caption_y=800)
+    assert calls["kw"]["subtitle_y_pos"] == 800
+    assert json.loads((session / "results.json").read_text())["clips"][0]["caption_y"] == 800
+
+    rerender.rerender_clip(str(session), 1, start=6.0, end=12.0)       # a later edit keeps the chosen height
+    assert calls["kw"]["subtitle_y_pos"] == 800
+
+    assert rerender.undo_rerender(str(session), 1) is True              # undo goes back one step (800)
+    rerender.rerender_clip(str(session), 1)
+    assert calls["kw"]["subtitle_y_pos"] == 800
+
+
+def test_caption_height_defaults_to_the_run_and_rejects_nonsense(tmp_path, monkeypatch):
+    session = _session(tmp_path)
+    calls = {}
+    _fake_engine(monkeypatch, calls)
+    monkeypatch.chdir(tmp_path)
+    rerender.rerender_clip(str(session), 1)
+    assert calls["kw"]["subtitle_y_pos"] == 1150
+    assert "caption_y" not in json.loads((session / "results.json").read_text())["clips"][0]
+    assert rerender.validate_caption_y(None) is None and rerender.validate_caption_y("900.4") == 900
+    for bad in (50, 1900, "abc"):
+        with pytest.raises(ValueError):
+            rerender.validate_caption_y(bad)
+
+
 def test_a_window_outside_the_analysed_range_is_analysed_on_demand(tmp_path, monkeypatch):
     session = _session(tmp_path)
     calls = {}
