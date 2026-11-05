@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       extra_args:
-        description: 'Extra main.py flags for the test render, e.g. --bitrate 12000k (what the daily channel passes)'
+        description: 'Extra main.py flags for the test render (default: --bitrate 12000k, what the daily channel passes)'
         required: false
         default: ''
   schedule:
@@ -73,7 +73,8 @@ jobs:
       - name: Render FACTS short (no upload)
         if: env.PEXELS_API_KEY != ''
         env:
-          OFFLINE_EXTRA_ARGS: ${{ github.event.inputs.extra_args }}
+          # the daily channel always passes --bitrate 12000k; testing without it let a crash in that path go unnoticed for a day
+          OFFLINE_EXTRA_ARGS: ${{ github.event.inputs.extra_args || '--bitrate 12000k' }}
         run: python scripts/offline_facts_render.py
 
       - name: Check output
