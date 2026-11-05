@@ -14,6 +14,11 @@ on:
       - 'scripts/offline_facts_render.py'
       - '.github/workflows/e2e.yml'
   workflow_dispatch:
+    inputs:
+      extra_args:
+        description: 'Extra main.py flags for the test render, e.g. --bitrate 12000k (what the daily channel passes)'
+        required: false
+        default: ''
   schedule:
     - cron: '30 2 * * 1' # weekly, catches upstream breakage (Edge TTS, Pexels, Remotion)
 
@@ -67,6 +72,8 @@ jobs:
 
       - name: Render FACTS short (no upload)
         if: env.PEXELS_API_KEY != ''
+        env:
+          OFFLINE_EXTRA_ARGS: ${{ github.event.inputs.extra_args }}
         run: python scripts/offline_facts_render.py
 
       - name: Check output
