@@ -136,3 +136,85 @@ def test_make_recap_with_enhance_brightens_a_dark_trip_video(tmp_path):
                             ask=lambda p: "{}", geocode=False, enhance=mode)
         results[mode] = enhance.measure(enhance.sample_frames(res["video"], FF, n=4))["p50"]
     assert results["auto"] > results["off"] + 0.03
+
+
+def _fake_extract(monkeypatch, tmp_path, **kw):
+    """Run extract_segments with a fake FFmpeg process and return (the ffmpeg commands, the highlights list)."""
+    import json
+    from engine import video_gen
+    cmds = []
+
+    class FakeProc:
+        def __init__(self, cmd, **k):
+            cmds.append(cmd)
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(video_gen.subprocess, "Popen", FakeProc)
+    monkeypatch.setattr(video_gen, "_check_nvenc", lambda: False)
+    monkeypatch.setattr(video_gen, "generate_thumbnail", lambda *a, **k: None, raising=False)
+    tr = tmp_path / "t.json"
+    tr.write_text(json.dumps({}))
+    out = tmp_path / "out"
+    out.mkdir()
+    highlights = [{"start": 2.0, "end": 7.0}]
+    try:
+        video_gen.extract_segments("src.mp4", highlights, str(tr), str(out), **kw)
+    except Exception:
+        pass            # post-processing after the FFmpeg command is irrelevant here
+    return cmds, highlights
+
+
+def test_clip_extraction_measures_the_clip_and_puts_the_correction_first(monkeypatch, tmp_path):
+    seen = {}
+
+    def fake(video, strength="medium", ffmpeg=None, frames=None, start=0.0, duration=None):
+        seen.update(video=video, strength=strength, start=start, duration=duration)
+        return "eq=gamma=1.4", {"notes": ["too dark, lifted"]}, {}
+    monkeypatch.setattr(enhance, "enhance_filter", fake)
+    cmds, highlights = _fake_extract(monkeypatch, tmp_path, enhance="auto", enhance_strength="subtle")
+    vf = cmds[0][cmds[0].index("-vf") + 1]
+    assert vf.startswith("eq=gamma=1.4,")                                         # corrected before cropping / any look
+    assert seen == {"video": "src.mp4", "strength": "subtle", "start": 2.0, "duration": 5.0}      # this clip's stretch, not the whole video
+    assert highlights[0]["enhance_notes"] == ["too dark, lifted"]
+
+
+def test_clip_extraction_without_enhance_is_unchanged(monkeypatch, tmp_path):
+    def boom(*a, **k):
+        raise AssertionError("must not measure anything when enhance is off")
+    monkeypatch.setattr(enhance, "enhance_filter", boom)
+    cmds, highlights = _fake_extract(monkeypatch, tmp_path)
+    assert "eq=gamma" not in cmds[0][cmds[0].index("-vf") + 1] and "enhance_notes" not in highlights[0]
+
+
+def test_a_failed_measurement_leaves_the_clip_alone(monkeypatch, tmp_path):
+    def broken(*a, **k):
+        raise RuntimeError("no frames")
+    monkeypatch.setattr(enhance, "enhance_filter", broken)
+    cmds, highlights = _fake_extract(monkeypatch, tmp_path, enhance="auto")
+    assert cmds and "enhance_notes" not in highlights[0]
+
+
+def test_sample_frames_can_look_at_a_stretch_of_a_longer_video(tmp_path):
+    seen = []
+
+    class R:
+        returncode = 0
+        stdout = bytes(24 * 24 * 3)
+
+    def run(cmd, **k):
+        seen.append(float(cmd[cmd.index("-ss") + 1]) if "-ss" in cmd else None)
+        return R()
+    frames = enhance.sample_frames("v.mp4", "ffmpeg", n=2, width=24, duration=10.0, start=100.0, run=run)
+    assert len(frames) == 2 and all(100.0 < t < 110.0 for t in seen)             # inside [start, start + duration]
+
+
+def test_a_reference_brightness_makes_neighbouring_shots_match():
+    dark_shot = enhance.measure([ramp(0.0, 0.40)])             # median 0.2
+    ok_shot = enhance.measure([ramp(0.20, 0.80)])              # median 0.5
+    brightish = enhance.measure([ramp(0.35, 0.85)])            # median 0.6: fine on its own
+    assert enhance.plan(ok_shot, "medium", reference=0.5)["gamma"] == 1.0                      # already at the recap's typical brightness
+    assert enhance.plan(dark_shot, "medium", reference=0.5)["gamma"] > enhance.plan(dark_shot, "medium")["gamma"] > 1.0   # lifted further towards the others
+    assert enhance.plan(brightish, "medium")["gamma"] == 1.0                                   # inside the default band
+    assert enhance.plan(brightish, "medium", reference=0.35)["gamma"] < 1.0                    # but a bright one among darker shots is toned down

@@ -226,3 +226,38 @@ def test_nearby_attractions_offline_is_not_cached_as_empty(tmp_path, monkeypatch
     cache = str(tmp_path / "places.json")
     assert geo.nearby_attractions((43.0, 77.0), cache, fetch=down) == []
     assert not os.path.exists(cache)                                    # a failed lookup must not be remembered as "nothing there"
+
+
+def test_manual_rotation_parses_and_forces_the_turn_and_size():
+    assert tr.parse_rotations("183047=270, 101930_CLN=90;bad;x=45") == [("183047", 270), ("101930_CLN", 90)]
+    assert tr.parse_rotations("") == [] and tr.parse_rotations("a=-90") == [("a", 270)]
+    items = [{"file": "/v/183047_ufRMEJTR.mp4", "size": (1080, 1920), "start": 0, "end": 4},
+             {"file": "/v/183047_ufRMEJTR.mp4", "size": (1920, 1080), "rotate": 90, "start": 9, "end": 13},      # had an automatic 90 turn
+             {"file": "/v/other.mp4", "size": (1920, 1080), "start": 0, "end": 4}]
+    assert tr.apply_rotations(items, [("183047", 270)]) == 2
+    assert items[0]["rotate"] == 270 and items[0]["size"] == (1920, 1080)
+    assert items[1]["rotate"] == 270 and items[1]["size"] == (1920, 1080)          # swapped back to the file as shown, then for the new turn
+    assert "rotate" not in items[2] and items[2]["size"] == (1920, 1080)
+    cancel = {"file": "/v/183047_x.mp4", "size": (1080, 1920), "rotate": 90}
+    tr.apply_rotations([cancel], [("183047", 0)])
+    assert cancel["rotate"] == 0 and cancel["size"] == (1920, 1080)
+
+
+def test_boring_shots_are_swapped_for_a_spare():
+    assert tr.looks_boring("A still shot of an empty wooden bench on a paved area") and tr.looks_boring("Blurry footage of a pocket")
+    assert not tr.looks_boring("A woman in a dark jacket stands at a turquoise lake")
+    a, b = m("/v/100000_a.mp4", 0), m("/v/110000_b.mp4", 0)
+    a["visual"], b["visual"] = "An empty bench in a park", "A woman hikes along a river"
+    spare = m("/v/105000_c.mp4", 0)
+
+    def describe_one(x):
+        x["visual"] = "A waterfall drops into a pool"
+    out = tr.drop_repeats([a, b], [spare], describe_one)
+    assert out[0] is spare and out[1] is b                                            # the empty bench made room for a better shot
+    assert tr.drop_repeats([a], [], describe_one) == [a]                              # nothing better: it stays
+
+
+def test_the_cinematic_plan_does_not_reserve_time_for_title_cards():
+    with_cards, _ = tr.plan_days([5, 5, 5, 5, 5], 80)
+    without, _ = tr.plan_days([5, 5, 5, 5, 5], 80, card=0.0)
+    assert sum(without) > sum(with_cards)

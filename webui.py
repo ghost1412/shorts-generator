@@ -393,7 +393,7 @@ def clear_brand():
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
-               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive=""):
+               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -434,6 +434,8 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--user_context", about.strip()]
         if visual:
             cmd += ["--visual_context"]
+        if enhance:
+            cmd += ["--enhance", "auto"]
         if (moments or "").strip():
             from engine.moments import parse_moments
             try:
@@ -751,7 +753,7 @@ def build_ui():
                             q_about = gr.Textbox(label="What is this video about? (optional)", lines=2, placeholder="God of War 3 story playthrough",
                                                 info="Helps the AI judge which moments matter, for example when the speaker chats while the story happens on screen.")
                             q_visual = gr.Checkbox(label="Look at the picture too (slower)", value=False,
-                                                   info="A local vision model looks at a few frames of each candidate so the story on screen counts, not only the words. Needs one in Ollama, e.g. ollama pull gemma3:12b.")
+                                                   info="A vision model looks at a few frames of each candidate so the story on screen counts, not only the words. With a Gemini key in .env it uses Gemini (small frames are sent to Google); otherwise it needs a local one in Ollama (ollama pull gemma3:12b) and nothing leaves your PC.")
                             q_cut = gr.Textbox(label="Cut these words or phrases out (one per line)", lines=3, placeholder="you know, so basically",
                                                info="Every time it is said, that bit is removed from the short.")
                         with gr.Accordion("Languages (optional)", open=False):
@@ -771,6 +773,7 @@ def build_ui():
                         q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
                         with gr.Accordion("Extras (optional)", open=False):
                             q_clean = gr.Checkbox(label="Clean up the sound", info="Removes background noise and evens out the volume.")
+                            q_enhance = gr.Checkbox(label="Auto-enhance the picture", info="Like an editor: each short is measured and a dark clip is lifted, a colour cast reduced, a dull one given a little colour, plus light sharpening. Only what is off is corrected. On your PC; it cannot add detail that is not there.")
                             q_hook = gr.Checkbox(label="Big title at the start", info="Shows the short's hook as a title for the first 3 seconds. Needs animated captions.")
                             q_emoji = gr.Checkbox(label="Emoji next to key words in the captions", info="Needs animated captions.")
                             q_filler = gr.Checkbox(label="Satisfying video underneath", info="Your clip on top, looping gameplay or satisfying footage below (shorts only). Without a file below, a video from assets/backgrounds/local or a free stock clip is used.")
@@ -901,7 +904,7 @@ def build_ui():
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)

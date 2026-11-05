@@ -147,3 +147,20 @@ def test_drive_upload_after_a_clip_run_reports_and_skips_when_empty(monkeypatch,
     assert sent == [([str(video)], "https://drive.google.com/drive/folders/ABCdef123456")]
     assert len(list(webui._with_drive(stream(), ""))) == 1 and len(sent) == 1          # no folder given: nothing is uploaded
     assert "not a Google Drive folder" in webui.drive_upload_message([str(video)], "nonsense")
+
+
+def test_start_here_enhance_checkbox_adds_the_flag(tmp_path, monkeypatch):
+    monkeypatch.setattr(webui, "ROOT", str(tmp_path))
+    seen = {}
+
+    def fake_stream(cmd, results, long_form, minutes, find):
+        seen["cmd"] = cmd
+        yield "ok", "", []
+    monkeypatch.setattr(webui, "_stream_clip", fake_stream)
+    monkeypatch.setattr(webui, "_pipeline_cmd", lambda: ["py"])
+    list(webui.quick_clip("https://example.com/v", None, 3, True, enhance=True))
+    assert seen["cmd"][seen["cmd"].index("--enhance") + 1] == "auto"
+    import time
+    time.sleep(1.1)
+    list(webui.quick_clip("https://example.com/v", None, 3, True))
+    assert "--enhance" not in seen["cmd"]

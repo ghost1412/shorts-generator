@@ -205,20 +205,33 @@ def same_description(a, b, threshold=0.5):
     return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= threshold
 
 
+_BORING = re.compile(r"\b(empty (?:\w+ ){0,2}(?:bench|room|street|path|chair|table|hallway|park)|blurry|out of focus|black screen|completely dark|lens (cap|is covered)|"
+                     r"inside (a|the|his|her) pocket|nothing (is )?(visible|happening)|unclear|obscured|accidental)\b", re.I)
+
+
+def looks_boring(text):
+    """True when a picture description says the shot is empty, blurry, black or accidental (not worth a place in the recap)."""
+    return bool(_BORING.search(str(text or "")))
+
+
 def drop_repeats(moments, spares, describe_one):
-    """Moments of one day where no two neighbours look alike by their description. A repeat is swapped for the nearest spare that is
-    not a repeat itself (described on the spot by describe_one(moment)); when none is left it stays."""
+    """Moments of one day where no two neighbours look alike by their description and none is an empty, blurry or accidental shot. Such a
+    moment is swapped for the nearest spare that is neither (described on the spot by describe_one(moment)); when none is left it stays."""
     out, spares = [], list(spares)
+
+    def bad(c, prev):
+        v = c.get("visual")
+        return bool(v) and (looks_boring(v) or (prev is not None and same_description(v, prev.get("visual"))))
     for m in moments:
         cur = m
-        while out and cur.get("visual") and same_description(cur.get("visual"), out[-1].get("visual")):
+        while bad(cur, out[-1] if out else None):
             pool = [s for s in spares if not any(same_scene(s, k) for k in out)]
             if not pool:
                 break
             nxt = min(pool, key=lambda s: abs((moment_time(s) or 0) - (moment_time(cur) or 0)))
             spares.remove(nxt)
             describe_one(nxt)
-            if nxt.get("visual") and not same_description(nxt.get("visual"), out[-1].get("visual")):
+            if nxt.get("visual") and not bad(nxt, out[-1] if out else None):
                 cur = nxt
         out.append(cur)
     return out
@@ -299,6 +312,35 @@ def landmarks_first(names):
     """Place names with real landmarks (lakes, canyons, parks) before plain districts and regions, for the title line and the closing card."""
     plain = ("district", "region", "oblast", "province", "county")
     return sorted(names, key=lambda n: str(n).lower().endswith(plain))
+
+
+def parse_rotations(text):
+    """[(file-name part, degrees)] from '183047=270, 101930_CLN=90' (degrees clockwise: 0, 90, 180 or 270; 0 cancels a wrong automatic turn)."""
+    out = []
+    for item in re.split(r"[,;\n]+", str(text or "")):
+        m = re.fullmatch(r"\s*(.+?)\s*=\s*(-?\d+)\s*", item)
+        if m and int(m.group(2)) % 90 == 0:
+            out.append((m.group(1), int(m.group(2)) % 360))
+    return out
+
+
+def apply_rotations(items, rotations):
+    """Force the turn of every moment/glimpse whose file name contains a given part (the owner knows which clip is sideways); the size
+    is swapped as needed. Returns how many items were changed."""
+    changed = 0
+    for it in items:
+        name = os.path.basename(it["file"])
+        for part, deg in rotations:
+            if part in name:
+                size = it.get("size")
+                if size and (it.get("rotate", 0) % 180 == 90):
+                    size = (size[1], size[0])                         # back to the picture as the file shows it
+                if size and deg % 180 == 90:
+                    size = (size[1], size[0])
+                it["size"] = size
+                it["rotate"] = deg
+                changed += 1
+    return changed
 
 
 def rotate_filter(deg):
@@ -971,7 +1013,7 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium"):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate=""):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1."""
     global W, H
@@ -988,13 +1030,13 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
     if style == "cinematic":
         QUALITY.update(crf="17", preset="fast")
     try:
-        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength)
+        return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate)
     finally:
         W, H = old
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium"):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate=""):
     videos = collect_videos(list(paths))
     days_paths = group_days(videos)
     if not days_paths:
@@ -1031,7 +1073,26 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     if cine:
         grade = pick_grade(ffmpeg, [i[0] for infos in all_infos for i in infos])
         print(f"[Log] Colour grade: {'warm' if grade == CINEMATIC_GRADE else 'cool'} (from the footage).")
-    fixes = {}
+    fixes, fix_stats, ref_box = {}, {}, []
+
+    def stats_for(path):
+        if path not in fix_stats:
+            from engine.enhance import measure, sample_frames
+            fix_stats[path] = measure(sample_frames(path, ffmpeg=ffmpeg))
+        return fix_stats[path]
+
+    def brightness_reference():
+        """The typical median brightness over the videos the recap uses, so the shots are corrected towards each other (None: too few)."""
+        if not ref_box:
+            import statistics
+            meds = []
+            for d in days:
+                for f in dict.fromkeys(m["file"] for m in d["moments"]):
+                    st = stats_for(f)
+                    if st:
+                        meds.append(st["p50"])
+            ref_box.append(statistics.median(meds) if len(meds) >= 3 else None)
+        return ref_box[0]
 
     def fix_for(path):
         """Correction chain for one source video (measured once), '' when enhance is off or the clip needs nothing."""
@@ -1039,15 +1100,16 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             return ""
         if path not in fixes:
             try:
-                from engine.enhance import enhance_filter
-                fixes[path] = enhance_filter(path, enhance_strength, ffmpeg)[0]
+                from engine.enhance import build_filter, plan
+                fixes[path] = build_filter(plan(stats_for(path), enhance_strength, brightness_reference()))
             except Exception as e:
                 print(f"[Warning] Could not measure {os.path.basename(path)} for enhancing ({str(e)[:60]}); left as it is.")
                 fixes[path] = ""
         return fixes[path]
     if enhance not in (None, "", "off"):
         print(f"[Log] Auto enhance ({enhance_strength}): each video is measured and corrected where needed (exposure, colour cast, dullness, sharpness).")
-    counts, clip_len = plan_days([len(i) for i in all_infos], max(float(total_seconds) - opening, len(all_infos) * 6.0))
+    counts, clip_len = plan_days([len(i) for i in all_infos], max(float(total_seconds) - opening, len(all_infos) * 6.0),
+                                 card=0.0 if cine else CARD_SECONDS)          # the cinematic look puts the titles over the footage: no card time to reserve
     glimpse_s, title_s, first_min, music_start = GLIMPSE_SECONDS, 3.4, 3.2, 0.0
     mute_orig = bool(cine and music)        # the song carries the edit: the clips' own sound would break it at every cut
     if cine and music:
@@ -1127,6 +1189,9 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     turned = fix_rotation([m for d in days for m in d["moments"]], ffmpeg=ffmpeg, known=rot_known) if visual else 0      # sends frames to Gemini: only with --visual_context
     if turned:
         print(f"[Log] {turned} sideways video(s) turned upright.")
+    rotations = parse_rotations(manual_rotate)
+    if rotations and apply_rotations([m for d in days for m in d["moments"]], rotations):       # (the title shot is taken from these afterwards)
+        print(f"[Log] Manual rotation applied: {manual_rotate}.")
 
     # the trip title is shown over a shot of its own: the same shot must not open Day 1 again right after it
     title_m = days[0]["moments"].pop(0) if cine and len(days[0]["moments"]) > 1 else None
@@ -1143,6 +1208,8 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         glimpses = pick_glimpses(days, GLIMPSES, glimpse_s, grab=grab, rate=rate)
         if visual:
             fix_rotation(glimpses, ffmpeg=ffmpeg, known=rot_known)
+        if rotations:
+            apply_rotations(glimpses, rotations)
         if glimpses:
             hook_png = caption_png(os.path.join(parts_dir, "hook.png"), it["hook"], y_frac=0.3, size=96, lower=cine)
             for gi, g in enumerate(glimpses, 1):
@@ -1260,7 +1327,8 @@ def run(args, target_bitrate=None, target_preset=None):
                       total_seconds=getattr(args, "recap_length", 60) or 60, music=getattr(args, "music", None),
                       visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
                       stops=getattr(args, "trip_stops", None), geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
-                      enhance_strength=getattr(args, "enhance_strength", "medium") or "medium", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                      enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
+                      manual_rotate=getattr(args, "recap_rotate", "") or "", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
         style = getattr(args, "recap_style", "auto") or "auto"
         if getattr(args, "recap_versions", "one") == "both":
             made = make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)

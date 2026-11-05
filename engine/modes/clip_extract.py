@@ -247,6 +247,7 @@ def run(args, target_bitrate, target_preset):
         orientation=orientation, letterbox_crop=letterbox_crop,
         caption_style=args.caption_style, subtitle_y_pos=args.subtitle_y_pos,
         video_filter=active_video_filter, user_context=args.user_context,
+        enhance=getattr(args, 'enhance', 'off') or 'off', enhance_strength=getattr(args, 'enhance_strength', 'medium') or 'medium',
         max_workers=getattr(args, 'max_workers', None),
         layout=args.layout,
         filler_video=getattr(args, 'filler_video', None),
@@ -680,6 +681,10 @@ def run(args, target_bitrate, target_preset):
                 "title_variants": meta_item.get("title_variants", []),
                 "thumbnail": os.path.join(os.path.dirname(clip_path), meta_item["thumbnail"]) if meta_item.get("thumbnail") and clip_path else None
             })
+            if h.get("enhance_notes"):          # what auto-enhance fixed in this clip, shown on its review card
+                last = output_json_data["clips"][-1]
+                last["enhance"] = list(h["enhance_notes"])
+                last["edit_summary"] = ((last.get("edit_summary") or "") + " Picture fixed: " + ", ".join(h["enhance_notes"]) + ".").strip()
         with open(args.output_json, "w", encoding="utf-8") as f_out:
             json.dump(output_json_data, f_out, indent=4)
         print(f"[Log] Exported structured JSON results to: {args.output_json}")

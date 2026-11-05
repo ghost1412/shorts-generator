@@ -22,8 +22,9 @@ STRENGTHS = {"subtle": 0.5, "medium": 1.0}
 TARGET_MEDIAN = 0.42          # the middle grey of a well exposed clip (0..1)
 
 
-def sample_frames(video, ffmpeg=None, n=5, width=160, duration=None, run=subprocess.run):
-    """[float RGB arrays (h, w, 3) in 0..1] of n frames spread over the clip (first and last 10% skipped); [] on failure."""
+def sample_frames(video, ffmpeg=None, n=5, width=160, duration=None, run=subprocess.run, start=0.0):
+    """[float RGB arrays (h, w, 3) in 0..1] of n frames spread over [start, start + duration] of the video (first and last 10% of that
+    stretch skipped; the whole video when no duration is given); [] on failure."""
     if ffmpeg is None:
         import imageio_ffmpeg
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -33,7 +34,7 @@ def sample_frames(video, ffmpeg=None, n=5, width=160, duration=None, run=subproc
         duration = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 10.0
     frames = []
     for k in range(n):
-        t = max(0.0, duration * (0.1 + 0.8 * (k + 0.5) / n))
+        t = max(0.0, start + duration * (0.1 + 0.8 * (k + 0.5) / n))
         r = run([ffmpeg, "-hide_banner", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", video, "-frames:v", "1",
                  "-vf", f"scale={width}:-2:flags=area", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True)
         if r.returncode != 0 or not r.stdout:
@@ -74,17 +75,20 @@ def _clamp(x, lo, hi):
     return max(lo, min(hi, x))
 
 
-def plan(stats, strength="medium"):
-    """The corrections for these statistics: {"gamma", "black", "white", "cast": (r, g, b), "saturation", "sharpen", "denoise", "notes"}.
+def plan(stats, strength="medium", reference=None):
+    """The corrections for these statistics (`reference`: the typical median brightness of the other shots of the same video, so
+    neighbouring shots match; without it the fixed middle grey is the aim): {"gamma", "black", "white", "cast": (r, g, b), "saturation", "sharpen", "denoise", "notes"}.
     Every value is limited so a wrong measurement cannot ruin a clip."""
     s = STRENGTHS.get(strength, 1.0) if isinstance(strength, str) else float(strength)
     out = {"gamma": 1.0, "black": 0.0, "white": 1.0, "cast": (0.0, 0.0, 0.0), "saturation": 1.0, "sharpen": 0.0, "denoise": False, "notes": []}
     if not stats or s <= 0:
         return out
     med = _clamp(stats["p50"], 0.02, 0.98)
-    # brightness: lift dark clips, tame very bright ones; at most gamma 1.7 (up) / 0.85 (down)
-    if med < 0.34 or med > 0.66:
-        full = math.log(med) / math.log(TARGET_MEDIAN)
+    target = TARGET_MEDIAN if reference is None else _clamp(reference, 0.30, 0.55)
+    # brightness: lift dark clips, tame very bright ones; at most gamma 1.7 (up) / 0.85 (down). Left alone inside a band around the aim
+    # (0.34-0.66 for the default aim), which keeps a bright or moody scene as it is while still evening out the shots of one video
+    if med < target - 0.08 or med > target + 0.24:
+        full = math.log(med) / math.log(target)
         out["gamma"] = round(_clamp(1.0 + (full - 1.0) * 0.6 * s, 0.85, 1.7), 3)
         out["notes"].append("too dark, lifted" if out["gamma"] > 1 else "too bright, toned down")
     # contrast: stretch the black and white points when the range is narrow (flat or hazy picture)
@@ -130,11 +134,12 @@ def build_filter(p):
     return ",".join(chain)
 
 
-def enhance_filter(video, strength="medium", ffmpeg=None, frames=None):
-    """(filter chain, plan, stats) for a video file; the chain is '' when it needs nothing."""
-    frames = frames if frames is not None else sample_frames(video, ffmpeg=ffmpeg)
+def enhance_filter(video, strength="medium", ffmpeg=None, frames=None, start=0.0, duration=None, reference=None):
+    """(filter chain, plan, stats) for a video file (or for the stretch [start, start + duration] of it, e.g. one clip of a long
+    video); the chain is '' when it needs nothing."""
+    frames = frames if frames is not None else sample_frames(video, ffmpeg=ffmpeg, start=start, duration=duration)
     stats = measure(frames)
-    p = plan(stats, strength)
+    p = plan(stats, strength, reference)
     return build_filter(p), p, stats
 
 

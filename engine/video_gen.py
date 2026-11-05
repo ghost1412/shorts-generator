@@ -2614,7 +2614,7 @@ def finish_segment_processes(procs):
             print(f"[Warning] Could not finish segment {os.path.basename(final)}: {e}")
 
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None, enhance="off", enhance_strength="medium"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2708,6 +2708,18 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         elif use_hq:
             vf_filter = f"{get_hq_vf()},{vf_filter}"
             
+        # Auto enhance: measure this clip (not the whole video) and correct exposure / colour cast / dullness before any look is applied
+        if enhance not in (None, "", "off"):
+            try:
+                from engine.enhance import enhance_filter
+                fix_vf, fix_plan, _fix_stats = enhance_filter(source_path, enhance_strength, ffmpeg_exe, start=hi['start'], duration=duration)
+                hi['enhance_notes'] = list(fix_plan.get("notes") or [])
+                if fix_vf:
+                    vf_filter = f"{fix_vf},{vf_filter}"
+                print(f"[Log] Clip {i+1}: auto-enhance ({', '.join(hi['enhance_notes']) or 'light sharpening only'}).")
+            except Exception as e:
+                print(f"[Warning] Clip {i+1}: could not measure it for auto-enhance ({str(e)[:70]}); left as it is.")
+
         # 🟢 Apply Visual Color Grade Filter if requested (Static, Auto, or Dynamic)
         if video_filter:
             v_name = video_filter.lower().strip()
