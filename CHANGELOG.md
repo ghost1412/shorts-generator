@@ -4,6 +4,9 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+### New
+- **Recap transitions instead of plain cuts (`--transitions mix|punch|whip|flash|glitch`, "Transitions between shots" on the Recap tab)**: a fast zoom punch with a short blur, a whip pan with horizontal motion blur, a white flash, an RGB-split glitch, or a mix that changes on every cut. The effect is built from the end of one shot and the start of the next, so the shots are still joined without re-encoding; the hook text stays put. How long it lasts follows `--edit_strength` (subtle 0.14 s, medium 0.2 s, hyped 0.26 s). Off by default; runs on this PC only.
+
 ## 0.5.0 (2026-11-07)
 
 ### New

@@ -53,6 +53,7 @@ def parse_args():
     parser.add_argument("--target_duration", type=int, default=30)
     parser.add_argument("--auto_edit", choices=["podcast", "hype", "educational", "vlog"], help="Edit like an editor: one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, teaser opening, colour and sound effects for this kind of video. Your own flags still win. Writes edit_plan.json.")
     parser.add_argument("--edit_strength", choices=["subtle", "medium", "hyped"], default="medium", help="With --auto_edit: how much of the edit shows (default medium).")
+    parser.add_argument("--transitions", choices=["none", "mix", "punch", "whip", "flash", "glitch"], default="none", help="--mode TRIP: a transition on every cut instead of a plain cut: punch (fast push-in), whip (slide with motion blur), flash (white), glitch (RGB split) or mix (a different one each time). Length follows --edit_strength.")
     parser.add_argument("--stat_pops", action="store_true", help="Show striking numbers (\"$200\", \"73%%\", \"10 years\") big on screen the moment they are said. Needs --use_remotion.")
     parser.add_argument("--cold_open", action="store_true", help="Start each short with its strongest line (a 1.5-6 s teaser taken from the clip), then play the clip from its beginning. Shorts only.")
     parser.add_argument("--no_signals", action="store_true", help="Ignore the extra scoring signals (speech-rate change, and laughter/applause with --use_audio_detect).")

@@ -34,6 +34,8 @@ def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_
 EDIT_STYLE_CHOICES = [("No auto-edit (pick my own options)", "none"), ("Podcast / interview", "podcast"),
                       ("Hype / gaming / reaction", "hype"), ("Educational / explainer", "educational"), ("Vlog / lifestyle", "vlog")]
 EDIT_STRENGTH_CHOICES = [("Subtle", "subtle"), ("Medium", "medium"), ("Hyped", "hyped")]
+from engine import transitions as _transitions  # noqa: E402
+TRANSITION_CHOICES = _transitions.LABELS
 
 
 def edit_args(style, strength="medium"):
@@ -157,7 +159,7 @@ RECAP_GRADE_CHOICES =[("Automatic: a look only if the footage suits, otherwise n
 
 
 def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto"):
+              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -187,6 +189,8 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--clean_audio"]
     if sample and str(sample) != "auto":
         args += ["--recap_sample", str(sample)]
+    if transitions and str(transitions) != "none":
+        args += ["--transitions", str(transitions)]
     return args
 
 

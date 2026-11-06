@@ -238,7 +238,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
 
 
 def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto"):
+               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
     """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
@@ -249,7 +249,7 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
     cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound,
-                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample)]
+                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions)]
     if reuse:
         copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
         if copied:
@@ -1047,6 +1047,8 @@ def build_ui():
                                                    info="Subtle keeps it quiet; Hyped uses everything.")
                         t_grade = gr.Dropdown(web_args.RECAP_GRADE_CHOICES, value="default", label="Colour filter",
                                               info="Automatic gives the cinematic look when the footage suits it and none otherwise. Pick one to force a look, or None to leave the colours as filmed.")
+                        t_trans = gr.Dropdown(web_args.TRANSITION_CHOICES, value="none", label="Transitions between shots",
+                                              info="Instead of plain cuts: a fast zoom punch, a whip pan, a white flash, a glitch, or a mix. How long they last follows 'How much editing'.")
                         t_clean = gr.Checkbox(value=False, label="Clean up the sound (noise, volume)",
                                               info="Only matters when the clips' own sound is in the recap (no music, or 'keep the original sound' ticked).")
                         t_sample = gr.Dropdown(web_args.RECAP_SAMPLE_CHOICES, value="auto", label="How many of your videos to look at",
@@ -1073,7 +1075,7 @@ def build_ui():
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans],
                                     [t_status, t_log, t_video, t_md])
                 t_kind.change(recap_kind_changed, t_kind, [t_name, t_stops, t_note, t_places, t_keep])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])

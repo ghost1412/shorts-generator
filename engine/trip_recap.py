@@ -1203,7 +1203,7 @@ def zoom_filter(seconds, amount, out=False, fps=30):
     return f"fps={fps},zoompan=z='{z}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={fps}"
 
 
-def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="auto", size=None, audio=True, cap_from=0.3, cap_gap=0.3, grade="", fade_s=0.2, layers=None, rotate=0, fix="", zoom=0.0, zoom_out=False):
+def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="auto", size=None, audio=True, cap_from=0.3, cap_gap=0.3, grade="", fade_s=0.2, layers=None, rotate=0, fix="", zoom=0.0, zoom_out=False, head=None, tail=None, trans_s=0.2):
     w, h = size or (0, 0)
     portrait = h > w > 0
     if layout == "crop" or (layout == "auto" and portrait == (H > W)):
@@ -1217,7 +1217,16 @@ def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="aut
     if zoom and zoom > 0:
         base = f"{base},{zoom_filter(seconds, zoom, zoom_out)}"
     grade = ",".join(x for x in (fix, grade) if x)           # first the correction (exposure, cast ...), then the look
-    fade = (f",{grade}" if grade else "") + f",fade=t=in:st=0:d={fade_s}:color=black,fade=t=out:st={seconds - fade_s:.2f}:d={fade_s}:color=black"
+    if head or tail:        # a cut transition: its effect replaces the black dip on the sides that have one
+        from engine.transitions import clip_effect
+        fx, f_in, f_out = clip_effect(head, tail, seconds, trans_s, W, H)
+        if fx:
+            base = f"{base},{fx}"
+        f_in = f_in or ("" if head else f"fade=t=in:st=0:d={fade_s}:color=black")
+        f_out = f_out or ("" if tail else f"fade=t=out:st={seconds - fade_s:.2f}:d={fade_s}:color=black")
+        fade = (f",{grade}" if grade else "") + "".join(f",{x}" for x in (f_in, f_out) if x)
+    else:
+        fade = (f",{grade}" if grade else "") + f",fade=t=in:st=0:d={fade_s}:color=black,fade=t=out:st={seconds - fade_s:.2f}:d={fade_s}:color=black"
     cmd = [ffmpeg, "-y", "-loglevel", "error", "-ss", f"{start:.2f}", "-t", f"{seconds:.2f}", "-i", src]
     if layers:
         n = len(layers)
@@ -1359,7 +1368,7 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto"):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1.
     kind: "trip" (default), "wedding", "event" or "family" - the wording, the section names and whether places are looked up from GPS.
@@ -1386,13 +1395,13 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
         QUALITY.update(crf="17", preset="fast")
     try:
         return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate, place_names, avoid, kind=kind, keep_sound=keep_sound,
-                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample)
+                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions)
     finally:
         W, H = old
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto"):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
     K = get_kind(kind)
     factor = sample_factor(sample, K.get("sample"))
     from engine import auto_edit
@@ -1453,6 +1462,19 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         """The slow push-in for the next shot (in, out, in...), or nothing when no edit style is chosen."""
         shot_no[0] += 1
         return {"zoom": zoom_amount, "zoom_out": shot_no[0] % 2 == 0} if zoom_amount else {}
+    from engine import transitions as _tr
+    trans_name = _tr.validate(transitions)
+    trans_s = _tr.seconds_for(edit_strength)
+    trans_types = _tr.cut_types(trans_name, 400)
+    clip_no = [0]
+
+    def trans_kw():
+        """Head and tail transition of the next shot: the cut before it and the cut after it share one type. Nothing when none is chosen."""
+        i = clip_no[0]
+        clip_no[0] += 1
+        if trans_name == "none":
+            return {}
+        return {"head": trans_types[i - 1] if i else None, "tail": trans_types[i], "trans_s": trans_s}
     fixes, fix_stats, ref_box = {}, {}, []
 
     def stats_for(path):
@@ -1633,7 +1655,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             for gi, g in enumerate(glimpses, 1):
                 out = os.path.join(parts_dir, f"glimpse_{gi}.mp4")
                 render_clip(ffmpeg, g["file"], g["start"], glimpse_s, out, hook_png, layout, g["size"], audio=has_audio(g["file"]) and not mute_orig,
-                            cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw())
+                            cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw(), **trans_kw())
                 parts.append(out)
             print(f"[Log] Opening: hook \"{it['hook']}\" over {len(glimpses)} glimpse(s).")
         if cine:
@@ -1641,7 +1663,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             out = os.path.join(parts_dir, "trip_title.mp4")
             lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else (" · ".join(trip_places[:4]) or K["tagline"]), "",
                                    look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0)
-            render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw())
+            render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw(), **trans_kw())
             parts.append(out)
         else:
             title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else K["by"], "")
@@ -1674,7 +1696,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
                 lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], f"{unit} {di}" if len(days) > 1 else "",
                                        look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di)
                 secs = max(secs, first_min)
-            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw())
+            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw())
             parts.append(out)
         print(f"[Log] {K['unit']} {di} rendered.")
     # a closing card, so the recap does not just fade out on the last shot
@@ -1799,7 +1821,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
                       manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)),
                       grade_name=_explicit_filter(args), edit=getattr(args, "auto_edit", "") if getattr(args, "auto_edit", "none") != "none" else "",
-                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), sample=getattr(args, "recap_sample", "auto") or "auto", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), sample=getattr(args, "recap_sample", "auto") or "auto", transitions=getattr(args, "transitions", "none") or "none", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
         style = getattr(args, "recap_style", "auto") or "auto"
         if getattr(args, "recap_versions", "one") == "both":
             made = make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)
