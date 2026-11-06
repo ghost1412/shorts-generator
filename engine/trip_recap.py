@@ -559,6 +559,11 @@ def loudness_per_second(video, ffmpeg=None, run=subprocess.run):
     return vals
 
 
+def _file_name(path):
+    """File name of a path written on any OS (an itinerary made on Windows can be read elsewhere)."""
+    return re.split(r"[\\/]", str(path))[-1]
+
+
 def load_avoid(spec):
     """{(file name, start, end)} of the moments that earlier recaps used, from `spec`: itinerary.json files or recap folders (the folder
     itself and its portrait/ and landscape/ sub-folders), separated by commas. Missing or unreadable ones are skipped."""
@@ -578,7 +583,7 @@ def load_avoid(spec):
             for day in data.get("days", []) if isinstance(data, dict) else []:
                 for m in day.get("moments", []):
                     try:
-                        found.add((os.path.basename(str(m["file"])), float(m["start"]), float(m["end"])))
+                        found.add((_file_name(m["file"]), float(m["start"]), float(m["end"])))
                     except (KeyError, TypeError, ValueError):
                         continue
     return found
@@ -586,7 +591,7 @@ def load_avoid(spec):
 
 def was_used(path, start, end, avoid, min_overlap=0.4):
     """True when [start, end] of this video overlaps a moment from `avoid` by at least min_overlap of its length."""
-    name, length = os.path.basename(str(path)), max(0.1, float(end) - float(start))
+    name, length = _file_name(path), max(0.1, float(end) - float(start))
     return any(n == name and max(0.0, min(end, b) - max(start, a)) / length >= min_overlap for n, a, b in avoid)
 
 
