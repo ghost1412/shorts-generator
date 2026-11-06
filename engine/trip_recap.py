@@ -215,14 +215,16 @@ def description_words(text):
     return {w for w in re.findall(r"[a-z]+", str(text or "").lower()) if w not in _STOP_WORDS and len(w) > 2}
 
 
-def same_description(a, b, threshold=0.5):
+def same_description(a, b, threshold=0.4):
     """True when two picture descriptions say nearly the same (word overlap)."""
     wa, wb = description_words(a), description_words(b)
     return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= threshold
 
 
 _BORING = re.compile(r"\b(empty (?:\w+ ){0,2}(?:bench|room|street|path|chair|table|hallway|park)|blurry|out of focus|black screen|completely dark|lens (cap|is covered)|"
-                     r"inside (a|the|his|her) pocket|nothing (is )?(visible|happening)|unclear|obscured|accidental)\b", re.I)
+                     r"inside (a|the|his|her) pocket|nothing (is )?(visible|happening)|unclear|obscured|accidental|mating|pigeons?|buffet|dining (?:establishment|room|hall)|"
+                     r"(?:very|too|mostly|extremely|pitch|almost) dark|pitch[- ]black|dimly lit|barely visible|"
+                     r"(?:close-up|view|shot) of (?:the |a )?(?:ground|floor|pavement|sidewalk|dirt|asphalt|feet))\b", re.I)
 
 
 def looks_boring(text):
@@ -230,27 +232,78 @@ def looks_boring(text):
     return bool(_BORING.search(str(text or "")))
 
 
-def drop_repeats(moments, spares, describe_one):
-    """Moments of one day where no two neighbours look alike by their description and none is an empty, blurry or accidental shot. Such a
-    moment is swapped for the nearest spare that is neither (described on the spot by describe_one(moment)); when none is left it stays."""
-    out, spares = [], list(spares)
+LOOK_ALIKE = 26.0             # thumbnails closer than this look like the same shot (real look-alikes: 7-22, different shots: 30 and up)
 
-    def bad(c, prev):
+
+def thumb_distance(a, b):
+    """How different two JPEG frames look: mean difference of 12x12 thumbnails with the brightness removed. Same view ~ 0-22, others 30+.
+    1000.0 when a frame cannot be read (never 'alike')."""
+    import io
+    try:
+        import numpy as np
+        from PIL import Image
+
+        def thumb(j):
+            t = np.asarray(Image.open(io.BytesIO(j)).convert("RGB").resize((12, 12)), dtype=float)
+            return t - t.mean()
+        return float(np.abs(thumb(a) - thumb(b)).mean())
+    except Exception:
+        return 1000.0
+
+
+def drop_repeats(moments, spares, describe_one, before=(), window=2, alike=None):
+    """Moments of one day where none looks like one of the `window` shots before it (by description, by `alike(a, b)` on the pictures,
+    also across days through `before`, the moments of the day before) and none is an empty, blurry, dark or accidental shot. Such a
+    moment is swapped for the nearest spare that is neither (described on the spot by describe_one(moment)). A repeat with no spare
+    stays; an empty or accidental shot with no spare is dropped when the day has other moments."""
+    out, spares = [], list(spares)
+    earlier = list(before)
+    alike = alike or (lambda a, b: False)
+
+    def boring(c):
+        return looks_boring(c.get("visual"))
+
+    def bad(c):
         v = c.get("visual")
-        return bool(v) and (looks_boring(v) or (prev is not None and same_description(v, prev.get("visual"))))
+        recent = (earlier + out)[-window:]
+        return boring(c) or any(alike(c, r) or (bool(v) and same_description(v, r.get("visual"))) for r in recent)
     for m in moments:
         cur = m
-        while bad(cur, out[-1] if out else None):
+        while bad(cur):
             pool = [s for s in spares if not any(same_scene(s, k) for k in out)]
             if not pool:
                 break
             nxt = min(pool, key=lambda s: abs((moment_time(s) or 0) - (moment_time(cur) or 0)))
             spares.remove(nxt)
             describe_one(nxt)
-            if nxt.get("visual") and not bad(nxt, out[-1] if out else None):
+            if not bad(nxt):
                 cur = nxt
+        if boring(cur) and len(moments) > 1:
+            continue
         out.append(cur)
     return out
+
+
+def best_closing(moments, grab=None, score=None):
+    """`moments` with the most striking of them last, so the recap ends on a strong shot (a wide view, not a wing tip or a dark street).
+    Fewer than 3 moments, or when no frame can be read: unchanged. Only that one shot moves; the rest keep their filming order."""
+    if len(moments) < 3:
+        return list(moments)
+    if grab is None:
+        from engine.visual_context import grab_frames
+        grab = lambda f, s, e: grab_frames(f, s, e, n=1)  # noqa: E731
+    score = score or scenic_score
+    scores = []
+    for m in moments:
+        try:
+            frames = grab(m["file"], m["start"], m["end"])
+        except Exception:
+            frames = None
+        scores.append(score(frames[0]) if frames else None)
+    if None in scores:
+        return list(moments)
+    best = max(range(len(moments)), key=lambda i: scores[i])
+    return [m for i, m in enumerate(moments) if i != best] + [moments[best]]
 
 
 PLAIN_AREA = ("district", "region", "oblast", "province", "county")
@@ -1485,22 +1538,42 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     if not days:
         raise ValueError("None of the videos could be read.")
 
-    if visual:
-        from engine.visual_context import describe_candidates
+    from engine.visual_context import grab_frames as _grab_frames
+    grab_one = grab or (lambda f, s_, e_: _grab_frames(f, s_, e_, n=1, ffmpeg=ffmpeg))
+    frame_cache = {}
 
-        def describe_one(m):
-            one = describe_candidates(m["file"], [{"start": m["start"], "end": m["end"]}], about=f"{trip_name} {note}".strip(),
-                                      cache_path=os.path.join(session_dir, "visual_context.json"), ask=describe)
-            if one and one[0].get("visual"):
-                m["visual"] = one[0]["visual"]
-        for d in days:
-            for m in d["moments"]:
-                describe_one(m)
-            before = list(d["moments"])
-            d["moments"] = drop_repeats(d["moments"], d["spares"], describe_one)
-            swapped = sum(1 for a, b in zip(before, d["moments"]) if a is not b)
-            if swapped:
-                print(f"[Log] Replaced {swapped} shot(s) that looked like their neighbour.")
+    def frame_of(m):
+        k = (m["file"], round(m["start"], 1))
+        if k not in frame_cache:
+            try:
+                got = grab_one(m["file"], m["start"], m["end"])
+            except Exception:
+                got = None
+            frame_cache[k] = got[0] if got else None
+        return frame_cache[k]
+
+    def alike(a, b):
+        fa, fb = frame_of(a), frame_of(b)
+        return fa is not None and fb is not None and thumb_distance(fa, fb) < LOOK_ALIKE
+
+    def describe_one(m):
+        if not visual:
+            return
+        from engine.visual_context import describe_candidates
+        one = describe_candidates(m["file"], [{"start": m["start"], "end": m["end"]}], about=f"{trip_name} {note}".strip(),
+                                  cache_path=os.path.join(session_dir, "visual_context.json"), ask=describe)
+        if one and one[0].get("visual"):
+            m["visual"] = one[0]["visual"]
+    previous = []
+    for d in days:
+        for m in d["moments"]:
+            describe_one(m)
+        before = list(d["moments"])
+        d["moments"] = drop_repeats(d["moments"], d["spares"], describe_one, before=previous, alike=alike)
+        previous = d["moments"][-2:]
+        swapped = sum(1 for a, b in zip(before, d["moments"]) if a is not b)
+        if swapped or len(d["moments"]) < len(before):
+            print(f"[Log] Replaced or dropped {swapped + len(before) - len(d['moments'])} shot(s) that looked like a shot just before them or were dark or empty.")
     for d in days:
         d.pop("spares", None)
 
@@ -1535,6 +1608,11 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
 
     # the trip title is shown over a shot of its own: the same shot must not open Day 1 again right after it
     title_m = days[0]["moments"].pop(0) if cine and len(days[0]["moments"]) > 1 else None
+    if len(days[-1]["moments"]) >= 3:
+        last_before = list(days[-1]["moments"])
+        days[-1]["moments"] = best_closing(last_before, grab=grab)
+        if days[-1]["moments"] != last_before:
+            print("[Log] The recap ends on the most striking shot of the last day.")
     it = write_itinerary(trip_name, note, days, ask=ask, stops=stops, kind=kind)
     parts = []
     parts_dir = os.path.join(session_dir, "recap_parts")

@@ -449,3 +449,76 @@ def test_the_second_version_reuses_the_first_versions_place_names(tmp_path):
     merged = json.loads((b / "place_names.json").read_text(encoding="utf-8"))
     assert merged == {"v3:42.985,78.465": "Kaindy Lake", "v3:43.354,79.058": "Charyn Canyon", "v3:43.111,77.111": "Shymbulak"}   # the first version's names win
     assert tr.share_place_names(str(tmp_path / "none"), str(b)) == 0
+
+
+def test_drop_repeats_looks_two_shots_back_and_across_days_and_skips_dark_shots():
+    mk = lambda name, v: {"file": f"/v/{name}.mp4", "start": 0.0, "end": 4.8, "visual": v}          # noqa: E731
+    bay1, other, bay2 = mk("a", "Calm green bay with rocky limestone islands under a grey sky"), mk("b", "A woman smiles at a market stall"), mk("c", "Green bay with limestone islands and grey sky")
+    spare = mk("d", "A narrow street with scooters and shops")
+    out = tr.drop_repeats([bay1, other, bay2], [spare], lambda m: None)
+    assert out == [bay1, other, spare]                                         # the third looks like the first (two back)
+    out = tr.drop_repeats([bay2], [spare], lambda m: None, before=[bay1])      # the day before ended on the same view
+    assert out == [spare]
+    dark = mk("e", "A very dark street, barely visible lights")
+    assert tr.looks_boring(dark["visual"]) and tr.looks_boring("A close-up of the ground with dirt")
+    assert not tr.looks_boring("A night view of a lit bridge with a dragon sculpture")
+    assert tr.drop_repeats([dark], [spare], lambda m: None) == [spare]
+
+
+def test_best_closing_moves_the_most_striking_shot_last_and_leaves_short_lists_alone():
+    ms = [{"file": f"/v/{i}.mp4", "start": 0.0, "end": 4.8} for i in range(4)]
+    scores = {"/v/0.mp4": 0.2, "/v/1.mp4": 0.9, "/v/2.mp4": 0.4, "/v/3.mp4": 0.1}
+    out = tr.best_closing(ms, grab=lambda f, s, e: [f.encode()], score=lambda jpeg: scores[jpeg.decode()])
+    assert [m["file"] for m in out] == ["/v/0.mp4", "/v/2.mp4", "/v/3.mp4", "/v/1.mp4"]
+    assert tr.best_closing(ms[:2], grab=lambda f, s, e: [b"x"], score=lambda j: 1) == ms[:2]
+    assert tr.best_closing(ms, grab=lambda f, s, e: [], score=lambda j: 1) == ms                     # no frames: unchanged
+
+
+def _jpeg_of(color_rows):
+    import io
+    from PIL import Image
+    img = Image.new("RGB", (64, 64))
+    for y in range(64):
+        img.paste(color_rows[min(len(color_rows) - 1, y * len(color_rows) // 64)], (0, y, 64, y + 1))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG")
+    return buf.getvalue()
+
+
+def test_thumb_distance_tells_the_same_view_from_another_and_alike_drives_drop_repeats():
+    sea = _jpeg_of([(190, 190, 190), (110, 130, 120)])                      # grey sky over green sea
+    sea_dim = _jpeg_of([(150, 150, 150), (70, 90, 80)])                    # the same view a bit darker
+    street = _jpeg_of([(30, 30, 30), (200, 60, 40), (40, 40, 160), (220, 220, 60)])
+    assert tr.thumb_distance(sea, sea_dim) < tr.LOOK_ALIKE < tr.thumb_distance(sea, street)
+    assert tr.thumb_distance(b"not a jpeg", sea) > 500
+    frames = {"a": sea, "b": street, "c": sea_dim, "d": street}
+    mk = lambda n: {"file": f"/v/{n}.mp4", "start": 0.0, "end": 4.8}       # noqa: E731
+    a, b, c, d = mk("a"), mk("b"), mk("c"), mk("d")
+    alike = lambda x, y: tr.thumb_distance(frames[x["file"][3]], frames[y["file"][3]]) < tr.LOOK_ALIKE      # noqa: E731
+    out = tr.drop_repeats([a, c], [b], lambda m: None, alike=alike)            # c looks like a: the street takes its place
+    assert out == [a, b]
+
+
+def test_drop_repeats_drops_an_accidental_shot_when_nothing_replaces_it_but_keeps_a_lone_one():
+    ok = {"file": "/v/ok.mp4", "start": 0.0, "end": 4.8, "visual": "A woman smiles at a waterfall"}
+    bad = {"file": "/v/bad.mp4", "start": 0.0, "end": 4.8, "visual": "Two pigeons walk on a tiled sidewalk"}
+    assert tr.looks_boring("A flock of pigeons") and tr.looks_boring("people at a buffet in a dining room")
+    assert tr.drop_repeats([ok, bad], [], lambda m: None) == [ok]              # no spare: dropped, the day still has a shot
+    assert tr.drop_repeats([bad], [], lambda m: None) == [bad]                 # the day's only shot stays
+
+
+def test_check_rotation_gives_up_quickly_when_gemini_stays_rate_limited(monkeypatch):
+    from engine import visual_context as vc
+    slept, calls = [], []
+
+    def busy(req, timeout=0):
+        calls.append(1)
+        raise OSError("HTTP Error 429: Too Many Requests")
+    monkeypatch.setattr(vc.urllib.request, "urlopen", busy)
+    monkeypatch.setattr("time.sleep", lambda s: slept.append(s))
+    monkeypatch.setattr(vc, "_ROTATION_PAUSED_UNTIL", 0.0)
+    assert vc.check_rotation([b"1"] * 30, key="k") is None                 # 3 batches, but it stops after the first give-up
+    assert sum(slept) <= vc.MAX_BACKOFF_SECONDS
+    before = len(calls)
+    assert vc.check_rotation([b"1"], key="k") is None and len(calls) == before      # paused: no further request for a while
+    monkeypatch.setattr(vc, "_ROTATION_PAUSED_UNTIL", 0.0)

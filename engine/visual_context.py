@@ -183,12 +183,20 @@ ROTATION_PROMPT = ("These are {n} frames from different phone videos, numbered i
 UP_TO_ROTATION = {"top": 0, "left": 90, "bottom": 180, "right": 270}      # clockwise turn that puts the top of the scene at the top
 
 
+_ROTATION_PAUSED_UNTIL = 0.0       # after Gemini stayed rate-limited, the rotation check is left to the local sky check until this time
+MAX_BACKOFF_SECONDS = 60           # the most one rotation check waits for a rate-limited Gemini before giving up
+
+
 def check_rotation(frames, key=None, timeout=120, batch=12):
     """[0|90|180|270 for each JPEG frame] from Gemini (clockwise degrees to make the frame upright), None when it cannot be done."""
     key = key or gemini_key()
     if not frames or not key or (os.getenv("SHORTSFLOW_VISION") or "").lower() == "ollama":
         return None
     import time
+    global _ROTATION_PAUSED_UNTIL
+    if time.time() < _ROTATION_PAUSED_UNTIL:
+        return None
+    waited = 0
     result = []
     for lo in range(0, len(frames), batch):
         chunk = frames[lo:lo + batch]
@@ -215,7 +223,13 @@ def check_rotation(frames, key=None, timeout=120, batch=12):
                     break
             except Exception as e:
                 if "429" in str(e) or "503" in str(e):
-                    time.sleep(20 * (attempt + 1))
+                    if waited >= MAX_BACKOFF_SECONDS:
+                        print("[Warning] Gemini is busy; the picture rotation is checked on this PC for now.")
+                        _ROTATION_PAUSED_UNTIL = time.time() + 300
+                        return None
+                    wait = min(20 * (attempt + 1), MAX_BACKOFF_SECONDS - waited) if waited < MAX_BACKOFF_SECONDS else 0
+                    waited += wait
+                    time.sleep(wait)
                     continue
                 print(f"[Warning] Checking the picture rotation with Gemini failed ({str(e)[:80]}).")
         if got is None:
