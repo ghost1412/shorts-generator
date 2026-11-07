@@ -1478,7 +1478,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     clip_no, tail_seq, overlays, boxes, subject_cuts = [0], [], {}, {}, []      # overlays: shot -> the title/caption PNGs burned into it (taken out of the subject cut-out)
 
     def _person_near_end(file, start, secs, size=None):
-        """A clear person in three frames over the shot's last half second, laid out the way the shot is rendered (crop or letterbox)."""
+        """A clear person in four frames over the shot's last second (the bridge, with its build-up, covers up to 0.8 s), laid out the way the shot is rendered (crop or letterbox)."""
         if not _subject.available():
             return False
         grabber = grab
@@ -1487,7 +1487,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             grabber = lambda f, s, e: grab_frames(f, s, e, n=1, ffmpeg=ffmpeg)  # noqa: E731
         end = start + secs
         frames = []
-        for back in (0.70, 0.50, 0.30):                    # each call returns the frame 0.25 s after its start (the window is at least 0.5 s)
+        for back in (1.00, 0.70, 0.50, 0.30):                    # each call returns the frame 0.25 s after its start (the window is at least 0.5 s)
             got = grabber(file, end - back, end - back + 0.5) or []
             if not got:
                 return False

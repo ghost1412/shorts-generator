@@ -22,6 +22,7 @@ MIN_GAP = 4                        # at least this many cuts between two of them
 MIN_ASPECT = 1.0                   # the person's outline is at least as tall as wide (a group side by side is wider)
 MIN_COVER, MAX_COVER = 0.012, 0.80  # share of the (rendered) frame the person fills: smaller = no clear subject, larger = nothing to reveal behind
 _MODEL = []
+last_reason = [""]                # why the last make_bridge made nothing (for the log)
 
 # Looks of the bridge. glow: strength of the bright outline round the person (0 = none); sweep: a light band running over the outline;
 # dim: how much the old background darkens so the person stands out; lead: seconds of build-up BEFORE the background starts to change.
@@ -324,10 +325,15 @@ def make_bridge(ffmpeg, a_path, b_path, out, size, enc, seconds=BRIDGE_S, fps=FP
         b = read_frames(ffmpeg, b_path, 0.0, seconds, size, fps)
         n = min(len(a) - nl, len(b))
         if n < 6:
+            last_reason[0] = "the shots are too short"
             return False
         a, b = a[len(a) - n - nl:], b[:n]
         masks = masks_fn(a) if masks_fn else masks_for(a, a_box)
-        if not (clear_subject(masks) and single_subject(masks)):
+        if not clear_subject(masks):
+            last_reason[0] = "no clear person in the last moments (they leave the frame, or are too small or too big)"
+            return False
+        if not single_subject(masks):
+            last_reason[0] = "more than one person (or a wide group)"
             return False
         tm = text_mask(a_overlays, size)
         clean = [without_text(f, tm) for f in a] if tm is not None else None
@@ -373,6 +379,8 @@ def apply(ffmpeg, parts, pairs, size, enc, workdir, seconds=BRIDGE_S, masks_fn=N
         if make_bridge(ffmpeg, a, b, out, size, enc, seconds, masks_fn=masks_fn, a_overlays=(overlays or {}).get(a), a_box=(boxes or {}).get(a), style=style):
             bridges[i] = out
             made += 1
+        else:
+            print(f"[Log] Subject cut-out skipped for one cut: {last_reason[0] or 'could not build it'}.")
     if not bridges:
         return list(parts), 0
     result = []
