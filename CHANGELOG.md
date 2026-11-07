@@ -5,6 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 ### New
+- **Scheduled runs now mix formats**: the daily workflow used to be pinned to FACTS ("Spot the Lie"), so the channel only got that format. Each cron run now picks a mode by weighted chance (Spot the Lie, This or That, Emoji Guess, Odd One Out, Find It, Trivia, Riddle, Top 5, Story). Set the repo variable `SCHEDULED_MODE` to one mode name for the old behaviour, or to your own weights such as `WYR:30,FACTS:10`.
 - **Recap transitions instead of plain cuts (`--transitions mix|punch|whip|flash|glitch`, "Transitions between shots" on the Recap tab)**: a fast zoom punch with a short blur, a whip pan with horizontal motion blur, a white flash, an RGB-split glitch, or a mix that changes on every cut. The effect is built from the end of one shot and the start of the next, so the shots are still joined without re-encoding; the hook text stays put. How long it lasts follows `--edit_strength` (subtle 0.14 s, medium 0.2 s, hyped 0.26 s). Off by default; runs on this PC only.
 
 ## 0.5.0 (2026-11-07)

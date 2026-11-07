@@ -128,5 +128,5 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 
 ## Open decisions (ask the repo owner)
 
-- Should scheduled runs ever use modes other than FACTS? (Set repo variable `SCHEDULED_MODE`.)
+- ~~Should scheduled runs ever use modes other than FACTS?~~ Yes: weighted mix via `scripts/pick_scheduled_mode.py` (repo variable `SCHEDULED_MODE` overrides; 2026-11-07).
 - Is the hosted SaaS in `web/` (Stripe, Supabase) still maintained, or should docs focus on self-hosting?

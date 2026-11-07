@@ -240,8 +240,13 @@ jobs:
         if [ ! -f "token.json" ] || [ ! -s "token.json" ]; then
           ARG_SKIP_UPLOAD="--skip-upload"
         fi
-        # Scheduled runs stick to one format (repo variable SCHEDULED_MODE, default FACTS) to keep the channel on-niche
-        ARG_MODE="${{ github.event_name == 'schedule' && format('--mode {0}', vars.SCHEDULED_MODE || 'FACTS') || (github.event.inputs.mode && github.event.inputs.mode != 'AUTO' && format('--mode {0}', github.event.inputs.mode)) || '--mode AUTO' }}"
+        # Scheduled runs pick a mode by weighted chance (scripts/pick_scheduled_mode.py). Repo variable SCHEDULED_MODE:
+        # empty/MIX = default mix, one mode name = always that mode, 'WYR:30,FACTS:10' = your own weights.
+        ARG_MODE="${{ (github.event.inputs.mode && github.event.inputs.mode != 'AUTO' && format('--mode {0}', github.event.inputs.mode)) || '--mode AUTO' }}"
+        if [ "${{ github.event_name }}" = "schedule" ]; then
+          ARG_MODE="--mode $(python scripts/pick_scheduled_mode.py '${{ vars.SCHEDULED_MODE }}')"
+          echo "Scheduled run: $ARG_MODE"
+        fi
         ARG_CAT="${{ github.event.inputs.category && github.event.inputs.category != 'random' && format('--category {0}', github.event.inputs.category) || '' }}"
         ARG_VIBE="${{ github.event.inputs.vibe && github.event.inputs.vibe != 'suspense' && format('--vibe {0}', github.event.inputs.vibe) || '' }}"
         ARG_USER_ID="${{ github.event.inputs.user_id && format('--user_id {0}', github.event.inputs.user_id) || '' }}"
