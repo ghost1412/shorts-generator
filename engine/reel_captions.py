@@ -147,7 +147,8 @@ def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx2
     vcur, acur, elapsed = "v0", "a0", durations[0]
     for i in range(1, n):
         if xf:
-            parts.append(f"[{vcur}][v{i}]xfade=transition={names[i - 1] if i - 1 < len(names) else "fade"}:duration={xf}:offset={elapsed - xf:.3f}[xv{i}]")
+            kind = names[i - 1] if i - 1 < len(names) else "fade"
+            parts.append(f"[{vcur}][v{i}]xfade=transition={kind}:duration={xf}:offset={elapsed - xf:.3f}[xv{i}]")
             parts.append(f"[{acur}][a{i}]acrossfade=d={xf}:c1=tri:c2=tri[xa{i}]")
             elapsed += durations[i] - xf
         else:
