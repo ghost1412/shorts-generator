@@ -151,3 +151,37 @@ def test_glow_outlines_the_person_and_builds_up_before_the_wipe():
     assert out[0][10, 5].astype(int).sum() < 80 * 3                    # the old background darkens during the build-up
     assert abs(int(out[lead - 1][60, 5].mean()) - 80) < 60 and plain[lead - 1][60, 5].mean() == 80   # nothing has changed to B yet in the lead
     assert out[-1][5, 5].mean() > 150                                  # at the end the background is B
+
+
+def _blob(h, w, boxes):
+    m = np.zeros((h, w), np.float32)
+    for y0, y1, x0, x1 in boxes:
+        m[y0:y1, x0:x1] = 1.0
+    return m
+
+
+def test_only_a_single_person_gets_the_cut_out():
+    one = _blob(200, 120, [(40, 160, 50, 80)])                                   # one standing person
+    two = _blob(200, 120, [(40, 160, 20, 45), (50, 160, 70, 95)])                 # two separate people
+    crowd = _blob(200, 120, [(100, 160, 5, 115)])                                 # a wide group
+    tiny_extra = _blob(200, 120, [(40, 160, 50, 80), (150, 156, 5, 9)])           # one person and a speck elsewhere
+    assert sc.single_subject([one] * 5) and sc.single_subject([tiny_extra] * 5)
+    assert not sc.single_subject([two] * 5) and not sc.single_subject([crowd] * 5) and not sc.single_subject([])
+    assert sc.single_subject([one] * 9 + [two]) and not sc.single_subject([one] * 3 + [two] * 2)
+
+
+def test_apply_makes_at_most_max_bridges(tmp_path):
+    if not FF:
+        pytest.skip("needs ffmpeg")
+    import subprocess
+    clips = []
+    for k in range(4):
+        c = str(tmp_path / f"clip_{k}.mp4")
+        subprocess.run([FF, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=gray:s=160x90:r=30:d=3", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-t", "3",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", c], check=True)
+        clips.append(c)
+    pairs = {(clips[i], clips[i + 1]) for i in range(3)}
+    person = lambda frames: [_blob(90, 160, [(20, 80, 60, 90)]) for _ in frames]          # noqa: E731
+    enc = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac"]
+    _parts, made = sc.apply(FF, clips, pairs, (160, 90), enc, str(tmp_path / "w"), masks_fn=person, max_bridges=2)
+    assert made == 2

@@ -17,6 +17,9 @@ import subprocess
 BRIDGE_S = 0.5
 FPS = 30
 PERSON_CLASS = 15                  # 'person' in the VOC label set used by the model
+MAX_BRIDGES = 2                    # per edit: the effect stays special
+MIN_GAP = 4                        # at least this many cuts between two of them
+MIN_ASPECT = 1.0                   # the person's outline is at least as tall as wide (a group side by side is wider)
 MIN_COVER, MAX_COVER = 0.012, 0.80  # share of the (rendered) frame the person fills: smaller = no clear subject, larger = nothing to reveal behind
 _MODEL = []
 
@@ -166,6 +169,25 @@ def clear_subject(masks):
     return present >= 0.8 and MIN_COVER <= sum(covers) / len(covers) <= MAX_COVER
 
 
+def single_subject(masks):
+    """True when ONE person is in the frames: a single body-shaped blob (taller than wide), no second sizeable blob, in at least 80 % of the
+    frames. Groups, crowds and people side by side are not a single character, so they get no cut-out."""
+    import cv2
+    import numpy as np
+    if not masks:
+        return False
+    good = 0
+    for m in masks:
+        count, _labels, stats, _c = cv2.connectedComponentsWithStats((m > 0.5).astype(np.uint8), connectivity=8)
+        areas = [int(stats[i, cv2.CC_STAT_AREA]) for i in range(1, count)]
+        if not areas:
+            continue
+        big = [i for i in range(1, count) if stats[i, cv2.CC_STAT_AREA] >= 0.2 * max(areas)]
+        if len(big) == 1 and stats[big[0], cv2.CC_STAT_HEIGHT] >= MIN_ASPECT * stats[big[0], cv2.CC_STAT_WIDTH]:
+            good += 1
+    return good / len(masks) >= 0.8
+
+
 def frame_like_render(img, out_size, crop):
     """`img` (HxWx3 uint8) laid out the way the recap renders it at out_size = (w, h): centre-cropped to fill (crop=True) or fitted on a
     dark canvas (crop=False, the letterbox layout), so the person's share of the frame matches the rendered shot."""
@@ -199,7 +221,7 @@ def has_person_jpegs(jpegs, out_size=None, crop=True):
                 return False
             img = img[:, :, ::-1].copy()
             masks.append(person_mask(frame_like_render(img, out_size, crop) if out_size else img))
-        return clear_subject(masks)
+        return clear_subject(masks) and single_subject(masks)
     except Exception:
         return False
 
@@ -215,7 +237,7 @@ def _glow_layer(alpha, strength, sweep_pos=None):
     grown = cv2.dilate(small, np.ones((k, k), np.uint8))
     tight = np.clip(cv2.GaussianBlur(grown, (0, 0), max(1.5, w / 400.0)) - small, 0.0, 1.0)
     wide = np.clip(cv2.GaussianBlur(grown, (0, 0), max(4.0, w / 40.0)) - small, 0.0, 1.0)
-    halo = np.clip(tight * 1.3 + wide * 0.6, 0.0, 1.0)
+    halo = np.clip(tight * 0.9 + wide * 0.5, 0.0, 1.0)
     if sweep_pos is not None:
         gx, gy = np.meshgrid(np.linspace(0.0, 1.0, halo.shape[1], dtype=np.float32), np.linspace(0.0, 1.0, halo.shape[0], dtype=np.float32))
         band = np.exp(-(((gx + 0.35 * gy) / 1.35 - sweep_pos) / 0.10) ** 2)
@@ -305,7 +327,7 @@ def make_bridge(ffmpeg, a_path, b_path, out, size, enc, seconds=BRIDGE_S, fps=FP
             return False
         a, b = a[len(a) - n - nl:], b[:n]
         masks = masks_fn(a) if masks_fn else masks_for(a, a_box)
-        if not clear_subject(masks):
+        if not (clear_subject(masks) and single_subject(masks)):
             return False
         tm = text_mask(a_overlays, size)
         clean = [without_text(f, tm) for f in a] if tm is not None else None
@@ -331,9 +353,10 @@ def trim(ffmpeg, path, out, cut_head, cut_tail, enc):
     return r.returncode == 0 and os.path.isfile(out) and os.path.getsize(out) > 1000
 
 
-def apply(ffmpeg, parts, pairs, size, enc, workdir, seconds=BRIDGE_S, masks_fn=None, overlays=None, boxes=None, style=None):
+def apply(ffmpeg, parts, pairs, size, enc, workdir, seconds=BRIDGE_S, masks_fn=None, overlays=None, boxes=None, style=None, max_bridges=MAX_BRIDGES):
     """Return a new parts list with the subject cut-out between the pairs of ADJACENT parts in `pairs` (a set of (path_a, path_b)).
     `overlays` maps a shot's path to the PNGs burned into it, `boxes` to the part of its frame holding the sharp picture,
+    `max_bridges` = the most that are made (a safety net; the recap plans at most that many),
     `style` = resolve_style(...) (the outline build-up `lead` makes the bridge, and the end of A that it replaces, that much longer).
     A pair whose bridge cannot be made (no clear person, a shot too short) stays a plain cut. Returns (parts, bridges made); raises when a
     shot cannot be trimmed."""
@@ -342,6 +365,8 @@ def apply(ffmpeg, parts, pairs, size, enc, workdir, seconds=BRIDGE_S, masks_fn=N
     bridges, made = {}, 0
     for i in range(len(parts) - 1):
         a, b = parts[i], parts[i + 1]
+        if made >= max_bridges:
+            break
         if (a, b) not in pairs or min(_duration(ffmpeg, a), _duration(ffmpeg, b)) < 2 * seconds + lead + 0.4:
             continue
         out = os.path.join(workdir, f"bridge_{i}.mp4")

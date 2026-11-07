@@ -162,7 +162,7 @@ RECAP_GRADE_CHOICES =[("Automatic: a look only if the footage suits, otherwise n
 
 
 def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto"):
+              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -198,6 +198,8 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--subject_look", str(subject_look)]
     if subject_color and str(subject_color) != "auto":
         args += ["--subject_color", str(subject_color)]
+    if subject_max is not None and int(subject_max) != 2:
+        args += ["--subject_max", str(int(subject_max))]
     return args
 
 
