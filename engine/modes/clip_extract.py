@@ -235,6 +235,10 @@ def run(args, target_bitrate, target_preset):
         active_video_filter = auto_detect_video_filter(user_context=args.user_context, style_context=args.style_context, category=args.category, prompt=args.prompt)
         print(f"[Log] 🎨 Auto-detected video filter: '{active_video_filter}'")
 
+    from engine import transitions as _tr
+    reel_transition = _tr.resolve(getattr(args, 'transitions', 'auto') or 'auto', getattr(args, 'auto_edit', None))
+    if reel_transition != "none" and args.extract_mode == "long":
+        print(f"[Log] Transitions between the moments of the reel: {reel_transition}.")
     timing.mark("fillers + orientation + letterbox checks")
     extracted_files = extract_segments(
         args.source_video, highlights, transcript_path, session_dir, 
@@ -252,7 +256,8 @@ def run(args, target_bitrate, target_preset):
         layout=args.layout,
         filler_video=getattr(args, 'filler_video', None),
         remove_fillers=getattr(args, 'remove_fillers', False),
-        reel_captions=getattr(args, 'reel_captions', False)
+        reel_captions=getattr(args, 'reel_captions', False),
+        transitions=reel_transition
     )
     
     timing.mark("rendering the clips (FFmpeg / Remotion)")

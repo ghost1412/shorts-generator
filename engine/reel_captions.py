@@ -127,7 +127,7 @@ def burn_captions(video_in, ass_path, video_out, codec="libx264", quality_params
     return r.returncode == 0 and os.path.exists(video_out) and os.path.getsize(video_out) > 1000
 
 
-def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx264", quality_params=None, workdir=None):
+def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx264", quality_params=None, workdir=None, transitions=None):
     """Join `paths` into one reel with FFmpeg: crossfades (xfade / acrossfade) and, optionally, burned-in ASS captions, all in
     one encode. MoviePy needed ~14 minutes for the same 5 minute reel because it re-composites every frame. Returns True on success.
     `durations` are the rendered lengths of the segments (same order)."""
@@ -143,10 +143,11 @@ def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx2
     for i in range(n):
         parts.append(f"[{i}:v]fps=30,setsar=1,format=yuv420p[v{i}]")
         parts.append(f"[{i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[a{i}]")
+    names = list(transitions or [])
     vcur, acur, elapsed = "v0", "a0", durations[0]
     for i in range(1, n):
         if xf:
-            parts.append(f"[{vcur}][v{i}]xfade=transition=fade:duration={xf}:offset={elapsed - xf:.3f}[xv{i}]")
+            parts.append(f"[{vcur}][v{i}]xfade=transition={names[i - 1] if i - 1 < len(names) else "fade"}:duration={xf}:offset={elapsed - xf:.3f}[xv{i}]")
             parts.append(f"[{acur}][a{i}]acrossfade=d={xf}:c1=tri:c2=tri[xa{i}]")
             elapsed += durations[i] - xf
         else:

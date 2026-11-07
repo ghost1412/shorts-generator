@@ -1,6 +1,6 @@
 """Trip recap: several videos (day 1, day 2, ...) -> one vertical recap with a title card per day and a written itinerary.
 
-    python main.py --mode TRIP --trip_videos day1/ day2/ --trip_name "Almaty" --recap_length 60
+    python main.py --mode TRIP --trip_videos day1/ day2/ --trip_name "Northvale" --recap_length 60
 
 * Videos are grouped into days: one folder per day, or files named "day1", "day 2", ... , else by the date they were filmed.
 * From every day a few lively moments are picked (loudest stretches, spread over the whole day, so the recap covers the day and not just
@@ -134,7 +134,7 @@ def split_into(groups, n):
 
 
 def parse_stops(text):
-    """['Kolsai Lake', 'Kaindy Lake', ...] from 'Kolsai Lake, Kaindy Lake; Charyn Canyon' (or a list)."""
+    """['Pinemere Lake', 'Larkwater Lake', ...] from 'Pinemere Lake, Larkwater Lake; Stonegate Canyon' (or a list)."""
     if isinstance(text, (list, tuple)):
         items = [str(x) for x in text]
     else:
@@ -308,16 +308,16 @@ def best_closing(moments, grab=None, score=None):
 
 PLAIN_AREA = ("district", "region", "oblast", "province", "county")
 CACHE_PREFIX = "v3:"          # v3: names from the no-guessing prompt with the conflict check (older prefixes held wrong names)
-CONFLICT_KM = 2.5             # one name on two places this far apart is a mistake (two different lakes cannot both be "Kolsay Lakes")
+CONFLICT_KM = 2.5             # one name on two places this far apart is a mistake (two different lakes cannot both be "Pinemere Lakes")
 
 
 def is_plain_area(name):
-    """True for no name or an administrative area ("Kegen District"): fine for the itinerary, never shown on screen."""
+    """True for no name or an administrative area ("Westford District"): fine for the itinerary, never shown on screen."""
     return not str(name or "").strip() or str(name).strip().lower().endswith(PLAIN_AREA)
 
 
 def parse_place_overrides(text):
-    """[(lat, lon, name)] from '42.985,78.465=Kaindy Lake; 42.991,78.326=Kolsay Lakes' (names you know to be right)."""
+    """[(lat, lon, name)] from '42.985,78.465=Larkwater Lake; 42.991,78.326=Pinemere Lakes' (names you know to be right)."""
     out = []
     for item in re.split(r"[;\n]+", str(text or "")):
         m = re.fullmatch(r"\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*=\s*(.+?)\s*", item)
@@ -436,7 +436,7 @@ def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_pat
                       "a well-known attraction you are SURE is within about 2 km of that GPS position and matches the pictures; translate local "
                       "names to English. NEVER answer with a district, region or province name. Two places that are more than 2 km apart cannot "
                       "have the same name. If you are not sure, answer an empty string \"\": do not guess a famous name. At most 4 words, in English.\n"
-                      + "\n".join(lines) + '\nReply with JSON only: [{"id": 1, "name": "Kaindy Lake"}, {"id": 2, "name": ""}, ...]')
+                      + "\n".join(lines) + '\nReply with JSON only: [{"id": 1, "name": "Larkwater Lake"}, {"id": 2, "name": ""}, ...]')
             try:
                 from engine.script_gen import robust_json_parse
                 _apply_rows(robust_json_parse(ask(prompt)), places, saved, key_of, only=set(pending))
@@ -916,11 +916,14 @@ def resolve_look(grade_name, edit, auto_grade, text=""):
 
 def cut_sound_events(parts, kind):
     """Sound-effect events {t, kind, why} at the start of every shot except the first: [(path, seconds)] of the recap's parts, in order."""
-    events, t = [], 0.0
+    events, t, prev = [], 0.0, ""
     for path, seconds in parts:
-        if t > 0 and os.path.basename(path).startswith(("clip_", "glimpse_", "trip_title")):
+        name = re.sub(r"^trim_\d+_", "", os.path.basename(path))             # a shot trimmed for a subject cut-out is still a shot
+        after_bridge = prev.startswith("bridge_")                              # the bridge already carries the cut: no second sound after it
+        if t > 0 and not after_bridge and name.startswith(("clip_", "glimpse_", "trip_title", "bridge_")):
             events.append({"t": round(t, 3), "kind": kind, "why": "cut"})
         t += float(seconds)
+        prev = name
     return events
 
 
@@ -1368,7 +1371,7 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto"):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1.
     kind: "trip" (default), "wedding", "event" or "family" - the wording, the section names and whether places are looked up from GPS.
@@ -1401,7 +1404,7 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto"):
     K = get_kind(kind)
     factor = sample_factor(sample, K.get("sample"))
     from engine import auto_edit
@@ -1463,18 +1466,36 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         shot_no[0] += 1
         return {"zoom": zoom_amount, "zoom_out": shot_no[0] % 2 == 0} if zoom_amount else {}
     from engine import transitions as _tr
-    trans_name = _tr.validate(transitions)
+    trans_name = _tr.resolve(transitions, edit)
+    if trans_name != "none":
+        print(f"[Log] Transitions between shots: {trans_name}.")
+    from engine import subject_cut as _subject
     trans_s = _tr.seconds_for(edit_strength)
     trans_types = _tr.cut_types(trans_name, 400)
-    clip_no = [0]
+    clip_no, tail_seq = [0], []
 
-    def trans_kw():
-        """Head and tail transition of the next shot: the cut before it and the cut after it share one type. Nothing when none is chosen."""
+    def _person_near_end(file, start, secs):
+        if not _subject.available():
+            return False
+        grabber = grab
+        if grabber is None:
+            from engine.visual_context import grab_frames
+            grabber = lambda f, s, e: grab_frames(f, s, e, n=1, ffmpeg=ffmpeg)  # noqa: E731
+        frames = grabber(file, start + secs - 0.8, start + secs) or []
+        return bool(frames) and _subject.has_person_jpeg(frames[0])
+
+    def trans_kw(file=None, start=0.0, secs=0.0):
+        """Head and tail transition of the next shot: the cut before it and the cut after it share one type. Nothing when none is chosen.
+        For the subject cut-out the tail is "subject" only when a clear person is in the shot's last moments; otherwise a normal type."""
         i = clip_no[0]
         clip_no[0] += 1
         if trans_name == "none":
             return {}
-        return {"head": trans_types[i - 1] if i else None, "tail": trans_types[i], "trans_s": trans_s}
+        tail = trans_types[i]
+        if tail == "subject":
+            tail = "subject" if file and _person_near_end(file, start, secs) else _tr.fallback_type(i)
+        tail_seq.append(tail)
+        return {"head": tail_seq[i - 1] if i else None, "tail": tail, "trans_s": trans_s}
     fixes, fix_stats, ref_box = {}, {}, []
 
     def stats_for(path):
@@ -1655,7 +1676,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             for gi, g in enumerate(glimpses, 1):
                 out = os.path.join(parts_dir, f"glimpse_{gi}.mp4")
                 render_clip(ffmpeg, g["file"], g["start"], glimpse_s, out, hook_png, layout, g["size"], audio=has_audio(g["file"]) and not mute_orig,
-                            cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw(), **trans_kw())
+                            cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw(), **trans_kw(g["file"], g["start"], glimpse_s))
                 parts.append(out)
             print(f"[Log] Opening: hook \"{it['hook']}\" over {len(glimpses)} glimpse(s).")
         if cine:
@@ -1663,7 +1684,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             out = os.path.join(parts_dir, "trip_title.mp4")
             lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else (" · ".join(trip_places[:4]) or K["tagline"]), "",
                                    look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0)
-            render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw(), **trans_kw())
+            render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw(), **trans_kw(m0["file"], m0["start"], title_s))
             parts.append(out)
         else:
             title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else K["by"], "")
@@ -1675,7 +1696,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         day_places = list(dict.fromkeys(m["place"] for m in d["moments"] if m.get("place") and not is_plain_area(m["place"]) and m["place"] != "In flight"))
         if day_places:
             three = " · ".join(day_places[:3])
-            row["title"] = (three if len(three) <= 40 else " · ".join(day_places[:2]))[:50]           # the real places, not a vague "Day 3 Almaty"
+            row["title"] = (three if len(three) <= 40 else " · ".join(day_places[:2]))[:50]           # the real places, not a vague "Day 3 Northvale"
     for di, (d, row) in enumerate(zip(days, it["days"]), 1):
         if cine:
             card_png = None      # the title appears over the day's first shot instead of a card
@@ -1696,7 +1717,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
                 lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], f"{unit} {di}" if len(days) > 1 else "",
                                        look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di)
                 secs = max(secs, first_min)
-            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw())
+            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw(m["file"], m["start"], secs))
             parts.append(out)
         print(f"[Log] {K['unit']} {di} rendered.")
     # a closing card, so the recap does not just fade out on the last shot
@@ -1713,6 +1734,15 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         from engine.audio_clean import clean_audio
         cleaned = sum(1 for p in parts if os.path.basename(p).startswith(("clip_", "glimpse_", "trip_title")) and has_audio(p) and clean_audio(p))
         print(f"[Log] Cleaned the sound of {cleaned} shot(s).")
+    if trans_name == "subject":
+        shots = [p for p in parts if os.path.basename(p).startswith(("clip_", "glimpse_", "trip_title"))]
+        pairs = {(a, b) for k, (a, b) in enumerate(zip(shots, shots[1:])) if k < len(tail_seq) and tail_seq[k] == "subject" and parts.index(b) == parts.index(a) + 1}
+        if pairs:
+            try:
+                parts, made = _subject.apply(ffmpeg, parts, pairs, (W, H), _enc(), os.path.join(parts_dir, "subject"))
+                print(f"[Log] Subject cut-out: {made} of {len(pairs)} planned cut(s) have the person staying in front; the rest are plain cuts.")
+            except Exception as e:
+                print(f"[Warning] Subject cut-out skipped ({e}); plain cuts are used.")
     video = os.path.join(session_dir, "recap.mp4")
     concat(ffmpeg, parts, video, session_dir, music=music, music_gain=0.9 if mute_orig else 0.25, music_start=music_start, music_only=mute_orig)
     edit_log = {}
@@ -1810,7 +1840,7 @@ def run(args, target_bitrate=None, target_preset=None):
             args.trip_name = got["title"]
     if not paths:
         print("[Error] TRIP mode needs --trip_videos (video files, or folders with one folder per day) or --trip_album (a shared "
-              "Google Photos link), e.g. --mode TRIP --trip_videos day1 day2 --trip_name Almaty")
+              "Google Photos link), e.g. --mode TRIP --trip_videos day1 day2 --trip_name Northvale")
         sys.exit(2)
     layout = getattr(args, "layout", "auto")
     try:
@@ -1821,7 +1851,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
                       manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)),
                       grade_name=_explicit_filter(args), edit=getattr(args, "auto_edit", "") if getattr(args, "auto_edit", "none") != "none" else "",
-                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), sample=getattr(args, "recap_sample", "auto") or "auto", transitions=getattr(args, "transitions", "none") or "none", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), sample=getattr(args, "recap_sample", "auto") or "auto", transitions=getattr(args, "transitions", "auto") or "auto", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
         style = getattr(args, "recap_style", "auto") or "auto"
         if getattr(args, "recap_versions", "one") == "both":
             made = make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)

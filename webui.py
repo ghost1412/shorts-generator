@@ -238,7 +238,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
 
 
 def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
+               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto"):
     """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
@@ -1028,11 +1028,11 @@ def build_ui():
                         t_kind = gr.Dropdown(web_args.RECAP_KIND_CHOICES, value="trip", label="What kind of videos are these?",
                                              info="Changes the wording and the options below. Wedding, event and family recaps never look up places.")
                         t_files = gr.File(label="Your videos (in filming order)", file_count="multiple", file_types=["video"], type="filepath")
-                        t_name = gr.Textbox(label="Trip name", placeholder="Almaty: Kolsai, Kaindy and Charyn")
-                        t_stops = gr.Textbox(label="Stops (optional): one per line or comma separated, e.g. Kolsai Lake, Kaindy Lake", placeholder="Kolsai Lake, Kaindy Lake, Charyn Canyon",
+                        t_name = gr.Textbox(label="Trip name", placeholder="Northvale: Pinemere, Larkwater and Stonegate")
+                        t_stops = gr.Textbox(label="Stops (optional): one per line or comma separated, e.g. Pinemere Lake, Larkwater Lake", placeholder="Pinemere Lake, Larkwater Lake, Stonegate Canyon",
                                              info="Use this for a one-day tour or to name the parts. Leave empty for a trip of several days: name the files or folders day1, day2...")
                         t_note = gr.Textbox(label="A note about the trip (optional)", lines=3, info="The AI only uses facts you write here and what it sees in the pictures.",
-                                            placeholder="We booked a 17 hour tour from Almaty. We left at 5 am and went first to Kolsai Lake.")
+                                            placeholder="We booked a 17 hour tour from Northvale. We left at 5 am and went first to Pinemere Lake.")
                         t_hook = gr.Textbox(label="Opening line (optional)", placeholder="Woke up at 4 AM just for this view",
                                             info="Shown over the first glimpses. Empty: written from your note.")
                         t_length = gr.Slider(30, web_args.MAX_RECAP_SECONDS, value=60, step=15, label="Recap length (seconds)",
@@ -1047,7 +1047,7 @@ def build_ui():
                                                    info="Subtle keeps it quiet; Hyped uses everything.")
                         t_grade = gr.Dropdown(web_args.RECAP_GRADE_CHOICES, value="default", label="Colour filter",
                                               info="Automatic gives the cinematic look when the footage suits it and none otherwise. Pick one to force a look, or None to leave the colours as filmed.")
-                        t_trans = gr.Dropdown(web_args.TRANSITION_CHOICES, value="none", label="Transitions between shots",
+                        t_trans = gr.Dropdown(web_args.TRANSITION_CHOICES, value="auto", label="Transitions between shots",
                                               info="Instead of plain cuts: a fast zoom punch, a whip pan, a white flash, a glitch, or a mix. How long they last follows 'How much editing'.")
                         t_clean = gr.Checkbox(value=False, label="Clean up the sound (noise, volume)",
                                               info="Only matters when the clips' own sound is in the recap (no music, or 'keep the original sound' ticked).")

@@ -4,21 +4,34 @@ A cut between shot A and shot B is built from the TAIL of A and the HEAD of B, s
 joined without re-encoding. `clip_effect()` returns the FFmpeg filter text for one shot's head and tail. Everything runs on this PC.
 
 Types: punch (a fast push-in with a short blur, the next shot settles out of it), whip (the picture slides away with horizontal motion
-blur and the next one slides in), flash (a white flash), glitch (RGB split and noise), mix (these, one after the other).
+blur and the next one slides in), flash (a white flash), glitch (RGB split and noise), mix (these, one after the other), subject (the person cut
+out of the shot stays in front while the background wipes to the next shot; engine/subject_cut.py; a cut without a clear person gets one of the
+other types instead).
 """
 
-NAMES = ("none", "punch", "whip", "flash", "glitch", "mix")
-LABELS = [("None (plain cuts)", "none"), ("Mix (a different one on every cut)", "mix"), ("Zoom punch", "punch"), ("Whip pan", "whip"),
-          ("White flash", "flash"), ("Glitch", "glitch")]
+NAMES = ("none", "punch", "whip", "flash", "glitch", "mix", "subject")
+AUTO = "auto"       # follows the Auto-edit style (STYLE_DEFAULTS); an explicit choice, including "none", always wins
+STYLE_DEFAULTS = {"hype": "mix", "vlog": "punch"}              # podcast, educational and no style: plain cuts
+LABELS = [("Auto (follows the edit style)", "auto"), ("None (plain cuts)", "none"), ("Mix (a different one on every cut)", "mix"), ("Zoom punch", "punch"), ("Whip pan", "whip"),
+          ("White flash", "flash"), ("Glitch", "glitch"),
+          ("Subject cut-out (the person stays, the background changes)", "subject")]
 MIX_ORDER = ("punch", "whip", "glitch", "punch", "flash", "whip")
 SECONDS = {"subtle": 0.14, "medium": 0.2, "hyped": 0.26}       # length of the head and of the tail
 PUNCH_AMOUNT = 0.30                                            # how much bigger the picture gets at the cut
 
 
 def validate(name):
-    name = (name or "none").strip().lower()
-    if name not in NAMES:
-        raise ValueError(f"Unknown transition {name!r}. Choose one of: {', '.join(NAMES)}")
+    name = (name or AUTO).strip().lower()
+    if name != AUTO and name not in NAMES:
+        raise ValueError(f"Unknown transition {name!r}. Choose one of: {AUTO}, {', '.join(NAMES)}")
+    return name
+
+
+def resolve(name, style=None):
+    """The transition to use: `name` itself, or for "auto" the default of the Auto-edit `style` (none for styles without one)."""
+    name = validate(name)
+    if name == AUTO:
+        return STYLE_DEFAULTS.get((style or "").strip().lower(), "none")
     return name
 
 
@@ -29,11 +42,26 @@ def seconds_for(strength):
 def cut_types(name, count):
     """The transition of each of `count` cuts, in order: the one chosen, or the mix cycling."""
     name = validate(name)
-    if name == "none":
+    if name in ("none", AUTO):
         return [None] * count
+    if name == "subject":
+        return ["subject"] * count
     if name == "mix":
         return [MIX_ORDER[i % len(MIX_ORDER)] for i in range(count)]
     return [name] * count
+
+
+XFADE = {"punch": "zoomin", "whip": "slideleft", "flash": "fadewhite", "glitch": "pixelize"}     # FFmpeg xfade look-alikes for the reel join
+
+
+def fallback_type(index):
+    """The normal transition for cut number `index` when the subject cut-out cannot be used there (no clear person)."""
+    return MIX_ORDER[index % len(MIX_ORDER)]
+
+
+def xfade_names(name, count):
+    """FFmpeg xfade transition names for `count` joins in a compiled reel (several moments of one video); plain 'fade' when no type is set."""
+    return [XFADE.get(fallback_type(i) if k == "subject" else k, "fade") for i, k in enumerate(cut_types(name, count))]
 
 
 def _windows(kinds, seconds, d, head, tail):

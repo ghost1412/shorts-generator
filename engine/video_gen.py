@@ -2614,7 +2614,7 @@ def finish_segment_processes(procs):
             print(f"[Warning] Could not finish segment {os.path.basename(final)}: {e}")
 
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None, enhance="off", enhance_strength="medium"):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None, enhance="off", enhance_strength="medium", transitions="none"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2823,6 +2823,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         # MoviePy's per-frame compositing needed ~14 minutes for a 5 minute reel. MoviePy stays as the fallback below.
         try:
             from engine.reel_captions import ass_document, reel_words, render_reel
+            from engine.transitions import xfade_names
             ff_xf = 0.25 if len(parts) > 1 else 0.0
             ass_path = None
             if reel_captions:
@@ -2833,7 +2834,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             ff_codec = 'h264_nvenc' if use_gpu else codec
             ff_params = ['-rc', 'vbr', '-cq', '18', '-b:v', '0'] if use_gpu else ['-crf', '18']
             if render_reel(seg_paths, [p[2] for p in parts], out, xf=ff_xf, ass_path=ass_path, codec=ff_codec,
-                           quality_params=ff_params, workdir=output_dir):
+                           quality_params=ff_params, workdir=output_dir,
+                           transitions=xfade_names(transitions, len(parts))):
                 for clip in clips: clip.close()
                 print(f"[Log] Highlight reel rendered with FFmpeg: {out}")
                 extracted_files.append(out)

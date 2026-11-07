@@ -42,6 +42,8 @@ clip = ["stable-ts>=2.17,<3", "opencv-python>=4.10,<5", "librosa>=0.10,<0.12", "
 local-voice = ["kokoro-onnx>=0.4,<1", "soundfile>=0.12,<1"]
 explainer = ["manim>=0.19,<0.22", "manimpango<0.6.0"]
 webui = ["gradio>=5,<7"]
+# Subject cut-out transition (--transitions subject): person segmentation on the CPU
+subject = ["torch>=2.2,<3", "torchvision>=0.17,<1", "opencv-python>=4.10,<5"]
 # Simplified <-> Traditional Chinese captions (--zh_script)
 zh = ["opencc-python-reimplemented>=0.1.7,<1"]
 full = ["shortsflow[clip,local-voice,explainer,webui,zh]", "gtts>=2.5,<3"]

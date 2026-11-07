@@ -137,7 +137,7 @@ RECAP_KIND_CHOICES = [("Trip (days, places named from GPS)", "trip"), ("Wedding 
                       ("Event or party", "event"), ("Family memories", "family")]
 # what each kind changes in the form: (name label, parts label + example, note label + example)
 RECAP_KIND_TEXT = {
-    "trip": ("Trip name", "Stops (optional): one per line or comma separated, e.g. Kolsai Lake, Kaindy Lake", "A note about the trip (optional)"),
+    "trip": ("Trip name", "Stops (optional): one per line or comma separated, e.g. Pinemere Lake, Larkwater Lake", "A note about the trip (optional)"),
     "wedding": ("Names or title (optional)", "Parts of the day in the order they happened, e.g. Getting ready, Ceremony, Dinner, Dancing",
                 "A note (optional): who is getting married, what each part was, favourite moments"),
     "event": ("Event name", "Parts of the event in order (optional), e.g. Arrival, Cake, Dancing", "A note about the event (optional)"),
@@ -159,7 +159,7 @@ RECAP_GRADE_CHOICES =[("Automatic: a look only if the footage suits, otherwise n
 
 
 def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="none"):
+              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto"):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -189,7 +189,7 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--clean_audio"]
     if sample and str(sample) != "auto":
         args += ["--recap_sample", str(sample)]
-    if transitions and str(transitions) != "none":
+    if transitions and str(transitions) != "auto":
         args += ["--transitions", str(transitions)]
     return args
 

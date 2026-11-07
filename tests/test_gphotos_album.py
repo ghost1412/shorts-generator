@@ -14,14 +14,14 @@ def _item(i, ts, video=False, secs=10.0):
 
 
 def _page(items, token="TOK"):
-    data = [None, items, token, ["ALBUMID", "Kazakhstan", []]]
+    data = [None, items, token, ["ALBUMID", "Eastland", []]]
     return ("<html>AF_initDataCallback({key: 'ds:1', hash: '2', data:" + json.dumps(data) + ", sideChannel: {}});</html>").encode()
 
 
 def test_parse_page_and_rows():
     items = [_item(1, 1_000_000), _item(2, 2_000_000, video=True, secs=12)]
     album_id, title, got, token = ga.parse_page(_page(items).decode())
-    assert (album_id, title, token) == ("ALBUMID", "Kazakhstan", "TOK") and len(got) == 2
+    assert (album_id, title, token) == ("ALBUMID", "Eastland", "TOK") and len(got) == 2
     rows = ga.to_rows(got)
     assert [r["video"] for r in rows] == [False, True] and rows[1]["seconds"] == 12.0
 
@@ -69,7 +69,7 @@ def test_list_album_follows_continuation_pages(monkeypatch):
     first = _page([_item(1, 1000, True)], token="T1")
     monkeypatch.setattr(ga, "next_page", lambda aid, tok, key: ([_item(2, 2000, True)], None) if tok == "T1" else ([], None))
     title, rows = ga.list_album("https://photos.app.goo.gl/abc", fetch=lambda url, *a, **k: (first, "https://photos.google.com/share/X?key=K1"))
-    assert title == "Kazakhstan" and len(rows) == 2
+    assert title == "Eastland" and len(rows) == 2
 
 
 def test_is_album_link():

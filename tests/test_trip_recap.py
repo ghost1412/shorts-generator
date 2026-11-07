@@ -53,14 +53,14 @@ def test_pick_windows_prefers_loud_parts_and_spreads():
 
 def test_itinerary_parsing_and_fallback():
     days = [{"moments": [{"file": "a.mp4", "start": 1, "visual": "a lake"}, {"file": "a.mp4", "start": 9}]}]
-    good = '{"title": "Almaty", "days": [{"title": "Lakes", "summary": "A day at the lake.", "captions": ["Big Almaty Lake"]}]}'
-    it = tr.write_itinerary("Almaty", "", days, ask=lambda p: good)
-    assert it["title"] == "Almaty" and it["days"][0]["captions"] == ["Big Almaty Lake", ""]
-    bad = tr.write_itinerary("Almaty", "", days, ask=lambda p: "nonsense")
+    good = '{"title": "Northvale", "days": [{"title": "Lakes", "summary": "A day at the lake.", "captions": ["Big Northvale Lake"]}]}'
+    it = tr.write_itinerary("Northvale", "", days, ask=lambda p: good)
+    assert it["title"] == "Northvale" and it["days"][0]["captions"] == ["Big Northvale Lake", ""]
+    bad = tr.write_itinerary("Northvale", "", days, ask=lambda p: "nonsense")
     assert bad["days"][0]["title"] == "Day 1"
     boom = tr.write_itinerary("", "", days, ask=lambda p: 1 / 0)
     assert boom["title"] == "Trip recap"
-    assert "a lake" in tr.build_prompt("Almaty", "note", days)
+    assert "a lake" in tr.build_prompt("Northvale", "note", days)
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not on PATH")
@@ -122,13 +122,13 @@ def test_pick_glimpses_spreads_over_days_and_follows_trip_order():
 
 def test_hook_comes_from_ai_and_is_overridable():
     days = [{"moments": [{"file": "a.mp4", "start": 1}]}]
-    good = '{"title": "Almaty", "hook": "Woke up at 4 AM just for this view", "days": [{"title": "Lakes", "summary": "", "captions": ["x"]}]}'
-    assert tr.write_itinerary("Almaty", "woke up at 4am", days, ask=lambda p: good)["hook"] == "Woke up at 4 AM just for this view"
-    assert "Use only facts from the traveller" in tr.build_prompt("Almaty", "note", days)
+    good = '{"title": "Northvale", "hook": "Woke up at 4 AM just for this view", "days": [{"title": "Lakes", "summary": "", "captions": ["x"]}]}'
+    assert tr.write_itinerary("Northvale", "woke up at 4am", days, ask=lambda p: good)["hook"] == "Woke up at 4 AM just for this view"
+    assert "Use only facts from the traveller" in tr.build_prompt("Northvale", "note", days)
 
 
 def test_parse_stops_and_split_into():
-    assert tr.parse_stops("Kolsai Lake, Kaindy Lake; Charyn Canyon") == ["Kolsai Lake", "Kaindy Lake", "Charyn Canyon"]
+    assert tr.parse_stops("Pinemere Lake, Larkwater Lake; Stonegate Canyon") == ["Pinemere Lake", "Larkwater Lake", "Stonegate Canyon"]
     assert tr.parse_stops("") == [] and tr.parse_stops(None) == []
     g = tr.split_into([["a", "b", "c"], ["d", "e"]], 3)
     assert g == [["a", "b"], ["c", "d"], ["e"]]
@@ -137,14 +137,14 @@ def test_parse_stops_and_split_into():
 
 def test_stop_names_are_used_verbatim_and_prompt_forbids_inventing():
     days = [{"moments": [{"file": "a.mp4", "start": 1}]}, {"moments": [{"file": "b.mp4", "start": 1}]}]
-    stops = ["Kolsai Lake", "Kaindy Lake"]
-    reply = '{"title": "Almaty tour", "hook": "h", "days": [{"title": "Whatever", "summary": "s", "captions": ["x"]}, {"title": "Else", "summary": "", "captions": [""]}]}'
-    it = tr.write_itinerary("Almaty", "17 hour tour from 5 am", days, ask=lambda p: reply, stops=stops)
+    stops = ["Pinemere Lake", "Larkwater Lake"]
+    reply = '{"title": "Northvale tour", "hook": "h", "days": [{"title": "Whatever", "summary": "s", "captions": ["x"]}, {"title": "Else", "summary": "", "captions": [""]}]}'
+    it = tr.write_itinerary("Northvale", "17 hour tour from 5 am", days, ask=lambda p: reply, stops=stops)
     assert [d["title"] for d in it["days"]] == stops
-    p = tr.build_prompt("Almaty", "note", days, stops)
-    assert "Never invent" in p and "Stop 1 = Kolsai Lake" in p
-    assert tr.fallback_itinerary("", days, stops)["days"][1]["title"] == "Kaindy Lake"
-    assert "## Stop 1: Kolsai Lake" in tr.itinerary_markdown(it, [{"moments": [{"file": "a.mp4", "start": 1}]}] * 2, "Stop")
+    p = tr.build_prompt("Northvale", "note", days, stops)
+    assert "Never invent" in p and "Stop 1 = Pinemere Lake" in p
+    assert tr.fallback_itinerary("", days, stops)["days"][1]["title"] == "Larkwater Lake"
+    assert "## Stop 1: Pinemere Lake" in tr.itinerary_markdown(it, [{"moments": [{"file": "a.mp4", "start": 1}]}] * 2, "Stop")
 
 
 def test_stops_are_cut_at_the_longest_pauses():
@@ -204,7 +204,7 @@ def test_frame_look_falls_back_to_a_neutral_look():
 
 def test_cinematic_layers_follow_the_look(tmp_path):
     from engine import trip_recap as t
-    lay = t.cinematic_layers(str(tmp_path / "t"), "Almaty trip", "Day 2", "a film", look={"zone": "lower", "dark": False, "accent": (200, 120, 60)}, index=1)
+    lay = t.cinematic_layers(str(tmp_path / "t"), "Northvale trip", "Day 2", "a film", look={"zone": "lower", "dark": False, "accent": (200, 120, 60)}, index=1)
     assert [ts for _p, ts in lay] == sorted(ts for _p, ts in lay) and len(lay) == 3      # credit, title, rule + line appear one after another
     assert all(os.path.isfile(p) for p, _ts in lay)
 
@@ -276,7 +276,7 @@ def test_long_titles_and_captions_stay_inside_a_vertical_frame(tmp_path):
     t.W, t.H = t.ASPECTS["9:16"]
     try:
         for index, zone in ((0, "center"), (1, "left"), (1, "lower")):
-            lay = t.cinematic_layers(str(tmp_path / f"t{index}{zone}"), "Day 1: Arriving in Almaty, Kazakhstan", "Day 1 of 5 in the mountains", "a very long credit line for the film",
+            lay = t.cinematic_layers(str(tmp_path / f"t{index}{zone}"), "Day 1: Arriving in Northvale, Eastland", "Day 1 of 5 in the mountains", "a very long credit line for the film",
                                      look={"zone": zone, "dark": True, "accent": (200, 150, 90)}, index=index)
             for png, _ts in lay:
                 box = Image.open(png).getchannel("A").getbbox()
@@ -292,7 +292,7 @@ def test_long_titles_and_captions_stay_inside_a_vertical_frame(tmp_path):
 def test_recap_kinds_change_the_wording_and_default_to_the_trip():
     days = [{"moments": [{"visual": "a groom on a horse", "file": "a.mp4", "start": 1}]},
             {"moments": [{"visual": "a couple dancing", "file": "b.mp4", "start": 2}]}]
-    trip = tr.build_prompt("Almaty", "note", days)
+    trip = tr.build_prompt("Northvale", "note", days)
     wed = tr.build_prompt("Alex and Sam", "note", days, ["Ceremony", "Dinner"], kind="wedding")
     assert "travel recap" in trip and "Day 1" in trip and "traveller" in trip
     assert "wedding film" in wed and "Part 1 = Ceremony" in wed and "travel" not in wed.lower() and "GPS" not in wed

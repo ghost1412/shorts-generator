@@ -35,10 +35,10 @@ def test_earlier_runs_lists_finished_and_unfinished_clip_runs(tmp_path):
 
 def test_earlier_trip_runs_use_the_trip_name_and_videos(tmp_path):
     root = str(tmp_path)
-    cmd = ["py", "--mode", "TRIP", "--trip_videos", "C:/a/day1", "C:/a/day2", "--session_dir", "s", "--trip_name", "Almaty trip"]
+    cmd = ["py", "--mode", "TRIP", "--trip_videos", "C:/a/day1", "C:/a/day2", "--session_dir", "s", "--trip_name", "Northvale trip"]
     d = make_run(root, "trip_20261105_090000", cmd, ["recap.mp4"])
     rows = reuse.earlier_runs(root, "trip")
-    assert len(rows) == 1 and rows[0][0].endswith("Almaty trip")
+    assert len(rows) == 1 and rows[0][0].endswith("Northvale trip")
     assert reuse.trip_videos_of(os.path.join(d, "command.json")) == ["C:/a/day1", "C:/a/day2"]
 
 

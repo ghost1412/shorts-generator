@@ -109,3 +109,27 @@ def test_devanagari_words_name_the_bundled_font():
     doc = ass_document([(0.0, 0.5, "hello"), (0.5, 1.0, "नमस्ते")], size=(1920, 1080))
     assert ",,HELLO\n" in doc
     assert ",,{\\fnNoto Sans Devanagari}नमस्ते\n" in doc
+
+
+def test_render_reel_accepts_every_transition_type(tmp_path):
+    from engine import transitions as tx
+    from engine.reel_captions import render_reel
+    ff = shutil.which("ffmpeg")
+    if not ff:
+        pytest.skip("ffmpeg not installed")
+    paths = []
+    for i, (freq, color) in enumerate([(300, "red"), (500, "green"), (700, "blue"), (400, "white"), (600, "black")]):
+        p = tmp_path / f"s{i}.mp4"
+        _clip(ff, p, 3, freq, color)
+        paths.append(str(p))
+    out = tmp_path / "reel.mp4"
+    names = tx.xfade_names("mix", 4)
+    assert len(set(names)) > 2 and "fade" not in names
+    assert render_reel(paths, [3.0] * 5, str(out), xf=0.25, transitions=names)
+    assert abs(_duration(ff, out, "v:0") - (15 - 4 * 0.25)) < 0.3
+
+
+def test_xfade_names_follow_the_chosen_type():
+    from engine import transitions as tx
+    assert tx.xfade_names("none", 2) == ["fade", "fade"] == tx.xfade_names("auto", 2)
+    assert tx.xfade_names("flash", 2) == ["fadewhite"] * 2

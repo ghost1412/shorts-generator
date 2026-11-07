@@ -34,12 +34,12 @@ def test_group_places_splits_on_distance_and_keeps_unlocated_videos_with_the_pre
 
 
 def test_name_from_reply_prefers_a_named_feature_and_ignores_benches_and_road_codes():
-    lake = {"name": "Kolsay Lakes Town", "category": "leisure", "address": {"county": "Kegen District", "state": "Almaty Region"}, "display_name": "Kolsay Lakes Town, P-16"}
-    assert geo.name_from_reply(lake)["name"] == "Kolsay Lakes Town"
-    bench = {"name": "", "category": "amenity", "address": {"county": "Kegen District", "state": "Almaty Region"}, "display_name": "Kegen District"}
+    lake = {"name": "Pinemere Lakes Town", "category": "leisure", "address": {"county": "Westford District", "state": "Northvale Region"}, "display_name": "Pinemere Lakes Town, P-16"}
+    assert geo.name_from_reply(lake)["name"] == "Pinemere Lakes Town"
+    bench = {"name": "", "category": "amenity", "address": {"county": "Westford District", "state": "Northvale Region"}, "display_name": "Westford District"}
     got = geo.name_from_reply(bench)
-    assert got["name"] == "" and got["area"] == "Kegen District"
-    road = {"name": "KZ05-08", "category": "highway", "address": {"county": "Kegen District"}}
+    assert got["name"] == "" and got["area"] == "Westford District"
+    road = {"name": "R-5", "category": "highway", "address": {"county": "Westford District"}}
     assert geo.name_from_reply(road)["name"] == ""
     assert geo.name_from_reply({"error": "Unable to geocode"}) is None
 
@@ -49,11 +49,11 @@ def test_place_name_caches_and_can_be_switched_off(tmp_path, monkeypatch):
 
     def fetch(lat, lon):
         calls.append((lat, lon))
-        return {"name": "Kaindy", "category": "natural", "address": {"state": "Almaty Region"}, "display_name": "Kaindy"}
+        return {"name": "Larkwater", "category": "natural", "address": {"state": "Northvale Region"}, "display_name": "Larkwater"}
     cache = str(tmp_path / "places.json")
     monkeypatch.delenv("SHORTSFLOW_GEOCODE", raising=False)
-    assert geo.place_name((42.9922, 78.4640), cache, fetch=fetch)["name"] == "Kaindy"
-    assert geo.place_name((42.9923, 78.4641), cache, fetch=fetch)["name"] == "Kaindy"      # same 3-decimal cell: from the cache
+    assert geo.place_name((42.9922, 78.4640), cache, fetch=fetch)["name"] == "Larkwater"
+    assert geo.place_name((42.9923, 78.4641), cache, fetch=fetch)["name"] == "Larkwater"      # same 3-decimal cell: from the cache
     assert len(calls) == 1
     monkeypatch.setenv("SHORTSFLOW_GEOCODE", "off")
     assert geo.place_name((10.0, 10.0), None, fetch=fetch) is None and len(calls) == 1
@@ -102,20 +102,20 @@ def test_same_description_and_drop_repeats_swaps_in_a_different_spare():
 
 def test_name_places_uses_the_map_first_and_the_llm_only_to_improve_it(tmp_path, monkeypatch):
     monkeypatch.delenv("SHORTSFLOW_GEOCODE", raising=False)
-    monkeypatch.setattr(geo, "place_name", lambda loc, cache_path=None, **k: {"name": "", "area": "Kegen District", "region": "Almaty Region", "hint": "Kegen District"})
+    monkeypatch.setattr(geo, "place_name", lambda loc, cache_path=None, **k: {"name": "", "area": "Westford District", "region": "Northvale Region", "hint": "Westford District"})
     monkeypatch.setattr(geo, "nearby_attractions", lambda loc, cache_path=None, **k: ["Каинды", "Viewpoint shelter"])
     places = [{"center": (42.99, 78.46), "files": ["a"], "visuals": ["Turquoise lake among spruce trees"]}, {"center": None, "files": ["b"], "visuals": []}]
     seen = []
 
     def ask(prompt):
         seen.append(prompt)
-        return '[{"id": 1, "name": "Kaindy Lake"}]'
-    tr.name_places(places, "Almaty", "", ask=ask)
-    assert places[0]["name"] == "Kaindy Lake" and places[1]["name"] == ""
+        return '[{"id": 1, "name": "Larkwater Lake"}]'
+    tr.name_places(places, "Northvale", "", ask=ask)
+    assert places[0]["name"] == "Larkwater Lake" and places[1]["name"] == ""
     assert "42.9900, 78.4600" in seen[0] and "Turquoise lake" in seen[0] and "do not guess" in seen[0]
     assert "Каинды" in seen[0] and "NEVER answer with a district" in seen[0]          # map attractions are offered, districts are ruled out
-    tr.name_places(places, "Almaty", "", ask=lambda p: "not json")        # a bad answer keeps the map's name
-    assert places[0]["name"] == "Kegen District"
+    tr.name_places(places, "Northvale", "", ask=lambda p: "not json")        # a bad answer keeps the map's name
+    assert places[0]["name"] == "Westford District"
 
 
 def test_rotate_filter_values():
@@ -175,7 +175,7 @@ def test_check_rotation_without_a_key_does_nothing(monkeypatch):
 
 
 def test_landmarks_come_before_districts_in_the_title_line():
-    assert tr.landmarks_first(["Almaly District", "Kaindy Lake", "Almaty Region", "Charyn Canyon"]) == ["Kaindy Lake", "Charyn Canyon", "Almaly District", "Almaty Region"]
+    assert tr.landmarks_first(["Eastmoor District", "Larkwater Lake", "Northvale Region", "Stonegate Canyon"]) == ["Larkwater Lake", "Stonegate Canyon", "Eastmoor District", "Northvale Region"]
 
 
 @pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="needs ffmpeg")
@@ -219,16 +219,16 @@ def test_trip_title_shot_is_not_repeated_as_the_first_shot_of_day_one(tmp_path):
 
 def test_nearby_attractions_collects_named_places_and_caches_them(tmp_path, monkeypatch):
     monkeypatch.delenv("SHORTSFLOW_GEOCODE", raising=False)
-    rows = {"viewpoint": [{"name": "Black Charyn Canyon"}, {"name": ""}], "waterfall": [{"name": "Maiden tears"}], "lake": [],
-            "attraction": [{"name": "Black Charyn Canyon"}], "park": [{"name": "KZ05-11"}]}
+    rows = {"viewpoint": [{"name": "Black Stonegate Canyon"}, {"name": ""}], "waterfall": [{"name": "Maiden tears"}], "lake": [],
+            "attraction": [{"name": "Black Stonegate Canyon"}], "park": [{"name": "KZ05-11"}]}
     calls = []
 
     def fetch(q, lat, lon, span):
         calls.append(q)
         return rows[q]
     cache = str(tmp_path / "places.json")
-    assert geo.nearby_attractions((43.35, 79.05), cache, fetch=fetch) == ["Black Charyn Canyon", "Maiden tears"]
-    assert geo.nearby_attractions((43.3504, 79.0504), cache, fetch=fetch) == ["Black Charyn Canyon", "Maiden tears"]      # same cell: cached
+    assert geo.nearby_attractions((43.35, 79.05), cache, fetch=fetch) == ["Black Stonegate Canyon", "Maiden tears"]
+    assert geo.nearby_attractions((43.3504, 79.0504), cache, fetch=fetch) == ["Black Stonegate Canyon", "Maiden tears"]      # same cell: cached
     assert len(calls) == len(geo.ATTRACTION_QUERIES)
     monkeypatch.setenv("SHORTSFLOW_GEOCODE", "off")
     assert geo.nearby_attractions((10.0, 10.0), None, fetch=fetch) == []
@@ -281,17 +281,17 @@ def test_the_cinematic_plan_does_not_reserve_time_for_title_cards():
 
 def _no_network(monkeypatch, near=()):
     monkeypatch.delenv("SHORTSFLOW_GEOCODE", raising=False)
-    monkeypatch.setattr(geo, "place_name", lambda loc, cache_path=None, **k: {"name": "", "area": "Kegen District", "region": "Almaty Region", "hint": "Kegen District"})
+    monkeypatch.setattr(geo, "place_name", lambda loc, cache_path=None, **k: {"name": "", "area": "Westford District", "region": "Northvale Region", "hint": "Westford District"})
     monkeypatch.setattr(geo, "nearby_attractions", lambda loc, cache_path=None, **k: list(near))
 
 
 def test_place_overrides_parse_and_win_over_the_ai(monkeypatch):
-    assert tr.parse_place_overrides("42.985,78.465=Kaindy Lake; 42.991, 78.326 = Kolsay Lakes;bad;1,2=") == [(42.985, 78.465, "Kaindy Lake"), (42.991, 78.326, "Kolsay Lakes")]
+    assert tr.parse_place_overrides("42.985,78.465=Larkwater Lake; 42.991, 78.326 = Pinemere Lakes;bad;1,2=") == [(42.985, 78.465, "Larkwater Lake"), (42.991, 78.326, "Pinemere Lakes")]
     _no_network(monkeypatch)
     places = [{"center": (42.9851, 78.4652), "files": ["a"], "visuals": []}, {"center": (43.35, 79.05), "files": ["b"], "visuals": []}]
     asked = []
-    tr.name_places(places, ask=lambda p: asked.append(p) or '[{"id": 1, "name": "Wrong"}, {"id": 2, "name": "Charyn Canyon"}]', overrides=tr.parse_place_overrides("42.985,78.465=Kaindy Lake"))
-    assert [p["name"] for p in places] == ["Kaindy Lake", "Charyn Canyon"]                  # typed name kept, the other asked
+    tr.name_places(places, ask=lambda p: asked.append(p) or '[{"id": 1, "name": "Wrong"}, {"id": 2, "name": "Stonegate Canyon"}]', overrides=tr.parse_place_overrides("42.985,78.465=Larkwater Lake"))
+    assert [p["name"] for p in places] == ["Larkwater Lake", "Stonegate Canyon"]                  # typed name kept, the other asked
     assert len(asked) == 1 and "[1]" not in asked[0] and "[2]" in asked[0]               # the typed place was not even put to the AI
 
 
@@ -310,15 +310,15 @@ def test_shots_from_a_plane_are_named_in_flight_without_asking():
 def test_the_same_name_on_two_far_places_is_corrected_or_dropped(monkeypatch):
     _no_network(monkeypatch)
     places = [{"center": (42.985, 78.465), "files": ["a"], "visuals": []}, {"center": (42.991, 78.326), "files": ["b"], "visuals": []}]
-    answers = iter(['[{"id": 1, "name": "Kolsay Lakes"}, {"id": 2, "name": "Kolsay Lakes"}]', '[{"id": 1, "name": "Kaindy Lake"}, {"id": 2, "name": "Kolsay Lakes"}]'])
+    answers = iter(['[{"id": 1, "name": "Pinemere Lakes"}, {"id": 2, "name": "Pinemere Lakes"}]', '[{"id": 1, "name": "Larkwater Lake"}, {"id": 2, "name": "Pinemere Lakes"}]'])
     prompts = []
     tr.name_places(places, ask=lambda p: prompts.append(p) or next(answers))
-    assert [p["name"] for p in places] == ["Kaindy Lake", "Kolsay Lakes"] and "SAME name" in prompts[1]
+    assert [p["name"] for p in places] == ["Larkwater Lake", "Pinemere Lakes"] and "SAME name" in prompts[1]
     # still the same name after the corrective request: only the first keeps it
     places2 = [{"center": (42.985, 78.465), "files": ["a"], "visuals": []}, {"center": (42.991, 78.326), "files": ["b"], "visuals": []}]
-    both = '[{"id": 1, "name": "Kolsay Lakes"}, {"id": 2, "name": "Kolsay Lakes"}]'
+    both = '[{"id": 1, "name": "Pinemere Lakes"}, {"id": 2, "name": "Pinemere Lakes"}]'
     tr.name_places(places2, ask=lambda p: both)
-    assert places2[0]["name"] == "Kolsay Lakes" and tr.is_plain_area(places2[1]["name"])      # the loser falls back to the map's area name, which is never shown
+    assert places2[0]["name"] == "Pinemere Lakes" and tr.is_plain_area(places2[1]["name"])      # the loser falls back to the map's area name, which is never shown
     assert tr.name_conflicts([{"center": (1.0, 1.0), "name": "A Lake"}, {"center": (1.001, 1.001), "name": "A Lake"}]) == []      # same lake, 150 m
 
 
@@ -326,7 +326,7 @@ def test_an_unsure_ai_answers_blank_and_the_map_fallback_stays(monkeypatch):
     _no_network(monkeypatch)
     places = [{"center": (43.0, 77.0), "files": ["a"], "visuals": []}]
     tr.name_places(places, ask=lambda p: '[{"id": 1, "name": ""}]')
-    assert places[0]["name"] == "Kegen District" and tr.is_plain_area(places[0]["name"])          # kept for the itinerary, never shown on screen
+    assert places[0]["name"] == "Westford District" and tr.is_plain_area(places[0]["name"])          # kept for the itinerary, never shown on screen
 
 
 def test_old_cached_names_are_not_trusted_and_new_ones_are_remembered(tmp_path, monkeypatch):
@@ -334,28 +334,28 @@ def test_old_cached_names_are_not_trusted_and_new_ones_are_remembered(tmp_path, 
     cache = tmp_path / "places.json"
     (tmp_path / "place_names.json").write_text('{"v2:43.000,77.000": "Wrong Old Name"}', encoding="utf-8")
     places = [{"center": (43.0, 77.0), "files": ["a"], "visuals": []}]
-    tr.name_places(places, ask=lambda p: '[{"id": 1, "name": "Big Almaty Lake"}]', cache_path=str(cache))
-    assert places[0]["name"] == "Big Almaty Lake"
+    tr.name_places(places, ask=lambda p: '[{"id": 1, "name": "Big Northvale Lake"}]', cache_path=str(cache))
+    assert places[0]["name"] == "Big Northvale Lake"
     saved = json.loads((tmp_path / "place_names.json").read_text(encoding="utf-8"))
-    assert saved["v3:43.000,77.000"] == "Big Almaty Lake"
+    assert saved["v3:43.000,77.000"] == "Big Northvale Lake"
     again = [{"center": (43.0, 77.0), "files": ["a"], "visuals": []}]
     tr.name_places(again, ask=lambda p: (_ for _ in ()).throw(AssertionError("cached: no request")), cache_path=str(cache))
-    assert again[0]["name"] == "Big Almaty Lake"
+    assert again[0]["name"] == "Big Northvale Lake"
 
 
 def test_on_screen_labels_are_place_names_only_and_only_when_the_place_changes_in_the_cinematic_look():
-    days = [{"moments": [{"place": "Kaindy Lake"}, {"place": "Kaindy Lake"}, {"place": "Kegen District"}, {"place": "Kolsay Lakes"}]},
-            {"moments": [{"place": "Kolsay Lakes"}, {}]}]
-    assert tr.moment_labels(days, cine=True) == [["Kaindy Lake", "", "", "Kolsay Lakes"], ["", ""]]
-    assert tr.moment_labels(days, cine=False) == [["Kaindy Lake", "Kaindy Lake", "", "Kolsay Lakes"], ["Kolsay Lakes", ""]]
+    days = [{"moments": [{"place": "Larkwater Lake"}, {"place": "Larkwater Lake"}, {"place": "Westford District"}, {"place": "Pinemere Lakes"}]},
+            {"moments": [{"place": "Pinemere Lakes"}, {}]}]
+    assert tr.moment_labels(days, cine=True) == [["Larkwater Lake", "", "", "Pinemere Lakes"], ["", ""]]
+    assert tr.moment_labels(days, cine=False) == [["Larkwater Lake", "Larkwater Lake", "", "Pinemere Lakes"], ["Pinemere Lakes", ""]]
 
 
 def test_places_review_lists_names_coordinates_and_map_links(tmp_path):
-    places = [{"center": (42.985, 78.465), "name": "Kaindy Lake", "files": ["a", "b"], "visuals": ["A turquoise lake"]},
-              {"center": (43.0, 77.0), "name": "Kegen District", "files": ["c"], "visuals": []}, {"center": None, "name": "", "files": []}]
-    path = tr.write_places_review(str(tmp_path / "places_review.md"), places, "Almaty")
+    places = [{"center": (42.985, 78.465), "name": "Larkwater Lake", "files": ["a", "b"], "visuals": ["A turquoise lake"]},
+              {"center": (43.0, 77.0), "name": "Westford District", "files": ["c"], "visuals": []}, {"center": None, "name": "", "files": []}]
+    path = tr.write_places_review(str(tmp_path / "places_review.md"), places, "Northvale")
     text = open(path, encoding="utf-8").read()
-    assert "google.com/maps?q=42.9850,78.4650" in text and "**Kaindy Lake**" in text and "2 video(s)" in text
+    assert "google.com/maps?q=42.9850,78.4650" in text and "**Larkwater Lake**" in text and "2 video(s)" in text
     assert "not shown on screen" in text and "--place_names" in text
 
 
@@ -421,33 +421,33 @@ def test_the_same_spot_on_different_days_is_named_once_and_shares_the_name(monke
               {"center": (43.2576, 76.9415), "files": ["d4"], "visuals": ["A woman hiking near a small waterfall"]},
               {"center": (42.99, 78.33), "files": ["d2"], "visuals": []}]
     prompts = []
-    answers = iter(['[{"id": 1, "name": "Republic Square"}, {"id": 3, "name": "Kolsay Lakes"}]'])
+    answers = iter(['[{"id": 1, "name": "Republic Square"}, {"id": 3, "name": "Pinemere Lakes"}]'])
     tr.name_places(places, ask=lambda p: prompts.append(p) or next(answers))
-    assert places[0]["name"] == places[1]["name"] == "Republic Square" and places[2]["name"] == "Kolsay Lakes"
+    assert places[0]["name"] == places[1]["name"] == "Republic Square" and places[2]["name"] == "Pinemere Lakes"
     assert len(prompts) == 1 and "[2]" not in prompts[0] and "waterfall" in prompts[0]      # one question for the spot, with both days' pictures
 
 
 def test_a_place_the_ai_is_unsure_about_keeps_the_maps_own_name():
     import engine.geo as g
     orig = g.place_name, g.nearby_attractions
-    g.place_name, g.nearby_attractions = (lambda *a, **k: {"name": "Kolsay Lakes Town", "area": "Kegen District", "hint": "x"}), (lambda *a, **k: [])
+    g.place_name, g.nearby_attractions = (lambda *a, **k: {"name": "Pinemere Lakes Town", "area": "Westford District", "hint": "x"}), (lambda *a, **k: [])
     try:
         places = [{"center": (42.9913, 78.3261), "files": ["a"], "visuals": []}]
         tr.name_places(places, ask=lambda p: '[{"id": 1, "name": ""}]')
     finally:
         g.place_name, g.nearby_attractions = orig
-    assert places[0]["name"] == "Kolsay Lakes Town"                        # a named map feature beats leaving the stop unnamed
+    assert places[0]["name"] == "Pinemere Lakes Town"                        # a named map feature beats leaving the stop unnamed
 
 
 def test_the_second_version_reuses_the_first_versions_place_names(tmp_path):
     a, b = tmp_path / "portrait", tmp_path / "landscape"
     a.mkdir()
     b.mkdir()
-    (a / "place_names.json").write_text(json.dumps({"v3:42.985,78.465": "Kaindy Lake", "v3:43.354,79.058": "Charyn Canyon"}), encoding="utf-8")
+    (a / "place_names.json").write_text(json.dumps({"v3:42.985,78.465": "Larkwater Lake", "v3:43.354,79.058": "Stonegate Canyon"}), encoding="utf-8")
     (b / "place_names.json").write_text(json.dumps({"v3:42.985,78.465": "Something Else", "v3:43.111,77.111": "Shymbulak"}), encoding="utf-8")
     assert tr.share_place_names(str(a), str(b)) == 2
     merged = json.loads((b / "place_names.json").read_text(encoding="utf-8"))
-    assert merged == {"v3:42.985,78.465": "Kaindy Lake", "v3:43.354,79.058": "Charyn Canyon", "v3:43.111,77.111": "Shymbulak"}   # the first version's names win
+    assert merged == {"v3:42.985,78.465": "Larkwater Lake", "v3:43.354,79.058": "Stonegate Canyon", "v3:43.111,77.111": "Shymbulak"}   # the first version's names win
     assert tr.share_place_names(str(tmp_path / "none"), str(b)) == 0
 
 

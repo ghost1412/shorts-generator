@@ -10,7 +10,7 @@ from shortsflow import web_args
 
 
 def test_names_validate_and_mix_cycles_while_one_type_repeats():
-    assert tx.validate("") == "none" and tx.validate("WHIP") == "whip"
+    assert tx.validate("") == "auto" and tx.validate("WHIP") == "whip"
     with pytest.raises(ValueError):
         tx.validate("spin")
     assert tx.cut_types("none", 3) == [None, None, None]
@@ -34,7 +34,8 @@ def test_web_args_passes_the_transition_only_when_one_is_chosen():
     base = web_args.trip_args(["a.mp4"], "s", length=60)
     assert "--transitions" not in base
     assert web_args.trip_args(["a.mp4"], "s", length=60, transitions="mix")[-2:] == ["--transitions", "mix"]
-    assert ("Zoom punch", "punch") in web_args.TRANSITION_CHOICES and web_args.TRANSITION_CHOICES[0][1] == "none"
+    assert ("Zoom punch", "punch") in web_args.TRANSITION_CHOICES and web_args.TRANSITION_CHOICES[0][1] == "auto"
+    assert web_args.trip_args(["a.mp4"], "s", length=60, transitions="none")[-2:] == ["--transitions", "none"]
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
@@ -59,3 +60,48 @@ def test_a_recap_with_mixed_transitions_renders_end_to_end(tmp_path):
     r = tr.make_recap([str(tmp_path / "day1"), str(tmp_path / "day2")], str(tmp_path / "out"), total_seconds=30, style="plain", aspect="16:9",
                       ask=lambda p: "{}", geocode=False, transitions="mix", edit="hype", edit_strength="medium")
     assert os.path.getsize(r["video"]) > 10000
+
+
+def test_auto_follows_the_edit_style_and_explicit_choices_win():
+    assert tx.resolve("auto", "hype") == "mix" and tx.resolve("auto", "vlog") == "punch"
+    assert tx.resolve("auto", "podcast") == tx.resolve("auto", "educational") == tx.resolve("auto", "") == tx.resolve(None, None) == "none"
+    assert tx.resolve("none", "hype") == "none" and tx.resolve("glitch", "podcast") == "glitch"
+    assert tx.cut_types("auto", 3) == [None] * 3
+
+
+def _footage(tmp_path):
+    for d in ("day1", "day2"):
+        (tmp_path / d).mkdir()
+        for n, tone in (("a.mp4", 300), ("b.mp4", 500)):
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25:duration=30", "-f", "lavfi", "-i", f"sine=f={tone}:d=30",
+                            "-shortest", "-pix_fmt", "yuv420p", str(tmp_path / d / n)], check=True)
+    return [str(tmp_path / "day1"), str(tmp_path / "day2")]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_subject_cutout_recap_makes_bridges_when_a_person_is_found(tmp_path, monkeypatch, capsys):
+    import numpy as np
+    from engine import subject_cut as sc
+    monkeypatch.setattr(sc, "available", lambda: True)
+    monkeypatch.setattr(sc, "has_person_jpeg", lambda jpeg: True)
+
+    def box(frame):
+        m = np.zeros(frame.shape[:2], np.float32)
+        h, w = m.shape
+        m[h // 5:h * 4 // 5, w * 2 // 5:w * 3 // 5] = 1.0
+        return m
+    monkeypatch.setattr(sc, "person_mask", box)
+    r = tr.make_recap(_footage(tmp_path), str(tmp_path / "out"), total_seconds=30, style="plain", aspect="16:9", ask=lambda p: "{}", geocode=False,
+                      transitions="subject", edit="hype", edit_strength="medium")
+    out = capsys.readouterr().out
+    assert os.path.getsize(r["video"]) > 10000 and "Subject cut-out:" in out and "Subject cut-out: 0 of" not in out
+    assert any(f.startswith("bridge_") for f in os.listdir(tmp_path / "out" / "recap_parts" / "subject"))
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
+def test_subject_cutout_falls_back_to_normal_transitions_without_a_person(tmp_path, monkeypatch, capsys):
+    from engine import subject_cut as sc
+    monkeypatch.setattr(sc, "has_person_jpeg", lambda jpeg: False)
+    r = tr.make_recap(_footage(tmp_path), str(tmp_path / "out"), total_seconds=30, style="plain", aspect="16:9", ask=lambda p: "{}", geocode=False,
+                      transitions="subject", edit="hype", edit_strength="medium")
+    assert os.path.getsize(r["video"]) > 10000 and "Subject cut-out:" not in capsys.readouterr().out
