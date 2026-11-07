@@ -83,7 +83,7 @@ def test_subject_cutout_recap_makes_bridges_when_a_person_is_found(tmp_path, mon
     import numpy as np
     from engine import subject_cut as sc
     monkeypatch.setattr(sc, "available", lambda: True)
-    monkeypatch.setattr(sc, "has_person_jpeg", lambda jpeg: True)
+    monkeypatch.setattr(sc, "has_person_jpegs", lambda jpegs, size=None, crop=True: True)
 
     def box(frame):
         m = np.zeros(frame.shape[:2], np.float32)
@@ -101,7 +101,7 @@ def test_subject_cutout_recap_makes_bridges_when_a_person_is_found(tmp_path, mon
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="needs ffmpeg")
 def test_subject_cutout_falls_back_to_normal_transitions_without_a_person(tmp_path, monkeypatch, capsys):
     from engine import subject_cut as sc
-    monkeypatch.setattr(sc, "has_person_jpeg", lambda jpeg: False)
+    monkeypatch.setattr(sc, "has_person_jpegs", lambda jpegs, size=None, crop=True: False)
     r = tr.make_recap(_footage(tmp_path), str(tmp_path / "out"), total_seconds=30, style="plain", aspect="16:9", ask=lambda p: "{}", geocode=False,
                       transitions="subject", edit="hype", edit_strength="medium")
     assert os.path.getsize(r["video"]) > 10000 and "Subject cut-out:" not in capsys.readouterr().out

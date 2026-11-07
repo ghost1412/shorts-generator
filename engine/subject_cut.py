@@ -17,7 +17,7 @@ import subprocess
 BRIDGE_S = 0.5
 FPS = 30
 PERSON_CLASS = 15                  # 'person' in the VOC label set used by the model
-MIN_COVER, MAX_COVER = 0.03, 0.80  # share of the frame the person fills: smaller = no clear subject, larger = nothing to reveal behind
+MIN_COVER, MAX_COVER = 0.012, 0.80  # share of the (rendered) frame the person fills: smaller = no clear subject, larger = nothing to reveal behind
 _MODEL = []
 
 
@@ -60,18 +60,48 @@ def coverage(mask):
 
 
 def clear_subject(masks):
-    """True when a person fills a sensible part of the frame in (nearly) every mask."""
+    """True when a person fills a sensible part of the frame on average and is there in at least 80 % of the frames (the mask can miss a frame)."""
     covers = [coverage(m) for m in masks]
-    return bool(covers) and min(covers) >= MIN_COVER * 0.6 and MIN_COVER <= sum(covers) / len(covers) <= MAX_COVER
+    if not covers:
+        return False
+    present = sum(1 for c in covers if c >= MIN_COVER * 0.6) / len(covers)
+    return present >= 0.8 and MIN_COVER <= sum(covers) / len(covers) <= MAX_COVER
 
 
-def has_person_jpeg(jpeg):
-    """Quick check on one JPEG (a frame near the end of a shot): is there a clear person? False on any failure."""
+def frame_like_render(img, out_size, crop):
+    """`img` (HxWx3 uint8) laid out the way the recap renders it at out_size = (w, h): centre-cropped to fill (crop=True) or fitted on a
+    dark canvas (crop=False, the letterbox layout), so the person's share of the frame matches the rendered shot."""
+    import cv2
+    import numpy as np
+    ow, oh = out_size
+    h, w = img.shape[:2]
+    if crop:
+        s = max(ow / w, oh / h)
+        r = cv2.resize(img, (max(ow, round(w * s)), max(oh, round(h * s))), interpolation=cv2.INTER_AREA)
+        y, x = (r.shape[0] - oh) // 2, (r.shape[1] - ow) // 2
+        return r[y:y + oh, x:x + ow]
+    s = min(ow / w, oh / h)
+    r = cv2.resize(img, (max(1, round(w * s)), max(1, round(h * s))), interpolation=cv2.INTER_AREA)
+    canvas = np.zeros((oh, ow, 3), np.uint8)
+    y, x = (oh - r.shape[0]) // 2, (ow - r.shape[1]) // 2
+    canvas[y:y + r.shape[0], x:x + r.shape[1]] = r
+    return canvas
+
+
+def has_person_jpegs(jpegs, out_size=None, crop=True):
+    """Check on several JPEG frames from the end of a shot: is a clear person in all of them? With out_size the frames are laid out like the
+    rendered shot first. False on any failure or when there are no frames."""
     try:
         import cv2
         import numpy as np
-        img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
-        return img is not None and clear_subject([person_mask(img[:, :, ::-1].copy())])
+        masks = []
+        for jpeg in jpegs:
+            img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+            if img is None:
+                return False
+            img = img[:, :, ::-1].copy()
+            masks.append(person_mask(frame_like_render(img, out_size, crop) if out_size else img))
+        return clear_subject(masks)
     except Exception:
         return False
 

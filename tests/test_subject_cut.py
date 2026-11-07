@@ -40,6 +40,7 @@ def test_clear_subject_needs_a_person_of_sensible_size():
     small[30:70, 30:70] = 1.0
     assert sc.clear_subject([small, small]) and not sc.clear_subject([none]) and not sc.clear_subject([big]) and not sc.clear_subject([])
     assert not sc.clear_subject([small, none, none])                     # the person walks out of the frame: no cut-out
+    assert sc.clear_subject([small] * 9 + [none]) and not sc.clear_subject([small] * 3 + [none] * 2)       # one missed frame in ten is fine
 
 
 def test_compose_keeps_the_person_and_reveals_the_next_shot():
@@ -83,3 +84,15 @@ def test_cut_sounds_follow_the_bridge_not_the_trimmed_shots():
     parts = [("p/clip_1.mp4", 3.5), ("p/bridge_0.mp4", 0.5), ("w/trim_2_clip_2.mp4", 3.5), ("p/clip_3.mp4", 4.0), ("p/end.mp4", 3.0)]
     events = tr.cut_sound_events(parts, "whoosh")
     assert [e["t"] for e in events] == [3.5, 7.5]          # the bridge start and the plain cut before clip_3; none after the bridge
+
+
+def test_frames_are_laid_out_like_the_render():
+    wide = np.full((90, 160, 3), 200, np.uint8)
+    fit = sc.frame_like_render(wide, (90, 160), crop=False)             # 16:9 source into a 9:16 recap: letterboxed, black bars above and below
+    assert fit.shape == (160, 90, 3) and fit[0, 0].sum() == 0 and fit[80, 45, 0] == 200
+    crop = sc.frame_like_render(wide, (90, 160), crop=True)             # centre crop: no bars
+    assert crop.shape == (160, 90, 3) and crop.min() == 200
+
+
+def test_has_person_jpegs_is_false_without_frames_or_on_bad_data():
+    assert not sc.has_person_jpegs([]) and not sc.has_person_jpegs([b"not a jpeg"])

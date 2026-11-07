@@ -1474,17 +1474,26 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     trans_types = _tr.cut_types(trans_name, 400)
     clip_no, tail_seq = [0], []
 
-    def _person_near_end(file, start, secs):
+    def _person_near_end(file, start, secs, size=None):
+        """A clear person in three frames over the shot's last half second, laid out the way the shot is rendered (crop or letterbox)."""
         if not _subject.available():
             return False
         grabber = grab
         if grabber is None:
             from engine.visual_context import grab_frames
             grabber = lambda f, s, e: grab_frames(f, s, e, n=1, ffmpeg=ffmpeg)  # noqa: E731
-        frames = grabber(file, start + secs - 0.8, start + secs) or []
-        return bool(frames) and _subject.has_person_jpeg(frames[0])
+        end = start + secs
+        frames = []
+        for back in (0.70, 0.50, 0.30):                    # each call returns the frame 0.25 s after its start (the window is at least 0.5 s)
+            got = grabber(file, end - back, end - back + 0.5) or []
+            if not got:
+                return False
+            frames.append(got[0])
+        w, h = size or (0, 0)
+        crop = not w or layout == "crop" or (layout == "auto" and (h > w) == (H > W))
+        return _subject.has_person_jpegs(frames, (W, H), crop)
 
-    def trans_kw(file=None, start=0.0, secs=0.0):
+    def trans_kw(file=None, start=0.0, secs=0.0, size=None):
         """Head and tail transition of the next shot: the cut before it and the cut after it share one type. Nothing when none is chosen.
         For the subject cut-out the tail is "subject" only when a clear person is in the shot's last moments; otherwise a normal type."""
         i = clip_no[0]
@@ -1493,7 +1502,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             return {}
         tail = trans_types[i]
         if tail == "subject":
-            tail = "subject" if file and _person_near_end(file, start, secs) else _tr.fallback_type(i)
+            tail = "subject" if file and _person_near_end(file, start, secs, size) else _tr.fallback_type(i)
         tail_seq.append(tail)
         return {"head": tail_seq[i - 1] if i else None, "tail": tail, "trans_s": trans_s}
     fixes, fix_stats, ref_box = {}, {}, []
@@ -1676,7 +1685,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             for gi, g in enumerate(glimpses, 1):
                 out = os.path.join(parts_dir, f"glimpse_{gi}.mp4")
                 render_clip(ffmpeg, g["file"], g["start"], glimpse_s, out, hook_png, layout, g["size"], audio=has_audio(g["file"]) and not mute_orig,
-                            cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw(), **trans_kw(g["file"], g["start"], glimpse_s))
+                            cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw(), **trans_kw(g["file"], g["start"], glimpse_s, g["size"]))
                 parts.append(out)
             print(f"[Log] Opening: hook \"{it['hook']}\" over {len(glimpses)} glimpse(s).")
         if cine:
@@ -1684,7 +1693,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             out = os.path.join(parts_dir, "trip_title.mp4")
             lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else (" · ".join(trip_places[:4]) or K["tagline"]), "",
                                    look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0)
-            render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw(), **trans_kw(m0["file"], m0["start"], title_s))
+            render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw(), **trans_kw(m0["file"], m0["start"], title_s, m0["size"]))
             parts.append(out)
         else:
             title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else K["by"], "")
@@ -1717,7 +1726,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
                 lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], f"{unit} {di}" if len(days) > 1 else "",
                                        look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di)
                 secs = max(secs, first_min)
-            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw(m["file"], m["start"], secs))
+            render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw(m["file"], m["start"], secs, m["size"]))
             parts.append(out)
         print(f"[Log] {K['unit']} {di} rendered.")
     # a closing card, so the recap does not just fade out on the last shot
