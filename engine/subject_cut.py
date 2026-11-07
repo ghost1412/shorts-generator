@@ -228,7 +228,7 @@ def has_person_jpegs(jpegs, out_size=None, crop=True):
 
 def _glow_layer(alpha, strength, sweep_pos=None):
     """Bright halo round a (float 0..1) person mask: a tight rim plus a wide soft glow, 0..1 (HxW); a light band at `sweep_pos` (0..1 across the
-    picture, diagonal) strengthens it as it passes. Done at half size, the halo is soft anyway."""
+    picture, diagonal) strengthens it as it passes. Never inside the person. Done at half size, the halo is soft anyway."""
     import cv2
     import numpy as np
     h, w = alpha.shape
@@ -236,8 +236,8 @@ def _glow_layer(alpha, strength, sweep_pos=None):
     k = max(3, (w // 2) // 90) | 1
     grown = cv2.dilate(small, np.ones((k, k), np.uint8))
     tight = np.clip(cv2.GaussianBlur(grown, (0, 0), max(1.5, w / 400.0)) - small, 0.0, 1.0)
-    wide = np.clip(cv2.GaussianBlur(grown, (0, 0), max(4.0, w / 40.0)) - small, 0.0, 1.0)
-    halo = np.clip(tight * 0.9 + wide * 0.5, 0.0, 1.0)
+    wide = np.clip(cv2.GaussianBlur(grown, (0, 0), max(5.0, w / 28.0)) * 1.4 - small, 0.0, 1.0)
+    halo = np.clip(tight * 0.35 + wide * 0.75, 0.0, 1.0) * (1.0 - np.clip(small * 1.5, 0.0, 1.0))             # mostly a soft glow with only a faint rim, not a hard sticker edge
     if sweep_pos is not None:
         gx, gy = np.meshgrid(np.linspace(0.0, 1.0, halo.shape[1], dtype=np.float32), np.linspace(0.0, 1.0, halo.shape[0], dtype=np.float32))
         band = np.exp(-(((gx + 0.35 * gy) / 1.35 - sweep_pos) / 0.10) ** 2)
