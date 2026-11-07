@@ -105,3 +105,11 @@ def test_subject_cutout_falls_back_to_normal_transitions_without_a_person(tmp_pa
     r = tr.make_recap(_footage(tmp_path), str(tmp_path / "out"), total_seconds=30, style="plain", aspect="16:9", ask=lambda p: "{}", geocode=False,
                       transitions="subject", edit="hype", edit_strength="medium")
     assert os.path.getsize(r["video"]) > 10000 and "Subject cut-out:" not in capsys.readouterr().out
+
+
+def test_subject_look_options_reach_the_command_line_only_when_set():
+    base = web_args.trip_args(["a.mp4"], "s")
+    assert "--subject_look" not in base and "--subject_color" not in base
+    a = web_args.trip_args(["a.mp4"], "s", subject_look="glow_sweep", subject_color="gold")
+    assert a[a.index("--subject_look") + 1] == "glow_sweep" and a[a.index("--subject_color") + 1] == "gold"
+    assert ("Bright outline", "glow") in web_args.SUBJECT_LOOK_CHOICES and "gold" in web_args.SUBJECT_COLOR_CHOICES

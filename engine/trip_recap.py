@@ -1371,7 +1371,7 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto"):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto"):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1.
     kind: "trip" (default), "wedding", "event" or "family" - the wording, the section names and whether places are looked up from GPS.
@@ -1398,13 +1398,13 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
         QUALITY.update(crf="17", preset="fast")
     try:
         return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate, place_names, avoid, kind=kind, keep_sound=keep_sound,
-                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions)
+                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color)
     finally:
         W, H = old
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto"):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto"):
     K = get_kind(kind)
     factor = sample_factor(sample, K.get("sample"))
     from engine import auto_edit
@@ -1470,6 +1470,9 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     if trans_name != "none":
         print(f"[Log] Transitions between shots: {trans_name}.")
     from engine import subject_cut as _subject
+    subject_style = _subject.resolve_style(subject_look, subject_color, edit) if trans_name == "subject" else None
+    if subject_style:
+        print(f"[Log] Subject cut-out look: {subject_style['look']}.")
     trans_s = _tr.seconds_for(edit_strength)
     trans_types = _tr.cut_types(trans_name, 400)
     clip_no, tail_seq, overlays, boxes = [0], [], {}, {}      # overlays: shot -> the title/caption PNGs burned into it (taken out of the subject cut-out)
@@ -1758,7 +1761,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         pairs = {(a, b) for k, (a, b) in enumerate(zip(shots, shots[1:])) if k < len(tail_seq) and tail_seq[k] == "subject" and parts.index(b) == parts.index(a) + 1}
         if pairs:
             try:
-                parts, made = _subject.apply(ffmpeg, parts, pairs, (W, H), _enc(), os.path.join(parts_dir, "subject"), overlays=overlays, boxes=boxes)
+                parts, made = _subject.apply(ffmpeg, parts, pairs, (W, H), _enc(), os.path.join(parts_dir, "subject"), overlays=overlays, boxes=boxes, style=subject_style)
                 print(f"[Log] Subject cut-out: {made} of {len(pairs)} planned cut(s) have the person staying in front; the rest are plain cuts.")
             except Exception as e:
                 print(f"[Warning] Subject cut-out skipped ({e}); plain cuts are used.")
@@ -1870,7 +1873,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
                       manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)),
                       grade_name=_explicit_filter(args), edit=getattr(args, "auto_edit", "") if getattr(args, "auto_edit", "none") != "none" else "",
-                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), sample=getattr(args, "recap_sample", "auto") or "auto", transitions=getattr(args, "transitions", "auto") or "auto", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
+                      edit_strength=getattr(args, "edit_strength", "medium") or "medium", clean_sound=bool(getattr(args, "clean_audio", False)), sample=getattr(args, "recap_sample", "auto") or "auto", transitions=getattr(args, "transitions", "auto") or "auto", subject_look=getattr(args, "subject_look", "auto") or "auto", subject_color=getattr(args, "subject_color", "auto") or "auto", layout="fit" if layout == "fit" else ("crop" if layout == "crop" else "auto"))
         style = getattr(args, "recap_style", "auto") or "auto"
         if getattr(args, "recap_versions", "one") == "both":
             made = make_recap_versions(paths, session_dir, aspect=getattr(args, "recap_aspect", None), style=style, **common)

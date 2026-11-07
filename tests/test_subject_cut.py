@@ -123,3 +123,31 @@ def test_person_is_only_looked_for_inside_the_box(monkeypatch):
     frames = [np.zeros((100, 60, 3), np.uint8)] * 2
     m = sc.masks_for(frames, (30, 70, 0, 60))[0]
     assert m[50, 30] == 1.0 and m[10, 30] == 0.0 and m[90, 30] == 0.0
+
+
+def test_looks_are_presets_that_auto_picks_from_the_edit_style():
+    assert sc.resolve_style("auto", "auto", "hype")["look"] == "glow_sweep" and sc.resolve_style("auto", "auto", "vlog")["look"] == "glow"
+    assert sc.resolve_style("auto", "auto", "podcast")["look"] == "plain" and sc.resolve_style("auto", "auto", None)["glow"] == 0.0
+    assert sc.resolve_style("spotlight", "auto", "hype")["look"] == "spotlight"            # a manual choice wins over the edit style
+    assert sc.resolve_style("glow", "gold")["color"] == (255, 196, 64) and sc.resolve_style("glow", "#102030")["color"] == (16, 32, 48)
+    for bad in (("sparkle", "auto"), ("glow", "greenish"), ("glow", "#12")):
+        with pytest.raises(ValueError):
+            sc.resolve_style(*bad)
+
+
+def test_glow_outlines_the_person_and_builds_up_before_the_wipe():
+    h, w, n, lead = 120, 80, 8, 4
+    a = [np.full((h, w, 3), 80, np.uint8)] * (n + lead)
+    b = [np.full((h, w, 3), 200, np.uint8)] * n
+    m = np.zeros((h, w), np.float32)
+    m[30:90, 30:50] = 1.0
+    st = sc.resolve_style("glow_sweep", "gold")
+    out = sc.compose(a, b, [m] * (n + lead), None, st)
+    plain = sc.compose(a, b, [m] * (n + lead), None, sc.resolve_style("plain"))
+    assert len(out) == n + lead
+    ring = (60, 26)                                                    # just left of the person, inside the halo
+    assert out[lead - 1][ring].astype(int).sum() > plain[lead - 1][ring].astype(int).sum() + 30      # the outline is brighter than the plain bridge
+    assert out[lead - 1][ring][0] >= out[lead - 1][ring][2]            # gold: red at least as strong as blue
+    assert out[0][10, 5].astype(int).sum() < 80 * 3                    # the old background darkens during the build-up
+    assert abs(int(out[lead - 1][60, 5].mean()) - 80) < 60 and plain[lead - 1][60, 5].mean() == 80   # nothing has changed to B yet in the lead
+    assert out[-1][5, 5].mean() > 150                                  # at the end the background is B

@@ -36,6 +36,9 @@ EDIT_STYLE_CHOICES = [("No auto-edit (pick my own options)", "none"), ("Podcast 
 EDIT_STRENGTH_CHOICES = [("Subtle", "subtle"), ("Medium", "medium"), ("Hyped", "hyped")]
 from engine import transitions as _transitions  # noqa: E402
 TRANSITION_CHOICES = _transitions.LABELS
+from engine import subject_cut as _subject_cut  # noqa: E402
+SUBJECT_LOOK_CHOICES = _subject_cut.LOOK_LABELS
+SUBJECT_COLOR_CHOICES = _subject_cut.COLOR_CHOICES
 
 
 def edit_args(style, strength="medium"):
@@ -159,7 +162,7 @@ RECAP_GRADE_CHOICES =[("Automatic: a look only if the footage suits, otherwise n
 
 
 def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto"):
+              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto"):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -191,6 +194,10 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--recap_sample", str(sample)]
     if transitions and str(transitions) != "auto":
         args += ["--transitions", str(transitions)]
+    if subject_look and str(subject_look) != "auto":
+        args += ["--subject_look", str(subject_look)]
+    if subject_color and str(subject_color) != "auto":
+        args += ["--subject_color", str(subject_color)]
     return args
 
 
