@@ -1472,7 +1472,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     from engine import subject_cut as _subject
     trans_s = _tr.seconds_for(edit_strength)
     trans_types = _tr.cut_types(trans_name, 400)
-    clip_no, tail_seq = [0], []
+    clip_no, tail_seq, overlays, boxes = [0], [], {}, {}      # overlays: shot -> the title/caption PNGs burned into it (taken out of the subject cut-out)
 
     def _person_near_end(file, start, secs, size=None):
         """A clear person in three frames over the shot's last half second, laid out the way the shot is rendered (crop or letterbox)."""
@@ -1492,6 +1492,13 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         w, h = size or (0, 0)
         crop = not w or layout == "crop" or (layout == "auto" and (h > w) == (H > W))
         return _subject.has_person_jpegs(frames, (W, H), crop)
+
+    def note_shot(out, size, pngs):
+        """What the subject cut-out needs to know about a rendered shot: its title/caption PNGs and, when letterboxed, where the sharp picture is."""
+        overlays[out] = [p for p in pngs if p]
+        w, h = size or (0, 0)
+        if w and layout != "crop" and not (layout == "auto" and (h > w) == (H > W)):
+            boxes[out] = _subject.letterbox_box((w, h), (W, H))
 
     def trans_kw(file=None, start=0.0, secs=0.0, size=None):
         """Head and tail transition of the next shot: the cut before it and the cut after it share one type. Nothing when none is chosen.
@@ -1686,6 +1693,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
                 out = os.path.join(parts_dir, f"glimpse_{gi}.mp4")
                 render_clip(ffmpeg, g["file"], g["start"], glimpse_s, out, hook_png, layout, g["size"], audio=has_audio(g["file"]) and not mute_orig,
                             cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw(), **trans_kw(g["file"], g["start"], glimpse_s, g["size"]))
+                note_shot(out, g["size"], [hook_png])
                 parts.append(out)
             print(f"[Log] Opening: hook \"{it['hook']}\" over {len(glimpses)} glimpse(s).")
         if cine:
@@ -1694,6 +1702,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else (" · ".join(trip_places[:4]) or K["tagline"]), "",
                                    look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0)
             render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw(), **trans_kw(m0["file"], m0["start"], title_s, m0["size"]))
+            note_shot(out, m0["size"], [png for png, _ts in lay or []])
             parts.append(out)
         else:
             title = title_card_png(os.path.join(parts_dir, "trip_title.png"), it["title"], " · ".join(stops) if stops else K["by"], "")
@@ -1727,6 +1736,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
                                        look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di)
                 secs = max(secs, first_min)
             render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw(m["file"], m["start"], secs, m["size"]))
+            note_shot(out, m["size"], [cap_png] + [png for png, _ts in lay or []])
             parts.append(out)
         print(f"[Log] {K['unit']} {di} rendered.")
     # a closing card, so the recap does not just fade out on the last shot
@@ -1748,7 +1758,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         pairs = {(a, b) for k, (a, b) in enumerate(zip(shots, shots[1:])) if k < len(tail_seq) and tail_seq[k] == "subject" and parts.index(b) == parts.index(a) + 1}
         if pairs:
             try:
-                parts, made = _subject.apply(ffmpeg, parts, pairs, (W, H), _enc(), os.path.join(parts_dir, "subject"))
+                parts, made = _subject.apply(ffmpeg, parts, pairs, (W, H), _enc(), os.path.join(parts_dir, "subject"), overlays=overlays, boxes=boxes)
                 print(f"[Log] Subject cut-out: {made} of {len(pairs)} planned cut(s) have the person staying in front; the rest are plain cuts.")
             except Exception as e:
                 print(f"[Warning] Subject cut-out skipped ({e}); plain cuts are used.")

@@ -96,3 +96,30 @@ def test_frames_are_laid_out_like_the_render():
 
 def test_has_person_jpegs_is_false_without_frames_or_on_bad_data():
     assert not sc.has_person_jpegs([]) and not sc.has_person_jpegs([b"not a jpeg"])
+
+
+def test_letterbox_box_is_the_sharp_picture_inside_the_bars():
+    assert sc.letterbox_box((1920, 1080), (1080, 1920)) == (656, 1264, 0, 1080)        # landscape shot in a portrait frame: bars above and below
+    assert sc.letterbox_box((1080, 1920), (1080, 1920)) == (0, 1920, 0, 1080)
+    assert sc.letterbox_box((0, 0), (1080, 1920)) == (0, 1920, 0, 1080)
+
+
+def test_text_is_taken_out_of_the_person_layer(tmp_path):
+    cv2 = pytest.importorskip("cv2")
+    png = np.zeros((90, 160, 4), np.uint8)
+    png[40:50, 20:140] = (255, 255, 255, 255)                                            # a title line
+    path = str(tmp_path / "t.png")
+    cv2.imwrite(path, png)
+    tm = sc.text_mask([path, str(tmp_path / "missing.png")], (160, 90))
+    assert tm is not None and tm[45, 80] == 255 and tm[5, 5] == 0 and sc.text_mask([], (160, 90)) is None
+    frame = np.full((90, 160, 3), 60, np.uint8)
+    frame[40:50, 20:140] = 255
+    clean = sc.without_text(frame, tm)
+    assert clean[45, 80].max() < 120 and clean[5, 5].tolist() == [60, 60, 60]
+
+
+def test_person_is_only_looked_for_inside_the_box(monkeypatch):
+    monkeypatch.setattr(sc, "person_mask", lambda rgb, long_side=480: np.ones(rgb.shape[:2], np.float32))
+    frames = [np.zeros((100, 60, 3), np.uint8)] * 2
+    m = sc.masks_for(frames, (30, 70, 0, 60))[0]
+    assert m[50, 30] == 1.0 and m[10, 30] == 0.0 and m[90, 30] == 0.0

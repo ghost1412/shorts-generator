@@ -55,6 +55,66 @@ def person_mask(rgb, long_side=480):
     return np.clip((prob - 0.35) / 0.4, 0.0, 1.0).astype(np.float32)          # firm inside, soft edge
 
 
+def letterbox_box(src_size, out_size):
+    """(y0, y1, x0, x1) of the sharp picture when a shot of `src_size` (w, h) is fitted inside `out_size` with a blurred copy of itself filling
+    the bars (the recap's letterbox layout). The person has to be looked for only in this part: the blurred bars show them too."""
+    ow, oh = out_size
+    w, h = src_size
+    if not w or not h:
+        return (0, oh, 0, ow)
+    s = min(ow / w, oh / h)
+    pw, ph = min(ow, round(w * s)), min(oh, round(h * s))
+    y0, x0 = (oh - ph) // 2, (ow - pw) // 2
+    return (y0, y0 + ph, x0, x0 + pw)
+
+
+def masks_for(frames, box=None):
+    """Person masks for rendered frames, looked for inside `box` = (y0, y1, x0, x1) only (default: the whole frame); zero outside it."""
+    import numpy as np
+    h, w = frames[0].shape[:2]
+    y0, y1, x0, x1 = box or (0, h, 0, w)
+    out = []
+    for f in frames:
+        m = np.zeros(f.shape[:2], np.float32)
+        m[y0:y1, x0:x1] = person_mask(np.ascontiguousarray(f[y0:y1, x0:x1]))
+        out.append(m)
+    return out
+
+
+def text_mask(pngs, size):
+    """Where the recap's own titles and captions sit (alpha of their overlay PNGs, grown a little), as a uint8 mask of `size` (w, h); None if none."""
+    try:
+        import cv2
+        import numpy as np
+        w, h = size
+        acc = np.zeros((h, w), np.uint8)
+        for png in pngs or []:
+            img = cv2.imread(png, cv2.IMREAD_UNCHANGED)
+            if img is None or img.ndim != 3 or img.shape[2] < 4:
+                continue
+            a = cv2.resize(img[:, :, 3], (w, h), interpolation=cv2.INTER_AREA)
+            acc = np.maximum(acc, (a > 20).astype(np.uint8) * 255)
+        if not acc.any():
+            return None
+        return cv2.dilate(acc, np.ones((9, 9), np.uint8))
+    except Exception:
+        return None
+
+
+def without_text(frame, mask):
+    """`frame` with the pixels under `mask` filled in from their surroundings (only the text's bounding box is worked on, to stay fast)."""
+    import cv2
+    import numpy as np
+    ys, xs = np.nonzero(mask)
+    if not len(ys):
+        return frame
+    pad = 12
+    y0, y1, x0, x1 = max(0, ys.min() - pad), ys.max() + pad, max(0, xs.min() - pad), xs.max() + pad
+    out = frame.copy()
+    out[y0:y1, x0:x1] = cv2.inpaint(np.ascontiguousarray(frame[y0:y1, x0:x1]), np.ascontiguousarray(mask[y0:y1, x0:x1]), 3, cv2.INPAINT_TELEA)
+    return out
+
+
 def coverage(mask):
     return float((mask > 0.5).mean())
 
@@ -106,11 +166,13 @@ def has_person_jpegs(jpegs, out_size=None, crop=True):
         return False
 
 
-def compose(a_frames, b_frames, masks):
-    """The bridge frames: wipe A's background to B's, person (from A, with its mask) in front, growing and fading out. Lists of HxWx3 uint8."""
+def compose(a_frames, b_frames, masks, fg_frames=None):
+    """The bridge frames: wipe A's background to B's, person (from A, with its mask) in front, growing and fading out. Lists of HxWx3 uint8.
+    `fg_frames` = A's frames without burned-in text, used for the person layer (default: A's frames)."""
     import cv2
     import numpy as np
     n = len(a_frames)
+    fg_frames = fg_frames or a_frames
     h, w = a_frames[0].shape[:2]
     gx, gy = np.meshgrid(np.linspace(0.0, 1.0, w, dtype=np.float32), np.linspace(0.0, 1.0, h, dtype=np.float32))
     diag = (gx + 0.35 * gy) / 1.35                                   # 0 at the top left, 1 at the bottom right
@@ -125,7 +187,7 @@ def compose(a_frames, b_frames, masks):
         cx, cy = (float(xs.mean()), float(ys.mean())) if len(xs) else (w / 2.0, h / 2.0)
         s = 1.0 + 0.18 * p
         mat = np.array([[s, 0.0, cx - s * cx], [0.0, s, cy - s * cy]], dtype=np.float32)
-        fg = cv2.warpAffine(a_frames[i], mat, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        fg = cv2.warpAffine(fg_frames[i], mat, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
         alpha = cv2.warpAffine(m, mat, (w, h), flags=cv2.INTER_LINEAR) * (1.0 - max(0.0, (p - 0.6) / 0.4))
         alpha = alpha[..., None]
         out.append(np.clip(fg * alpha + bg * (1.0 - alpha), 0, 255).astype(np.uint8))
@@ -150,9 +212,11 @@ def _duration(ffmpeg, path):
     return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 0.0
 
 
-def make_bridge(ffmpeg, a_path, b_path, out, size, enc, seconds=BRIDGE_S, fps=FPS, masks_fn=None):
+def make_bridge(ffmpeg, a_path, b_path, out, size, enc, seconds=BRIDGE_S, fps=FPS, masks_fn=None, a_overlays=None, a_box=None):
     """Build the bridge clip `out` from the end of A and the start of B. Returns True, or False when there is no clear person
-    (nothing is written then) or anything fails. `enc` = the encoder arguments of the recap; `masks_fn(frames) -> masks` is for tests."""
+    (nothing is written then) or anything fails. `enc` = the encoder arguments of the recap; `masks_fn(frames) -> masks` is for tests;
+    `a_box` = where A's sharp picture is (letterboxed shots, see letterbox_box);
+    `a_overlays` = the title/caption PNGs burned into A, which are taken out of the person layer so they do not ghost over the next shot."""
     try:
         import numpy as np  # noqa: F401
         da = _duration(ffmpeg, a_path)
@@ -162,10 +226,12 @@ def make_bridge(ffmpeg, a_path, b_path, out, size, enc, seconds=BRIDGE_S, fps=FP
         if n < 6:
             return False
         a, b = a[:n], b[:n]
-        masks = (masks_fn or (lambda fr: [person_mask(f) for f in fr]))(a)
+        masks = masks_fn(a) if masks_fn else masks_for(a, a_box)
         if not clear_subject(masks):
             return False
-        frames = compose(a, b, masks)
+        tm = text_mask(a_overlays, size)
+        clean = [without_text(f, tm) for f in a] if tm is not None else None
+        frames = compose(a, b, masks, clean)
         w, h = size
         cmd = [ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps), "-i", "-",
                "-ss", f"{max(0.0, da - seconds):.3f}", "-t", f"{seconds:.3f}", "-i", a_path, "-t", f"{seconds:.3f}", "-i", b_path,
@@ -187,9 +253,10 @@ def trim(ffmpeg, path, out, cut_head, cut_tail, enc):
     return r.returncode == 0 and os.path.isfile(out) and os.path.getsize(out) > 1000
 
 
-def apply(ffmpeg, parts, pairs, size, enc, workdir, seconds=BRIDGE_S, masks_fn=None):
+def apply(ffmpeg, parts, pairs, size, enc, workdir, seconds=BRIDGE_S, masks_fn=None, overlays=None, boxes=None):
     """Return a new parts list with the subject cut-out between the pairs of ADJACENT parts in `pairs` (a set of (path_a, path_b)).
-    A pair whose bridge cannot be made (no clear person, a shot too short) stays a plain cut. Returns (parts, bridges made); raises when a
+    `overlays` maps a shot's path to the PNGs burned into it,
+    `boxes` to the part of its frame holding the sharp picture. A pair whose bridge cannot be made (no clear person, a shot too short) stays a plain cut. Returns (parts, bridges made); raises when a
     shot cannot be trimmed."""
     os.makedirs(workdir, exist_ok=True)
     bridges, made = {}, 0
@@ -198,7 +265,7 @@ def apply(ffmpeg, parts, pairs, size, enc, workdir, seconds=BRIDGE_S, masks_fn=N
         if (a, b) not in pairs or min(_duration(ffmpeg, a), _duration(ffmpeg, b)) < 2 * seconds + 0.4:
             continue
         out = os.path.join(workdir, f"bridge_{i}.mp4")
-        if make_bridge(ffmpeg, a, b, out, size, enc, seconds, masks_fn=masks_fn):
+        if make_bridge(ffmpeg, a, b, out, size, enc, seconds, masks_fn=masks_fn, a_overlays=(overlays or {}).get(a), a_box=(boxes or {}).get(a)):
             bridges[i] = out
             made += 1
     if not bridges:
