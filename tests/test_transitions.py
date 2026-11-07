@@ -112,7 +112,7 @@ def test_subject_look_options_reach_the_command_line_only_when_set():
     assert "--subject_look" not in base and "--subject_color" not in base
     a = web_args.trip_args(["a.mp4"], "s", subject_look="glow_sweep", subject_color="gold")
     assert a[a.index("--subject_look") + 1] == "glow_sweep" and a[a.index("--subject_color") + 1] == "gold"
-    assert ("Bright outline", "glow") in web_args.SUBJECT_LOOK_CHOICES and "gold" in web_args.SUBJECT_COLOR_CHOICES
+    assert ("Bright outline (experimental)", "glow") in web_args.SUBJECT_LOOK_CHOICES and "gold" in web_args.SUBJECT_COLOR_CHOICES
 
 
 def test_subject_max_option():

@@ -125,8 +125,8 @@ def test_person_is_only_looked_for_inside_the_box(monkeypatch):
     assert m[50, 30] == 1.0 and m[10, 30] == 0.0 and m[90, 30] == 0.0
 
 
-def test_looks_are_presets_that_auto_picks_from_the_edit_style():
-    assert sc.resolve_style("auto", "auto", "hype")["look"] == "glow_sweep" and sc.resolve_style("auto", "auto", "vlog")["look"] == "glow"
+def test_looks_are_presets_and_the_outline_is_opt_in():
+    assert sc.resolve_style("auto", "auto", "hype")["look"] == "plain" and sc.resolve_style("auto", "auto", "vlog")["look"] == "plain"      # off by default for now
     assert sc.resolve_style("auto", "auto", "podcast")["look"] == "plain" and sc.resolve_style("auto", "auto", None)["glow"] == 0.0
     assert sc.resolve_style("spotlight", "auto", "hype")["look"] == "spotlight"            # a manual choice wins over the edit style
     assert sc.resolve_style("glow", "gold")["color"] == (255, 196, 64) and sc.resolve_style("glow", "#102030")["color"] == (16, 32, 48)

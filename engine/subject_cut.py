@@ -32,9 +32,9 @@ LOOKS = {
     "glow_sweep": {"glow": 1.0, "sweep": True, "dim": 0.25, "lead": 0.3},
     "spotlight": {"glow": 0.6, "sweep": False, "dim": 0.5, "lead": 0.3},
 }
-LOOK_LABELS = [("Auto (follows the edit style)", "auto"), ("Plain (no outline)", "plain"), ("Bright outline", "glow"),
-               ("Bright outline + light sweep", "glow_sweep"), ("Spotlight (dark background, soft outline)", "spotlight")]
-LOOK_DEFAULTS = {"hype": "glow_sweep", "vlog": "glow"}          # other edit styles: plain
+LOOK_LABELS = [("Auto (plain for now)", "auto"), ("Plain (no outline)", "plain"), ("Bright outline (experimental)", "glow"),
+               ("Bright outline + light sweep (experimental)", "glow_sweep"), ("Spotlight (experimental)", "spotlight")]
+LOOK_DEFAULTS = {}          # auto = plain for every edit style for now (the outline looked unfinished); pick a look by hand to use it
 COLORS = {"white": (255, 255, 255), "gold": (255, 196, 64), "cyan": (70, 220, 255), "pink": (255, 80, 170)}
 COLOR_CHOICES = ["auto", *COLORS]
 

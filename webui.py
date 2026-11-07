@@ -1050,7 +1050,7 @@ def build_ui():
                         t_trans = gr.Dropdown(web_args.TRANSITION_CHOICES, value="auto", label="Transitions between shots",
                                               info="Instead of plain cuts: a fast zoom punch, a whip pan, a white flash, a glitch, or a mix. How long they last follows 'How much editing'.")
                         t_look_fx = gr.Dropdown(web_args.SUBJECT_LOOK_CHOICES, value="auto", label="Subject cut-out look",
-                                                info="Only for 'Subject cut-out': a bright outline can build up round the person before the background changes. Auto follows the edit style (hype: outline + light sweep, vlog: outline, others: plain).")
+                                                info="Only for 'Subject cut-out': a bright outline can build up round the person before the background changes. Auto is plain (no outline) for now; the outline looks are experimental.")
                         t_look_color = gr.Dropdown(web_args.SUBJECT_COLOR_CHOICES, value="auto", label="Outline colour",
                                                    info="Auto is white. You can also type a colour like #ffcc00 in the CLI (--subject_color).")
                         t_subject_max = gr.Number(value=2, minimum=0, maximum=6, precision=0, label="Most subject cut-outs",
