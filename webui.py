@@ -238,7 +238,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
 
 
 def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto"):
+               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2):
     """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
@@ -249,7 +249,7 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
     cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound,
-                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color)]
+                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max)]
     if reuse:
         copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
         if copied:
@@ -1053,6 +1053,8 @@ def build_ui():
                                                 info="Only for 'Subject cut-out': a bright outline can build up round the person before the background changes. Auto follows the edit style (hype: outline + light sweep, vlog: outline, others: plain).")
                         t_look_color = gr.Dropdown(web_args.SUBJECT_COLOR_CHOICES, value="auto", label="Outline colour",
                                                    info="Auto is white. You can also type a colour like #ffcc00 in the CLI (--subject_color).")
+                        t_subject_max = gr.Number(value=2, minimum=0, maximum=6, precision=0, label="Most subject cut-outs",
+                                                  info="Only where one person is alone in the shot; the other cuts use the other transitions.")
                         t_clean = gr.Checkbox(value=False, label="Clean up the sound (noise, volume)",
                                               info="Only matters when the clips' own sound is in the recap (no music, or 'keep the original sound' ticked).")
                         t_sample = gr.Dropdown(web_args.RECAP_SAMPLE_CHOICES, value="auto", label="How many of your videos to look at",
@@ -1079,7 +1081,7 @@ def build_ui():
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max],
                                     [t_status, t_log, t_video, t_md])
                 t_kind.change(recap_kind_changed, t_kind, [t_name, t_stops, t_note, t_places, t_keep])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])

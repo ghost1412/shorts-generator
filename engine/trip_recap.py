@@ -1513,7 +1513,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         tail = trans_types[i]
         if tail == "subject":
             spaced = not subject_cuts or i - subject_cuts[-1] >= _subject.MIN_GAP
-            if file and len(subject_cuts) < subject_max and spaced and _person_near_end(file, start, secs, size):      # one person, a few times only
+            if file and subject_max > 0 and len(subject_cuts) < subject_max + 1 and spaced and _person_near_end(file, start, secs, size):      # one person; one spare candidate in case a bridge fails (apply() keeps at most subject_max)
                 subject_cuts.append(i)
             else:
                 tail = _tr.fallback_type(i)
