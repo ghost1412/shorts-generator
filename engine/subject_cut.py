@@ -80,7 +80,20 @@ def _model():
     return _MODEL[0]
 
 
-def person_mask(rgb, long_side=480):
+def guided_filter(guide, src, radius, eps):
+    """Edge-preserving smoothing of `src` (float32 0..1) that follows the edges of `guide` (float32 0..1, same size): He et al.'s guided filter.
+    Used to snap the rough mask of the small model onto the real outline of the person in the picture."""
+    import cv2
+    box = lambda x: cv2.boxFilter(x, -1, (2 * radius + 1, 2 * radius + 1))      # noqa: E731
+    mg, ms = box(guide), box(src)
+    var_g = box(guide * guide) - mg * mg
+    cov = box(guide * src) - mg * ms
+    a = cov / (var_g + eps)
+    b = ms - a * mg
+    return box(a) * guide + box(b)
+
+
+def person_mask(rgb, long_side=640, refine=True):
     """Soft person mask (float32, 0..1, same height and width as `rgb`, an HxWx3 uint8 array)."""
     import cv2
     import numpy as np
@@ -93,7 +106,11 @@ def person_mask(rgb, long_side=480):
     with torch.no_grad():
         prob = torch.softmax(_model()(x[None])["out"], dim=1)[0, PERSON_CLASS].numpy()
     prob = cv2.resize(prob.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)
-    prob = cv2.GaussianBlur(prob, (0, 0), max(1.0, w / 300.0))
+    if refine:       # the model's mask is coarse: let the picture's own edges (hair, shoulders) decide where the outline runs
+        guide = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+        prob = np.clip(guided_filter(guide, np.clip(prob, 0.0, 1.0), max(4, w // 140), 2e-3), 0.0, 1.0)
+    else:
+        prob = cv2.GaussianBlur(prob, (0, 0), max(1.0, w / 300.0))
     return np.clip((prob - 0.35) / 0.4, 0.0, 1.0).astype(np.float32)          # firm inside, soft edge
 
 
