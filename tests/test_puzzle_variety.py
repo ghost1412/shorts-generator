@@ -80,3 +80,64 @@ def test_emoji_script_and_overused_answers(monkeypatch, tmp_path):
     out = g.generate_emoji_guess("movies")
     assert out["answer"] == "Moonlight Harbor"                       # the overused answer was rejected and asked again
     assert "3 seconds" not in out["script"] and "7 seconds" not in out["script"]       # the on-screen countdown is 5 s
+
+
+def test_chat_story_validator_rejects_copied_example_and_short_chats():
+    from engine.script_gen import validate_chat_story
+    def chat(texts):
+        return {"messages": [{"sender": "A" if i % 2 else "B", "text": t, "is_me": bool(i % 2)} for i, t in enumerate(texts)]}
+    good = chat([f"line {i}" for i in range(8)])
+    assert validate_chat_story(good)
+    assert not validate_chat_story(chat([f"line {i}" for i in range(4)]))
+    copied = chat(["hi"] * 7 + ["I'm standing by the blue car."])
+    assert not validate_chat_story(copied)
+
+
+def test_horror_cleaning_and_validation():
+    from engine.script_gen import clean_spoken, validate_horror
+    assert clean_spoken("It came. <Dramatic pause> Closer. [pause] Now.") == "It came. Closer. Now."
+    body = " ".join(["word"] * 60)
+    assert validate_horror({"narrator_script": body})
+    assert not validate_horror({"narrator_script": "too short"})
+    assert not validate_horror({"narrator_script": "In the dead of night " + body})
+
+
+def test_reddit_validator_rejects_raw_json_fallback_and_parser_reads_single_quotes():
+    from engine.script_gen import robust_json_parse, validate_reddit
+    body = " ".join(["word"] * 45) + " AITA?"
+    assert validate_reddit({"title": "AITA for x", "story": body})
+    assert not validate_reddit({"title": "Viral Update", "story": body})
+    assert not validate_reddit({"title": "AITA", "story": '{ "title": "x" ' + body})
+    assert not validate_reddit({"title": "AITA", "story": "short story? yes"})
+    assert not validate_reddit({"title": "AITA", "story": " ".join(["word"] * 60)})  # never asks for judgment
+    bs = chr(92)  # a backslash-escaped apostrophe inside a single-quoted string
+    got = robust_json_parse("{ 'title': 'AITA for this', 'story': 'It" + bs + "'s a story. Am I wrong?' }")
+    assert got["title"] == "AITA for this" and got["story"].endswith("Am I wrong?")
+
+
+def test_quote_validator_rejects_cliches_and_openers():
+    from engine.script_gen import validate_quote
+    assert validate_quote({"quote": "Time is a racehorse, and you are holding the reins loosely today."})
+    assert not validate_quote({"quote": "In stillness lies the strength of the soul and the calm."})
+    assert not validate_quote({"quote": "In every step of darkness there is a glimmer of light."})
+    assert not validate_quote({"quote": "Weather every storm with a steady mind and open hands."})
+    assert not validate_quote({"quote": "Too short."})
+
+
+def test_manim_answer_takes_code_from_a_fenced_block():
+    from engine.script_gen import parse_manim_answer
+    reply = '''{"title": "Why the sky is blue", "voiceover_text": "Sunlight scatters."}
+
+```python
+from manim import *
+
+class ExplainerScene(Scene):
+    def construct(self):
+        self.add(Text("Hi"))
+```
+'''
+    got = parse_manim_answer(reply)
+    assert got["title"] == "Why the sky is blue" and got["voiceover_text"] == "Sunlight scatters."
+    assert got["code"].startswith("from manim import *") and "class ExplainerScene" in got["code"]
+    old = parse_manim_answer('{"title": "T", "code": "from manim import *", "voiceover_text": "v"}')
+    assert old["title"] == "T" and old["code"].startswith("from manim")

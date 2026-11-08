@@ -4,6 +4,18 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+### Fixed
+- **NEWS never posts a placeholder, and stays on its category**: with no fresh headline the run stops instead of publishing a made-up story. Top stories are only used for the world category, sensitive topics (politics, geopolitics, health scares, deaths) and non-news pages (lists, quizzes, reviews, deals) are skipped, each cat persona keeps its own voice, and credits show the outlet name instead of a raw link.
+- **Puzzle formats stop repeating**: hooks, characters, find-it targets, emoji answers and odd-one-out effects avoid what was used recently (`engine/puzzle_variety.py`). Emoji Guess rejects overused answers (Lion King, Titanic and similar) and its voiceover matches the on-screen 5-second countdown.
+- **Odd One Out is harder and fairer**: a random difficulty (easy, medium, hard), a bigger grid, a generic hint when it is not easy, a shrinking timer bar, and no answer reveal at the end.
+- **CHAT_STORY, HORROR, REDDIT and QUOTE no longer repeat one story**: each picks a fresh premise instead of copying the prompt's example or dropping the category word into a template. HORROR strips stage directions like `<Dramatic pause>` before the voice reads them, REDDIT can no longer read raw JSON aloud when a reply fails to parse (the JSON parser also reads single-quoted dicts now), and QUOTE is always credited to "Unknown" so a made-up line never carries a real person's name. A failed generation stops the run instead of publishing a placeholder.
+- **EXPLAINER asks for the animation code as a code block** instead of inside a JSON string (small models got the escaping wrong and every try failed to parse), rejects placeholder titles, and writes a new script when a render crashes (up to 3 tries). Videos from a small local model are still plain text on black.
+- **GUESS_SOUND answers only with a sound it has**: the mode used to play synthesized rain for any answer outside a six-sound list (two of the links were dead). It now draws from a bundled pack of real recordings (`assets/sounds`, from Wikimedia Commons; `manifest.json` lists each licence) and adds a credit line to the description for CC BY-SA clips. The pack has 7 clips so far, so the mode repeats quickly and is not part of the scheduled mix.
+- **Recap**: place-name fallbacks hide names in non-Latin scripts, and the Recap tab keeps its extra options in one collapsed section.
+
+### Docs
+- Recap demo GIF built from CC0 stock clips (with a note on how it was made) and Hugging Face Space files in `space/`.
+
 ### New
 - **Scheduled runs now mix formats**: the daily workflow used to be pinned to FACTS ("Spot the Lie"), so the channel only got that format. Each cron run now picks a mode by weighted chance (Spot the Lie, This or That, Emoji Guess, Odd One Out, Find It, Trivia, Riddle, Top 5, Story). Set the repo variable `SCHEDULED_MODE` to one mode name for the old behaviour, or to your own weights such as `WYR:30,FACTS:10`.
 - **Recap transitions instead of plain cuts (`--transitions mix|punch|whip|flash|glitch`, "Transitions between shots" on the Recap tab)**: a fast zoom punch with a short blur, a whip pan with horizontal motion blur, a white flash, an RGB-split glitch, or a mix that changes on every cut. The effect is built from the end of one shot and the start of the next, so the shots are still joined without re-encoding; the hook text stays put. How long it lasts follows `--edit_strength` (subtle 0.14 s, medium 0.2 s, hyped 0.26 s). Runs on this PC only.

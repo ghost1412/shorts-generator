@@ -558,13 +558,13 @@ def run(args, target_bitrate, target_preset):
                 print(f"[Log] 🔝 TOP_5 Data: {top5_data}")
             elif mode == "CHAT_STORY":
                 from engine.script_gen import generate_chat_story_script
-                chat_data = generate_chat_story_script(topic)
+                chat_data = generate_chat_story_script(args.prompt or None)
                 full_script = chat_data.get("narrator_script", "")
                 facts_data = []
                 print(f"[Log] 💬 CHAT_STORY Data: {chat_data}")
             elif mode == "HORROR":
                 from engine.script_gen import generate_horror_story_script
-                horror_data = generate_horror_story_script(topic)
+                horror_data = generate_horror_story_script(args.prompt or None)
                 full_script = horror_data.get("narrator_script", "")
                 facts_data = []
                 print(f"[Log] 👁️ HORROR Data: {horror_data}")
@@ -1255,6 +1255,8 @@ def run(args, target_bitrate, target_preset):
             metadata['description'] = metadata.get('description', '') + f"\n\n📰 Source: {source_credit}"
     elif mode == "GUESS_SOUND":
         metadata = ensure_dict(generate_viral_metadata(f"Can you guess this sound? It's a {sound_data['object']}", mode="STORY", category=category))
+        if sound_data.get("credit"):
+            metadata['description'] = metadata.get('description', '') + "\n\n" + sound_data['credit']
     elif mode == "FUNNY_EXPLAINER":
         funny_title = funny_data.get("title") if 'funny_data' in locals() and isinstance(funny_data, dict) else "Scene Breakdown 🎬"
         funny_desc = funny_data.get("hook") if 'funny_data' in locals() and isinstance(funny_data, dict) else "Viral sarcastic scene breakdown."

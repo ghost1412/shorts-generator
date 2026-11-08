@@ -21,24 +21,32 @@ def run(args, target_bitrate, target_preset):
     session_dir = args.session_dir if args.session_dir else os.path.join("sessions", f"explainer_{session_id}")
     os.makedirs(session_dir, exist_ok=True)
     
-    script_data = generate_manim_script(topic, extract_mode=extract_mode)
+    # The model writes the animation code, and its code can crash when rendered, so a failed render gets a fresh script
+    # (up to 3 tries) instead of ending the run. The voiceover is made once a script has rendered.
+    script_data, manim_output_path, last_error = None, None, None
+    for attempt in range(1, 4):
+        script_data = generate_manim_script(topic, extract_mode=extract_mode)
+        print(f"[Log] LLM Script Generated (attempt {attempt}). Title: {script_data.get('title', topic)}")
+        try:
+            manim_output_path = render_manim_scene(script_data['code'], session_dir, extract_mode=extract_mode)
+            break
+        except Exception as e:
+            last_error = e
+            print(f"[Warning] Manim render failed on attempt {attempt}/3: {str(e)[-300:]}")
+    if manim_output_path is None and last_error is not None:
+        raise last_error
     title = script_data.get('title', f"Explainer: {topic}")
-    
-    print(f"[Log] LLM Script Generated. Title: {title}")
-    
+
     # 1. Generate Voiceover
     from engine.voice_gen import generate_voice
     voiceover_text = script_data.get('voiceover_text', f"Today we are explaining {topic}.")
     audio_path, subs_path = generate_voice(
-        voiceover_text, 
-        output_audio=os.path.join(session_dir, "voice.mp3"), 
+        voiceover_text,
+        output_audio=os.path.join(session_dir, "voice.mp3"),
         output_subs=os.path.join(session_dir, "subs.json"),
         add_cta=False
     )
-    
-    # 2. Render Manim Scene
-    manim_output_path = render_manim_scene(script_data['code'], session_dir, extract_mode=extract_mode)
-    
+
     if manim_output_path and os.path.exists(manim_output_path):
         output_path = manim_output_path
         # 3. Merge Audio and Video if voiceover succeeded

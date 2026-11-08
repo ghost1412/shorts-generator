@@ -15,7 +15,7 @@ GOOD = {
     "generate_wyr": ({"option_a": "Eat soup with a fork forever", "option_b": "Wear wet socks forever", "percent_a": 60, "percent_b": 30}, ()),
     "generate_trivia": ({"question": "Which planet has the most moons?", "answer": "Saturn", "options": ["Saturn", "Mars"]}, ()),
     "generate_quote": ({"quote": "The obstacle is the way forward for anyone", "author": "Marcus"}, ()),
-    "generate_reddit_story": ({"title": "AITA for eating lunch", "story": LONG}, ()),
+    "generate_reddit_story": ({"title": "AITA for eating lunch", "story": LONG + " AITA?"}, ()),
     "generate_story": ({"title": "The last lighthouse", "story": LONG}, ()),
 }
 BAD = {

@@ -536,7 +536,14 @@ def download_sfx(query, output_path="assets/sfx.mp3"):
     Downloads a sound effect from the curated library or a fallback.
     """
     query_lower = query.lower()
-    
+
+    from engine import sound_pack
+    label = sound_pack.match(query_lower)
+    if label:  # a real recording we ship; no network needed
+        import shutil
+        shutil.copyfile(sound_pack.path(label), output_path)
+        return output_path
+
     # 🌟 OFFLINE SYNTHESIS: 100% reliable Foley generation
     if "whoosh" in query_lower or "wind" in query_lower:
         print(f"[Log] Synthesizing '{query_lower}' SFX locally (0 network dependency)...")

@@ -579,16 +579,15 @@ def validate_reddit(data):
         story = " ".join(story)
     elif not isinstance(story, str):
         story = str(story)
-    return "title" in data and len(story.split()) > 20
+    if data.get("title") in (None, "", "Viral Update") or story.lstrip().startswith("{") or '"title"' in story:
+        return False  # the parser's raw-text fallback, not a story
+    return len(story.split()) >= 40 and "?" in story  # long enough to tell a story, and it asks for judgment
 
 def validate_trivia(data):
     return isinstance(data, dict) and "question" in data and "answer" in data
 
 def validate_jwst_script(data):
     return isinstance(data, dict) and "hook" in data and "story" in data
-
-def validate_quote(data):
-    return isinstance(data, dict) and "quote" in data and len(data.get("quote", "").split()) >= 5
 
 def validate_news(data):
     return isinstance(data, dict) and "story" in data and len(data.get("story", "").split()) > 10
@@ -620,6 +619,9 @@ def validate_manim(data):
     if not isinstance(data, dict):
         return False
     if "code" not in data or "title" not in data or "voiceover_text" not in data:
+        return False
+    if str(data.get("title", "")).lower().startswith(("title of", "<a ")) or len(str(data.get("voiceover_text", "")).split()) < 15:
+        print("[Log] Validation failed: placeholder title or no real voiceover.")
         return False
     
     code = data.get("code", "")
@@ -657,6 +659,21 @@ def validate_manim(data):
     return True
 
 # --- Generation Functions ---
+
+def parse_manim_answer(text):
+    """{"title", "voiceover_text", "code"} from a reply with a JSON line plus a fenced python block (code is never
+    asked for inside a JSON string, where small models get the escaping wrong). Falls back to the old all-JSON reply."""
+    import re
+    text = str(text or "")
+    m = re.search(r"```(?:python|py)?[ \t]*\r?\n(.*?)```", text, re.S)
+    if m:
+        meta = robust_json_parse(text.replace(m.group(0), " "))
+        meta = meta if isinstance(meta, dict) else {}
+        return {"title": meta.get("title") or "Explainer", "voiceover_text": meta.get("voiceover_text", ""),
+                "code": m.group(1).strip()}
+    data = robust_json_parse(text)
+    return data if isinstance(data, dict) else {}
+
 
 def generate_manim_script(topic, extract_mode="shorts", target_duration=30):
     """
@@ -706,25 +723,22 @@ REQUIREMENTS:
    - For all geometry topics, ensure the shapes accurately represent the math principles being taught.
 8. Include a complete, clear, multi-sentence voiceover script ("voiceover_text") that thoroughly explains the topic from start to finish. The script MUST end with proper punctuation (period, exclamation mark).
 9. CRITICAL TIMING: The voiceover script MUST take exactly {target_duration} seconds to read aloud at a normal speaking pace (approximately {int(target_duration * 2.5)} words). Count your words!
-10. Do NOT include markdown blocks in the "code" field. The "code" field MUST be valid raw Python code starting with `from manim import *`.
+10. The code MUST be valid Python starting with `from manim import *`, with a single ExplainerScene class.
 11. CRITICAL SYNTAX: When creating polygons or lines, use 3D coordinates as lists. Correct: `Polygon([-3, 0, 0], [0, 0, 0], [0, 4, 0])`. Incorrect: `Polygon([(-3, 0), (0, 0)])`.
 12. CRITICAL SPACING: DO NOT let text or shapes overlap! Use `.next_to()`, `.shift()`, or `VGroup(...).arrange(...)` to spread items out cleanly across the screen.
 13. MANIM COLORS: Use standard Manim color constants like `BLUE`, `TEAL`, `GREEN`, `YELLOW`, `RED`, `PURPLE`, `ORANGE`, `GOLD`, `WHITE`, `GRAY`, `PINK`, or hex strings (e.g. `"#00FFFF"`). DO NOT use `CYAN` (use `TEAL` or `"#00FFFF"`) or `MAGENTA` (use `PINK` or `"#FF00FF"`).
 {layout_instructions}
 
-Format as JSON ONLY:
-{{
-  "title": "Title of the explainer",
-  "code": "from manim import *\\n\\nclass ExplainerScene(Scene):\\n    def construct(self):\\n        ...",
-  "voiceover_text": "The complete voiceover script to be spoken during this animation."
-}}
+ANSWER FORMAT (two parts, in this order):
+1. One line of JSON with the title and voiceover:
+{{"title": "<a 3-6 word title for THIS topic>", "voiceover_text": "<the complete spoken script for this animation>"}}
+2. Then the Manim code in ONE fenced python block, as normal code with real line breaks (not inside JSON), starting with `from manim import *`.
 """
 
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=8192)
-        return robust_json_parse(response_text)
+        text = get_llm_response(prompt, temperature=0.7, max_tokens=8192)
+        return parse_manim_answer(text)
 
-    
     return with_best_of_n(llm_call, validate_manim, n=3)
 
 def generate_mixed_facts(category="science"):
@@ -905,6 +919,18 @@ def robust_json_parse(output):
         print(f"[Log] Recovered {len(collected_objects)} valid objects via greedy extraction.")
         return collected_objects[0] if len(collected_objects) == 1 else collected_objects
 
+    # strategy 2.5: a Python-style dict (single-quoted strings), which small models often write
+    lo, hi = output.find("{"), output.rfind("}")
+    if 0 <= lo < hi:
+        try:
+            import ast
+            lit = ast.literal_eval(output[lo:hi + 1])
+            if isinstance(lit, dict) and lit:
+                print("[Log] Recovered a single-quoted dict via literal_eval.")
+                return lit
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            pass
+
     # strategy 3: Key-Value Regex Extractor (for JSON objects with minor syntax flaws)
     extracted_kv = {}
     known_keys = ["emojis", "answer", "hint", "script", "title", "story", "hook", "loop_lead", "question", "options", "quote", "author"]
@@ -1045,42 +1071,51 @@ Format as JSON ONLY:
 
     return with_best_of_n(llm_call, validate_wyr, n=3)
 
+REDDIT_CONFLICTS = [
+    "refusing to lend a sibling money for the third time after they never paid back the first two",
+    "telling a friend their business idea is bad right before they quit their job for it",
+    "leaving a family dinner early because a relative would not stop comparing you to a cousin",
+    "reporting a coworker for a small lie that got them fired",
+    "refusing to give up a plane seat to a family so they can sit together",
+    "uninviting a friend from a trip after they changed the plan twice",
+    "asking a neighbour to stop a hobby that is quietly ruining your sleep",
+    "telling a bride the dress she picked looks bad on her, two days before the wedding",
+    "keeping the money from a relative's will that was meant to be split differently",
+    "refusing to switch jobs shifts for the fifth holiday in a row",
+    "telling a kid the truth about a pet that 'went to a farm'",
+    "cancelling a surprise party when you found out the guest of honour hates surprises",
+]
+
+
 def generate_reddit_story(category="general"):
-    """
-    Generates a dramatic, first-person Reddit-style story (e.g. AITA).
-    Returns: {"title": str, "story": str}
-    """
-    selected_sub = get_sub_topic(category)
-    print(f"[Log] REDDIT: Selected sub-topic: {selected_sub}")
-    
-    prompt = f"""Generate a highly dramatic, controversial, or shocking 1st-person story like you would see on r/AmItheAsshole or r/TrueOffMyChest regarding {selected_sub}. 
-Requirements:
-1. Start with a hook that clearly states the conflict (e.g., "Am I the jerk for banning my {selected_sub} from my wedding?").
-2. Focus on OBSCURE and RARE scenarios. Avoid generic drama.
-3. Tell the story in a fast-paced, emotional way.
-4. Keep it under 120 words.
-5. End on a cliffhanger or a controversial note asking for judgment.
-6. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
-7. Format as JSON ONLY. Escape all double quotes inside the text.
+    """A first-person AITA-style story. Returns {"title": str, "story": str, ...}. The conflict is a fresh scenario,
+    not the category word (which used to be dropped into a fixed wedding template)."""
+    from engine import puzzle_variety as pv
+    conflict = pv.fresh(REDDIT_CONFLICTS, "reddit_conflict")
+    print(f"[Log] REDDIT: conflict: {conflict}")
 
-CRITICAL VALIDATION:
-- Must include a clear moral dilemma.
-- Reader should be unsure who is right.
-- Must end with a direct question for judgment (e.g., "Am I the jerk?").
+    prompt = f"""Write a first-person Reddit AITA post (r/AmItheAsshole) about: {conflict}.
 
-JSON Structure:
-{{
-  "title": "A short viral title regarding {selected_sub}",
-  "story": "The full story text...",
-  "loop_lead": "But wait, it gets crazier..."
-}}
+RULES:
+- Open with one line that states the conflict. Then 3-5 short punchy sentences with specific details (names, amounts, what was said).
+- 80 to 120 words in total (never under 60). Both sides must have a fair point, so readers argue in the comments.
+- End by asking "AITA?" or "Am I the jerk?".
+- Plain text only: no hashtags, no URLs, no emojis in the story.
+- Valid JSON with double quotes only.
+
+Return JSON only, with this shape:
+{{"title": "<AITA title, 8-14 words>", "story": "<the post>", "loop_lead": "<one short teaser line>"}}
 """
 
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=600)
-        return robust_json_parse(response_text)
+        data = robust_json_parse(get_llm_response(prompt, temperature=0.8, max_tokens=600))
+        if isinstance(data, dict) and isinstance(data.get("story"), str):
+            import re as _re
+            data["story"] = _re.sub(r"\s*#\w+", "", data["story"]).strip()
+        return data
 
-    return with_best_of_n(llm_call, validate_reddit, n=3)
+    return with_best_of_n(llm_call, validate_reddit, n=4)
+
 
 def generate_trivia(category="general knowledge"):
     """
@@ -1119,41 +1154,54 @@ Format as JSON ONLY:
 
     return with_best_of_n(llm_call, validate_trivia, n=3)
 
+QUOTE_ANGLES = [
+    "money and what it buys", "time running out", "friendship that fades", "a skill learned slowly", "the first day of something new",
+    "regret you can still use", "discipline when nobody is watching", "a kind act nobody saw", "being the beginner again",
+    "silence after a hard decision", "an old habit you outgrew", "what you owe your future self", "small daily progress",
+    "letting go of an argument", "work nobody thanks you for", "your own opinion of yourself", "waiting for the right moment",
+    "a door that closed", "learning from someone you disagree with", "doing it scared",
+]
+QUOTE_CLICHES = ("in stillness", "in the quiet", "in the silence", "storm", "tempest", "believe in yourself", "never give up",
+                 "journey of a thousand")
+
+
+def validate_quote(data):
+    if not isinstance(data, dict):
+        return False
+    words = str(data.get("quote", "")).split()
+    low = " ".join(words).lower()
+    return 8 <= len(words) <= 32 and not any(c in low for c in QUOTE_CLICHES) and not low.startswith("in ")
+
+
 def generate_quote(category="stoic"):
-    """
-    Generates a deep, motivational, or philosophical quote.
-    Returns: {"quote": str, "author": str}
-    """
-    selected_sub = get_sub_topic(category)
-    print(f"[Log] QUOTE: Selected sub-topic: {selected_sub}")
-    
-    prompt = f"""Generate a profound, highly emotional or stoic quote about {selected_sub}.
-Requirements:
-1. Focus on an OBSCURE but powerful perspective.
-2. Provide the quote text (around 10-25 words).
-3. Provide the author's name (can be a real historical figure or "Unknown").
-4. Make it incredibly cinematic and thought-provoking.
-5. NO TECHNICAL NOISE: Do NOT include URLs, version numbers (e.g., v1.0), or "random script things" like JSON keys.
+    """A short original quote. Returns {"quote", "author", ...}. The author is always "Unknown": a model cannot vouch for
+    who said what, so a made-up line is never credited to a real person."""
+    from engine import puzzle_variety as pv
+    angle = pv.fresh(QUOTE_ANGLES, "quote_angle")
+    style = pv.fresh(["blunt and short", "a vivid image", "a surprising comparison", "a calm instruction", "a hard truth"], "quote_style")
+    print(f"[Log] QUOTE: angle: {angle} ({style})")
 
-CRITICAL VALIDATION:
-- Quote must be at least 10 words long for depth.
-- AVOID cliches (e.g., "believe in yourself", "never give up").
-- Must be cinematic and soul-stirring.
+    prompt = f"""Write one original quote in a {category} spirit about: {angle}.
+Style: {style}. 10 to 25 words. Something a person would screenshot and send to a friend.
 
-6. Format as JSON ONLY. Escape all double quotes inside the text.
-JSON Structure:
-{{
-  "quote": "Profound quote text about {category}",
-  "author": "Author Name",
-  "loop_lead": "Think about it..."
-}}
+RULES:
+- Do not begin with "In". No storms, tempests or stillness; no "believe in yourself" or "never give up".
+- It must be your own wording, not a famous quote.
+- Plain words, one sentence or two short ones. No hashtags, no URLs.
+- Valid JSON with double quotes only.
+
+Return JSON only, with this shape:
+{{"quote": "<the quote>", "author": "Unknown", "loop_lead": "<a 3-6 word teaser line>"}}
 """
 
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
-        return robust_json_parse(response_text)
+        data = robust_json_parse(get_llm_response(prompt, temperature=0.9, max_tokens=400))
+        if isinstance(data, dict):
+            data["author"] = "Unknown"
+        return data
 
-    return with_best_of_n(llm_call, validate_quote, n=3)
+    return with_best_of_n(llm_call, validate_quote, n=4)
+
 
 def normalize_emoji_guess(data):
     if not isinstance(data, dict):
@@ -1514,37 +1562,23 @@ def generate_movie_recap(title):
     # We reuse validate_story but with higher tolerance for length
     return with_best_of_n(llm_call, lambda d: len(d.get("story", "").split()) > 20, n=3)
 
+SOUND_HOOKS = ["Can you guess this sound?", "Only 1 in 10 get this right.", "What is making this sound?", "Listen closely. What is it?",
+               "Guess the sound before it ends.", "Turn your volume up. What is this?", "Bet you can't name this sound.",
+               "Easy or impossible? Name this sound."]
+
+
 def generate_sound_challenge(category="animals"):
-    """
-    Generates a 'Guess the Sound' challenge script.
-    """
-    
-    prompt = f"""Generate a 'Guess the Sound' viral challenge for category: {category}.
+    """A 'Guess the Sound' challenge built on a real bundled recording (engine/sound_pack). The answer is always a sound
+    we actually have, so the clip can never be unrelated noise."""
+    from engine import puzzle_variety as pv
+    from engine import sound_pack
+    labels = sound_pack.labels()
+    if not labels:
+        raise RuntimeError("No sounds in assets/sounds; GUESS_SOUND needs the sound pack.")
+    label = pv.fresh(labels, "sound_answer")
+    return {"hook": pv.fresh(SOUND_HOOKS, "sound_hook"), "object": label, "sound_query": label,
+            "reveal_text": f"It was a {label}! Did you get it?", "credit": sound_pack.credit(label)}
 
-TASK:
-1. Pick a specific object/animal with a distinct sound.
-2. Create a 5-word curiosity hook.
-3. Provide a 'sound_query' for searching a free sound effect (e.g., 'lion roar', 'old car engine').
-
-RULES:
-- Script should be: [HOOK] ... [5 SECONDS SILENCE FOR SOUND] ... [REVEAL]
-- Total script under 20 words.
-- JSON ONLY.
-
-Format:
-{{
-  "hook": "Can you guess this sound?",
-  "object": "Lion",
-  "sound_query": "lion roar",
-  "reveal_text": "It was a Lion! Did you get it?"
-}}
-"""
-
-    def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=200)
-        return robust_json_parse(response_text)
-
-    return with_best_of_n(llm_call, validate_sound_challenge, n=3)
 
 def generate_odd_one_out_script(category="general"):
     """
@@ -2375,61 +2409,132 @@ Return raw JSON only:
     # Not a canned script: a made-up "case" or "article" must never be published as if it were real
     raise RuntimeError("No LLM provider answered, so no Top 5 script was written (a fixed placeholder script is not published).")
 
-def generate_chat_story_script(topic="texting wrong number mystery"):
-    """
-    Generates a viral iMessage/WhatsApp style text message chat story between two characters.
-    """
-    prompt = f"""
-Write a viral 40-second animated text message story about: "{topic}".
-Sender 1 (Person A): Suspicious or startled.
-Sender 2 (Person B): Mysterious, funny, or shocking.
+CHAT_PREMISES = [
+    "a text from a wrong number that knows too much",
+    "a group chat where one member is secretly the person everyone is gossiping about",
+    "a mum texting her teenager with way too many emojis and one terrifying question",
+    "a delivery driver who keeps texting increasingly strange updates",
+    "someone texting their roommate about a noise in the apartment the roommate says is not theirs",
+    "a person arguing with an AI assistant that refuses to stop being helpful",
+    "a friend who confesses a harmless but ridiculous secret over text",
+    "a landlord and a tenant exchanging politely escalating messages about a mystery stain",
+    "a couple planning a surprise party by accident in the wrong chat",
+    "an old friend texting after ten years with a strange request",
+    "a sibling pranking their brother by pretending to be the bank",
+    "a coworker who accidentally sends a work rant to the boss",
+]
+CHAT_EXAMPLE_MARKERS = ("blue car", "turn off your lights")
 
-Return raw JSON only:
-{{
-  "title": "{topic.title()}",
-  "messages": [
-    {{"sender": "Alex", "text": "Hey are you home yet?", "is_me": true}},
-    {{"sender": "Unknown", "text": "Who is this? Look outside your window right now.", "is_me": false}},
-    {{"sender": "Alex", "text": "Wait what?? That's not funny...", "is_me": true}},
-    {{"sender": "Unknown", "text": "I'm standing by the blue car. Turn off your lights.", "is_me": false}}
-  ],
-  "narrator_script": "Hey are you home yet? Who is this? Look outside your window right now. Wait what? That's not funny... I'm standing by the blue car. Turn off your lights."
-}}
+
+def validate_chat_story(data):
+    if not isinstance(data, dict):
+        return False
+    msgs = data.get("messages")
+    if not isinstance(msgs, list) or len(msgs) < 6:
+        return False
+    if not all(isinstance(m, dict) and str(m.get("text", "")).strip() and m.get("sender") for m in msgs):
+        return False
+    joined = " ".join(str(m["text"]).lower() for m in msgs)
+    if any(k in joined for k in CHAT_EXAMPLE_MARKERS):  # the model copied the prompt's old example
+        return False
+    return len({str(m["sender"]) for m in msgs}) >= 2
+
+
+def generate_chat_story_script(topic=None):
+    """A short text-message chat story. `topic` (user prompt) is used when given, else a premise not used recently."""
+    from engine import puzzle_variety as pv
+    premise = topic if topic and str(topic).strip() else pv.fresh(CHAT_PREMISES, "chat_premise")
+    tone = pv.fresh(["funny", "creepy", "wholesome-awkward", "dramatic twist"], "chat_tone")
+    prompt = f"""Write a viral text message conversation (an iMessage chat), 8 to 12 messages, about: {premise}.
+Tone: {tone}. It must have a clear funny or surprising last message that makes people comment.
+
+RULES:
+- Two senders with first names (or a contact name). Set "is_me": true for the sender whose phone it is, false for the other.
+- Messages are short, like real texts. No narration inside messages.
+- Invent your own story; do not reuse any example.
+- "narrator_script" is the messages read in order, one sentence each.
+
+Return raw JSON only, with this shape:
+{{"title": "<4-6 word title for this story>", "messages": [{{"sender": "<name>", "text": "<text>", "is_me": true}}, {{"sender": "<name>", "text": "<text>", "is_me": false}}], "narrator_script": "<messages read in order>"}}
 """
+
+    def call(attempt):
+        data = robust_json_parse(get_llm_response(prompt, system_prompt="You are a viral chat story writer. Return raw JSON only.",
+                                                  temperature=0.9))
+        if isinstance(data, dict) and isinstance(data.get("messages"), list) and not str(data.get("narrator_script", "")).strip():
+            data["narrator_script"] = " ".join(str(m.get("text", "")) for m in data["messages"] if isinstance(m, dict))
+        return data
+
     try:
-        response = get_llm_response(prompt, system_prompt="You are a viral chat story writer. Return raw JSON only.")
-        data = robust_json_parse(response)
-        if isinstance(data, dict) and "messages" in data:
-            return data
+        return with_best_of_n(call, validate_chat_story, n=3)
     except Exception as e:
-        print(f"[Warning] Chat story generation failed: {e}")
-        
-    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
-    raise RuntimeError("No LLM provider answered, so no chat story script was written (a fixed placeholder script is not published).")
+        # Not a canned script: a made-up story must never be published as a placeholder.
+        raise RuntimeError(f"No chat story script was written ({e}); a fixed placeholder script is not published.")
 
-def generate_horror_story_script(topic="abandoned cabin in the woods"):
-    """Generates chilling, dark creepypasta horror story scripts."""
-    prompt = f"""
-Write a chilling 45-second horror story / creepypasta about: "{topic}".
-Build psychological tension, creepy whispers, and an unexpected scary twist.
 
-Return raw JSON only:
-{{
-  "title": "THE {topic.upper()} 👁️",
-  "narrator_script": "<Chilling 45-second narration with dramatic pauses>",
-  "search_term": "dark eerie horror abandoned mist fog"
-}}
+HORROR_PREMISES = [
+    "a night-shift worker whose security camera shows a coworker who quit last year",
+    "a child's drawing that gets one detail more accurate every morning",
+    "a voicemail from your own number, left tomorrow",
+    "a lighthouse keeper's log with entries he does not remember writing",
+    "a new neighbour who knows the house's old floor plan too well",
+    "a baby monitor picking up a second, quieter voice",
+    "a long elevator ride where the floor numbers count backwards",
+    "a hiking trail with trail markers that someone keeps moving closer to the path",
+    "a second-hand phone with photos of the buyer's sleeping house",
+    "a radio station that only plays on nights when someone will go missing",
+    "a school photo with one more person in it every year",
+    "a house sitter told never to answer the door after midnight",
+]
+HORROR_CLICHES = ("in the dead of night", "dead of night", "moonless", "abandoned house", "abandoned cabin")
+
+
+def clean_spoken(text):
+    """Remove stage directions like <Dramatic pause> or [pause] so the voice never reads them out."""
+    import re
+    text = re.sub(r"<[^>]{0,40}>|\[[^\]]{0,40}\]|\*[^*]{0,40}\*", " ", str(text or ""))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def validate_horror(data):
+    if not isinstance(data, dict):
+        return False
+    words = len(clean_spoken(data.get("narrator_script", "")).split())
+    low = clean_spoken(data.get("narrator_script", "")).lower()
+    return 55 <= words <= 140 and not any(c in low for c in HORROR_CLICHES)
+
+
+def generate_horror_story_script(topic=None):
+    """A short creepypasta. `topic` (user prompt) is used when given, else a premise not used recently."""
+    from engine import puzzle_variety as pv
+    premise = topic if topic and str(topic).strip() else pv.fresh(HORROR_PREMISES, "horror_premise")
+    prompt = f"""Write a creepy 40-second horror story told in first person, about: {premise}.
+
+RULES:
+- 90 to 120 words. One clear unsettling idea, a slow build, and a last line that lands.
+- Specific small details (objects, times, names), not generic fog, whispers or mist.
+- Do not start with "In the dead of night". No abandoned houses or cabins unless the premise says so.
+- Plain spoken words only: no stage directions, no <pause> tags, no brackets.
+
+Return raw JSON only, with this shape:
+{{"title": "<3-6 word title for this story>", "narrator_script": "<the story>", "search_term": "<3-5 words of dark stock footage that fits this story>"}}
 """
+
+    def call(attempt):
+        data = robust_json_parse(get_llm_response(prompt, system_prompt="You are a master horror storyteller. Return raw JSON only.",
+                                                  temperature=0.9))
+        if isinstance(data, dict):
+            data["narrator_script"] = clean_spoken(data.get("narrator_script", ""))
+            if not str(data.get("search_term", "")).strip():
+                data["search_term"] = "dark eerie night fog"
+        return data
+
     try:
-        response = get_llm_response(prompt, system_prompt="You are a master horror storyteller. Return raw JSON only.")
-        data = robust_json_parse(response)
-        if isinstance(data, dict) and "narrator_script" in data:
-            return data
+        return with_best_of_n(call, validate_horror, n=4)
     except Exception as e:
-        print(f"[Warning] Horror script generation failed: {e}")
-        
-    # Not a canned script: a made-up "case" or "article" must never be published as if it were real
-    raise RuntimeError("No LLM provider answered, so no horror story script was written (a fixed placeholder script is not published).")
+        # Not a canned script: a made-up story must never be published as a placeholder.
+        raise RuntimeError(f"No horror story script was written ({e}); a fixed placeholder script is not published.")
+
 
 def generate_true_crime_script(case_topic="unsolved mystery of the missing vessel"):
     """Generates documentary-style true crime case scripts."""

@@ -1,0 +1,58 @@
+{
+ "cat": {
+  "file": "cat.mp3",
+  "title": "Meow of a Siamese cat - freemaster2.wav",
+  "license": "CC0",
+  "author": "freemaster2",
+  "source": "https://commons.wikimedia.org/wiki/File:Meow_of_a_Siamese_cat_-_freemaster2.wav",
+  "mean_db": -15.7
+ },
+ "dog": {
+  "file": "dog.mp3",
+  "title": "Perro ladrando.ogg",
+  "license": "CC BY-SA 4.0",
+  "author": "Armartinell",
+  "source": "https://commons.wikimedia.org/wiki/File:Perro_ladrando.ogg",
+  "mean_db": -20.9
+ },
+ "sheep": {
+  "file": "sheep.mp3",
+  "title": "Sheep bleating.ogg",
+  "license": "Public domain",
+  "author": "earthcalling",
+  "source": "https://commons.wikimedia.org/wiki/File:Sheep_bleating.ogg",
+  "mean_db": -16.2
+ },
+ "horse": {
+  "file": "horse.mp3",
+  "title": "Wiehern.ogg",
+  "license": "Public domain",
+  "author": "Hü.",
+  "source": "https://commons.wikimedia.org/wiki/File:Wiehern.ogg",
+  "mean_db": -29.5
+ },
+ "thunder": {
+  "file": "thunder.mp3",
+  "title": "Thunder 01.ogg",
+  "license": "CC BY-SA 4.0",
+  "author": "Amuzujoe",
+  "source": "https://commons.wikimedia.org/wiki/File:Thunder_01.ogg",
+  "mean_db": -30.2
+ },
+ "bicycle bell": {
+  "file": "bicycle_bell.mp3",
+  "title": "Bell-ring.flac",
+  "license": "CC0",
+  "author": "qubodup",
+  "source": "https://commons.wikimedia.org/wiki/File:Bell-ring.flac",
+  "mean_db": -30.5
+ },
+ "typewriter": {
+  "file": "typewriter.mp3",
+  "title": "406243 stubb typewriter-ding-near-mono.wav",
+  "license": "CC0",
+  "author": "_stubb",
+  "source": "https://commons.wikimedia.org/wiki/File:406243_stubb_typewriter-ding-near-mono.wav",
+  "mean_db": -30.9
+ }
+}
