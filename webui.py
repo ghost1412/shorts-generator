@@ -1029,50 +1029,51 @@ def build_ui():
                                              info="Changes the wording and the options below. Wedding, event and family recaps never look up places.")
                         t_files = gr.File(label="Your videos (in filming order)", file_count="multiple", file_types=["video"], type="filepath")
                         t_name = gr.Textbox(label="Trip name", placeholder="Northvale: Pinemere, Larkwater and Stonegate")
-                        t_stops = gr.Textbox(label="Stops (optional): one per line or comma separated, e.g. Pinemere Lake, Larkwater Lake", placeholder="Pinemere Lake, Larkwater Lake, Stonegate Canyon",
-                                             info="Use this for a one-day tour or to name the parts. Leave empty for a trip of several days: name the files or folders day1, day2...")
-                        t_note = gr.Textbox(label="A note about the trip (optional)", lines=3, info="The AI only uses facts you write here and what it sees in the pictures.",
-                                            placeholder="We booked a 17 hour tour from Northvale. We left at 5 am and went first to Pinemere Lake.")
-                        t_hook = gr.Textbox(label="Opening line (optional)", placeholder="Woke up at 4 AM just for this view",
-                                            info="Shown over the first glimpses. Empty: written from your note.")
                         t_length = gr.Slider(30, web_args.MAX_RECAP_SECONDS, value=60, step=15, label="Recap length (seconds)",
                                              info="A trip: 60-120. A wedding or event film can be 10-30 minutes (600-1800). Longer recaps take longer to make.")
-                        t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],
-                                           value="hype", label="Style")
                         t_music = gr.File(label="Music (optional)", file_types=["audio"], type="filepath")
-                        t_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style (the director)",
-                                             info="Like on Start here: a slow push-in or pull-out on every shot, sound effects at the cuts and the style's own colour look. "
-                                                  "Hype / gaming is the punchiest; Vlog is warm and gentle.")
-                        t_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
-                                                   info="Subtle keeps it quiet; Hyped uses everything.")
-                        t_grade = gr.Dropdown(web_args.RECAP_GRADE_CHOICES, value="default", label="Colour filter",
-                                              info="Automatic gives the cinematic look when the footage suits it and none otherwise. Pick one to force a look, or None to leave the colours as filmed.")
-                        t_trans = gr.Dropdown(web_args.TRANSITION_CHOICES, value="auto", label="Transitions between shots",
-                                              info="Instead of plain cuts: a fast zoom punch, a whip pan, a white flash, a glitch, or a mix. How long they last follows 'How much editing'.")
-                        t_look_fx = gr.Dropdown(web_args.SUBJECT_LOOK_CHOICES, value="auto", visible=False, label="Subject cut-out look",
-                                                info="Only for 'Subject cut-out': a bright outline can build up round the person before the background changes. Auto is plain (no outline) for now; the outline looks are experimental.")
-                        t_look_color = gr.Dropdown(web_args.SUBJECT_COLOR_CHOICES, value="auto", visible=False, label="Outline colour",
-                                                   info="Auto is white. You can also type a colour like #ffcc00 in the CLI (--subject_color).")
-                        t_subject_max = gr.Number(value=2, minimum=0, maximum=6, precision=0, label="Most subject cut-outs",
-                                                  info="Only where one person is alone in the shot; the other cuts use the other transitions.")
-                        t_clean = gr.Checkbox(value=False, label="Clean up the sound (noise, volume)",
-                                              info="Only matters when the clips' own sound is in the recap (no music, or 'keep the original sound' ticked).")
-                        t_sample = gr.Dropdown(web_args.RECAP_SAMPLE_CHOICES, value="auto", label="How many of your videos to look at",
-                                               info="With hundreds of videos, looking at all of them means reading every file once. Sampling picks videos spread evenly over each folder.")
-                        t_look = gr.Checkbox(value=False, label="Look at the pictures too (better captions, fixes sideways clips; slower)",
-                                             info="Uses Gemini if you have a key (small frames are sent to Google), otherwise a local vision model if installed. Off = nothing leaves your PC for this.")
-                        t_enhance = gr.Checkbox(value=False, label="Auto-enhance the video (like an editor: brightness, colour, sharpness)",
-                                                info="Each video is measured and corrected only where needed: dark clips lifted, a colour cast reduced, dull clips given a little colour. Done on your PC; it cannot add detail that is not there.")
-                        t_both = gr.Checkbox(value=False, label="Make a portrait AND a landscape version",
-                                             info="Portrait uses your vertical clips, landscape your wide clips, so nothing is cropped small.")
-                        t_places = gr.Checkbox(value=True, label="Name the places from the videos' GPS",
-                                               info="Sends the rounded GPS position (about 100 m) to the free OpenStreetMap service and shows tourist-place names. Untick to keep it all on your PC.")
-                        t_keep = gr.Checkbox(value=False, label="Keep the original sound under the music (vows, speeches, laughter)",
-                                             info="Off = the song alone carries the edit. Only matters when you add music.")
-                        t_reuse = gr.Dropdown(label="Reuse an earlier recap (optional)", choices=[], interactive=True, value=None,
-                                              info="Picture descriptions and place names are reused, and its videos too if you add none above.")
-                        t_drive = gr.Textbox(label="Upload to a Google Drive folder (optional)", placeholder="https://drive.google.com/drive/folders/...",
-                                             info="Needs a one-time Google sign-in; see the top of engine/drive_upload.py.")
+                        with gr.Accordion("More options: stops, note, style, editing, extras (all optional)", open=False):
+                            t_stops = gr.Textbox(label="Stops (optional): one per line or comma separated, e.g. Pinemere Lake, Larkwater Lake", placeholder="Pinemere Lake, Larkwater Lake, Stonegate Canyon",
+                                                 info="Use this for a one-day tour or to name the parts. Leave empty for a trip of several days: name the files or folders day1, day2...")
+                            t_note = gr.Textbox(label="A note about the trip (optional)", lines=3, info="The AI only uses facts you write here and what it sees in the pictures.",
+                                                placeholder="We booked a 17 hour tour from Northvale. We left at 5 am and went first to Pinemere Lake.")
+                            t_hook = gr.Textbox(label="Opening line (optional)", placeholder="Woke up at 4 AM just for this view",
+                                                info="Shown over the first glimpses. Empty: written from your note.")
+                            t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],
+                                               value="hype", label="Style")
+                            t_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style (the director)",
+                                                 info="Like on Start here: a slow push-in or pull-out on every shot, sound effects at the cuts and the style's own colour look. "
+                                                      "Hype / gaming is the punchiest; Vlog is warm and gentle.")
+                            t_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
+                                                       info="Subtle keeps it quiet; Hyped uses everything.")
+                            t_grade = gr.Dropdown(web_args.RECAP_GRADE_CHOICES, value="default", label="Colour filter",
+                                                  info="Automatic gives the cinematic look when the footage suits it and none otherwise. Pick one to force a look, or None to leave the colours as filmed.")
+                            t_trans = gr.Dropdown(web_args.TRANSITION_CHOICES, value="auto", label="Transitions between shots",
+                                                  info="Instead of plain cuts: a fast zoom punch, a whip pan, a white flash, a glitch, or a mix. How long they last follows 'How much editing'.")
+                            t_look_fx = gr.Dropdown(web_args.SUBJECT_LOOK_CHOICES, value="auto", visible=False, label="Subject cut-out look",
+                                                    info="Only for 'Subject cut-out': a bright outline can build up round the person before the background changes. Auto is plain (no outline) for now; the outline looks are experimental.")
+                            t_look_color = gr.Dropdown(web_args.SUBJECT_COLOR_CHOICES, value="auto", visible=False, label="Outline colour",
+                                                       info="Auto is white. You can also type a colour like #ffcc00 in the CLI (--subject_color).")
+                            t_subject_max = gr.Number(value=2, minimum=0, maximum=6, precision=0, label="Most subject cut-outs",
+                                                      info="Only where one person is alone in the shot; the other cuts use the other transitions.")
+                            t_clean = gr.Checkbox(value=False, label="Clean up the sound (noise, volume)",
+                                                  info="Only matters when the clips' own sound is in the recap (no music, or 'keep the original sound' ticked).")
+                            t_sample = gr.Dropdown(web_args.RECAP_SAMPLE_CHOICES, value="auto", label="How many of your videos to look at",
+                                                   info="With hundreds of videos, looking at all of them means reading every file once. Sampling picks videos spread evenly over each folder.")
+                            t_look = gr.Checkbox(value=False, label="Look at the pictures too (better captions, fixes sideways clips; slower)",
+                                                 info="Uses Gemini if you have a key (small frames are sent to Google), otherwise a local vision model if installed. Off = nothing leaves your PC for this.")
+                            t_enhance = gr.Checkbox(value=False, label="Auto-enhance the video (like an editor: brightness, colour, sharpness)",
+                                                    info="Each video is measured and corrected only where needed: dark clips lifted, a colour cast reduced, dull clips given a little colour. Done on your PC; it cannot add detail that is not there.")
+                            t_both = gr.Checkbox(value=False, label="Make a portrait AND a landscape version",
+                                                 info="Portrait uses your vertical clips, landscape your wide clips, so nothing is cropped small.")
+                            t_places = gr.Checkbox(value=True, label="Name the places from the videos' GPS",
+                                                   info="Sends the rounded GPS position (about 100 m) to the free OpenStreetMap service and shows tourist-place names. Untick to keep it all on your PC.")
+                            t_keep = gr.Checkbox(value=False, label="Keep the original sound under the music (vows, speeches, laughter)",
+                                                 info="Off = the song alone carries the edit. Only matters when you add music.")
+                            t_reuse = gr.Dropdown(label="Reuse an earlier recap (optional)", choices=[], interactive=True, value=None,
+                                                  info="Picture descriptions and place names are reused, and its videos too if you add none above.")
+                            t_drive = gr.Textbox(label="Upload to a Google Drive folder (optional)", placeholder="https://drive.google.com/drive/folders/...",
+                                                 info="Needs a one-time Google sign-in; see the top of engine/drive_upload.py.")
                         t_btn = gr.Button("🧳 Make my recap", variant="primary")
                         t_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():

@@ -522,3 +522,9 @@ def test_check_rotation_gives_up_quickly_when_gemini_stays_rate_limited(monkeypa
     before = len(calls)
     assert vc.check_rotation([b"1"], key="k") is None and len(calls) == before      # paused: no further request for a while
     monkeypatch.setattr(vc, "_ROTATION_PAUSED_UNTIL", 0.0)
+
+
+def test_latin_or_empty_hides_names_in_other_scripts():
+    assert tr.latin_or_empty("Larkwater Lake") == "Larkwater Lake"
+    assert tr.latin_or_empty("Café Öst") == "Café Öst"
+    assert tr.latin_or_empty("Көлсай көлдері") == "" and tr.latin_or_empty(None) == ""

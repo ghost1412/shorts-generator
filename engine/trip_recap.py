@@ -311,6 +311,12 @@ CACHE_PREFIX = "v3:"          # v3: names from the no-guessing prompt with the c
 CONFLICT_KM = 2.5             # one name on two places this far apart is a mistake (two different lakes cannot both be "Pinemere Lakes")
 
 
+def latin_or_empty(name):
+    """The name when it is written in Latin letters, else '' (a map name in Kazakh/Cyrillic/other script is not shown on screen)."""
+    name = str(name or "").strip()
+    return "" if any(c.isalpha() and ord(c) > 0x24F for c in name) else name
+
+
 def is_plain_area(name):
     """True for no name or an administrative area ("Westford District"): fine for the itinerary, never shown on screen."""
     return not str(name or "").strip() or str(name).strip().lower().endswith(PLAIN_AREA)
@@ -391,7 +397,7 @@ def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_pat
         f = dict(f or {})
         f["near"] = nearby_attractions(p["center"], cache_path=cache_path) if (geocode and p.get("center")) else []
         facts.append(f)
-        p["name"] = f.get("name") or f.get("area") or ""
+        p["name"] = latin_or_empty(f.get("name")) or latin_or_empty(f.get("area"))
     if not any(p.get("center") for p in places):
         return places
     names_path = os.path.join(os.path.dirname(cache_path), "place_names.json") if cache_path else None
@@ -462,7 +468,7 @@ def name_places(places, trip_name="", note="", ask=None, geocode=True, cache_pat
         if group_of[i] != i:
             p["name"] = rep.get("name", "")                           # the same spot on another day: the same name
         if not p.get("name") and p.get("center"):
-            p["name"] = facts[i].get("name") or facts[i].get("area") or ""      # the AI was unsure or lost a conflict: the map's own name
+            p["name"] = latin_or_empty(facts[i].get("name")) or latin_or_empty(facts[i].get("area"))      # the AI was unsure or lost a conflict: the map's own name
         if p.get("center") and p.get("name") and not is_plain_area(p["name"]):
             saved[key_of(p)] = p["name"]
     if names_path and saved:

@@ -97,7 +97,7 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 ### D. Distribution (`README.md`, new `spaces/`, packaging)
 | | Task | Owner | Notes |
 |---|---|---|---|
-| [ ] | D1. Hugging Face Space running `webui.py` (CPU, idea-to-video modes) | | |
+| [~] | D1. Hugging Face Space running `webui.py` (CPU): files ready in `space/` (README front matter, app.py, requirements, packages); not created or pushed yet | Claude | Needs the owner to create the Space and push `space/` |
 | [ ] | D2. WebUI demo GIF at the top of the README | | |
 | [x] | D3. `pip install shortsflow`: move `main.py` + `engine/` into a package, resolve asset paths from the package, console script `shortsflow` | | Large; conflicts with anything touching `main.py` - schedule alone |
 | [ ] | D4. Submit MCP server to awesome-mcp-servers / Smithery / Glama | | Human task |
