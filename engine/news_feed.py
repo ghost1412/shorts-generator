@@ -19,11 +19,34 @@ SENSITIVE = re.compile(
     r"\b(dead|dies|died|death|deaths|killed|killing|kills|murder\w*|shoot\w*|shot|stabb\w*|massacre|terror\w*|"
     r"attack\w*|bomb\w*|war|invasion|hostage\w*|rape\w*|assault\w*|abuse\w*|suicide|overdose|fatal\w*|crash\w*|"
     r"earthquake|tsunami|hurricane|wildfire|flood\w*|disaster|victims?|funeral|tragedy|tragic|mourn\w*|cancer|"
-    r"pandemic|outbreak|missing|kidnap\w*|trial|sentenced|convicted|lawsuit)\b", re.I)
+    r"pandemic|outbreak|missing|kidnap\w*|trial|sentenced|convicted|lawsuit|"
+    r"bleed\w*|newborn\w*|infant\w*|babies|vaccin\w*|flu|virus|disease|deficiency|"
+    r"trump|biden|putin|election\w*|congress|senate|democrat\w*|republican\w*|sanction\w*|"
+    r"russia\w*|ukrain\w*|belarus|gaza|israel\w*|hamas|iran\w*|china|taiwan|military|troops|missile\w*)\b", re.I)
+
+
+def clean_source(source):
+    """A readable credit: 'Gizmodo (https://...)' -> 'Gizmodo'; a Reddit link -> 'r/worldnews (Reddit)'."""
+    source = str(source or "").strip()
+    m = re.search(r"reddit\.com/r/([A-Za-z0-9_]+)", source)
+    if m:
+        return f"r/{m.group(1)} (Reddit)"
+    source = re.sub(r"\s*\(https?://[^)]*\)", "", source).strip()
+    return "" if source.startswith("http") else source
 
 
 def is_sensitive(text):
     return bool(SENSITIVE.search(text or ""))
+
+
+# Pages that are not news: lists, quizzes, buying guides, reviews, "updated" evergreen articles.
+EVERGREEN = re.compile(
+    r"\b(best|top \d+|\d+ best|quiz|test your|updated|how to|guide|review\w*|deals?|sale|coupon\w*|"
+    r"vs\.?|explained|things to know|what to know|ranked|ranking|horoscope\w*|giveaway)\b|\(updated\)", re.I)
+
+
+def is_evergreen(text):
+    return bool(EVERGREEN.search(text or ""))
 
 
 def clean(text):
@@ -146,6 +169,7 @@ def pick(headlines, history=None, avoid_sensitive=True, rng=None):
     groups = cluster(headlines)
     ok = [g for g in groups
           if not any(same_story(g["best"]["headline"], s) for s in seen)
+          and not is_evergreen(g["best"]["headline"])
           and not (avoid_sensitive and is_sensitive(g["best"]["headline"] + " " + g["best"].get("description", "")))]
     if not ok:
         return None

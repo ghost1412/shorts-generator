@@ -107,3 +107,20 @@ def test_no_fresh_headline_raises_instead_of_a_placeholder(monkeypatch, tmp_path
     monkeypatch.setattr(nf, "history_path", lambda: str(tmp_path / "h.json"))
     with pytest.raises(script_gen.NoFreshNews):
         script_gen.generate_funny_news("tech", tone="funny")
+
+
+def test_clean_source_and_wider_sensitive_list():
+    assert nf.clean_source("Gizmodo (https://news.google.com/rss/articles/abc?oc=5)") == "Gizmodo"
+    assert nf.clean_source("https://www.reddit.com/r/worldnews/comments/xyz/title/") == "r/worldnews (Reddit)"
+    assert nf.clean_source("https://example.com/feed") == "" and nf.clean_source("BBC News") == "BBC News"
+    for text in ("More parents decline vitamin K shots for newborns", "Crypto industry braces for Trump ties",
+                 "Boeing cleared to sell jets to Belarus", "Flu strain spreads early"):
+        assert nf.is_sensitive(text), text
+    assert not nf.is_sensitive("Scientists discover a baby whale off Canada")
+
+
+def test_evergreen_pages_are_not_news():
+    for text in ("The Best New Gadgets and Hi-Fi Releases of 2026 (Updated)", "Test your pop culture: From Hollywood to the Heartland",
+                 "10 best phones to buy now", "iPhone vs Pixel: which is better"):
+        assert nf.is_evergreen(text), text
+    assert not nf.is_evergreen("Scientists discover an unknown baby whale off Canada")

@@ -1186,6 +1186,8 @@ def validate_emoji_guess(data):
 
 EMOJI_KINDS = ["movie", "TV show", "video game", "song", "cartoon character", "anime", "famous brand", "food or dish",
                "famous place or landmark", "book", "Disney or Pixar film", "sport or athlete", "app or website", "historical figure"]
+# The answers every model reaches for first: never used (the model is also told so, but small ones ignore it).
+EMOJI_OVERUSED = {"the lion king", "lion king", "titanic", "spider-man", "spiderman", "harry potter", "finding nemo", "frozen", "batman", "star wars", "super mario", "pirates of the caribbean"}
 EMOJI_SCRIPTS = [
     "Can you guess this {hint} from {n} emojis? {secs} seconds on the clock! Type your answer in the comments!",
     "Only real fans get this one. Which {hint} is hiding in these emojis? Comment your guess before time runs out!",
@@ -1262,7 +1264,7 @@ JSON Structure ONLY:
 
     def fresh_answer(data):
         norm = normalize_emoji_guess(data)
-        if norm is None or norm["answer"].strip().lower() in {a.strip().lower() for a in avoid}:
+        if norm is None or norm["answer"].strip().lower() in {a.strip().lower() for a in avoid} | EMOJI_OVERUSED:
             return False
         if len(_real_emojis(norm["emojis"])) < 2 or any(c.isalpha() for c in norm["emojis"]):
             print("[Log] EMOJI_GUESS: the emojis are not real emojis; trying again.")
@@ -1296,7 +1298,7 @@ JSON Structure ONLY:
     # Voiceover and title come from pools so videos do not all sound and read the same (the script never contains the answer).
     hint_words = str(normalized.get("hint") or "answer").strip().rstrip("!.")
     n_found = len([e for e in re.split(r"\s+", str(normalized["emojis"]).strip()) if e]) or n_emoji
-    secs = random.choice([3, 5, 5, 7])
+    secs = 5                                       # the video's countdown always runs 5 seconds
     normalized["script"] = pv.fresh(EMOJI_SCRIPTS, "emoji_script").format(hint=hint_words.lower(), n=n_found, secs=secs)
     normalized["title"] = pv.fresh(EMOJI_TITLES, "emoji_title").format(HINT=hint_words.upper(), N=n_found)[:90]
     pv.record("emoji_answer", normalized["answer"])
@@ -1304,6 +1306,15 @@ JSON Structure ONLY:
     ans_safe = str(normalized.get('answer')).encode('ascii', 'ignore').decode('ascii')
     print(f"[Log] EMOJI_GUESS generated answer (hidden in audio): {ans_safe}")
     return normalized
+
+
+PERSONA_VOICES = {
+    "mafia_cat": "a mafia boss cat (\"Listen up, see?\", \"capisce?\", \"fuggedaboutit\", purring threats, offers nobody can refuse)",
+    "orange_cat": "a lazy, chaotic orange cat who is obsessed with food and naps and treats every story like a snack-time emergency",
+    "rabbit": "a fast-talking cartoon rabbit (\"Boing! What's up docs?\")",
+    "robot": "a deadpan robot (\"Beep boop, processing...\")",
+    "squirrel": "a hyperactive squirrel who gets distracted by nuts",
+}
 
 
 class NoFreshNews(RuntimeError):
@@ -1366,7 +1377,8 @@ def generate_funny_news(category="general", tone="funny", persona=None):
     from engine import news_feed
     # Wider net when the narrow query is empty: the category's plain query and the top stories feed come after the first choices.
     rss_feeds.append(f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en")
-    rss_feeds.append("https://news.google.com/rss?hl=en&gl=US&ceid=US:en")
+    if category in ("world", "general"):                       # top stories are about everything: only right for the world category
+        rss_feeds.append("https://news.google.com/rss?hl=en&gl=US&ceid=US:en")
     texts = []
     for feed_url in rss_feeds:
         try:
@@ -1396,16 +1408,18 @@ def generate_funny_news(category="general", tone="funny", persona=None):
         print(f"[Log] NEWS: nothing in the last 2 days, using a story from the last week.")
     real_headline = chosen["headline"]
     real_description = chosen.get("description", "")
-    real_source = chosen["source"]
+    from engine.news_feed import clean_source
+    real_source = clean_source(chosen["source"]) or "News"
     news_feed.remember(real_headline)
     print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     
     # --- STEP 2: Use LLM to rewrite based on tone/persona ---
     if persona:
-        tone_instruction = f"""PERSONA: You are a {persona}. 
-        Use characteristic slang, sounds, and interjections (e.g., if Rabbit, use "Boing! What's up docs?"; if Robot, use "Beep Boop - Processing...").
-        Be EXTREMELY expressive and funny."""
+        voice = PERSONA_VOICES.get(persona, "a funny cartoon character with its own catchphrases")
+        tone_instruction = f"""PERSONA: You are {voice}.
+        Speak ONLY in this character's voice (do not borrow another character's catchphrases). Be expressive and funny, with one real joke or
+        punchline about the story. Never joke about people suffering; make fun of the situation, not the victims."""
     elif tone == "funny":
         tone_instruction = """TONE: Sarcastic, funny, disbelief-filled. End with a punchline or "Bro, this actually happened." 
         HOOK: Rewrite headline as a shocking 6-word hook."""

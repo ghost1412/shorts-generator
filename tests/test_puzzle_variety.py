@@ -68,3 +68,15 @@ def test_odd_levels_get_harder_and_pick_is_valid():
     for effect in ("tilt", "hue", "dark", "blur"):
         assert change(effect, "easy") > change(effect, "medium") > change(effect, "hard") > 0, effect
     assert {vg.pick_odd_level(random.Random(i)) for i in range(200)} == {"easy", "medium", "hard"}
+
+
+def test_emoji_script_and_overused_answers(monkeypatch, tmp_path):
+    from engine import puzzle_variety as pv2, script_gen as g
+    monkeypatch.setattr(pv2, "_path", lambda: str(tmp_path / "h.json"))
+    monkeypatch.setattr(g, "get_sub_topic", lambda c: c)
+    replies = iter(['{"emojis": "🦁 👑 🌅", "answer": "The Lion King", "hint": "Disney movie", "script": "x"}',
+                    '{"emojis": "🧊 🚢 💔", "answer": "Moonlight Harbor", "hint": "Romance movie", "script": "x"}'])
+    monkeypatch.setattr(g, "get_llm_response", lambda *a, **k: next(replies) if "Emoji puzzle" not in a[0] else '{"kind_ok": true, "emojis_fit": true}')
+    out = g.generate_emoji_guess("movies")
+    assert out["answer"] == "Moonlight Harbor"                       # the overused answer was rejected and asked again
+    assert "3 seconds" not in out["script"] and "7 seconds" not in out["script"]       # the on-screen countdown is 5 s
