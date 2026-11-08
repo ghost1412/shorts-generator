@@ -2025,6 +2025,9 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
     
     return output_path
 
+TILE = 150      # size of one tile of the odd-one-out grid
+
+
 ODD_EFFECTS = {
     "tilt": "ONE IS TILTED",
     "hue": "ONE HAS A DIFFERENT COLOUR",
@@ -2032,24 +2035,37 @@ ODD_EFFECTS = {
     "blur": "ONE IS BLURRY",
     "invert": "ONE HAS FLIPPED COLOURS",
 }
+# How strong the difference is. Easy is spotted in about a second; hard needs a real search. "invert" is only used on easy.
+ODD_LEVELS = {
+    "easy":   {"tilt": 14, "hue": 85, "dark": 0.55, "blur": 3.5},
+    "medium": {"tilt": 8,  "hue": 22, "dark": 0.78, "blur": 2.2},
+    "hard":   {"tilt": 4,  "hue": 10, "dark": 0.88, "blur": 1.6},
+}
+ODD_LEVEL_WEIGHTS = {"easy": 20, "medium": 50, "hard": 30}
 
 
-def make_odd_variant(base_pil, effect):
-    """The one different tile: clear enough to find in a few seconds, but still a real search (a 14 degree tilt, a colour shift...)."""
+def pick_odd_level(rng=random):
+    return rng.choices(list(ODD_LEVEL_WEIGHTS), weights=list(ODD_LEVEL_WEIGHTS.values()))[0]
+
+
+def make_odd_variant(base_pil, effect, level="easy"):
+    """The one different tile. `level` sets how strong the difference is (see ODD_LEVELS)."""
     from PIL import ImageEnhance, ImageFilter, ImageOps
+    strength = ODD_LEVELS.get(level, ODD_LEVELS["easy"])
     rgba = base_pil.convert("RGBA")
     if effect == "tilt":
-        return rgba.rotate(14, expand=False, fillcolor=(0, 0, 0, 0))
+        return rgba.rotate(strength["tilt"], expand=False, fillcolor=(0, 0, 0, 0))
     alpha = rgba.getchannel("A")
     rgb = rgba.convert("RGB")
     if effect == "hue":
         h, sat, v = rgb.convert("HSV").split()
-        h = h.point(lambda x: (x + 85) % 256)                      # about 120 degrees round the colour wheel
+        shift = strength["hue"]
+        h = h.point(lambda x: (x + shift) % 256)
         out = Image.merge("HSV", (h, sat, v)).convert("RGB")
     elif effect == "dark":
-        out = ImageEnhance.Brightness(rgb).enhance(0.55)
+        out = ImageEnhance.Brightness(rgb).enhance(strength["dark"])
     elif effect == "blur":
-        out = rgb.filter(ImageFilter.GaussianBlur(3.5))
+        out = rgb.filter(ImageFilter.GaussianBlur(strength["blur"]))
     else:
         out = ImageOps.invert(rgb)
     out = out.convert("RGBA")
@@ -2057,7 +2073,7 @@ def make_odd_variant(base_pil, effect):
     return out
 
 
-def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out.mp4", music_path=None, bitrate="8000k", preset="medium", use_hq=False):
+def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out.mp4", music_path=None, bitrate="8000k", preset="medium", use_hq=False, difficulty=None):
     """
     Composes an Odd One Out puzzle video.
     Builds a 5x6 grid of the base image, but modifies one (the odd one) to be slightly rotated/flipped.
@@ -2080,19 +2096,23 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     # Make it square
     size = min(base_pil.size)
     # Make it square and slightly smaller for denser grid
-    base_pil = base_pil.crop((0, 0, size, size)).resize((120, 120))
+    base_pil = base_pil.crop((0, 0, size, size)).resize((TILE, TILE))
     
-    # The odd one: a clear but fair difference (tilt, colour shift, darker, blurry, inverted); not the same kind twice in a row
+    # The odd one: a difference whose strength is picked at random (easy / medium / hard); not the same kind twice in a row.
+    # Only the easy videos tell the viewer what to look for.
     from engine.puzzle_variety import fresh
-    effect = fresh(list(ODD_EFFECTS), "odd_effect")
-    hint = ODD_EFFECTS[effect]
-    odd_pil = make_odd_variant(base_pil, effect)
+    level = difficulty or pick_odd_level()
+    effects = [e for e in ODD_EFFECTS if level == "easy" or e != "invert"]
+    effect = fresh(effects, "odd_effect")
+    hint = ODD_EFFECTS[effect] if level == "easy" else "ONE IS DIFFERENT..."
+    odd_pil = make_odd_variant(base_pil, effect, level)
+    print(f"[Log] ODD_ONE_OUT: level {level}, difference {effect}")
 
 
     # 3. Build the Grid Image (Denser grid: 6x8 instead of 5x6)
-    grid_cols = 6
-    grid_rows = 8
-    spacing = 145
+    grid_cols = 5
+    grid_rows = 7
+    spacing = 180
     
     grid_w = grid_cols * spacing
     grid_h = grid_rows * spacing
@@ -2112,7 +2132,7 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     grid_clip = ImageClip(np.array(grid_img)).with_start(0).with_duration(duration)
     # Center grid
     gx = (1080 - grid_w) // 2
-    gy = 600
+    gy = 450
     grid_clip = grid_clip.with_position((gx, gy))
 
     # 5. Text Elements
@@ -2127,8 +2147,14 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     timer_start_time = audio_clip.duration - 2.0 # Start timer a bit before audio ends
     timer_bg = ColorClip(size=(900, timer_h), color=(50, 50, 50)).with_duration(timer_duration).with_position(("center", 1750)).with_start(timer_start_time)
     
-    timer_fg = ColorClip(size=(900, timer_h), color=(255, 50, 50)).with_start(timer_start_time).with_duration(timer_duration)
-    timer_fg = timer_fg.with_position(lambda t: (int((1080 - 900)/2 - 900 * min(max(t - timer_start_time, 0) / timer_duration, 1.0)), 1750))
+    def _bar(t):
+        w = int(900 * (1 - min(max(t, 0) / timer_duration, 1.0)))
+        arr = np.zeros((timer_h, 900, 3), dtype="uint8")
+        arr[:] = (50, 50, 50)
+        arr[:, :w] = (255, 50, 50)
+        return arr
+    from moviepy import VideoClip
+    timer_fg = VideoClip(_bar, duration=timer_duration).with_start(timer_start_time).with_position(("center", 1750))
     
     # 7. Reveal (Replaced answer reveal with a final CTA)
     reveal_start = timer_start_time + timer_duration

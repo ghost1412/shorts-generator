@@ -50,3 +50,21 @@ def test_odd_variants_are_clearly_different_and_keep_size_and_transparency():
         diff = ImageChops.difference(odd.convert("RGB"), base.convert("RGB")).convert("L")
         assert sum(diff.getdata()) > 120 * 120 * 3, effect                 # not a near-invisible change
         assert odd.getpixel((2, 2))[3] == 0 or effect == "tilt"             # transparent corners stay transparent
+
+
+def test_odd_levels_get_harder_and_pick_is_valid():
+    import random
+    from PIL import Image, ImageChops
+    from engine import video_gen as vg
+    base = Image.new("RGBA", (150, 150), (0, 0, 0, 255))
+    for x in range(150):
+        for y in range(150):
+            base.putpixel((x, y), (x * 255 // 150, 90, y * 255 // 150, 255) if (x // 5 + y // 5) % 2 else (200, 40, 60, 255))     # a checker has edges, so blur shows
+
+    def change(effect, level):
+        diff = ImageChops.difference(vg.make_odd_variant(base, effect, level).convert("RGB"), base.convert("RGB")).convert("L")
+        return sum(diff.getdata())
+
+    for effect in ("tilt", "hue", "dark", "blur"):
+        assert change(effect, "easy") > change(effect, "medium") > change(effect, "hard") > 0, effect
+    assert {vg.pick_odd_level(random.Random(i)) for i in range(200)} == {"easy", "medium", "hard"}
