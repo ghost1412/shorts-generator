@@ -2,7 +2,7 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
-## Unreleased
+## 0.6.0 (2026-11-08)
 
 ### Fixed
 - **NEWS never posts a placeholder, and stays on its category**: with no fresh headline the run stops instead of publishing a made-up story. Top stories are only used for the world category, sensitive topics (politics, geopolitics, health scares, deaths) and non-news pages (lists, quizzes, reviews, deals) are skipped, each cat persona keeps its own voice, and credits show the outlet name instead of a raw link.
