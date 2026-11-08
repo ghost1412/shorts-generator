@@ -47,6 +47,21 @@ by Aida Thomas, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0); 
 
 ---
 
+## 🧳 Recap demo: six clips become one video
+
+<div align="center">
+  <img src="demos/demo_recap.gif" width="240" alt="Trip recap: hook, day title cards and fast cuts made from six stock clips" />
+</div>
+
+This is a real run of `py main.py --mode TRIP --trip_videos <6 clips> --recap_length 30 --recap_aspect 9:16 --auto_edit hype --transitions mix`
+(the first 12 seconds). **It is not a best case:** the source is six free, widescreen (16:9) stock clips filmed by someone else, with no GPS and no
+music, so there are no place names, and every shot sits small in the middle of the vertical frame with a blurred copy of itself above and below.
+Vertical phone videos with GPS fill the frame instead and get named places.
+Source footage: six videos by Poiana11 on Wikimedia Commons (`HoiAnMarket`, `HoiAn Market`, `Vietnam-HUE`, `VietnamBridge`, `TecnoVietnam`,
+`TecnoWork&danceVietnam`), all marked [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+---
+
 ## 🎛️ Review, restyle and brand your shorts
 
 After **Make my shorts**, the browser app (`shortsflow webui`) shows every short as a card instead of a bare file list:
@@ -122,6 +137,7 @@ All GIFs are real renders from this repository.
 | GIF | What it shows |
 | :--- | :--- |
 | `demo_clipping_active.gif` | Long interview clipped with `--layout active`: the shot cuts to whoever is speaking, with word captions |
+| `demo_recap.gif` | Trip recap from six widescreen CC0 stock clips (not a best case: letterboxed, no GPS or music): hook, title cards, fast cuts |
 | `demo_spot_the_lie.gif` | The "Spot the Lie" quiz format that runs the daily YouTube channel |
 | `demo_short.gif` | Idea-to-video short with spring captions |
 | `demo_facts.gif` | `--mode FACTS` trivia short |
