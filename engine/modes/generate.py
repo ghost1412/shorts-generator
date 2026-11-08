@@ -131,6 +131,19 @@ def persist_and_export(args, mode, category, metadata, final_video, output_filen
 TOPIC_MODES = ("ARTICLE", "UGC", "BIBLE", "TRUE_CRIME")   # modes that cannot work from a random category word
 
 
+
+def _real_news(category, tone, persona):
+    """A retelling of a real headline. When the category has nothing fresh, try the other news categories; never a placeholder story."""
+    from engine.script_gen import generate_funny_news, NoFreshNews
+    others = [c for c in ("world", "tech", "sports", "science", "celebrities") if c != category]
+    for cat in [category] + others:
+        try:
+            return generate_funny_news(cat, tone=tone, persona=persona)
+        except NoFreshNews as e:
+            print(f"[Log] {e}")
+    print("[Error] No fresh real news in any category right now; not making a news short.", flush=True)
+    sys.exit(1)
+
 def run(args, target_bitrate, target_preset):
     print("--- Starting Shorts Generator ---", flush=True)
 
@@ -342,13 +355,20 @@ def run(args, target_bitrate, target_preset):
             elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
                 target_q = args.category or args.hero or args.prompt or "Cat"
                 num_t = args.clip_count if getattr(args, "clip_count", 7) and args.clip_count != 5 else 7
+                from engine.puzzle_variety import fresh
                 intros = [
                     f"99% of people WILL FAIL to find all {num_t} {target_q}s! 🧠",
                     f"Only GIGACHADS can spot all {num_t} {target_q}s! 🗿",
                     f"Can you spot all {num_t} hidden {target_q}s before time runs out? 🤫",
-                    f"If you find all {num_t} {target_q}s, you owe me a sub! 🤝"
+                    f"If you find all {num_t} {target_q}s, you owe me a sub! 🤝",
+                    f"There are {num_t} {target_q}s hiding here. I found them all in 8 seconds. Can you? 😎",
+                    f"{num_t} {target_q}s, one screen, ten seconds. Go! ⏱️",
+                    f"Don't blink: {num_t} {target_q}s are hiding in this picture! 👁️",
+                    f"Bet you miss at least one of the {num_t} {target_q}s! 😈",
+                    f"Count them out loud: {num_t} {target_q}s are in here somewhere! 🔍",
+                    f"Real ones find all {num_t} {target_q}s. Let's see! 🏅",
                 ]
-                full_script = f"{random.choice(intros)} ... 🔍 10 seconds on the clock! ... ... ... ... ... Did you spot them all? Comment below!"
+                full_script = f"{fresh(intros, 'find_intro')} ... 🔍 10 seconds on the clock! ... ... ... ... ... Did you spot them all? Comment below!"
                 facts_data = []
                 print(f"[Log] Meme Puzzle Game Mode: {mode} (Target: {target_q}, Count: {num_t})", flush=True)
             elif mode == "EMOJI_GUESS":
@@ -384,9 +404,20 @@ def run(args, target_bitrate, target_preset):
                     "Only a GENIUS can spot the odd one! 🗿",
                     "Is your brain awake? Find the difference! 🧐",
                     "Bro, this one is actually impossible! 🤫",
-                    "If you find it in 3 seconds, you're a LEGEND! 🏆"
+                    "If you find it in 3 seconds, you're a LEGEND! 🏆",
+                    "Your eyes are lying to you. Find the imposter! 👀",
+                    "Most people give up before the timer ends. Will you? ⏱️",
+                    "One of these is different. Take a guess, no scrolling! ☝️",
+                    "I bet you can't find it in 5 seconds! 😏",
+                    "Hardest eye test of the day. Ready? 🔥",
+                    "Everyone says it's easy. Then they miss it. 😬",
+                    "Look slowly. The odd one is hiding in plain sight! 🕵️",
+                    "Only 1 in 10 people get this right. Are you one? 🎯",
+                    "Pause the video if you need to. Which one is wrong? 🛑",
+                    "This took me 20 seconds. How fast are you? ⚡",
                 ]
-                hook = random.choice(intros)
+                from engine.puzzle_variety import fresh
+                hook = fresh(intros, "odd_intro")
                 theme = f"One of these is NOT a {category}..."
                 full_script = f"{hook} ... {theme} ... Find it before the time runs out! ... ... ... ... ... Did you spot the odd one? Let me know!"
                 odd_res = {"hook": hook, "theme": theme} # For metadata consistency
@@ -399,14 +430,14 @@ def run(args, target_bitrate, target_preset):
                 print(f"[Log] RIDDLE Data: {riddle_data}")
             elif mode == "NEWS":
                 selected_persona = args.persona if args.persona else ("rabbit" if args.cartoon else None)
-                news_data = generate_funny_news(category, tone="funny", persona=selected_persona)
+                news_data = _real_news(category, "funny", selected_persona)
                 news_source = news_data.get('source', 'Unknown')
                 full_script = f"{news_data['hook']} ... {news_data['story']}"
                 facts_data = []
                 print(f"[Log] NEWS (funny) Data: {news_data}")
             elif mode == "NEWS_SERIOUS":
                 selected_persona = args.persona if args.persona else ("rabbit" if args.cartoon else None)
-                news_data = generate_funny_news(category, tone="serious", persona=selected_persona)
+                news_data = _real_news(category, "serious", selected_persona)
                 news_source = news_data.get('source', 'Unknown')
                 full_script = f"{news_data['hook']} ... {news_data['story']}"
                 facts_data = []

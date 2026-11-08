@@ -1237,6 +1237,10 @@ JSON Structure ONLY:
     return normalized
 
 
+class NoFreshNews(RuntimeError):
+    """No usable real headline was found; the news formats must not invent one."""
+
+
 def generate_funny_news(category="general", tone="funny", persona=None):
     """
     Fetches REAL news from RSS feeds, then uses LLM to rewrite in the chosen tone or persona.
@@ -1291,32 +1295,40 @@ def generate_funny_news(category="general", tone="funny", persona=None):
             rss_feeds.append("https://www.espn.com/espn/rss/news")
     
     from engine import news_feed
-    headlines = []
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+    # Wider net when the narrow query is empty: the category's plain query and the top stories feed come after the first choices.
+    rss_feeds.append(f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en")
+    rss_feeds.append("https://news.google.com/rss?hl=en&gl=US&ceid=US:en")
+    texts = []
     for feed_url in rss_feeds:
         try:
             resp = requests.get(feed_url, timeout=10, headers={"User-Agent": "ShortsFlow/1.0 (News Aggregator)"})
             if resp.status_code != 200:
                 print(f"[Warning] Feed {feed_url} answered HTTP {resp.status_code}; skipping it.")
                 continue
-            headlines += news_feed.parse_feed(resp.text, feed_url, cutoff)
+            texts.append((feed_url, resp.text))
         except Exception as e:
             print(f"[Warning] RSS fetch failed for {feed_url}: {e}")
 
     # Funny/persona retellings must not joke about deaths, violence, disasters or court cases.
-    chosen = news_feed.pick(headlines, history=news_feed.load_history(),
-                            avoid_sensitive=(tone == "funny" or bool(persona)))
+    chosen = None
+    for hours in (48, 24 * 7):                      # the last 2 days first, then the last week
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        headlines = []
+        for feed_url, text in texts:
+            headlines += news_feed.parse_feed(text, feed_url, cutoff)
+        chosen = news_feed.pick(headlines, history=news_feed.load_history(),
+                                avoid_sensitive=(tone == "funny" or bool(persona)))
+        if chosen is not None:
+            break
     if chosen is None:
-        print(f"[Warning] No fresh, unused, suitable headlines for {category}. Using fallback.")
-        chosen = {
-            "headline": f"Breaking development in {category} today" if tone == "serious" else f"Unbelievable {category} story catches everyone off guard",
-            "source": "Global News Network", "feed": "fallback", "description": "",
-        }
+        # Never publish a made-up placeholder story: the caller picks another format instead.
+        raise NoFreshNews(f"No fresh, unused, suitable headlines for {category}.")
+    if hours != 48:
+        print(f"[Log] NEWS: nothing in the last 2 days, using a story from the last week.")
     real_headline = chosen["headline"]
     real_description = chosen.get("description", "")
     real_source = chosen["source"]
-    if chosen.get("feed") != "fallback":
-        news_feed.remember(real_headline)
+    news_feed.remember(real_headline)
     print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     print(f"[Log] NEWS ({persona or tone}): Fresh headline found: \"{real_headline}\" (Source: {real_source})")
     

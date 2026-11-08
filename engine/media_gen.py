@@ -223,7 +223,11 @@ def get_game_assets(num_objects=30, target_query=None, output_dir="assets/game")
         {"name": "Walter White", "query": "breaking bad walter white"}
     ]
     
-    selected_target = random.choice(targets) if not target_query else {"name": "Object", "query": target_query}
+    if target_query:
+        selected_target = {"name": "Object", "query": target_query}
+    else:
+        from engine.puzzle_variety import fresh
+        selected_target = next(t for t in targets if t["name"] == fresh([t["name"] for t in targets], "game_target"))      # not one of the last few characters
     assets["target_name"] = selected_target["name"]
     
     # Download Target

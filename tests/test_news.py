@@ -1,3 +1,4 @@
+import pytest
 import json
 import random
 from datetime import datetime, timedelta, timezone
@@ -93,3 +94,16 @@ def test_generate_funny_news_end_to_end_offline(monkeypatch, tmp_path):
     assert "3 of 5" in out["story"] and out["original_headline"].startswith("Cat elected")
     assert len(prompts) == 2 and "SOURCE SUMMARY" in prompts[0] and "3 of 5 votes" in prompts[0]
     assert nf.load_history(str(tmp_path / "hist.json"))[0]["headline"].startswith("Cat elected")
+
+
+def test_no_fresh_headline_raises_instead_of_a_placeholder(monkeypatch, tmp_path):
+    from engine import script_gen
+
+    class Empty:
+        status_code = 200
+        text = "<rss><channel></channel></rss>"
+
+    monkeypatch.setattr(script_gen.requests, "get", lambda *a, **k: Empty())
+    monkeypatch.setattr(nf, "history_path", lambda: str(tmp_path / "h.json"))
+    with pytest.raises(script_gen.NoFreshNews):
+        script_gen.generate_funny_news("tech", tone="funny")
