@@ -2025,6 +2025,38 @@ def create_quote_video(audio_path, quote_data, video_paths, output_path="quote_s
     
     return output_path
 
+ODD_EFFECTS = {
+    "tilt": "ONE IS TILTED",
+    "hue": "ONE HAS A DIFFERENT COLOUR",
+    "dark": "ONE IS DARKER",
+    "blur": "ONE IS BLURRY",
+    "invert": "ONE HAS FLIPPED COLOURS",
+}
+
+
+def make_odd_variant(base_pil, effect):
+    """The one different tile: clear enough to find in a few seconds, but still a real search (a 14 degree tilt, a colour shift...)."""
+    from PIL import ImageEnhance, ImageFilter, ImageOps
+    rgba = base_pil.convert("RGBA")
+    if effect == "tilt":
+        return rgba.rotate(14, expand=False, fillcolor=(0, 0, 0, 0))
+    alpha = rgba.getchannel("A")
+    rgb = rgba.convert("RGB")
+    if effect == "hue":
+        h, sat, v = rgb.convert("HSV").split()
+        h = h.point(lambda x: (x + 85) % 256)                      # about 120 degrees round the colour wheel
+        out = Image.merge("HSV", (h, sat, v)).convert("RGB")
+    elif effect == "dark":
+        out = ImageEnhance.Brightness(rgb).enhance(0.55)
+    elif effect == "blur":
+        out = rgb.filter(ImageFilter.GaussianBlur(3.5))
+    else:
+        out = ImageOps.invert(rgb)
+    out = out.convert("RGBA")
+    out.putalpha(alpha)
+    return out
+
+
 def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out.mp4", music_path=None, bitrate="8000k", preset="medium", use_hq=False):
     """
     Composes an Odd One Out puzzle video.
@@ -2050,20 +2082,13 @@ def create_odd_one_out_video(audio_path, base_img_path, output_path="odd_one_out
     # Make it square and slightly smaller for denser grid
     base_pil = base_pil.crop((0, 0, size, size)).resize((120, 120))
     
-    # Create the odd one with a random subtle modification
-    effect = random.choice(["rotate", "flip", "color"])
-    hint = "ONE IS DIFFERENT..."
-    
-    if effect == "rotate":
-        odd_pil = base_pil.rotate(3, expand=False, fillcolor=(0,0,0,0))
-    elif effect == "flip":
-        odd_pil = base_pil.transpose(Image.FLIP_LEFT_RIGHT)
-    else: # color
-        from PIL import ImageEnhance
-        enhancer = ImageEnhance.Brightness(base_pil)
-        odd_pil = enhancer.enhance(0.92) # Slightly darker is very hard to spot
-    
-    
+    # The odd one: a clear but fair difference (tilt, colour shift, darker, blurry, inverted); not the same kind twice in a row
+    from engine.puzzle_variety import fresh
+    effect = fresh(list(ODD_EFFECTS), "odd_effect")
+    hint = ODD_EFFECTS[effect]
+    odd_pil = make_odd_variant(base_pil, effect)
+
+
     # 3. Build the Grid Image (Denser grid: 6x8 instead of 5x6)
     grid_cols = 6
     grid_rows = 8

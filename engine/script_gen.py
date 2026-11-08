@@ -1184,30 +1184,74 @@ def validate_emoji_guess(data):
     return normalize_emoji_guess(data) is not None
 
 
+EMOJI_KINDS = ["movie", "TV show", "video game", "song", "cartoon character", "anime", "famous brand", "food or dish",
+               "famous place or landmark", "book", "Disney or Pixar film", "sport or athlete", "app or website", "historical figure"]
+EMOJI_SCRIPTS = [
+    "Can you guess this {hint} from {n} emojis? {secs} seconds on the clock! Type your answer in the comments!",
+    "Only real fans get this one. Which {hint} is hiding in these emojis? Comment your guess before time runs out!",
+    "{n} emojis, one {hint}. Think fast, you have {secs} seconds! Drop your answer below!",
+    "Bet you can't name this {hint} in {secs} seconds. Go! Write it in the comments!",
+    "Crack the emoji code! Which {hint} is it? Comment before the timer ends!",
+    "This one fooled my friends. Can you name this {hint}? {secs} seconds, comment now!",
+    "Easy or impossible? You decide. Guess the {hint} from these emojis and tell me in the comments!",
+    "Pause if you need to. What {hint} do these {n} emojis spell out? Answer in the comments!",
+]
+EMOJI_TITLES = [
+    "GUESS THE {HINT} 🧩", "EMOJI TEST: NAME THE {HINT} 🧠", "ONLY FANS GET THIS {HINT} 🔥", "CAN YOU DECODE THIS {HINT}? 🤔",
+    "{N} EMOJIS, ONE {HINT} 👀", "99% CAN'T NAME THIS {HINT} 😬", "EMOJI RIDDLE: WHICH {HINT}? 🕵️",
+]
+
+
+def _real_emojis(text):
+    """The emoji characters in `text` (letters, digits and punctuation do not count)."""
+    return [c for c in str(text) if ord(c) >= 0x1F000 or 0x2600 <= ord(c) <= 0x27BF or 0x2B00 <= ord(c) <= 0x2BFF or 0x2190 <= ord(c) <= 0x21FF or ord(c) in (0x00A9, 0x00AE, 0x203C, 0x2049, 0x2122, 0x2139, 0x3030, 0x303D)]
+
+
+def emojis_fit_answer(emojis, answer, hint, ask=None):
+    """Second opinion from the model: do these emojis plausibly point to the answer, and is the answer the kind of thing the hint says?
+    True when it says yes, or when the check itself cannot be made (rate limit, offline): a failed check never blocks a run."""
+    prompt = (f'Emoji puzzle. Emojis: {emojis}\nAnswer: {answer}\nCategory hint: {hint}\n'
+              'Question 1: is the answer really the kind of thing the category hint says (a movie is a movie, a game is a game)?\n'
+              'Question 2: would a fan reasonably get from these emojis to this answer (the emojis clearly relate to it)?\n'
+              'Reply JSON only: {"kind_ok": true, "emojis_fit": true}')
+    try:
+        data = robust_json_parse((ask or (lambda q: get_llm_response(q, temperature=0.0, max_tokens=60)))(prompt))
+        return bool(data.get("kind_ok")) and bool(data.get("emojis_fit"))
+    except Exception:
+        return True
+
+
 def generate_emoji_guess(category="movies", max_tokens=600):
     """
     Generates an Emoji Guess puzzle (Movie, Character, Song, or Pop Culture item).
-    Returns: {"emojis": str, "answer": str, "hint": str, "script": str}
+    Recent answers are never repeated, the kind of thing, the number of emojis, the voiceover and the title all vary.
+    Returns: {"emojis": str, "answer": str, "hint": str, "script": str, "title": str}
     """
+    from engine import puzzle_variety as pv
     selected_sub = get_sub_topic(category) if category else "movies"
-    prompt = f"""Generate a highly engaging "Guess from Emojis" video puzzle for category: {selected_sub}.
+    kind = pv.fresh(EMOJI_KINDS, "emoji_kind")
+    n_emoji = random.choice([2, 3, 3, 4, 5])
+    level = random.choice(["easy (everyone knows it)", "medium", "hard (only real fans get it)"])
+    avoid = pv.recent("emoji_answer", 30)
+    avoid_line = ("6. Do NOT use any of these recent answers: " + "; ".join(avoid) + ".\n") if avoid else ""
+    prompt = f"""Generate a "Guess from Emojis" video puzzle. Theme: {selected_sub}. The answer must be a {kind}.
 REQUIREMENTS:
-1. Provide 2 to 4 emojis that cleverly represent a famous Movie, TV Show, Video Game, Song, or Pop Culture Character.
-2. The answer must be universally recognizable and fun to guess.
-3. Include a short 1-line category hint (e.g. "Disney Animated Movie" or "Blockbuster Sci-Fi").
-4. CRITICAL: Do NOT state or reveal the answer in the voiceover script!
-5. End the voiceover script with an urgent call-to-action asking viewers to type their answer in the comments section!
-
+1. Use exactly {n_emoji} emojis that cleverly represent the answer. Difficulty: {level}.
+2. The answer must be well known, with one clear correct name. Pick something fresh, not the first one that comes to mind (no Spider-Man, Harry Potter, Lion King, Titanic).
+3. Include a short 2-4 word category hint that names the kind (e.g. "Disney animated movie", "Retro video game").
+4. Do NOT put the answer in the script. The script is one short line asking viewers to comment their guess.
+5. Emojis must really match the answer; do not use emojis that only fit another title.
+{avoid_line}
 JSON Structure ONLY:
 {{
   "emojis": "🦁 👑 🌅",
   "answer": "The Lion King",
-  "hint": "Disney Classic Movie",
-  "script": "Can you guess this movie from these emojis? You have 5 seconds on the clock! Write your answer in the comments right now! No cheating!"
+  "hint": "Disney animated movie",
+  "script": "Can you guess this movie from these emojis? Comment your answer!"
 }}
 """
     def llm_call(attempt):
-        response_text = get_llm_response(prompt, temperature=0.7, max_tokens=max_tokens)
+        response_text = get_llm_response(prompt, temperature=0.9, max_tokens=max_tokens)
         data = robust_json_parse(response_text)
         if isinstance(data, list) and len(data) > 0:
             for item in data:
@@ -1216,8 +1260,20 @@ JSON Structure ONLY:
             return normalize_emoji_guess(data[0]) or data[0]
         return normalize_emoji_guess(data) or data
 
+    def fresh_answer(data):
+        norm = normalize_emoji_guess(data)
+        if norm is None or norm["answer"].strip().lower() in {a.strip().lower() for a in avoid}:
+            return False
+        if len(_real_emojis(norm["emojis"])) < 2 or any(c.isalpha() for c in norm["emojis"]):
+            print("[Log] EMOJI_GUESS: the emojis are not real emojis; trying again.")
+            return False
+        if not emojis_fit_answer(norm["emojis"], norm["answer"], norm["hint"]):
+            print("[Log] EMOJI_GUESS: the emojis do not fit the answer; trying again.")
+            return False
+        return True
+
     try:
-        res = with_best_of_n(llm_call, validate_emoji_guess, n=3)
+        res = with_best_of_n(llm_call, fresh_answer, n=5)
         normalized = normalize_emoji_guess(res)
     except Exception as e:
         print(f"[Warning] LLM generation failed for EMOJI_GUESS ({e}). Using fallback puzzle.")
@@ -1225,12 +1281,25 @@ JSON Structure ONLY:
 
     if not normalized:
         fallbacks = [
-            {"emojis": "🦁 👑 🌅", "answer": "The Lion King", "hint": "Disney Classic Movie", "script": "Can you guess this movie from these emojis? You have 5 seconds on the clock! Write your answer in the comments right now! No cheating!"},
-            {"emojis": "🕷️ 🧍 🏙️", "answer": "Spider-Man", "hint": "Superhero Movie", "script": "Guess the superhero movie from these emojis! You have 5 seconds! Type your answer now!"},
-            {"emojis": "🚢 🧊 💔", "answer": "Titanic", "hint": "Romance & Drama", "script": "Can you guess this legendary movie from these emojis? 5 seconds on the clock! Comment before time runs out!"},
-            {"emojis": "🧙 🧹 ⚡", "answer": "Harry Potter", "hint": "Fantasy Movie", "script": "Guess this magical movie from the emojis! 5 seconds on the clock! Drop your answer in the comments!"}
+            {"emojis": "🦁 👑 🌅", "answer": "The Lion King", "hint": "Disney animated movie"},
+            {"emojis": "🚢 🧊 💔", "answer": "Titanic", "hint": "Romance movie"},
+            {"emojis": "🐟 🔍 🌊", "answer": "Finding Nemo", "hint": "Pixar movie"},
+            {"emojis": "🍄 👨‍🔧 🏰", "answer": "Super Mario", "hint": "Video game series"},
+            {"emojis": "🧊 ❄️ 👸", "answer": "Frozen", "hint": "Disney movie"},
+            {"emojis": "🏴‍☠️ 🦜 🗺️", "answer": "Pirates of the Caribbean", "hint": "Adventure movie"},
         ]
-        normalized = random.choice(fallbacks)
+        left = [f for f in fallbacks if f["answer"].lower() not in {a.lower() for a in avoid}] or fallbacks
+        normalized = dict(random.choice(left))
+        normalized["script"] = "Can you guess this from these emojis? Comment your answer!"
+        normalized["title"] = "GUESS THE EMOJI 🧩"
+
+    # Voiceover and title come from pools so videos do not all sound and read the same (the script never contains the answer).
+    hint_words = str(normalized.get("hint") or "answer").strip().rstrip("!.")
+    n_found = len([e for e in re.split(r"\s+", str(normalized["emojis"]).strip()) if e]) or n_emoji
+    secs = random.choice([3, 5, 5, 7])
+    normalized["script"] = pv.fresh(EMOJI_SCRIPTS, "emoji_script").format(hint=hint_words.lower(), n=n_found, secs=secs)
+    normalized["title"] = pv.fresh(EMOJI_TITLES, "emoji_title").format(HINT=hint_words.upper(), N=n_found)[:90]
+    pv.record("emoji_answer", normalized["answer"])
 
     ans_safe = str(normalized.get('answer')).encode('ascii', 'ignore').decode('ascii')
     print(f"[Log] EMOJI_GUESS generated answer (hidden in audio): {ans_safe}")

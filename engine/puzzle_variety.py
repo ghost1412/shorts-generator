@@ -44,3 +44,22 @@ def fresh(options, kind, rng=random, path=None, remember=True):
         except OSError:
             pass
     return pick
+
+
+def recent(kind, count=40, path=None):
+    """The last `count` values recorded for `kind` (oldest first)."""
+    data = _load(path or _path())
+    return [x for x in data.get(kind, []) if isinstance(x, str)][-count:]
+
+
+def record(kind, value, path=None):
+    """Remember `value` for `kind` (for lists that cannot be picked from up front, like AI-written answers)."""
+    path = path or _path()
+    data = _load(path)
+    data[kind] = ([x for x in data.get(kind, []) if isinstance(x, str)] + [str(value)])[-KEEP:]
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+    except OSError:
+        pass
