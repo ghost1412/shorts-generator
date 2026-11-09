@@ -132,6 +132,11 @@ def windows_for(duration, length, hop=None):
     return out
 
 
+# Titles for action moments when no AI text provider answers (the clip's own words are empty, so there is nothing to quote).
+ACTION_HOOKS = ["No time to blink", "Things got intense", "Watch the whole fight", "This got out of hand", "Pure chaos",
+                "One mistake and it's over", "Did you see that coming?", "The fight everyone clips", "It gets wild at the end"]
+
+
 def to_highlight(w):
     """A clip entry in the same shape the rest of the pipeline uses."""
     score = w["story_score"] if w["kind"] == "story" else w["action_score"]
@@ -211,6 +216,10 @@ def pick_game_moments(video_path, transcript_path, output_dir, clip_count=3, tar
     skip = INTRO * total if total > 120 else 0.0
     chosen = choose(wins, clip_count, story_share=story_share, min_gap=length, skip_before=skip)
     out = [to_highlight(w) for w in chosen]
+    from engine import puzzle_variety as pv
+    for h in out:
+        if h["kind"] == "action":
+            h["hook_text"] = pv.fresh(ACTION_HOOKS, "game_action_hook")      # not the same title twice in a row
     n_story = sum(1 for h in out if h["kind"] == "story")
     print(f"[Log] Game moments: {n_story} story + {len(out) - n_story} action of {len(wins)} windows measured.")
     return out

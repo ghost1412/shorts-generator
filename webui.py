@@ -187,7 +187,8 @@ def _count(value):
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
                caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider,
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None, auto_zoom=False, cold_open=False,
-               spoken="en", auto_edit="none", edit_strength="medium", stat_pops=False):
+               spoken="en", auto_edit="none", edit_strength="medium", stat_pops=False,
+               game=False, game_mix="0.5", caption_position="default", caption_size="default"):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
@@ -203,6 +204,9 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     if spoken and spoken != "en":
         cmd += ["--language", spoken]            # the command line assumes English unless told otherwise
     cmd += web_args.edit_args(auto_edit, edit_strength)
+    if use_remotion:
+        cmd += web_args.caption_look_args(caption_position, caption_size)
+    cmd += web_args.game_args(game, game_mix)
     yield from _run(cmd)
 
 
@@ -978,6 +982,13 @@ def build_ui():
                             broll = gr.Checkbox(label="Auto B-roll")
                             srt = gr.Checkbox(label="Export .srt")
                         clip_settings = _render_settings(with_aspect=False)
+                        with gr.Accordion("Game footage and caption position (optional)", open=False):
+                            clip_game = gr.Checkbox(label="This is game footage", value=False,
+                                                    info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay), and keeps the whole screen in frame (Framing \"single\" becomes \"fit\").")
+                            clip_game_mix = gr.Dropdown(web_args.GAME_MIX_CHOICES, value="0.5", label="Story or action")
+                            with gr.Row():
+                                clip_cap_pos = gr.Dropdown(web_args.CAPTION_POSITION_CHOICES, value="default", label="Caption position")
+                                clip_cap_size = gr.Dropdown(web_args.CAPTION_SIZE_CHOICES, value="default", label="Caption size")
                         with gr.Accordion("Extras", open=False):
                             with gr.Row():
                                 clip_clean = gr.Checkbox(label="Clean audio", info="Noise reduction + loudness to about -14 LUFS")
@@ -1000,7 +1011,8 @@ def build_ui():
                     clip_video,
                     [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
                      clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom, clip_cold,
-                     clip_spoken, clip_edit, clip_edit_strength, clip_stats],
+                     clip_spoken, clip_edit, clip_edit_strength, clip_stats,
+                     clip_game, clip_game_mix, clip_cap_pos, clip_cap_size],
                     [clip_log, clip_videos],
                 )
                 clip_stop.click(stop_jobs, None, clip_log, cancels=[clip_run])

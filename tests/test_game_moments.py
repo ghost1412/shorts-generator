@@ -67,3 +67,10 @@ def test_cli_has_content_and_game_mix_options():
     import os
     src = open(os.path.join(os.path.dirname(__file__), "..", "shortsflow", "_main.py"), encoding="utf-8").read()
     assert '"--content"' in src and '"--game_mix"' in src
+
+
+def test_action_clips_get_varied_titles(tmp_path, monkeypatch):
+    from engine import puzzle_variety as pv
+    monkeypatch.setattr(pv, "_path", lambda: str(tmp_path / "h.json"))
+    titles = [pv.fresh(gm.ACTION_HOOKS, "game_action_hook") for _ in range(4)]
+    assert len(set(titles)) == 4 and all(t in gm.ACTION_HOOKS for t in titles)

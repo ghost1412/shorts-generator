@@ -57,3 +57,18 @@ def test_web_quick_clip_inputs_match_its_parameters():
     params = list(inspect.signature(webui.quick_clip).parameters)
     assert len(inputs) <= len(params) and inputs[-4:] == ["q_game", "q_game_mix", "q_cap_pos", "q_cap_size"]
     assert params[len(inputs) - 4:len(inputs)] == ["game", "game_mix", "caption_position", "caption_size"]
+
+
+def test_clip_tab_inputs_match_clip_video_parameters():
+    import inspect
+    import re
+    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+    m = re.search(r"clip_btn\.click\(\s*clip_video,\s*\[(.*?)\],\s*\[clip_log", src, re.S)
+    assert m
+    inputs = [x.strip() for x in m.group(1).replace("\n", " ").split(",") if x.strip()]
+    import webui
+    params = list(inspect.signature(webui.clip_video).parameters)
+    assert inputs[-4:] == ["clip_game", "clip_game_mix", "clip_cap_pos", "clip_cap_size"]
+    # *clip_settings stands for five inputs (style, aspect, remotion, llm, tts)
+    assert len(inputs) - 1 + 5 == len(params)
+    assert params[-4:] == ["game", "game_mix", "caption_position", "caption_size"]
