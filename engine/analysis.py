@@ -1589,7 +1589,7 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True, moments=None, visual_context=False):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True, moments=None, visual_context=False, game=False, game_mix=0.5):
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
@@ -1611,6 +1611,13 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
         highlights = parse_moments(moments, default_length=target_duration or 30, video_seconds=probe_duration(video_path))
         print(f"[Log] Using the {len(highlights)} moment(s) you chose: " +
               ", ".join(f"{h['start']:.0f}-{h['end']:.0f}s" for h in highlights))
+    elif game and mode == "shorts":
+        # game footage: story moments (cutscenes, dialogue) and action moments (fights, gameplay) from the words, sound and picture
+        from engine.game_moments import pick_game_moments
+        highlights = pick_game_moments(video_path, transcript_path, output_dir, clip_count=clip_count,
+                                       target_duration=target_duration or 30, story_share=game_mix)
+        if not highlights:
+            raise RuntimeError("Game mode found no story or action moments (is the video very short or silent and still?).")
     elif find_query:
         from engine.find_moments import find_moments, llm_ask
         with open(transcript_path, 'r', encoding='utf-8') as f:

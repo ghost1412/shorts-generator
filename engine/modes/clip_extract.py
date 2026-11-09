@@ -153,6 +153,8 @@ def run(args, target_bitrate, target_preset):
         extra_signals=not getattr(args, 'no_signals', False),
         moments=getattr(args, 'moments', None),
         visual_context=getattr(args, 'visual_context', False),
+        game=getattr(args, 'content', 'auto') == 'game',
+        game_mix=getattr(args, 'game_mix', 0.5),
     )
     
     timing.mark("analysis done (all of process_source_video)")
