@@ -9,10 +9,10 @@ out of the shot stays in front while the background wipes to the next shot; engi
 other types instead).
 """
 
-NAMES = ("none", "punch", "whip", "flash", "glitch", "mix", "subject")
+NAMES = ("none", "punch", "whip", "flash", "glitch", "mix", "subject", "dissolve")      # NAMES[1:5] (punch..glitch) is used by position below
 AUTO = "auto"       # follows the Auto-edit style (STYLE_DEFAULTS); an explicit choice, including "none", always wins
 STYLE_DEFAULTS = {"hype": "mix", "vlog": "punch"}              # podcast, educational and no style: plain cuts
-LABELS = [("Auto (follows the edit style)", "auto"), ("None (plain cuts)", "none"), ("Mix (a different one on every cut)", "mix"), ("Zoom punch", "punch"), ("Whip pan", "whip"),
+LABELS = [("Auto (follows the edit style)", "auto"), ("None (plain cuts)", "none"), ("Dissolve (smooth crossfade, no zoom)", "dissolve"), ("Mix (a different one on every cut)", "mix"), ("Zoom punch", "punch"), ("Whip pan", "whip"),
           ("White flash", "flash"), ("Glitch", "glitch"),
           ("Subject cut-out (the person stays, the background changes)", "subject")]
 MIX_ORDER = ("punch", "whip", "glitch", "punch", "flash", "whip")
@@ -42,7 +42,7 @@ def seconds_for(strength):
 def cut_types(name, count):
     """The transition of each of `count` cuts, in order: the one chosen, or the mix cycling."""
     name = validate(name)
-    if name in ("none", AUTO):
+    if name in ("none", AUTO, "dissolve"):       # dissolve is a crossfade made when the shots are joined, not an effect on each shot
         return [None] * count
     if name == "subject":
         return ["subject"] * count

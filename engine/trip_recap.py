@@ -142,6 +142,33 @@ def parse_stops(text):
     return [s.strip() for s in items if s.strip()]
 
 
+def parse_lines(text):
+    """One line of text per part from 'Fry the nuts in ghee | Roast the khoya' (or one per line, or a list). Empty entries are kept
+    so a part can have no line; parts without an entry get none."""
+    if isinstance(text, (list, tuple)):
+        items = [str(x) for x in text]
+    else:
+        items = re.split(r"[\|\n]", str(text or ""))
+    items = [" ".join(s.split()) for s in items]
+    while items and not items[-1]:
+        items.pop()
+    return items
+
+
+def payoff_first(glimpses, days):
+    """The opening shows the result first: glimpses from the LAST part go in front (a finished dish, the summit, the first dance). When
+    none was picked, the last part's first moment is added as one."""
+    if not glimpses or not days:
+        return glimpses
+    last = len(days) - 1
+    tail = [g for g in glimpses if g.get("day") == last]
+    if not tail and days[last].get("moments"):
+        m = days[last]["moments"][0]
+        tail = [{"file": m["file"], "start": m["start"], "end": m["end"], "size": m["size"], "day": last}]
+        glimpses = glimpses[:-1] if len(glimpses) > 1 else glimpses
+    return tail + [g for g in glimpses if g not in tail]
+
+
 def plan_counts(n_days, total_seconds, card=CARD_SECONDS, clip=CLIP_SECONDS):
     """(clips per day, clip seconds) so that cards + clips fill `total_seconds`."""
     n_days = max(1, int(n_days))
@@ -1035,14 +1062,25 @@ def cinematic_layers(path_base, title, line="", small="", look=None, index=0):
         layers.append((layer(credit, "a"), 0.3))
     layers.append((layer(title_fn, "b"), 0.9))
     if line:
-        l_lines, l_font, l_lh = fit(line, 40, 28)
+        long_line = len(str(line)) > 28             # a sentence (a recipe step), not a short tag like "Day 2": bigger, white, on a dark panel
+        l_lines, l_font, l_lh = fit(line, 50 if long_line else 40, 34 if long_line else 28, max_lines=3 if long_line else 1)
 
         def sub(d):
             x0, x1 = (cx, cx + int(120 * u)) if left else (cx - int(60 * u), cx + int(60 * u))
             d.line([(x0, below), (x1, below)], fill=accent, width=max(2, int(3 * u)))
             y = below + int(50 * u)
+            if long_line:
+                boxes, yy = [], y
+                for ln in l_lines:
+                    boxes.append(d.textbbox((cx, yy), ln, font=l_font, anchor=anchor))
+                    yy += l_lh
+                pad = int(20 * u)
+                d.rounded_rectangle([min(b[0] for b in boxes) - pad, min(b[1] for b in boxes) - pad,
+                                     max(b[2] for b in boxes) + pad, max(b[3] for b in boxes) + pad],
+                                    radius=int(16 * u), fill=(0, 0, 0, 150))
             for ln in l_lines:
-                d.text((cx, y), ln, font=l_font, fill=accent, anchor=anchor)
+                d.text((cx, y), ln, font=l_font, fill=((255, 255, 255, 255) if long_line else accent), anchor=anchor,
+                       stroke_width=(2 if long_line else 0), stroke_fill=(0, 0, 0, 200))
                 y += l_lh
         layers.append((layer(sub, "c"), 1.7))
     return layers
@@ -1267,14 +1305,45 @@ def render_clip(ffmpeg, src, start, seconds, out, caption_file=None, layout="aut
         raise RuntimeError("Could not cut a clip: " + (r.stderr or "")[-400:])
 
 
-def concat(ffmpeg, parts, out, session_dir, music=None, music_gain=0.25, music_start=0.0, music_only=False):
+DISSOLVE_SECONDS = 0.6      # how long one shot melts into the next with --transitions dissolve
+
+
+def dissolve_graph(durations, d=DISSOLVE_SECONDS, fade_in=0.5, fade_out=1.0):
+    """(filter_complex, video label, audio label) that crossfades every shot into the next over `d` seconds (xfade fade, acrossfade),
+    with a gentle fade in at the very start and out at the very end. Each shot overlaps its neighbour, so the total is shorter by
+    d per join. `durations` are the shots' lengths in seconds, in order; every shot is capped so a join is never longer than the shot."""
+    n = len(durations)
+    if n < 2:
+        raise ValueError("A dissolve needs at least two shots.")
+    d = max(0.05, min(d, min(durations) * 0.45))
+    v, a, parts, acc = "[0:v]", "[0:a]", [], 0.0
+    for k in range(1, n):
+        acc += durations[k - 1]
+        offset = acc - k * d
+        parts.append(f"{v}[{k}:v]xfade=transition=fade:duration={d:.3f}:offset={max(0.0, offset):.3f}[v{k}]")
+        parts.append(f"{a}[{k}:a]acrossfade=d={d:.3f}:c1=tri:c2=tri[a{k}]")
+        v, a = f"[v{k}]", f"[a{k}]"
+    total = sum(durations) - (n - 1) * d
+    parts.append(f"{v}fade=t=in:st=0:d={fade_in:.2f},fade=t=out:st={max(0.0, total - fade_out):.2f}:d={fade_out:.2f}[vout]")
+    parts.append(f"{a}afade=t=in:st=0:d={fade_in:.2f},afade=t=out:st={max(0.0, total - fade_out):.2f}:d={fade_out:.2f}[aout]")
+    return ";".join(parts), "[vout]", "[aout]"
+
+
+def concat(ffmpeg, parts, out, session_dir, music=None, music_gain=0.25, music_start=0.0, music_only=False, dissolve=0.0):
     lst = os.path.join(session_dir, "recap_parts.txt")
     with open(lst, "w", encoding="utf-8") as f:
         for p in parts:
             f.write("file '" + os.path.abspath(p).replace("\\", "/").replace("'", "'\\''") + "'\n")
     joined = out if not music else os.path.join(session_dir, "recap_nomusic.mp4")
-    r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", joined],
-                       capture_output=True, text=True)
+    if dissolve and len(parts) > 1:      # crossfade the shots (one re-encode of the whole recap instead of a copy)
+        graph, vlabel, alabel = dissolve_graph([video_info(p)[0] or 0.0 for p in parts], d=dissolve)
+        cmd = [ffmpeg, "-y", "-loglevel", "error"]
+        for p in parts:
+            cmd += ["-noautorotate", "-i", p]        # some shots carry a stale rotate tag on an upright picture; a plain join ignores it, so does this
+        r = subprocess.run(cmd + ["-filter_complex", graph, "-map", vlabel, "-map", alabel, *_enc(), joined], capture_output=True, text=True)
+    else:
+        r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", joined],
+                           capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError("Could not join the recap: " + (r.stderr or "")[-300:])
     if music:
@@ -1377,7 +1446,7 @@ def decide_look(paths, probe=None, sample=12):
 
 
 def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, music=None, visual=False, layout="auto",
-               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2):
+               ask=None, describe=None, ffmpeg=None, hook="", style="hype", grab=None, stops=None, aspect=None, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_with_result=False):
     """Build the recap. Returns {"video", "itinerary_md", "itinerary_json", "days"}. Raises ValueError for no videos.
     aspect: "9:16" (default), "16:9" or "2.35:1"; the cinematic style defaults to 2.35:1.
     kind: "trip" (default), "wedding", "event" or "family" - the wording, the section names and whether places are looked up from GPS.
@@ -1404,13 +1473,13 @@ def make_recap(paths, session_dir, trip_name="", note="", total_seconds=60, musi
         QUALITY.update(crf="17", preset="fast")
     try:
         return _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation, geocode, enhance, enhance_strength, manual_rotate, place_names, avoid, kind=kind, keep_sound=keep_sound,
-                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max)
+                           grade_name=grade_name, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max, lines=lines, open_with_result=open_with_result)
     finally:
         W, H = old
         QUALITY.update(old_quality)
 
 
-def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2):
+def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visual, layout, ask, describe, ffmpeg, hook, style, grab, stops, orientation="any", geocode=True, enhance="off", enhance_strength="medium", manual_rotate="", place_names="", avoid="", kind="trip", keep_sound=False, grade_name="default", edit="", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_with_result=False):
     K = get_kind(kind)
     factor = sample_factor(sample, K.get("sample"))
     from engine import auto_edit
@@ -1441,6 +1510,9 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     cine = style == "cinematic"
     hype = style != "plain"
     grade, fade_s = (CINEMATIC_GRADE, 0.5) if cine else ("", 0.2)
+    dissolving = (transitions or "").strip().lower() == "dissolve"      # an explicit choice only; "auto" never dissolves
+    if dissolving:
+        fade_s = 0.05                    # no dip to black on every shot: the shots melt into each other when they are joined
     closing_s = 3.2
     opening = ((GLIMPSES * GLIMPSE_SECONDS + CARD_SECONDS) if hype else 0.0) + closing_s      # glimpses + the trip title card + the closing card
     all_infos = []
@@ -1514,7 +1586,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         For the subject cut-out the tail is "subject" only when a clear person is in the shot's last moments; otherwise a normal type."""
         i = clip_no[0]
         clip_no[0] += 1
-        if trans_name == "none":
+        if trans_name in ("none", "dissolve"):
             return {}
         tail = trans_types[i]
         if tail == "subject":
@@ -1696,6 +1768,8 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             from engine.visual_context import rate_scenery
             rate = rate_scenery
         glimpses = pick_glimpses(days, GLIMPSES, glimpse_s, grab=grab, rate=rate)
+        if open_with_result:
+            glimpses = payoff_first(glimpses, days)
         if visual:
             fix_rotation(glimpses, ffmpeg=ffmpeg, known=rot_known)
         if rotations:
@@ -1704,9 +1778,10 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             hook_png = caption_png(os.path.join(parts_dir, "hook.png"), it["hook"], y_frac=0.3, size=96, lower=cine)
             for gi, g in enumerate(glimpses, 1):
                 out = os.path.join(parts_dir, f"glimpse_{gi}.mp4")
-                render_clip(ffmpeg, g["file"], g["start"], glimpse_s, out, hook_png, layout, g["size"], audio=has_audio(g["file"]) and not mute_orig,
+                shown = None if (cine and gi > 1) else hook_png      # cinematic: the hook once, on the first shot, not stamped on every one
+                render_clip(ffmpeg, g["file"], g["start"], glimpse_s, out, shown, layout, g["size"], audio=has_audio(g["file"]) and not mute_orig,
                             cap_from=0.0, cap_gap=0.0, grade=grade, fade_s=fade_s, rotate=g.get("rotate", 0), fix=fix_for(g["file"]), **zoom_kw(), **trans_kw(g["file"], g["start"], glimpse_s, g["size"]))
-                note_shot(out, g["size"], [hook_png])
+                note_shot(out, g["size"], [shown] if shown else [])
                 parts.append(out)
             print(f"[Log] Opening: hook \"{it['hook']}\" over {len(glimpses)} glimpse(s).")
         if cine:
@@ -1723,6 +1798,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             render_card(ffmpeg, title, card)
             parts.append(card)
     labels = moment_labels(days, cine)
+    step_lines = parse_lines(lines)                      # --recap_lines: a line of text for each part (a recipe step, a stop)
     for d, row in zip(days, it["days"]):
         day_places = list(dict.fromkeys(m["place"] for m in d["moments"] if m.get("place") and not is_plain_area(m["place"]) and m["place"] != "In flight"))
         if day_places:
@@ -1732,7 +1808,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         if cine:
             card_png = None      # the title appears over the day's first shot instead of a card
         elif stops:
-            card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), row["title"], f"{K['stop_unit']} {di} of {len(days)}", row["summary"])
+            card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), row["title"], f"{K['stop_unit']} {di} of {len(days)}", (step_lines[di - 1] if di - 1 < len(step_lines) and step_lines[di - 1] else row["summary"]))
         else:
             card_png = title_card_png(os.path.join(parts_dir, f"card_{di}.png"), f"{K['unit']} {di}", row["title"], row["summary"])
         if card_png:
@@ -1740,12 +1816,13 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             render_card(ffmpeg, card_png, card)
             parts.append(card)
         for mi, (m, cap) in enumerate(zip(d["moments"], row["captions"]), 1):
-            label = labels[di - 1][mi - 1] or ("" if cine else cap)             # cinematic: the place name only; no vague picture captions
+            own = step_lines[di - 1] if di - 1 < len(step_lines) else ""            # --recap_lines: the part's own line
+            label = (own if (own and not (cine and mi == 1)) else labels[di - 1][mi - 1] or ("" if cine else cap))   # cinematic: the place name only; no vague picture captions
             cap_png = caption_png(os.path.join(parts_dir, f"cap_{di}_{mi}.png"), label, lower=cine) if label and not (cine and mi == 1) else None
             out = os.path.join(parts_dir, f"clip_{di}_{mi}.mp4")
             lay, secs = None, m["end"] - m["start"]
             if cine and mi == 1:
-                lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], f"{unit} {di}" if len(days) > 1 else "",
+                lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], own or (f"{unit} {di}" if len(days) > 1 else ""),
                                        look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di)
                 secs = max(secs, first_min)
             render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw(m["file"], m["start"], secs, m["size"]))
@@ -1776,7 +1853,8 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             except Exception as e:
                 print(f"[Warning] Subject cut-out skipped ({e}); plain cuts are used.")
     video = os.path.join(session_dir, "recap.mp4")
-    concat(ffmpeg, parts, video, session_dir, music=music, music_gain=0.9 if mute_orig else 0.25, music_start=music_start, music_only=mute_orig)
+    concat(ffmpeg, parts, video, session_dir, music=music, music_gain=0.9 if mute_orig else 0.25, music_start=music_start, music_only=mute_orig,
+           dissolve=DISSOLVE_SECONDS if trans_name == "dissolve" else 0.0)
     edit_log = {}
     cut_kind = ((director or {}).get("sfx") or {}).get("cut") or ((director or {}).get("sfx") or {}).get("broll")
     if director and cut_kind:                          # the director's cut sound under every shot change
@@ -1879,7 +1957,7 @@ def run(args, target_bitrate=None, target_preset=None):
         common = dict(trip_name=getattr(args, "trip_name", "") or "", note=getattr(args, "user_context", "") or "",
                       total_seconds=getattr(args, "recap_length", 60) or 60, music=getattr(args, "music", None),
                       visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
-                      stops=getattr(args, "trip_stops", None), geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
+                      stops=getattr(args, "trip_stops", None), lines=getattr(args, "recap_lines", "") or "", open_with_result=bool(getattr(args, "recap_open_result", False)), geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
                       manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)),
                       grade_name=_explicit_filter(args), edit=getattr(args, "auto_edit", "") if getattr(args, "auto_edit", "none") != "none" else "",
