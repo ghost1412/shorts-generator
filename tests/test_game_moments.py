@@ -74,3 +74,11 @@ def test_action_clips_get_varied_titles(tmp_path, monkeypatch):
     monkeypatch.setattr(pv, "_path", lambda: str(tmp_path / "h.json"))
     titles = [pv.fresh(gm.ACTION_HOOKS, "game_action_hook") for _ in range(4)]
     assert len(set(titles)) == 4 and all(t in gm.ACTION_HOOKS for t in titles)
+
+
+def test_story_titles_are_whole_sentences_not_cut_off():
+    assert gm.story_title("Okay. Huh? Sometimes I'm just more comfortable. I have a lot to say.") == "Sometimes I'm just more comfortable."
+    assert gm.story_title("What kind of wisdom is that? Can't the") == "What kind of wisdom is that?"
+    assert gm.story_title("") == "" and gm.story_title("Yeah. Okay. No.") == ""
+    long = gm.story_title("We walked all the way down to the old harbour and then the lights went out again.")
+    assert len(long.split()) <= 9 and long.split()[-1].lower() not in gm._DANGLING

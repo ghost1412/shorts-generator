@@ -137,12 +137,37 @@ ACTION_HOOKS = ["No time to blink", "Things got intense", "Watch the whole fight
                 "One mistake and it's over", "Did you see that coming?", "The fight everyone clips", "It gets wild at the end"]
 
 
+_FILLER = {"yeah", "okay", "ok", "oh", "uh", "um", "huh", "hey", "no", "yes", "well", "right", "so", "hmm", "ah"}
+_DANGLING = {"and", "the", "a", "an", "of", "to", "i", "he", "she", "it", "but", "or", "so", "that", "with", "have", "is", "in",
+             "was", "we", "you", "they", "for", "at", "on", "my", "your", "if", "as", "this", "what", "like"}
+
+
+def story_title(words, max_words=9):
+    """A short title from what is said: the first complete sentence of 3 to ~12 words (not just 'Okay.' or 'Huh?'). When
+    every sentence is longer (Whisper often leaves out the full stops), the first one is shortened at a word boundary so it
+    never ends on a dangling word. '' when there is nothing usable."""
+    import re
+    text = " ".join(str(words or "").split())
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+
+    def plain(parts):
+        return [re.sub(r"[^a-z']", "", p.lower()) for p in parts]
+
+    usable = [s.split() for s in sentences if len(s.split()) >= 3 and not all(p in _FILLER for p in plain(s.split()))]
+    fitting = [p for p in usable if len(p) <= max_words + 3]
+    parts = (fitting or usable or [[]])[0]
+    if len(parts) > max_words:               # only a sentence that had to be shortened can end on a dangling word
+        parts = parts[:max_words]
+        while len(parts) > 3 and plain(parts[-1:])[0] in _DANGLING:
+            parts.pop()
+    return " ".join(parts).strip(" ,;:-")
+
+
 def to_highlight(w):
     """A clip entry in the same shape the rest of the pipeline uses."""
     score = w["story_score"] if w["kind"] == "story" else w["action_score"]
     if w["kind"] == "story":
-        words = (w.get("words") or "").split()
-        hook = " ".join(words[:8]).strip(" .,;:") or "Story moment"
+        hook = story_title(w.get("words")) or "Story moment"
         tone, reason = "tense", "Story moment: dialogue or cutscene"
     else:
         hook, tone, reason = "Action moment", "action_peak", "Action moment: loud, fast, little speech"
