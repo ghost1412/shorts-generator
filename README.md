@@ -62,6 +62,26 @@ Source footage: six videos by Poiana11 on Wikimedia Commons (`HoiAnMarket`, `Hoi
 
 ---
 
+## 🎮 Game footage demo: story moments and action moments
+
+<div align="center">
+  <img src="demos/demo_game.gif" width="240" alt="Game mode: a cutscene clip with animated captions, then a car chase, the whole picture kept in frame" />
+</div>
+
+`py main.py --source_video gameplay.mp4 --content game --clip_count 6 --use_remotion`
+
+The normal picker only sees stretches where someone speaks, so a silent fight could never be chosen. Game mode measures every 30-second stretch
+(words, sound peaks, picture motion), labels it **story** (cutscene, dialogue) or **action** (fights, driving, shooting), and picks about half of each
+(`--game_mix 0.5`; `0` = all action, `1` = all story). The whole picture stays in frame over a blurred copy, so the minimap, the HUD and the game's own
+subtitles are not cut off (`--game_crop` keeps a centre crop instead). Captions can be moved and resized: `--caption_position top|middle|bottom`,
+`--caption_size small|large|xlarge`. In the web app: Start here, "Game footage and caption position".
+**Not a best case:** the picture is small in the middle of the vertical frame with blurred bars above and below, and the action picking has been tuned
+on one cutscene-and-driving video only; the first run used a small local model, so titles are plain.
+Source footage: a 10-minute stretch of Rockstar Games' official "Grand Theft Auto VI: An Extended Look" video (in-game footage, PlayStation 5),
+used as fan content; Grand Theft Auto VI footage © Rockstar Games.
+
+---
+
 ## 🎛️ Review, restyle and brand your shorts
 
 After **Make my shorts**, the browser app (`shortsflow webui`) shows every short as a card instead of a bare file list:
@@ -138,6 +158,7 @@ All GIFs are real renders from this repository.
 | :--- | :--- |
 | `demo_clipping_active.gif` | Long interview clipped with `--layout active`: the shot cuts to whoever is speaking, with word captions |
 | `demo_recap.gif` | Trip recap from six widescreen CC0 stock clips (not a best case: letterboxed, no GPS or music): hook, title cards, fast cuts |
+| `demo_game.gif` | `--content game`: a cutscene clip with captions, then a car chase, whole picture kept in frame (not a best case: small picture, blurred bars) |
 | `demo_spot_the_lie.gif` | The "Spot the Lie" quiz format that runs the daily YouTube channel |
 | `demo_short.gif` | Idea-to-video short with spring captions |
 | `demo_facts.gif` | `--mode FACTS` trivia short |
