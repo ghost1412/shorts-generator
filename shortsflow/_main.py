@@ -63,6 +63,7 @@ def parse_args():
     parser.add_argument("--no_rerank", action="store_true", help="Skip the second LLM pass that rates all clip candidates together with context (uses the older per-clip scoring).")
     parser.add_argument("--no_diversity", action="store_true", help="Do not skip near-duplicate clips or prefer different topics when choosing shorts.")
     parser.add_argument("--content", choices=["auto", "game"], default="auto", help="game: pick story moments (cutscenes, dialogue) AND action moments (fights, gameplay, even with no one talking) from game footage. The normal picker only sees stretches where someone speaks.")
+    parser.add_argument("--game_crop", action="store_true", help="With --content game: keep the centred/face crop instead of the default fit layout (the whole picture over a blurred copy, so the minimap, HUD and the game's own subtitles are not cut off).")
     parser.add_argument("--game_mix", type=float, default=0.5, help="With --content game: share of the clips that are story moments (0.5 = half story, half action; 0 = all action; 1 = all story).")
     parser.add_argument("--moments", help="Make shorts from these exact times instead of letting the AI choose (one per line or comma separated): 7:00-7:45, 1:01:40-1:02:30, 420-465. A single time (7:00) starts a short of --target_duration there. Good for cutscenes and any scene you already know.")
     parser.add_argument("--visual_context", action="store_true", help="Let a local vision model (Ollama, e.g. gemma3:12b) look at a few frames of each candidate moment, so the story on screen counts and not only what is said. Slower; skipped with a note when no vision model is installed. Use --user_context to say what the video is about.")
@@ -151,6 +152,8 @@ def parse_args():
     parser.add_argument("--use_remotion", action="store_true", help="Use Remotion engine instead of MoviePy for modern professional rendering.")
     parser.add_argument("--caption_style", default="HORMOZI", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "AUTO", "RANDOM"], help="Subtitle animation preset for Remotion renderer (default: HORMOZI). KARAOKE = colour sweep along the line, NEON = glow, BAR = subtitle bar.")
     parser.add_argument("--caption_color", type=str, default=None, help="Accent colour of the active caption word as hex, e.g. '#FF3366' (any caption style; needs --use_remotion).")
+    parser.add_argument("--caption_position", choices=["default", "top", "middle", "bottom"], default="default", help="Where the animated captions sit (needs --use_remotion): top, middle or bottom of the screen. default keeps the normal height (and below the picture with --layout fit). An explicit --subtitle_y_pos wins.")
+    parser.add_argument("--caption_size", choices=["small", "default", "large", "xlarge"], default="default", help="Size of the animated captions (needs --use_remotion): small 0.8x, large 1.3x, xlarge 1.6x. The top edge stays where it is.")
     parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for animated (Remotion) captions on clips (default: 1150; moved up automatically for --layout split_filler).")
     parser.add_argument("--max_workers", type=int, default=None, help="Force number of parallel rendering worker threads (e.g. 2 or 4 for Remotion/FFmpeg).")
     
@@ -213,6 +216,10 @@ def parse_args():
             print("[Warning] --stat_pops is drawn by the animated renderer; it is ignored without --use_remotion.")
     if args.caption_emoji:
         os.environ["SHORTSFLOW_CAPTION_EMOJI"] = "1"
+    from engine import caption_layout
+    args.subtitle_y_pos = caption_layout.y_for(getattr(args, "caption_position", "default"), args.subtitle_y_pos)
+    if getattr(args, "caption_size", "default") != "default":
+        os.environ["SHORTSFLOW_CAPTION_SIZE"] = str(caption_layout.size_for(args.caption_size))
     if args.hook_overlay:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
     if args.auto_zoom:

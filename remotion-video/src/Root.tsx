@@ -37,6 +37,7 @@ export const RemotionRoot: React.FC = () => {
           category: "general",
           titleText: "Preview Short",
           subtitleYPos: 1600,
+          captionSize: 1,
           captionStyle: "HORMOZI" as const,
           captionEmoji: false,
           hookSeconds: 2.8,

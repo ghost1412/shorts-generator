@@ -412,7 +412,8 @@ def clear_brand():
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
-               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default"):
+               auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default",
+               game=False, game_mix="0.5", caption_position="default", caption_size="default"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -426,7 +427,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     results = os.path.join(session, "results.json")
     os.makedirs(session, exist_ok=True)
     long_form = mode == "long"
-    layout = "split_filler" if filler else "auto"
+    layout = "split_filler" if filler else ("fit" if game and not long_form else "auto")   # game footage: keep the whole picture
     lang_args = ["--language", (spoken or "auto")]
     if caption_lang:
         lang_args += ["--caption_lang", caption_lang]
@@ -448,6 +449,8 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         cmd += web_args.grade_args(grade)
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
+            cmd += web_args.caption_look_args(caption_position, caption_size)
+        cmd += web_args.game_args(game, game_mix)
         if (find or "").strip():
             cmd += ["--find", find.strip()]
         if (about or "").strip():
@@ -796,6 +799,16 @@ def build_ui():
                         q_grade = gr.Dropdown(web_args.COLOR_GRADE_CHOICES, value="default", label="Colour filter",
                                               info="A colour look for the whole short. Automatic uses the Auto-edit style's own look (Hype: vibrant action, "
                                                    "Vlog: cinematic warm); pick one here to override it.")
+                        with gr.Accordion("Game footage and caption position (optional)", open=False):
+                            q_game = gr.Checkbox(label="This is game footage", value=False,
+                                                 info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay, even with nobody talking), and keeps the whole screen in frame so the minimap and the game's own subtitles are not cut off.")
+                            q_game_mix = gr.Dropdown(web_args.GAME_MIX_CHOICES, value="0.5", label="Story or action",
+                                                     info="How many of the shorts are story moments and how many are action. Only used for game footage.")
+                            with gr.Row():
+                                q_cap_pos = gr.Dropdown(web_args.CAPTION_POSITION_CHOICES, value="default", label="Caption position",
+                                                        info="Where the animated captions sit. Normal height is the default.")
+                                q_cap_size = gr.Dropdown(web_args.CAPTION_SIZE_CHOICES, value="default", label="Caption size",
+                                                         info="Size of the animated captions.")
                         with gr.Accordion("Extras (optional)", open=False):
                             q_clean = gr.Checkbox(label="Clean up the sound", info="Removes background noise and evens out the volume.")
                             q_enhance = gr.Checkbox(label="Auto-enhance the picture", info="Like an editor: each short is measured and a dark clip is lifted, a colour cast reduced, a dull one given a little colour, plus light sharpening. Only what is off is corrected. On your PC; it cannot add detail that is not there.")
@@ -938,7 +951,8 @@ def build_ui():
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
-                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade],
+                             q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
+                             q_game, q_game_mix, q_cap_pos, q_cap_size],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)

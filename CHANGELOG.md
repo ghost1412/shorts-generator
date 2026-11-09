@@ -2,6 +2,12 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+### New
+- **Game footage mode (`--content game`, "This is game footage" in the Start-here tab)**: the normal picker builds its candidates only from stretches where someone speaks, so a silent boss fight or a gameplay highlight could never be chosen. Game mode measures every 30-second stretch of the video (words per second, sound peaks and variation, picture motion), labels each one story (cutscene, dialogue), action (fight, gameplay, even when Whisper hears words in the noise) or quiet, scores each by its own kind and mixes them (`--game_mix`, default half story and half action; a dropdown in the web form). The first 3% of the video (title montage) is skipped, and the clips use the `fit` layout (the whole picture over a blurred copy, so the minimap, the HUD and the game's own subtitles are not cut off); `--game_crop` keeps the centre crop. Tuned on one cutscene-and-boss-fight video; real gameplay may need different numbers. Clip titles for action moments are generic ("Action moment") when no AI text provider answers.
+- **Caption position and size (`--caption_position top|middle|bottom`, `--caption_size small|large|xlarge`, dropdowns in the Start-here tab)**: the animated captions can sit at the top, middle or bottom and be 0.8x to 1.6x their normal size; the top edge stays where it is when they grow. Normal height is still the default (and below the picture with `--layout fit`); an explicit `--subtitle_y_pos` wins. The size is remembered when a single clip is re-rendered. Needs `--use_remotion`.
+
 ## 0.6.0 (2026-11-08)
 
 ### Fixed

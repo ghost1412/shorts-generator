@@ -134,6 +134,10 @@ def run(args, target_bitrate, target_preset):
         from engine.media_gen import get_chapters_json_path
         chapters_path = get_chapters_json_path(source_url or args.source_video, session_dir)
 
+    if getattr(args, 'content', 'auto') == 'game' and args.layout == 'single' and not getattr(args, 'game_crop', False):
+        args.layout = 'fit'   # gameplay: a centre crop loses the minimap, the HUD and the game's own subtitles
+        print("[Log] Game footage: using the 'fit' layout (whole picture over a blurred copy). --game_crop keeps the centre crop.")
+
     from engine import timing
     timing.reset()
     highlights, transcript_path, interest_points, silence_intervals = process_source_video(
@@ -649,7 +653,7 @@ def run(args, target_bitrate, target_preset):
                 "extract_mode": args.extract_mode, "layout": getattr(args, "layout", "single"), "filler_video": getattr(args, "filler_video", None),
                 "smart_crop": bool(args.smart_crop), "tighten": bool(args.tighten), "tighten_mode": args.tighten_mode,
                 "use_remotion": bool(args.use_remotion), "caption_style": args.caption_style,
-                "subtitle_y_pos": args.subtitle_y_pos, "brand": getattr(args, "brand", None),
+                "subtitle_y_pos": args.subtitle_y_pos, "caption_size": float(os.getenv("SHORTSFLOW_CAPTION_SIZE") or 1.0), "brand": getattr(args, "brand", None),
                 "caption_lang": getattr(args, "caption_lang", None), "zh_script": getattr(args, "zh_script", "auto"),
                 "clean_audio": bool(getattr(args, "clean_audio", False)), "hook_overlay": bool(getattr(args, "hook_overlay", False)),
                 "broll": bool(getattr(args, "broll", False)),

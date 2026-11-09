@@ -7,6 +7,14 @@ import subprocess
 import time
 import uuid
 
+def _caption_size_from_env():
+    """Caption scale set by --caption_size (SHORTSFLOW_CAPTION_SIZE), 1.0 when unset or unreadable."""
+    try:
+        return max(0.6, min(1.8, float(os.getenv("SHORTSFLOW_CAPTION_SIZE") or 1.0)))
+    except ValueError:
+        return 1.0
+
+
 def _probe_duration(path):
     """Clip length in seconds via ffprobe, or None if it can't be read."""
     try:
@@ -419,6 +427,7 @@ def render_with_remotion(
           "category": "general",
           "titleText": title_text,
           "subtitleYPos": subtitle_y_pos,
+          "captionSize": _caption_size_from_env(),
           "captionStyle": caption_style,
           **overlay_props(hook_text),
           "avatarUrl": rel_avatar_path if rel_avatar_path else None,

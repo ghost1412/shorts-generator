@@ -41,6 +41,33 @@ SUBJECT_LOOK_CHOICES = _subject_cut.LOOK_LABELS
 SUBJECT_COLOR_CHOICES = _subject_cut.COLOR_CHOICES
 
 
+GAME_MIX_CHOICES = [("Half story, half action", "0.5"), ("Mostly action", "0.2"), ("Mostly story", "0.8"),
+                    ("Only action", "0"), ("Only story", "1")]
+CAPTION_POSITION_CHOICES = [("Normal height", "default"), ("Top", "top"), ("Middle", "middle"), ("Bottom", "bottom")]
+CAPTION_SIZE_CHOICES = [("Normal", "default"), ("Small", "small"), ("Large", "large"), ("Extra large", "xlarge")]
+
+
+def game_args(game=False, mix="0.5"):
+    """`--content game` (story AND action moments, whole picture kept in frame) with the story/action mix."""
+    if not game:
+        return []
+    try:
+        share = max(0.0, min(1.0, float(mix)))
+    except (TypeError, ValueError):
+        share = 0.5
+    return ["--content", "game", "--game_mix", f"{share:g}"]
+
+
+def caption_look_args(position="default", size="default"):
+    """`--caption_position` / `--caption_size`, only when they differ from the normal look."""
+    out = []
+    if position in ("top", "middle", "bottom"):
+        out += ["--caption_position", position]
+    if size in ("small", "large", "xlarge"):
+        out += ["--caption_size", size]
+    return out
+
+
 def edit_args(style, strength="medium"):
     """`--auto_edit STYLE --edit_strength S` (nothing when no style is chosen)."""
     if not style or style == "none":
