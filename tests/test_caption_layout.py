@@ -45,30 +45,39 @@ def test_web_form_builds_game_and_caption_options():
     assert [v for _, v in web_args.CAPTION_POSITION_CHOICES] == ["default", "top", "middle", "bottom"]
 
 
+def _webui_source():
+    return open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+
+
+def _params(src, name):
+    """Parameter names of a top-level function, read from the source (importing webui needs gradio, which CI does not install)."""
+    import ast
+    for node in ast.parse(src).body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return [a.arg for a in node.args.args]
+    raise AssertionError(name + " not found")
+
+
+def _click_inputs(src, pattern):
+    import re
+    m = re.search(pattern, src, re.S)
+    assert m
+    return [x.strip() for x in m.group(1).replace("\n", " ").split(",") if x.strip()]
+
+
 def test_web_quick_clip_inputs_match_its_parameters():
     """The Start-here button passes its inputs by position, so the list must line up with quick_clip's parameters."""
-    import inspect
-    import re
-    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
-    m = re.search(r"q_btn\.click\(quick_clip, \[(.*?)\],\s*\[q_status", src, re.S)
-    assert m
-    inputs = [x.strip() for x in m.group(1).replace("\n", " ").split(",") if x.strip()]
-    import webui
-    params = list(inspect.signature(webui.quick_clip).parameters)
+    src = _webui_source()
+    inputs = _click_inputs(src, r"q_btn\.click\(quick_clip, \[(.*?)\],\s*\[q_status")
+    params = _params(src, "quick_clip")
     assert len(inputs) <= len(params) and inputs[-4:] == ["q_game", "q_game_mix", "q_cap_pos", "q_cap_size"]
     assert params[len(inputs) - 4:len(inputs)] == ["game", "game_mix", "caption_position", "caption_size"]
 
 
 def test_clip_tab_inputs_match_clip_video_parameters():
-    import inspect
-    import re
-    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
-    m = re.search(r"clip_btn\.click\(\s*clip_video,\s*\[(.*?)\],\s*\[clip_log", src, re.S)
-    assert m
-    inputs = [x.strip() for x in m.group(1).replace("\n", " ").split(",") if x.strip()]
-    import webui
-    params = list(inspect.signature(webui.clip_video).parameters)
+    src = _webui_source()
+    inputs = _click_inputs(src, r"clip_btn\.click\(\s*clip_video,\s*\[(.*?)\],\s*\[clip_log")
+    params = _params(src, "clip_video")
     assert inputs[-4:] == ["clip_game", "clip_game_mix", "clip_cap_pos", "clip_cap_size"]
-    # *clip_settings stands for five inputs (style, aspect, remotion, llm, tts)
-    assert len(inputs) - 1 + 5 == len(params)
+    assert len(inputs) - 1 + 5 == len(params)       # *clip_settings stands for five inputs (style, aspect, remotion, llm, tts)
     assert params[-4:] == ["game", "game_mix", "caption_position", "caption_size"]
