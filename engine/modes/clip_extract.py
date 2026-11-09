@@ -595,7 +595,18 @@ def run(args, target_bitrate, target_preset):
                 "styles": args.style if isinstance(args.style, list) else ([args.style] if args.style else [])
             }
             
-            if active_cat != "gaming" and topic_name == "Viral Highlight":
+            if getattr(args, 'content', 'auto') == 'game':
+                # game footage: the older "gaming" path wrote generic titles and podcast hashtags. Quote what is said when
+                # there is enough of it; a moment with (almost) no words is titled by its own hook and tagged as gaming.
+                from engine.social_gen import generate_clip_metadata, game_clip_metadata
+                said = clip_transcript_text(transcript_segments, h['start'], h['end'])
+                game_note = f"Game footage ({topic_name})" if active_cat == "gaming" else "Game footage"
+                if len(said.split()) >= 8:
+                    meta = generate_clip_metadata(said, hook=h.get('hook_text'),
+                                                  user_context=" ".join(x for x in (args.user_context, game_note) if x))
+                else:
+                    meta = game_clip_metadata(h.get('hook_text'), topic_name if active_cat == "gaming" else "", h.get('kind'))
+            elif active_cat != "gaming" and topic_name == "Viral Highlight":
                 from engine.social_gen import generate_clip_metadata
                 seen = str(h.get('visual') or '').strip()
                 meta = generate_clip_metadata(clip_transcript_text(transcript_segments, h['start'], h['end']),

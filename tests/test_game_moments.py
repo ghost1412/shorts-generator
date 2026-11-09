@@ -82,3 +82,12 @@ def test_story_titles_are_whole_sentences_not_cut_off():
     assert gm.story_title("") == "" and gm.story_title("Yeah. Okay. No.") == ""
     long = gm.story_title("We walked all the way down to the old harbour and then the lights went out again.")
     assert len(long.split()) <= 9 and long.split()[-1].lower() not in gm._DANGLING
+
+
+def test_game_clip_metadata_has_gaming_tags_and_no_podcast_hashtags():
+    from engine.social_gen import game_clip_metadata
+    m = game_clip_metadata("Pure chaos", "GTA 6", "action")
+    assert m["title"] == "Pure chaos" and "#gta6" in m["description"] and "#action" in m["description"]
+    assert "podcast" not in m["description"].lower() and "gaming" in m["tags"] and "gta6" in m["tags"]
+    plain = game_clip_metadata(None, "", "story")
+    assert plain["title"] == "Story moment" and "#cutscene" in plain["description"]

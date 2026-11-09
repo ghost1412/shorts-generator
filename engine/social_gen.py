@@ -139,6 +139,17 @@ def _fallback_clip_metadata(text, hook):
     }
 
 
+def game_clip_metadata(hook, game="", kind=None):
+    """Title, description and tags for a game moment with (almost) nothing said: the clip's own hook as the title, the game
+    named only when it is known, and gaming hashtags."""
+    title = (hook or ("Action moment" if kind == "action" else "Story moment")).strip()[:80]
+    tags = ["gaming", "gameplay", "shorts"] + ([game.lower().replace(" ", "")] if game else [])
+    kind_tag = {"action": "#action", "story": "#cutscene"}.get(kind or "", "")
+    hashtags = " ".join(["#gaming", "#gameplay", "#shorts"] + ([f"#{game.lower().replace(' ', '')}"] if game else []) + ([kind_tag] if kind_tag else []))
+    lead = f"{game} {'action' if kind == 'action' else 'story'} moment.".strip() if game else f"{'Action' if kind == 'action' else 'Story'} moment."
+    return {"title": title, "description": f"{lead}\n\n{hashtags}", "tags": tags, "title_variants": []}
+
+
 def _description_lead(description):
     """The description without its hashtag line(s): hashtags are keywords, the sentences are claims that must be grounded."""
     lines = [ln for ln in str(description or "").splitlines() if ln.strip() and not ln.strip().startswith("#")]
