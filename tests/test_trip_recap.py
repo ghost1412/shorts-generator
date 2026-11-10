@@ -385,3 +385,83 @@ def test_cut_sound_events_follow_the_dissolve_overlap():
     plain = [e["t"] for e in tr.cut_sound_events(parts, "whoosh")]
     melt = [e["t"] for e in tr.cut_sound_events(parts, "whoosh", overlap=0.6)]
     assert plain == [4.0, 8.0] and melt == [3.4, 6.8]
+
+
+def test_timelapse_factor_never_asks_for_more_footage_than_the_file_has():
+    assert tr.timelapse_factor(None, 3.0, 100) == 1.0 and tr.timelapse_factor(1.0, 3.0, 100) == 1.0
+    assert tr.timelapse_factor("oops", 3.0, 100) == 1.0
+    assert tr.timelapse_factor(2.5, 3.0, 100) == 2.5
+    assert tr.timelapse_factor(3.0, 3.0, 6.0) == pytest.approx(2.0)          # only 6 s left: 2x at most for a 3 s shot
+    assert tr.timelapse_factor(3.0, 3.0, 1.0) == 1.0 and tr.timelapse_factor(3.0, 3.0, -4) == 1.0
+
+
+def test_render_clip_time_lapse_plays_a_longer_stretch_in_the_same_time(tmp_path):
+    import subprocess
+    try:
+        import imageio_ffmpeg
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+        from PIL import Image
+    except Exception:
+        pytest.skip("needs ffmpeg and Pillow")
+    src = str(tmp_path / "rb.mp4")
+    r = subprocess.run([ff, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=red:s=160x90:d=2:r=10", "-f", "lavfi", "-i", "color=c=blue:s=160x90:d=2:r=10",
+                        "-filter_complex", "[0][1]concat=n=2:v=1:a=0", "-pix_fmt", "yuv420p", src], capture_output=True)
+    if r.returncode != 0:
+        pytest.skip("ffmpeg could not make the test video")
+
+    def last_frame_colour(path):
+        png = str(tmp_path / "f.png")
+        subprocess.run([ff, "-y", "-loglevel", "error", "-sseof", "-0.15", "-i", path, "-frames:v", "1", png], check=True)
+        px = Image.open(png).convert("RGB").getpixel((80, 45))
+        return "red" if px[0] > px[2] else "blue"
+
+    old = (tr.W, tr.H)
+    tr.W, tr.H = 160, 90
+    try:
+        normal, fast = str(tmp_path / "n.mp4"), str(tmp_path / "s.mp4")
+        tr.render_clip(ff, src, 0, 1.0, normal, None, "crop", (160, 90), audio=False)
+        tr.render_clip(ff, src, 0, 1.0, fast, None, "crop", (160, 90), audio=False, speed=4.0)
+        for path in (normal, fast):
+            assert 0.9 < tr.video_info(path, ff.replace("ffmpeg", "ffprobe") if "ffprobe" in ff else "ffprobe")[0] < 1.2 if shutil_which_ffprobe() else True
+        assert last_frame_colour(normal) == "red"             # 1 s of normal speed stays inside the 2 s of red
+        assert last_frame_colour(fast) == "blue"              # 4x reaches the blue part within the same 1 s
+    finally:
+        tr.W, tr.H = old
+
+
+def shutil_which_ffprobe():
+    import shutil
+    return bool(shutil.which("ffprobe"))
+
+
+def test_recap_options_for_pace_ending_and_counter_exist():
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "shortsflow", "_main.py"), encoding="utf-8").read()
+    for flag in ('"--recap_speed"', '"--recap_end"', '"--recap_end_text"', '"--recap_counter"'):
+        assert flag in src
+    assert 'default="card"' in src[src.index('"--recap_end"'):src.index('"--recap_end"') + 120]            # the old closing card stays the default
+
+
+def test_stops_can_be_separated_with_a_bar_like_the_recap_lines():
+    assert tr.parse_stops("Fry the nuts|Roast semolina and khoya|Mix") == ["Fry the nuts", "Roast semolina and khoya", "Mix"]
+    assert tr.parse_stops("A, B; C") == ["A", "B", "C"]
+
+
+def test_quick_text_layers_show_at_once_and_old_timings_are_unchanged(tmp_path, monkeypatch):
+    """The fast recap pace shows the text straight away; the normal timings (0.3, 0.9, 1.7 s with 0.7 s fades) stay as they were."""
+    import subprocess
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen["filter"] = cmd[cmd.index("-filter_complex") + 1]
+        open(cmd[-1], "wb").write(b"x")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(tr.subprocess, "run", fake_run)
+    layers = [(str(tmp_path / "a.png"), 0.3), (str(tmp_path / "b.png"), 0.9)]
+    tr.render_clip("ffmpeg", "src.mp4", 0, 3.0, str(tmp_path / "o.mp4"), None, "crop", (1080, 1920), audio=False, layers=layers)
+    assert "fade=t=in:st=0.30:d=0.7:alpha=1" in seen["filter"] and "fade=t=out:st=2.40:d=0.4:alpha=1" in seen["filter"]
+    tr.render_clip("ffmpeg", "src.mp4", 0, 3.0, str(tmp_path / "o2.mp4"), None, "crop", (1080, 1920), audio=False,
+                   layers=[(str(tmp_path / "a.png"), 0.05)], layer_fade=(0.2, 0.25))
+    assert "fade=t=in:st=0.05:d=0.2:alpha=1" in seen["filter"] and "fade=t=out:st=2.55:d=0.25:alpha=1" in seen["filter"]
