@@ -198,7 +198,8 @@ try:
              width=700, max_w=700)
         saved = os.path.join(home, "brand", "brand.json")
         assert os.path.exists(saved), "brand.json was not written"
-        assert json.load(open(saved, encoding="utf-8"))["handle"] == "@lightexplained"
+        got = json.load(open(saved, encoding="utf-8"))
+        assert got.get("handle") == "@lightexplained", f"saved brand was {got}"
         page.reload()
         page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
         page.get_by_text("Your brand: logo, @handle, end card").click()
