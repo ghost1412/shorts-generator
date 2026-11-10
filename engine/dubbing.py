@@ -7,6 +7,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 MODE = "DUB"
@@ -120,6 +121,100 @@ def _parse(response):
     return robust_json_parse(response)
 
 
+# --- "smart" fit: whole sentences, no hard cuts -------------------------------------------------------------------------------
+# Characters per second a computer voice speaks at a natural pace plus a little speed-up (about 1.3x), used to tell the AI how
+# long a line may be. Devanagari and Arabic voices need clearly fewer characters per second than Latin ones (measured on a Hindi
+# dub: about 8.5 characters per second at normal speed).
+SPEECH_RATE = {"hi": 11.0, "mr": 11.0, "ar": 12.0, "ru": 13.0, "uk": 13.0, "bg": 13.0, "el": 13.0}
+TIGHT_LINE = ("The voice must finish in time: when a line is too long to be spoken in its time, shorten it by dropping filler and "
+              "repeated words, but keep the meaning. A shorter natural line is better than one that gets cut off.\n")
+SOFT_LAG = 1.0      # seconds a voice clip may end after the next line starts (the next one then starts a little late)
+MAX_LAG = 3.0       # the most the dub may run behind the picture before a clip is shortened as a last resort
+
+
+def speech_rate(lang):
+    """Characters per second to allow when translating into `lang`."""
+    return SPEECH_RATE.get(normalize_lang(lang), CHARS_PER_SECOND)
+
+
+def merge_short_segments(segments, want=3.0, max_len=7.0, max_gap=0.6):
+    """Join runs of short neighbouring lines into units of about `want` to `max_len` seconds.
+    Speech recognition can cut a film into 1-2 second pieces; voiced one by one, each piece gets its own lead-in silence and a hard
+    cut when the translation is longer. A unit stops growing at a pause, at the end of a sentence once it is 2 s long, or at max_len."""
+    out = []
+    for seg in segments:
+        cur = out[-1] if out else None
+        if cur is not None:
+            length = cur["end"] - cur["start"]
+            gap = seg["start"] - cur["end"]
+            ended = cur["text"].rstrip().endswith((".", "?", "!", "…", "।", "。"))
+            if length < want and gap <= max_gap and (seg["end"] - cur["start"]) <= max_len and not (ended and length >= 2.0):
+                cur["end"] = seg["end"]
+                cur["text"] = cur["text"].rstrip() + " " + seg["text"].lstrip()
+                continue
+        out.append(dict(seg))
+    return out
+
+
+def flow_schedule(segments, voice_seconds, soft_lag=SOFT_LAG, max_lag=MAX_LAG, pad=0.08):
+    """Where each voice clip starts and how fast it plays, without cutting sentences short when it can be avoided.
+    segments: [{start, end}], voice_seconds: length of each voice clip (0 or None = no clip).
+    A clip that does not fit speeds up (to SOFT_SPEEDUP, then to HARD_SPEEDUP) so it ends no later than `soft_lag` after the next line
+    would start; if that still is not enough it may run on until `max_lag` after, and the next clip then starts a little late. Only
+    beyond that is a clip cut (`trim`). Returns a list (None for lines without a clip) of {start, tempo, trim, end}."""
+    plans, cursor = [], None
+    for i, seg in enumerate(segments):
+        d = voice_seconds[i] if i < len(voice_seconds) else 0
+        if not d:
+            plans.append(None)
+            continue
+        start = seg["start"] if cursor is None else max(seg["start"], cursor + pad)
+        nxt = segments[i + 1]["start"] if i + 1 < len(segments) else seg["end"] + 3.0
+        preferred = max(0.3, seg["end"] - seg["start"])
+        tempo = min(d / preferred, SOFT_SPEEDUP) if d > preferred else 1.0
+        if start + d / tempo > nxt + soft_lag:
+            tempo = min(max(tempo, d / max(0.3, nxt + soft_lag - start)), HARD_SPEEDUP)
+        trim = None
+        if start + d / tempo > nxt + max_lag + 0.05:
+            tempo = max(tempo, min(d / max(0.3, nxt + max_lag - start), HARD_SPEEDUP))
+            if start + d / tempo > nxt + max_lag + 0.05:
+                trim = max(0.3, nxt + max_lag - start)
+        final = trim if trim is not None else d / tempo
+        cursor = start + final
+        plans.append({"start": start, "tempo": round(tempo, 3), "trim": trim, "end": cursor})
+    return plans
+
+
+VOICE_RETRIES = 3
+VOICE_RETRY_SECONDS = 0.8
+
+
+def _transient_voice_error(error):
+    """True for the errors the online voice service gives when it merely hiccuped (worth another try), not for a bad voice name."""
+    text = str(error).lower()
+    return any(k in text for k in ("no audio was received", "timed out", "timeout", "connection", "temporarily", "503", "429"))
+
+
+def trim_silence(path, ffmpeg=None):
+    """Cut the silence off the start and end of a voice clip in place (computer voices add a quarter second or more around every
+    line, which adds up over hundreds of lines). Returns True when the file was shortened; False leaves it as it was."""
+    try:
+        import imageio_ffmpeg
+        ffmpeg = ffmpeg or imageio_ffmpeg.get_ffmpeg_exe()
+        tmp = path + ".trim.mp3"
+        cut = "silenceremove=start_periods=1:start_duration=0.02:start_threshold=-45dB"
+        r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", path, "-af", f"{cut},areverse,{cut},areverse", tmp],
+                           capture_output=True)
+        if r.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 200:
+            os.replace(tmp, path)
+            return True
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    except Exception:
+        pass
+    return False
+
+
 TONES = {
     "faithful": "",                       # the default: keep the speaker's own tone, exactly the old behaviour
     "funny": "Rewrite each line in a playful, funny tone, with light jokes where they fit, but keep the meaning and every fact.",
@@ -143,23 +238,26 @@ def tone_line(tone):
     return text + "\n" if text else ""
 
 
-def translate_segments(segments, target_lang, llm=None, parse=None, about=None, tone="faithful"):
+def translate_segments(segments, target_lang, llm=None, parse=None, about=None, tone="faithful", cps=None, tight=False):
     """Translate each segment keeping one-to-one timing. Returns (texts, failed_count).
-    A segment the LLM did not return stays in the source language and counts as failed."""
+    A segment the LLM did not return stays in the source language and counts as failed.
+    cps: characters per second to allow (default CHARS_PER_SECOND); tight: also ask for shorter lines when a line cannot fit."""
     llm, parse = llm or _default_llm, parse or _parse
+    cps = cps or CHARS_PER_SECOND
     lang_full = LANG_NAMES.get(normalize_lang(target_lang), target_lang)
     texts = [s["text"] for s in segments]
     failed = 0
     for lo in range(0, len(segments), BATCH):
         chunk = segments[lo:lo + BATCH]
         items = [{"id": lo + i, "text": s["text"],
-                  "max_chars": max(12, int((s["end"] - s["start"]) * CHARS_PER_SECOND))} for i, s in enumerate(chunk)]
+                  "max_chars": max(12, int((s["end"] - s["start"]) * cps))} for i, s in enumerate(chunk)]
         prompt = (
             f"Translate each spoken line of this video into natural, spoken {lang_full} for dubbing.\n"
             "Keep the meaning and tone. Each translation must be short enough to be spoken in the same time, "
             "so stay at or below max_chars when you can. Do not merge or split lines.\n"
             "The lines come from speech recognition, so a word can be misheard: when a line makes no sense, translate what was "
             "most likely meant, and keep names as proper names.\n"
+            + (TIGHT_LINE if tight else "")
             + tone_line(tone)
             + (f"What the video is about (use it to fix misheard names and terms): {str(about).strip()[:400]}\n" if about else "") + "\n"
             f"Lines: {json.dumps(items, ensure_ascii=False)}\n\n"
@@ -470,9 +568,12 @@ def _mix_batch(ffmpeg, source_video, clips, total, session_dir, number):
 
 def dub_video(source_video, target_lang, session_dir, output_path=None, language="en", provider="auto",
               captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None, original="music", about=None,
-              tone="faithful", delivery="neutral", caption_size="default", caption_position="bottom"):
+              tone="faithful", delivery="neutral", caption_size="default", caption_position="bottom", fit="classic"):
     """Full pipeline. Returns {"video", "srt", "json", "segments", "failed_translations", "failed_voices"}.
-    transcribe/llm/synth/mixer can be replaced (tests, custom backends)."""
+    transcribe/llm/synth/mixer can be replaced (tests, custom backends).
+    fit: "classic" (the original behaviour: every transcript line voiced on its own, clips cut when too long) or "smart" (short lines
+    joined into sentences, silence trimmed off the voice clips, a language-aware length limit for the translation, and a clip that is
+    too long runs a little into the next gap instead of being cut; the subtitles follow the voice)."""
     target = normalize_lang(target_lang)
     if target not in EDGE_VOICES:
         raise ValueError(f"Unsupported dub language '{target_lang}'. Supported: {', '.join(supported_languages())}")
@@ -489,6 +590,12 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
     segments = segments_from_transcript(data)
     if not segments:
         raise ValueError("No speech found in the video, nothing to dub.")
+    smart = (fit or "classic") == "smart"
+    if smart:
+        before = len(segments)
+        segments = merge_short_segments(segments)
+        if len(segments) != before:
+            print(f"[Log] Smart fit: {before} short lines joined into {len(segments)} sentences, so each gets a natural voice and fewer hard cuts.")
     print(f"[Log] Dubbing {len(segments)} spoken segment(s) into {LANG_NAMES.get(target, target)}...")
     note = coverage_warning(segments, media_duration(source_video))
     if note:
@@ -502,7 +609,8 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
         print(f"[Log] Reusing the saved {LANG_NAMES.get(target, target)} translation ({len(texts)} lines) and any finished voice clips from "
               f"this session: no AI text or voice service is called for them. Delete {os.path.basename(json_path)} to translate again.")
     else:
-        texts, failed_tr = translate_segments(segments, target, llm=llm, about=about, tone=tone)
+        texts, failed_tr = translate_segments(segments, target, llm=llm, about=about, tone=tone,
+                                              cps=speech_rate(target) if smart else None, tight=smart)
     if failed_tr == len(segments):
         raise RuntimeError("Translation failed for every segment (no LLM answered). Check your AI key / Ollama "
                            "(see `shortsflow doctor`); nothing was dubbed.")
@@ -527,7 +635,17 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
         if saved and os.path.exists(path) and os.path.getsize(path) > 200 and _voice_matches(path + ".voice", tag):
             return path                                  # voiced by an earlier run on this same translation and delivery: keep it
         try:
-            synth(texts[i], path)
+            for attempt in range(VOICE_RETRIES + 1):
+                try:
+                    synth(texts[i], path)
+                    break
+                except Exception as e:
+                    # the online voice service sometimes returns nothing for a request when several arrive together: ask again
+                    if attempt >= VOICE_RETRIES or not _transient_voice_error(e):
+                        raise
+                    time.sleep(VOICE_RETRY_SECONDS * (attempt + 1))
+            if smart and os.path.exists(path) and os.path.getsize(path) > 200:
+                trim_silence(path)                       # no quarter-second of nothing around every line
             if os.path.exists(path) and os.path.getsize(path) > 200:
                 try:
                     with open(path + ".voice", "w", encoding="utf-8") as f:
@@ -553,20 +671,37 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
         raise RuntimeError(voice_failure_message(voice_errors))
 
     clips = []
-    for i, (seg, path) in enumerate(zip(segments, paths)):
-        if not path:
-            continue
-        nxt = segments[i + 1]["start"] if i + 1 < len(segments) else seg["end"] + 3.0
-        fit = plan_fit(media_duration(path), seg["end"] - seg["start"], nxt - seg["start"])
-        clips.append({"path": path, "start": seg["start"], "tempo": fit["tempo"], "trim": fit["trim"]})
+    caption_times = {}                                   # smart fit: the subtitles follow the voice, not the source timing
+    if smart:
+        plans = flow_schedule(segments, [media_duration(p) if p else 0.0 for p in paths])
+        cut = 0
+        for i, (path, plan) in enumerate(zip(paths, plans)):
+            if not path or plan is None:
+                continue
+            clips.append({"path": path, "start": plan["start"], "tempo": plan["tempo"], "trim": plan["trim"]})
+            caption_times[i] = (plan["start"], plan["end"])
+            cut += 1 if plan["trim"] else 0
+        print(f"[Log] Smart fit: {len(clips)} voice clips placed; {cut} had to be shortened at the end"
+              + (" (the translation runs much longer than the original speech there; a tighter tone or a faster voice would help)" if cut > len(clips) * 0.1 else "") + ".")
+    else:
+        for i, (seg, path) in enumerate(zip(segments, paths)):
+            if not path:
+                continue
+            nxt = segments[i + 1]["start"] if i + 1 < len(segments) else seg["end"] + 3.0
+            fit_plan = plan_fit(media_duration(path), seg["end"] - seg["start"], nxt - seg["start"])
+            clips.append({"path": path, "start": seg["start"], "tempo": fit_plan["tempo"], "trim": fit_plan["trim"]})
 
     base = os.path.splitext(os.path.basename(source_video))[0]
+    captioned = translated
+    if smart and caption_times:                          # subtitles appear when the voice speaks them
+        captioned = [dict(t, start=caption_times[i][0], end=caption_times[i][1]) if i in caption_times else t
+                     for i, t in enumerate(translated)]
     srt_path = os.path.join(session_dir, f"{base}_{target}.srt")
     with open(srt_path, "w", encoding="utf-8") as f:
-        f.write(build_srt(translated))
+        f.write(build_srt(captioned))
     if captions:
         with open(os.path.join(session_dir, f"{base}_{target}.ass"), "w", encoding="utf-8") as f:
-            f.write(build_ass(translated, video_size(source_video), caption_size, caption_position))
+            f.write(build_ass(captioned, video_size(source_video), caption_size, caption_position))
     json_path = os.path.join(session_dir, f"{base}_{target}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({"target_lang": target, "source_lang": source_lang, "tone": tone or "faithful", "delivery": delivery or "neutral",

@@ -2,6 +2,19 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+### Fixed
+- **Dubbing no longer chops sentences (`--dub_fit smart`, now the default on the command line and in the web app)**: speech recognition can cut a film into 1-2 second lines, and the dub voiced each one alone, so the new voice (2-3 times longer in Hindi) was sped up to its limit and then cut off mid-sentence, with a gap and a lead-in silence around every line. On a real 90-second Hindi test 54 of 59 clips were cut. Smart fit joins short neighbouring lines into sentences, trims the silence off each voice clip, tells the translator how many characters per second the language's voice speaks (Hindi, Marathi, Arabic and Cyrillic languages are slower than Latin ones), lets a voice that runs long continue into the next gap (up to about 3 s behind the picture) instead of cutting it, and puts the subtitles on the voice. The same test: 25 sentences, 2 clips shortened. `--dub_fit classic` keeps the old behaviour; library callers of `dub_video` still default to classic. A dub made before this change has different line boundaries, so it is translated again.
+- **The online voice service sometimes returned nothing for a line** ("No audio was received") when several lines were requested together; those lines are now asked again (a few times) instead of leaving a silent gap.
+- **Newer FFmpeg builds (8.x) reject `-filter_complex_script`**, which the dub mix, the highlights-reel captions and the transcript editor used; ShortsFlow now detects which spelling the installed FFmpeg understands.
+- A dub with hundreds of lines no longer crashes on Windows (the mix command was longer than Windows allows); a stopped dub can be continued, reusing its saved translation and voices (new "Continue an earlier dub" choice in the web app).
+- QUOTE rejects lines about harming yourself or others, death or weapons; HORROR shows its own title and dark footage instead of a random category and clip; REDDIT captions no longer print two words on top of each other.
+
+### New
+- **Dub options**: translation tone (`--dub_tone`: funny, sarcastic, dramatic, formal, casual), voice delivery (`--dub_delivery`: excited, calm, serious: speed and pitch only), subtitle size and position (`--dub_caption_size`, `--dub_caption_position above` clears subtitles already burned into the video), and an AI text provider choice on the Start here, Dub and Recap tabs.
+- A demo page for GitHub Pages (`index.html`) and a Mac/Linux/Docker route spelled out next to the Windows installer.
+
 ## 0.7.0 (2026-11-10)
 
 ### New

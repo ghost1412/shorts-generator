@@ -362,3 +362,151 @@ def test_dub_caption_flags_only_when_changed():
     assert more[more.index("--dub_caption_size") + 1] == "large" and more[more.index("--dub_caption_position") + 1] == "above"
     assert [v for _, v in web_args.DUB_CAPTION_SIZE_CHOICES] == ["default", "small", "large", "xlarge"] or set(v for _, v in web_args.DUB_CAPTION_SIZE_CHOICES) == set(dubbing.CAPTION_SIZES)
     assert set(v for _, v in web_args.DUB_CAPTION_POSITION_CHOICES) == set(dubbing.CAPTION_POSITIONS)
+
+
+# --- smart fit -----------------------------------------------------------------------------------------------------------------
+def seg(start, end, text="x"):
+    return {"start": float(start), "end": float(end), "text": text}
+
+
+def test_short_neighbouring_lines_are_joined_into_sentences():
+    lines = [seg(0, 1.2, "So we"), seg(1.2, 2.4, "went there"), seg(2.4, 3.6, "and it was fun."), seg(3.6, 4.8, "Next day"), seg(4.8, 6.0, "we left.")]
+    merged = dubbing.merge_short_segments(lines)
+    assert [(m["start"], m["end"]) for m in merged] == [(0, 3.6), (3.6, 6.0)]
+    assert merged[0]["text"] == "So we went there and it was fun."
+    assert lines[0]["text"] == "So we"                                   # the input is not changed
+
+
+def test_joining_stops_at_a_pause_at_the_length_limit_and_leaves_long_lines_alone():
+    assert len(dubbing.merge_short_segments([seg(0, 1, "a"), seg(3, 4, "b")])) == 2                  # a 2 s pause
+    long_run = [seg(i * 1.0, i * 1.0 + 1.0, "w") for i in range(12)]
+    assert all(m["end"] - m["start"] <= 7.0 for m in dubbing.merge_short_segments(long_run))
+    assert len(dubbing.merge_short_segments([seg(0, 4.0, "long line"), seg(4.0, 5.0, "next")])) == 2   # a line over 3 s is not extended
+    assert dubbing.merge_short_segments([]) == []
+
+
+def test_flow_schedule_does_not_cut_a_clip_that_can_run_into_the_gap():
+    segs = [seg(0, 2.0), seg(3.0, 5.0)]
+    plan = dubbing.flow_schedule(segs, [2.0, 2.0])
+    assert plan[0]["start"] == 0.0 and plan[0]["tempo"] == 1.0 and plan[0]["trim"] is None
+    long_plan = dubbing.flow_schedule(segs, [3.6, 2.0])                  # 3.6 s of voice for a 2 s line, 1 s gap after it
+    assert long_plan[0]["trim"] is None                                  # speeds up a little, ends 0.6 s late at most
+    assert long_plan[0]["tempo"] > 1.0 and long_plan[0]["end"] <= 3.0 + dubbing.SOFT_LAG + 0.01
+
+
+def test_flow_schedule_pushes_the_next_clip_instead_of_overlapping_and_cuts_only_as_a_last_resort():
+    segs = [seg(0, 1.0), seg(1.0, 2.0), seg(2.0, 3.0)]
+    plan = dubbing.flow_schedule(segs, [2.0, 2.0, 2.0])
+    assert plan[1]["start"] >= plan[0]["end"] and plan[2]["start"] >= plan[1]["end"]               # never two voices at once
+    hopeless = dubbing.flow_schedule([seg(0, 1.0), seg(1.0, 2.0)], [30.0, 1.0])
+    assert hopeless[0]["trim"] is not None                                                             # only now is a clip cut
+    assert hopeless[0]["end"] <= 1.0 + dubbing.MAX_LAG + 0.06
+    assert dubbing.flow_schedule([seg(0, 1)], [0]) == [None]
+
+
+def test_language_speech_rate_and_the_prompt_for_tight_fitting():
+    assert dubbing.speech_rate("hi") < dubbing.speech_rate("es") == dubbing.CHARS_PER_SECOND
+    asked = []
+
+    def llm(prompt):
+        asked.append(prompt)
+        return json.dumps({"translations": [{"id": 0, "text": "x"}]})
+    import json as _j
+    old = dubbing._parse
+    dubbing._parse = _j.loads
+    try:
+        dubbing.translate_segments([seg(0, 2.0, "Hello there")], "hi", llm=llm)
+        dubbing.translate_segments([seg(0, 2.0, "Hello there")], "hi", llm=llm, cps=dubbing.speech_rate("hi"), tight=True)
+    finally:
+        dubbing._parse = old
+    assert dubbing.TIGHT_LINE not in asked[0] and '"max_chars": 28' in asked[0]               # the old prompt, 14 chars per second
+    assert dubbing.TIGHT_LINE in asked[1] and '"max_chars": 22' in asked[1]                   # tighter for Hindi
+
+
+def test_trim_silence_shortens_a_padded_clip_and_leaves_a_missing_file_alone(tmp_path):
+    import subprocess
+    try:
+        import imageio_ffmpeg
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        pytest.skip("no ffmpeg")
+    clip = tmp_path / "padded.mp3"
+    r = subprocess.run([ff, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=d=0.4", "-f", "lavfi", "-i", "sine=f=440:d=0.5",
+                        "-f", "lavfi", "-i", "anullsrc=d=0.4", "-filter_complex", "[0][1][2]concat=n=3:v=0:a=1", str(clip)], capture_output=True)
+    if r.returncode != 0:
+        pytest.skip("ffmpeg cannot write mp3 here")
+    before = dubbing.media_duration(str(clip))
+    assert dubbing.trim_silence(str(clip), ff) is True
+    after = dubbing.media_duration(str(clip))
+    assert before > 1.2 and after < before - 0.4
+    assert dubbing.trim_silence(str(tmp_path / "missing.mp3"), ff) is False
+
+
+def test_smart_fit_end_to_end_with_fakes_joins_lines_and_subtitles_follow_the_voice(tmp_path, monkeypatch):
+    tpath = tmp_path / "t.json"
+    tpath.write_text(json.dumps({"language": "en", "segments": [
+        {"start": 0.0, "end": 1.2, "text": "So we"}, {"start": 1.2, "end": 2.4, "text": "went there"}, {"start": 2.4, "end": 3.6, "text": "and it was fun."},
+        {"start": 3.6, "end": 4.8, "text": "Next day"}, {"start": 4.8, "end": 6.0, "text": "we left."}]}))
+    monkeypatch.setattr(dubbing, "media_duration", lambda p: 3.0)
+    monkeypatch.setattr(dubbing, "trim_silence", lambda p, ffmpeg=None: True)
+    monkeypatch.setattr(dubbing, "_parse", json.loads)
+    asked, voiced = [], []
+
+    def llm(prompt):
+        asked.append(prompt)
+        return json.dumps({"translations": [{"id": 0, "text": "Pehla"}, {"id": 1, "text": "Doosra"}]})
+
+    def synth(text, out):
+        voiced.append(text)
+        open(out, "wb").write(b"x" * 500)
+
+    seen = {}
+
+    def mixer(src, clips, out, session_dir, burn_srt=None):
+        seen["clips"] = clips
+        open(out, "wb").write(b"v")
+
+    res = dubbing.dub_video("clip.mp4", "hi", str(tmp_path), transcribe=lambda: str(tpath), llm=llm, synth=synth, mixer=mixer, fit="smart")
+    assert res["segments"] == 2 and len(voiced) == 2                                   # five short lines became two sentences
+    assert dubbing.TIGHT_LINE in asked[0]
+    starts = [c["start"] for c in seen["clips"]]
+    assert starts[0] == 0.0 and starts[1] >= 3.6                                       # in order, never overlapping
+    srt = open(res["srt"], encoding="utf-8").read()
+    assert "Pehla" in srt and "Doosra" in srt
+
+
+def test_classic_fit_is_still_the_default_for_library_callers(tmp_path, monkeypatch):
+    import inspect
+    assert inspect.signature(dubbing.dub_video).parameters["fit"].default == "classic"
+    import os
+    src = open(os.path.join(os.path.dirname(__file__), "..", "shortsflow", "_main.py"), encoding="utf-8").read()
+    assert '"--dub_fit", choices=["smart", "classic"], default="smart"' in src
+
+
+def test_a_voice_service_hiccup_is_retried_but_a_real_error_is_not(tmp_path, monkeypatch, transcript):
+    _fake_media(monkeypatch)
+    monkeypatch.setattr(dubbing, "VOICE_RETRY_SECONDS", 0.0)
+    monkeypatch.setattr(dubbing, "_parse", json.loads)
+    llm = lambda prompt: json.dumps({"translations": [{"id": 0, "text": "Hola"}, {"id": 1, "text": "Bienvenido"}]})  # noqa: E731
+    calls = {"n": 0}
+
+    def flaky(text, out):
+        calls["n"] += 1
+        if calls["n"] in (1, 2):
+            raise RuntimeError("No audio was received. Please verify that your parameters are correct.")
+        open(out, "wb").write(b"x" * 500)
+
+    mixer = lambda src, clips, out, d, burn_srt=None: open(out, "wb").write(b"v")  # noqa: E731
+    res = dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=llm, synth=flaky, mixer=mixer, workers=1)
+    assert res["failed_voices"] == 0 and calls["n"] == 4                    # the two hiccups were asked again
+
+    other = tmp_path / "second"
+    count = {"n": 0}
+
+    def bad_voice(text, out):
+        count["n"] += 1
+        raise ValueError("Unknown voice name")
+
+    with pytest.raises(RuntimeError):
+        dubbing.dub_video("clip.mp4", "es", str(other), transcribe=lambda: transcript, llm=llm, synth=bad_voice, mixer=mixer, workers=1)
+    assert count["n"] == 2                                                   # one try per line: a real error is not repeated

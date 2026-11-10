@@ -32,6 +32,7 @@ def run(args, target_bitrate=None, target_preset=None):
             about=getattr(args, "user_context", None),
             tone=getattr(args, "dub_tone", "faithful") or "faithful",
             delivery=getattr(args, "dub_delivery", "neutral") or "neutral",
+            fit=getattr(args, "dub_fit", "smart") or "smart",
             caption_size=getattr(args, "dub_caption_size", "default") or "default",
             caption_position=getattr(args, "dub_caption_position", "bottom") or "bottom",
         )
