@@ -71,6 +71,17 @@ def report_status(video_id, user_id, title="Shorts Video", status="Processing", 
         import traceback
         traceback.print_exc()
 
+def star_hint(stream=None):
+    """One line after a finished run in a terminal, asking for a GitHub star. Not printed into pipes or logs (the web app, CI), and
+    SHORTSFLOW_NO_STAR_HINT=1 turns it off."""
+    import os, sys
+    stream = stream or sys.stdout
+    if os.getenv("SHORTSFLOW_NO_STAR_HINT") or not getattr(stream, "isatty", lambda: False)():
+        return False
+    print("\nLiked the result? A star helps others find this free, local tool: https://github.com/ghost1412/shorts-generator", file=stream)
+    return True
+
+
 def export_srt(transcript_data, output_path):
     """Exports transcript segments to a standard .srt file."""
     segments = transcript_data.get('segments', [])

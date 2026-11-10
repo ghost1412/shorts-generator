@@ -2,9 +2,23 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
-## Unreleased
+## 0.7.0 (2026-11-10)
 
 ### New
+- **Game framing that chooses for you (`--game_framing auto|fit|crop`, "Framing for game footage" in the Start-here and Clip tabs)**: `fit` keeps the whole picture over a blurred copy (the minimap, HUD and the game's own subtitles stay), `crop` is a full-screen portrait crop, and `auto` (the default) looks at frames inside the chosen moments and picks `fit` when a HUD or subtitles sit at the sides and `crop` when the picture is clean. It is a heuristic tuned on a handful of games; the log says what it chose and why, and the dropdown or flag overrides it. `--game_crop` still works and means `crop`.
+- **Captions off (`--caption_position off`, "No captions" in the caption-position dropdowns)**: draws none of our captions, for videos whose own subtitles are already burned in. A manual choice, never guessed; it is remembered when a clip is re-rendered.
+- **Second-opinion fact check for FACTS and TRIVIA**: after a script is written, one more model call judges every claim on its own. A script is kept only when the judge agrees the true facts are true and the lie is false; otherwise a new one is written (up to 4 tries). If the judge cannot be reached the script is kept with a warning, and `SHORTSFLOW_FACT_CHECK=off` turns it off. It is a model checking a model: it lowers wrong facts, it does not remove them.
+- **Recap text and result-first opening in the web Recap tab** ("A line for each part", "Open with the result first"), plus the earlier command-line options below.
+- A short "Liked the result? A star helps..." line after a finished run in a terminal (not in logs or the web app; `SHORTSFLOW_NO_STAR_HINT=1` turns it off).
+
+### Fixed
+- **Gemini 3 cut replies off**: its hidden thinking tokens count against the output limit, so short JSON replies (FACTS asked for 1024) were truncated and every attempt failed. The limit now leaves room for the thinking.
+- **WYR no longer asks the model for made-up vote percentages** (nothing showed them).
+- **Game mode remembers the moments it picked** (`highlights_game.json`, reused with `--use_cache` when the settings match).
+- **REDDIT and QUOTE** failed when `--session_dir` was a folder that did not exist yet; it is created now.
+- Cut sounds follow the dissolve overlap when `--auto_edit` is combined with `--transitions dissolve`.
+
+### Earlier in this release
 - **Recap text for each part and an opening that shows the result (`--recap_lines`, `--recap_open_result`)**: `--recap_lines "Fry the nuts in ghee | Roast the khoya"` gives each part (a recipe step, a stop) one line of text, shown under the part's title and on its shots; long lines are drawn larger and white on a soft dark panel so they stay readable over busy footage. `--recap_open_result` makes the opening shots come from the LAST part (the finished dish, the summit, the first dance) before the story starts. With the cinematic style the hook is shown once on the first opening shot instead of being stamped on every one.
 - **Dissolve transition (`--transitions dissolve`)**: every shot melts into the next over 0.6 s (xfade and acrossfade), with no zoom and no dip to black per shot; the recap gets shorter by 0.6 s per join. It is a choice you make (the Auto-edit styles still use the zoom punch or the mix) and it re-encodes the final join once. Shots with a stale rotate tag on an upright picture are joined as they are shown.
 - **Game footage mode (`--content game`, "This is game footage" in the Start-here tab)**: the normal picker builds its candidates only from stretches where someone speaks, so a silent boss fight or a gameplay highlight could never be chosen. Game mode measures every 30-second stretch of the video (words per second, sound peaks and variation, picture motion), labels each one story (cutscene, dialogue), action (fight, gameplay, even when Whisper hears words in the noise) or quiet, scores each by its own kind and mixes them (`--game_mix`, default half story and half action; a dropdown in the web form). The first 3% of the video (title montage) is skipped, and the clips use the `fit` layout (the whole picture over a blurred copy, so the minimap, the HUD and the game's own subtitles are not cut off); `--game_crop` keeps the centre crop. Tuned on one cutscene-and-boss-fight video; real gameplay may need different numbers. Clip titles for action moments are generic ("Action moment") when no AI text provider answers.

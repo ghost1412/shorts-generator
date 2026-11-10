@@ -1278,6 +1278,9 @@ def run(args, target_bitrate, target_preset):
 
     if not metadata.get("description"):
         metadata["description"] = f"Watch this amazing {category} short!"
+    footer = (os.getenv("SHORTSFLOW_DESCRIPTION_FOOTER") or "").strip()      # off unless set (the scheduled channel run sets it)
+    if footer and footer not in metadata["description"]:
+        metadata["description"] = metadata["description"].rstrip() + "\n\n" + footer
 
     if not isinstance(metadata.get("tags"), list):
         metadata["tags"] = [category, "shorts", "viral", mode.lower()]

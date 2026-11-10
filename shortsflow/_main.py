@@ -349,3 +349,5 @@ if getattr(args, "source_video", None) and args.mode not in ["TRAILER_MISSED", "
 
 from engine.modes.generate import run as run_generate
 run_generate(args, target_bitrate, target_preset)
+from engine.pipeline import star_hint
+star_hint()
