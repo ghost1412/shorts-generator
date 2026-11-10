@@ -332,3 +332,33 @@ def test_a_session_saved_before_tones_existed_still_resumes(tmp_path, monkeypatc
 
     res = _dub(tmp_path, transcript, no_llm, no_voice)
     assert res["failed_translations"] == 0 and res["failed_voices"] == 0
+
+
+def _style(ass):
+    line = next(l for l in ass.splitlines() if l.startswith("Style: Default"))
+    f = line.split(",")
+    return {"size": int(f[2]), "align": int(f[18]), "margin_v": int(f[21])}
+
+
+def test_dub_caption_defaults_are_unchanged_and_options_move_or_resize_them():
+    segs = [{"start": 0.0, "end": 2.0, "text": "namaste"}]
+    base = dubbing.build_ass(segs, size=(1280, 720))
+    assert dubbing.build_ass(segs, size=(1280, 720), caption_size="default", caption_position="bottom") == base
+    assert _style(base) == {"size": 43, "align": 2, "margin_v": 58}                  # exactly what it was before the options existed
+    assert _style(dubbing.build_ass(segs, (1280, 720), caption_size="large"))["size"] == 58
+    assert _style(dubbing.build_ass(segs, (1280, 720), caption_size="small"))["size"] == 35
+    assert _style(dubbing.build_ass(segs, (1280, 720), caption_position="above")) == {"size": 43, "align": 2, "margin_v": 144}
+    assert _style(dubbing.build_ass(segs, (1280, 720), caption_position="middle"))["align"] == 5
+    assert _style(dubbing.build_ass(segs, (1280, 720), caption_position="top"))["align"] == 8
+    assert dubbing.build_ass(segs, (1280, 720), caption_size="nonsense", caption_position="nonsense") == base   # unknown names: the default look
+
+
+def test_dub_caption_flags_only_when_changed():
+    from shortsflow import web_args
+    base = web_args.dub_args("v.mp4", "hi")
+    assert "--dub_caption_size" not in base and "--dub_caption_position" not in base
+    assert web_args.dub_args("v.mp4", "hi", caption_size="default", caption_position="bottom") == base
+    more = web_args.dub_args("v.mp4", "hi", caption_size="large", caption_position="above")
+    assert more[more.index("--dub_caption_size") + 1] == "large" and more[more.index("--dub_caption_position") + 1] == "above"
+    assert [v for _, v in web_args.DUB_CAPTION_SIZE_CHOICES] == ["default", "small", "large", "xlarge"] or set(v for _, v in web_args.DUB_CAPTION_SIZE_CHOICES) == set(dubbing.CAPTION_SIZES)
+    assert set(v for _, v in web_args.DUB_CAPTION_POSITION_CHOICES) == set(dubbing.CAPTION_POSITIONS)

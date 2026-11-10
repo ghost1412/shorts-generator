@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShortsFlow: free, open-source Opus Clip alternative</title>
+<meta name="description" content="Turn a long video into captioned vertical Shorts on your own PC. Free, open source, no watermark, no credits.">
+<meta property="og:title" content="ShortsFlow: free, open-source Opus Clip alternative">
+<meta property="og:description" content="Turn a long video into captioned vertical Shorts on your own PC. No watermark, no credits.">
+<meta property="og:image" content="https://ghost1412.github.io/shorts-generator/demos/demo_podcast_cuts.gif">
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --ink: #1c1b19; --muted: #5d5a54; --line: #e4e0d8;
+    --accent: #d9480f; --accent-ink: #ffffff; --soft: #fff1e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151412; --surface: #1f1d1a; --ink: #f1eee8; --muted: #b3aea4; --line: #34312c; --accent: #ff7a3d; --accent-ink: #1a1308; --soft: #2a1d14; }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header.top { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; gap: 12px; flex-wrap: wrap; }
+  .brand { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.01em; text-decoration: none; color: var(--ink); }
+  nav a { margin-left: 16px; text-decoration: none; color: var(--muted); font-size: 0.95rem; }
+  nav a:hover { color: var(--ink); }
+  .hero { display: grid; gap: 32px; align-items: center; padding: 28px 0 48px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .hero { grid-template-columns: 1.1fr 0.9fr; } }
+  h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.08; margin: 0 0 16px; letter-spacing: -0.02em; }
+  .lead { font-size: 1.15rem; color: var(--muted); margin: 0 0 24px; max-width: 34em; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 10px; font-weight: 700; text-decoration: none; border: 2px solid var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.ghost { color: var(--accent); background: transparent; }
+  .btn:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .hero figure { margin: 0; text-align: center; }
+  .hero img { width: min(300px, 100%); height: auto; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); }
+  figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+  section { padding: 40px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.6rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  .step { counter-increment: s; position: relative; padding-top: 44px; }
+  .step::before { content: counter(s); position: absolute; top: 12px; left: 18px; width: 28px; height: 28px; border-radius: 50%; background: var(--soft); color: var(--accent); font-weight: 800; display: grid; place-items: center; }
+  .steps { counter-reset: s; }
+  .demos { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .demos figure { margin: 0; }
+  .demos img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9rem; }
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 10px 0 0; }
+  .note { background: var(--soft); border-radius: 12px; padding: 14px 18px; color: var(--ink); }
+  footer { padding: 32px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+  footer p { margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#">ShortsFlow</a>
+    <nav aria-label="Sections"><a href="#demos">Demos</a><a href="#try">Try it</a><a href="#local">Privacy</a><a href="https://github.com/ghost1412/shorts-generator">GitHub</a></nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1>Turn a long video into Shorts, on your own PC.</h1>
+        <p class="lead">Paste a link or drop in a podcast, interview or game video. ShortsFlow finds the best moments, crops them to vertical, follows whoever is speaking and adds word-by-word captions. Free, open source, no watermark, no credits.</p>
+        <div class="cta">
+          <a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download for Windows</a>
+          <a class="btn ghost" href="https://github.com/ghost1412/shorts-generator">View on GitHub</a>
+        </div>
+      </div>
+      <figure>
+        <img src="demos/demo_podcast_cuts.gif" alt="A podcast clip: the vertical crop cuts between the two speakers while word-by-word captions appear" width="300" height="533">
+        <figcaption>A real run on a podcast: the crop follows the speaker, captions burned in.</figcaption>
+      </figure>
+    </div>
+
+    <section id="how">
+      <h2>How it works</h2>
+      <p class="sub">Three steps, no account needed to clip a video.</p>
+      <div class="grid steps">
+        <div class="card step"><h3>Add a video</h3><p>Paste a YouTube link or upload a file from your computer, in the browser app or from the command line.</p></div>
+        <div class="card step"><h3>It finds the moments</h3><p>Local speech recognition reads what is said, an AI scores the hooks, and every clip comes with the reason it was picked.</p></div>
+        <div class="card step"><h3>Review and export</h3><p>Preview each short, change the caption style, trim it, add your logo and handle, then download the vertical video.</p></div>
+      </div>
+    </section>
+
+    <section id="demos">
+      <h2>What it makes</h2>
+      <p class="sub">Real outputs. Each one is small here; the exported videos are much sharper.</p>
+      <div class="demos">
+        <figure><img loading="lazy" src="demos/demo_podcast_cuts.gif" alt="Podcast clip with speaker cuts and captions"><figcaption>Podcast clipping with active-speaker cuts</figcaption></figure>
+        <figure><img loading="lazy" src="demos/demo_spot_the_lie.gif" alt="A spot-the-lie short with three facts"><figcaption>"Spot the lie" quiz short, made from an idea</figcaption></figure>
+        <figure><img loading="lazy" src="demos/demo_facts.gif" alt="An animated facts short"><figcaption>Animated facts short</figcaption></figure>
+        <figure><img loading="lazy" src="demos/demo_recap.gif" alt="A recap video with title cards and fast cuts made from six clips"><figcaption>Recap: six clips become one video</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="try">
+      <h2>Try it</h2>
+      <p class="sub">Pick whichever is easiest.</p>
+      <div class="grid">
+        <div class="card"><h3>Windows installer</h3><p>Download, run it and open ShortsFlow from your desktop. No Python or API key to install first.</p><p style="margin-top:12px"><a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download</a></p></div>
+        <div class="card"><h3>Any computer</h3><p>Needs Python 3.12.</p><pre>pip install "shortsflow[clip]"
+shortsflow doctor
+shortsflow clip my_video.mp4</pre></div>
+        <div class="card"><h3>Nothing to install</h3><p>Open the notebook, run the cells and use the link it prints. Free GPU on Google Colab.</p><p style="margin-top:12px"><a class="btn ghost" href="https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb">Open in Colab</a></p></div>
+      </div>
+    </section>
+
+    <section id="local">
+      <h2>Your videos stay on your PC</h2>
+      <p class="sub">Local by default.</p>
+      <div class="note">
+        <p style="margin:0 0 8px">Nothing is sent anywhere unless you add an API key or switch on a cloud feature. The optional parts are AI text from Gemini or Groq, Gemini picture descriptions, Google Drive upload, and the place names in trip recaps, which send rounded GPS to the free OpenStreetMap service. Each one can be turned off.</p>
+        <p style="margin:0">Honest limits: speech recognition is slow without an NVIDIA graphics card, and the quality of titles depends on the AI model you use.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>And more</h2>
+      <div class="grid">
+        <div class="card"><h3>30+ formats</h3><p>Facts quizzes, explainers, top-5 lists, stories and more, from just an idea.</p></div>
+        <div class="card"><h3>Dubbing</h3><p>Translate a video's speech and re-voice it, with a choice of tone and voice speed.</p></div>
+        <div class="card"><h3>Game footage</h3><p>Finds story and action moments, even silent fights, and picks the framing.</p></div>
+        <div class="card"><h3>For agents</h3><p>An MCP server and a REST API, so other tools can drive it.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>Footage credits.</strong> Podcast demo: <a href="https://www.youtube.com/watch?v=VIq8L_ZeqkA">Lila Rose Podcast E143</a> by Lila Rose, shared on YouTube under the <a href="https://creativecommons.org/licenses/by/3.0">Creative Commons Attribution licence</a>; cropped, re-framed and captioned (changes made). Recap demo: six stock videos by Poiana11 on Wikimedia Commons, <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a>.</p>
+    <p>ShortsFlow is MIT licensed. <a href="https://github.com/ghost1412/shorts-generator">Source</a> · <a href="https://github.com/ghost1412/shorts-generator/issues">Report a problem</a> · <a href="https://github.com/ghost1412/shorts-generator/discussions">Discussions</a></p>
+  </footer>
+</div>
+</body>
+</html>

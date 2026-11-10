@@ -230,14 +230,21 @@ def _scoped_font(token):
     return tag + token[end + 1:] + "{\\r}"
 
 
-def build_ass(segments, size=(1280, 720)):
+CAPTION_SIZES = {"small": 0.8, "default": 1.0, "large": 1.35, "xlarge": 1.7}
+# (ASS alignment, bottom/top margin as a share of the frame height). "above" sits above the usual spot of subtitles that are
+# already burned into the video, so the two lines do not print over each other.
+CAPTION_POSITIONS = {"bottom": (2, 0.08), "above": (2, 0.2), "middle": (5, 0.0), "top": (8, 0.06)}
+
+
+def build_ass(segments, size=(1280, 720), caption_size="default", caption_position="bottom"):
     """Sentence captions as an ASS document. Unlike the SRT `subtitles=` filter (one default font), each word that is
     Devanagari / Arabic / Cyrillic / Greek / Chinese / Japanese / Korean names a font that has its glyphs, so non-Latin
     dubs do not show empty boxes. The CJK font is a small per-transcript subset (downloaded once, see script_fonts)."""
     from engine import reel_captions as rc
     from engine.script_fonts import cjk_language, cjk_subset
     w, h = size
-    font_size = round(min(w, h) * 0.06)
+    font_size = round(min(w, h) * 0.06 * CAPTION_SIZES.get((caption_size or "default").lower(), 1.0))
+    align, margin_v = CAPTION_POSITIONS.get((caption_position or "bottom").lower(), CAPTION_POSITIONS["bottom"])
     outline = max(2, round(font_size / 14))
     side = round(w * 0.06)
     head = (
@@ -247,7 +254,7 @@ def build_ass(segments, size=(1280, 720)):
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, "
         "StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
         f"Style: Default,Arial,{font_size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,"
-        f"{outline},1,2,{side},{side},{round(h * 0.08)},1\n\n"
+        f"{outline},1,{align},{side},{side},{round(h * margin_v)},1\n\n"
         "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
     subset = cjk_subset(" ".join(seg["text"] for seg in segments))  # None unless the text has Chinese/Japanese/Korean
@@ -463,7 +470,7 @@ def _mix_batch(ffmpeg, source_video, clips, total, session_dir, number):
 
 def dub_video(source_video, target_lang, session_dir, output_path=None, language="en", provider="auto",
               captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None, original="music", about=None,
-              tone="faithful", delivery="neutral"):
+              tone="faithful", delivery="neutral", caption_size="default", caption_position="bottom"):
     """Full pipeline. Returns {"video", "srt", "json", "segments", "failed_translations", "failed_voices"}.
     transcribe/llm/synth/mixer can be replaced (tests, custom backends)."""
     target = normalize_lang(target_lang)
@@ -559,7 +566,7 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
         f.write(build_srt(translated))
     if captions:
         with open(os.path.join(session_dir, f"{base}_{target}.ass"), "w", encoding="utf-8") as f:
-            f.write(build_ass(translated, video_size(source_video)))
+            f.write(build_ass(translated, video_size(source_video), caption_size, caption_position))
     json_path = os.path.join(session_dir, f"{base}_{target}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({"target_lang": target, "source_lang": source_lang, "tone": tone or "faithful", "delivery": delivery or "neutral",

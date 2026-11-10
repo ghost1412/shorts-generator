@@ -71,8 +71,8 @@ def test_dub_tab_passes_the_resume_choice_last():
     import ast
     src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
     fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "dub_video")
-    assert [a.arg for a in fn.args.args][-4:] == ["resume", "tone", "delivery", "llm_provider"]
-    assert "d_original, d_resume, d_tone, d_delivery, d_llm]" in src
+    assert [a.arg for a in fn.args.args][-6:] == ["resume", "tone", "delivery", "llm_provider", "caption_size", "caption_position"]
+    assert "d_original, d_resume, d_tone, d_delivery, d_llm, d_cap_size, d_cap_pos]" in src
 
 
 def test_ai_provider_flag_only_when_a_provider_is_picked():

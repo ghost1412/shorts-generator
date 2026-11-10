@@ -210,7 +210,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     yield from _run(cmd)
 
 
-def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto", original="music", resume=None, tone="faithful", delivery="neutral", llm_provider="auto"):
+def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto", original="music", resume=None, tone="faithful", delivery="neutral", llm_provider="auto", caption_size="default", caption_position="bottom"):
     """Dub tab: translate a video's speech and re-voice it. Yields (status, log, video, srt)."""
     import time
     from shortsflow import onboarding
@@ -228,7 +228,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
             raise gr.Error("Choose the language to dub into.")
         session = os.path.join(ROOT, "sessions", time.strftime("dub_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session, tts_provider, voice, original, tone, delivery, llm_provider)]
+    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session, tts_provider, voice, original, tone, delivery, llm_provider, caption_size, caption_position)]
     progress, seen = onboarding.Progress(steps=onboarding.DUB_STEPS), 0
     status = progress.message
     yield status, "", None, None
@@ -1059,6 +1059,11 @@ def build_ui():
                             d_delivery = gr.Dropdown(web_args.DUB_DELIVERY_CHOICES, value="neutral", label="How the voice speaks",
                                                      info="Speed and pitch of the computer voice, not real emotions.")
                         d_llm = _ai_provider_dropdown()
+                        with gr.Row():
+                            d_cap_size = gr.Dropdown(web_args.DUB_CAPTION_SIZE_CHOICES, value="default", label="Subtitle size",
+                                                     info="Only used when the subtitles are burned in.")
+                            d_cap_pos = gr.Dropdown(web_args.DUB_CAPTION_POSITION_CHOICES, value="bottom", label="Subtitle position",
+                                                    info="Pick Raised if the video already has its own subtitles at the bottom.")
                         d_resume = gr.Dropdown(label="Continue an earlier dub that stopped (optional)", choices=[], value=None, interactive=True,
                                                info="Pick it to finish where it stopped: the saved translation and finished voices are reused, so no AI text or voice service is called for them. The video, language and voice come from that run.")
                         d_btn = gr.Button("🌍 Dub my video", variant="primary")
@@ -1069,7 +1074,7 @@ def build_ui():
                         d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original, d_resume, d_tone, d_delivery, d_llm], [d_status, d_log, d_video, d_srt])
+                d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original, d_resume, d_tone, d_delivery, d_llm, d_cap_size, d_cap_pos], [d_status, d_log, d_video, d_srt])
                 d_stop.click(stop_jobs, None, d_status, cancels=[d_run])
                 demo.load(lambda: gr.update(choices=web_args.unfinished_dubs(ROOT)), None, d_resume)
 

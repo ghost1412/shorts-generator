@@ -163,12 +163,14 @@ DUB_ORIGINAL_CHOICES = [("Remove the original voice, keep the music and effects 
 
 DUB_TONE_CHOICES = [("Faithful (the speaker's own tone)", "faithful"), ("Funny", "funny"), ("Sarcastic", "sarcastic"),
                     ("Dramatic", "dramatic"), ("Formal", "formal"), ("Casual", "casual")]
+DUB_CAPTION_SIZE_CHOICES = [("Normal", "default"), ("Small", "small"), ("Large", "large"), ("Extra large", "xlarge")]
+DUB_CAPTION_POSITION_CHOICES = [("Bottom", "bottom"), ("Raised: above subtitles already in the video", "above"), ("Middle", "middle"), ("Top", "top")]
 DUB_DELIVERY_CHOICES = [("Neutral (the voice's own delivery)", "neutral"), ("Excited (faster, higher)", "excited"),
                         ("Calm (slower, softer)", "calm"), ("Serious (slower, lower)", "serious")]
 
 
 def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_dir=None, tts_provider="auto", voice="auto",
-             original="music", tone="faithful", delivery="neutral", llm_provider="auto"):
+             original="music", tone="faithful", delivery="neutral", llm_provider="auto", caption_size="default", caption_position="bottom"):
     """Arguments (after the pipeline command) for `--mode DUB`. 'auto' voice / provider leave the flags out."""
     args = ["--mode", "DUB", "--source_video", source, "--target_lang", target_lang,
             "--language", (spoken or "auto")]
@@ -184,6 +186,10 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
         args += ["--dub_tone", tone]                      # "faithful" is the command line's default
     if delivery in ("excited", "calm", "serious"):
         args += ["--dub_delivery", delivery]              # "neutral" is the command line's default
+    if caption_size in ("small", "large", "xlarge"):
+        args += ["--dub_caption_size", caption_size]      # "default" is the command line's default
+    if caption_position in ("above", "middle", "top"):
+        args += ["--dub_caption_position", caption_position]   # "bottom" is the command line's default
     args += llm_args(llm_provider)
     if session_dir:
         args += ["--session_dir", session_dir]
