@@ -187,12 +187,28 @@ try:
         page.get_by_text("Pink glow box").click()
         page.wait_for_timeout(800)
         page.get_by_text("Your brand: logo, @handle, end card").click()
-        page.get_by_label("@handle").fill("@lightexplained")
-        page.get_by_label("End card text (last 2 seconds)").fill("Follow for more")
         page.locator("input[type=file]").nth(1).set_input_files(logo)
         page.wait_for_timeout(1000)
-        page.get_by_role("button", name="Save my brand").click()
-        page.wait_for_selector("text=Saved your brand", timeout=30000)
+        saved = os.path.join(home, "brand", "brand.json")
+        for attempt in range(3):          # Gradio can miss a typed value if Save is clicked right away: type, leave the box, check, then save
+            handle_box = page.get_by_label("@handle", exact=True)
+            handle_box.fill("@lightexplained")
+            handle_box.press("Tab")
+            end_box = page.get_by_label("End card text (last 2 seconds)")
+            end_box.fill("Follow for more")
+            end_box.press("Tab")
+            page.wait_for_timeout(600)
+            if handle_box.input_value() != "@lightexplained":
+                continue
+            page.get_by_role("button", name="Save my brand").click()
+            page.wait_for_selector("text=Saved your brand", timeout=30000)
+            for _ in range(20):
+                if os.path.exists(saved) and json.load(open(saved, encoding="utf-8")).get("handle") == "@lightexplained":
+                    break
+                page.wait_for_timeout(250)
+            else:
+                continue
+            break
         page.screenshot(path=os.path.join(out_dir, "05_style_and_brand.png"), full_page=True)
         crop(page, "webui_style_brand.jpg", page.get_by_text("Caption style", exact=True).first, page.get_by_role("button", name="Remove brand"),
              width=700, max_w=700)
