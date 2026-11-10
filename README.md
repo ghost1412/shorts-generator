@@ -61,10 +61,12 @@ No account or API key is needed to clip a video. A key (or a free local Ollama) 
 
 ## ✂️ Clipping demo: the crop follows whoever is talking
 
-The first GIF above is a real run of `py main.py --source_video interview.mp4 --layout active --use_remotion` on a 4:3, 480p two-person
-interview: the shot cuts to the speaker, found by voice pitch plus face detection, and Whisper word captions are burned in.
-Source footage: [Aida Thomas Interviews Nancy Many - Part 1](https://commons.wikimedia.org/wiki/File:Aida_Thomas_Interviews_Nancy_Many_-_Part_1.ogv)
-by Aida Thomas, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0); the demo GIF is a derivative and is shared under the same licence.
+The first GIF above is a real run of `py main.py --source_video podcast.mp4 --layout active --use_remotion` on a two-host studio podcast
+(a 1080p proxy of a 4K video): the shot shows both hosts, then cuts to whoever is speaking (found by voice pitch plus face detection), and Whisper
+word captions are burned in. The GIF is the first 18 seconds of one clip, shrunk to 300 px wide, so the real MP4 is much sharper.
+Source footage: [The CSS-Podcast - 088 - State queries](https://commons.wikimedia.org/wiki/File:The_CSS-Podcast_%E2%80%93_088_%E2%80%93_State_queries.webm)
+by [Chrome for Developers](https://www.youtube.com/@ChromeDevs), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0); the demo is a cropped, re-framed
+and captioned excerpt (changes made).
 
 ---
 
