@@ -981,6 +981,7 @@ def run(args, target_bitrate, target_preset):
     # 4. Compose Video
     print(f"[Log] Composing final interactive video with {args.vibe} mood (Job ID: {session_id})...", flush=True)
     if args.session_dir:
+        os.makedirs(args.session_dir, exist_ok=True)         # a new --session_dir does not exist yet
         output_filename = os.path.join(args.session_dir, f"interactive_short_{session_id}.mp4")
     else:
         output_filename = f"interactive_short_{session_id}.mp4"
