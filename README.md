@@ -1,40 +1,61 @@
-# ⚡ ShortsFlow AI Studio
+# ⚡ ShortsFlow
 
-> **The self-hosted Opus Clip alternative.**  
-> Paste a podcast or YouTube link, get captioned 9:16 Shorts that cut to whoever is talking. Free, local, no watermark, no credit caps.
-
-**Clip long videos** with local Whisper, an LLM that scores the hooks, face-tracked 9:16 crops, a stacked two-speaker split or active-speaker switching, and Remotion spring captions.
-
-**Local by default.** Nothing is sent anywhere unless you add an API key or use a cloud feature: Gemini/Groq for AI text, Gemini for picture descriptions (`--visual_context`), Google Drive upload. The one lookup that is on by default is the trip recap's place naming (rounded GPS to the free OpenStreetMap service); `--recap_no_geocode` turns it off.
-
-**Or generate from an idea** with 30+ formats (facts quizzes, explainers, top-5 lists, stories) and drive everything from a browser UI, the CLI, Docker, Colab or an MCP agent.
+> **Turn a long video into captioned vertical Shorts, on your own PC.**
+> The free, open-source alternative to Opus Clip, Klap and Vizard: no watermark, no credits, no subscription.
 
 <div align="center">
-  <img src="demos/demo_clipping_active.gif" width="220" alt="Podcast clip: the crop cuts to whoever is speaking" />
-  <img src="demos/demo_spot_the_lie.gif" width="220" alt="Spot the Lie short rendered by ShortsFlow" />
-  <img src="demos/demo_short.gif" width="220" alt="Viral Short Preview" />
-  <img src="demos/demo_facts.gif" width="220" alt="AI Facts Preview" />
-  <img src="demos/demo_explainer.gif" width="220" alt="Manim Explainer Preview" />
+  <img src="demos/demo_clipping_active.gif" width="260" alt="A podcast clip: the crop cuts to whoever is speaking, with word-by-word captions" />
+  <br/>
+  <sub>A real run: the 9:16 crop cuts to whoever is talking, with word-timed captions. <code>shortsflow clip interview.mp4 --captions</code></sub>
 </div>
 
-<p align="center">
-  🎬 <b>Running in production:</b> the YouTube channel <a href="https://www.youtube.com/@spottheliee">@spottheliee</a> is generated and posted
-  entirely by ShortsFlow - 6 "spot the lie" Shorts a day from <a href=".github/workflows/daily_generate.yml">one GitHub Actions workflow</a>.
-</p>
+### Try it
+
+| | |
+|---|---|
+| 🪟 **Windows, no setup** | [⬇ ShortsFlow-Setup.exe](https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe) → open **ShortsFlow** → paste a link or drop a file → one button |
+| 💻 **Any OS** | `pip install "shortsflow[clip]"` → `shortsflow doctor` → `shortsflow clip my_video.mp4` |
+| ☁️ **Nothing to install** | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb) (free GPU) |
+
+No account or API key is needed to clip a video. A key (or a free local Ollama) only adds AI titles and descriptions.
+
+### Why people use it
+
+- **It finds the moments.** Local Whisper reads the speech, an AI scores the hooks, and every clip comes with the reason it was picked.
+- **It frames the shot.** Face-tracked 9:16 crops, a cut to whoever is speaking, or a game-aware layout that keeps the HUD.
+- **It styles the result.** Animated spring captions (Hormozi, glow box, bounce), your logo and handle, and an editor to re-cut any clip.
+- **It stays on your PC.** Nothing leaves it unless you add an API key or turn on a cloud feature: Gemini/Groq for AI text, Gemini for picture descriptions (`--visual_context`), Google Drive upload. The one lookup that is on by default is the trip recap's place naming (rounded GPS to the free OpenStreetMap service); `--recap_no_geocode` turns it off.
+- **It scales up.** Browser app, CLI, Docker, REST API, an MCP server for AI agents, and 30+ idea-to-video formats.
 
 <p align="center">
   <a href="https://pypi.org/project/shortsflow/"><img src="https://img.shields.io/pypi/v/shortsflow?style=flat&logo=pypi&logoColor=white&color=3775A9" alt="PyPI version" /></a>
   <a href="https://pypi.org/project/shortsflow/"><img src="https://img.shields.io/pypi/pyversions/shortsflow?style=flat&logo=python&logoColor=white" alt="Python versions" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
+  <a href="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
+  <a href="https://github.com/ghost1412/shorts-generator/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shorts-generator?style=flat&logo=github" alt="GitHub stars" /></a>
+  <a href="https://glama.ai/mcp/servers/ghost1412/shorts-generator"><img src="https://glama.ai/mcp/servers/ghost1412/shorts-generator/badges/score.svg" alt="ShortsFlow MCP server on Glama" /></a>
   <a href="https://remotion.dev"><img src="https://img.shields.io/badge/Remotion-React_Video-61DAFB?style=flat&logo=react" alt="Remotion" /></a>
   <a href="https://nvidia.com"><img src="https://img.shields.io/badge/CUDA-GPU_Accelerated-76B900?style=flat&logo=nvidia" alt="CUDA" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
-  <a href="https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open in Colab" /></a>
-  <a href="https://github.com/ghost1412/shorts-generator/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shorts-generator?style=flat&logo=github" alt="GitHub stars" /></a>
-  <a href="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
-  <a href="https://glama.ai/mcp/servers/ghost1412/shorts-generator"><img src="https://glama.ai/mcp/servers/ghost1412/shorts-generator/badges/score.svg" alt="ShortsFlow MCP server on Glama" /></a>
 </p>
 
 <p align="center"><b>⭐ If ShortsFlow saves you an Opus Clip subscription, please star the repo - it helps more creators find it.</b></p>
+
+<details>
+<summary><b>More it can make</b> (idea-to-video formats, explainers, running in production)</summary>
+
+<div align="center">
+  <img src="demos/demo_spot_the_lie.gif" width="200" alt="Spot the Lie short rendered by ShortsFlow" />
+  <img src="demos/demo_short.gif" width="200" alt="Viral Short Preview" />
+  <img src="demos/demo_facts.gif" width="200" alt="AI Facts Preview" />
+  <img src="demos/demo_explainer.gif" width="200" alt="Manim Explainer Preview" />
+</div>
+
+<p align="center">
+  🎬 <b>Running in production:</b> the YouTube channel <a href="https://www.youtube.com/@spottheliee">@spottheliee</a> is generated and posted
+  entirely by ShortsFlow - 6 Shorts a day from <a href=".github/workflows/daily_generate.yml">one GitHub Actions workflow</a>.
+</p>
+
+</details>
 
 ---
 
