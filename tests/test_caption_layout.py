@@ -42,7 +42,7 @@ def test_web_form_builds_game_and_caption_options():
     assert web_args.game_args(True, "oops") == ["--content", "game", "--game_mix", "0.5"]
     assert web_args.caption_look_args("default", "default") == []
     assert web_args.caption_look_args("bottom", "large") == ["--caption_position", "bottom", "--caption_size", "large"]
-    assert [v for _, v in web_args.CAPTION_POSITION_CHOICES] == ["default", "top", "middle", "bottom"]
+    assert [v for _, v in web_args.CAPTION_POSITION_CHOICES] == ["default", "top", "middle", "bottom", "off"]
 
 
 def _webui_source():

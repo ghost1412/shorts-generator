@@ -365,7 +365,9 @@ def get_llm_response(
                         "Content-Type": "application/json",
                         "x-goog-api-key": g_key
                     }
-                    gen_config = {"temperature": temperature, "maxOutputTokens": max_tokens}
+                    # Gemini 3 "thinking" tokens count against maxOutputTokens: with only the answer's budget, a short JSON reply was cut off
+                    # mid-way (FACTS asks for 1024). Leave room for the thinking on top of the answer.
+                    gen_config = {"temperature": temperature, "maxOutputTokens": min(65535, max_tokens + 4096)}
                     # Omit responseMimeType on retries if server 5xx errors occurred
                     if attempt < 2:
                         gen_config["responseMimeType"] = "application/json"
@@ -383,7 +385,10 @@ def get_llm_response(
 
                     response.raise_for_status()
                     res_json = response.json()
-                    content = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                    cand = res_json["candidates"][0]
+                    content = "".join(p.get("text", "") for p in cand["content"]["parts"] if not p.get("thought"))
+                    if cand.get("finishReason") == "MAX_TOKENS":
+                        print(f"[Warning] Gemini API ({g_model}) stopped at its token limit; the reply may be cut off.")
                     print(f"[Log] Gemini API success with {g_model}!")
                     return content
                 except Exception as e:
@@ -781,7 +786,10 @@ Return JSON ONLY:
                 f["truth"] = f["truth"].strip().lower() == "true"
         return data
 
-    data = with_best_of_n(llm_call, validate_mixed_facts, n=3)
+    from engine import fact_check
+    ask = lambda q: get_llm_response(q, temperature=0.0, max_tokens=200)
+    # a second call judges every claim alone; a script whose true facts or lie the judge disputes is written again
+    data = with_best_of_n(llm_call, lambda d: validate_mixed_facts(d) and fact_check.facts_ok(d, ask), n=4)
     # LLMs almost always put the lie last; shuffle so the answer position is unpredictable.
     random.shuffle(data["facts"])
     return data
@@ -1148,7 +1156,9 @@ Format as JSON ONLY:
         response_text = get_llm_response(prompt, temperature=0.2, max_tokens=400)
         return robust_json_parse(response_text)
 
-    return with_best_of_n(llm_call, validate_trivia, n=3)
+    from engine import fact_check
+    ask = lambda q: get_llm_response(q, temperature=0.0, max_tokens=200)
+    return with_best_of_n(llm_call, lambda d: validate_trivia(d) and fact_check.trivia_ok(d, ask), n=4)
 
 QUOTE_ANGLES = [
     "money and what it buys", "time running out", "friendship that fades", "a skill learned slowly", "the first day of something new",
