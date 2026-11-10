@@ -2,6 +2,7 @@
 
 > **Turn a long video into captioned vertical Shorts, on your own PC.**
 > The free, open-source alternative to Opus Clip, Klap and Vizard: no watermark, no credits, no subscription.
+> **[Demo page](https://ghost1412.github.io/shorts-generator/)** · one-click installer for Windows; Mac, Linux and Docker use the options below.
 
 <div align="center">
   <img src="demos/demo_podcast_cuts.gif" width="260" alt="A podcast clip: the crop cuts to whoever is speaking, with word-by-word captions" />

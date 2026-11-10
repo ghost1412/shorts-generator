@@ -41,6 +41,7 @@
   h2 { font-size: 1.6rem; margin: 0 0 8px; letter-spacing: -0.01em; }
   .sub { color: var(--muted); margin: 0 0 24px; }
   .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .grid.wide { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
   .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
   .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
@@ -51,7 +52,7 @@
   .demos figure { margin: 0; }
   .demos img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
   code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9rem; }
-  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 10px 0 0; }
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .note { background: var(--soft); border-radius: 12px; padding: 14px 18px; color: var(--ink); }
   footer { padding: 32px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
   footer p { margin: 0 0 8px; }
@@ -71,6 +72,7 @@
         <p class="lead">Paste a link or drop in a podcast, interview or game video. ShortsFlow finds the best moments, crops them to vertical, follows whoever is speaking and adds word-by-word captions. Free, open source, no watermark, no credits.</p>
         <div class="cta">
           <a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download for Windows</a>
+          <a class="btn ghost" href="#try">Mac, Linux or no install</a>
           <a class="btn ghost" href="https://github.com/ghost1412/shorts-generator">View on GitHub</a>
         </div>
       </div>
@@ -104,11 +106,13 @@
     <section id="try">
       <h2>Try it</h2>
       <p class="sub">Pick whichever is easiest.</p>
-      <div class="grid">
+      <div class="grid wide">
         <div class="card"><h3>Windows installer</h3><p>Download, run it and open ShortsFlow from your desktop. No Python or API key to install first.</p><p style="margin-top:12px"><a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download</a></p></div>
-        <div class="card"><h3>Any computer</h3><p>Needs Python 3.12.</p><pre>pip install "shortsflow[clip]"
+        <div class="card"><h3>Mac or Linux</h3><p>Needs Python 3.12 and FFmpeg. There is no one-click installer for these yet, so this is the route.</p><pre>pip install "shortsflow[clip]"
 shortsflow doctor
 shortsflow clip my_video.mp4</pre></div>
+        <div class="card"><h3>Docker</h3><p>The browser app in a container, on any system that runs Docker.</p><pre>docker run -p 7860:7860 \
+  ghcr.io/ghost1412/shorts-generator</pre><p style="margin-top:10px">Then open <code>localhost:7860</code>.</p></div>
         <div class="card"><h3>Nothing to install</h3><p>Open the notebook, run the cells and use the link it prints. Free GPU on Google Colab.</p><p style="margin-top:12px"><a class="btn ghost" href="https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb">Open in Colab</a></p></div>
       </div>
     </section>
