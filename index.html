@@ -41,6 +41,14 @@
   h2 { font-size: 1.6rem; margin: 0 0 8px; letter-spacing: -0.01em; }
   .sub { color: var(--muted); margin: 0 0 24px; }
   .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .ba { display: flex; gap: 20px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .ba figure { margin: 0; text-align: center; }
+  .ba img { max-width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+  .ba figure:first-child { flex: 0 1 520px; min-width: 0; }
+  .ba figure:last-child { flex: 0 1 240px; min-width: 0; }
+  .ba figure img { width: 100%; }
+  .ba .arrow { font-size: 2rem; color: var(--accent); font-weight: 800; }
+  @media (max-width: 700px) { .ba .arrow { transform: rotate(90deg); } }
   .grid.wide { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
   .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
@@ -68,8 +76,9 @@
   <main>
     <div class="hero">
       <div>
-        <h1>Turn a long video into Shorts, on your own PC.</h1>
-        <p class="lead">Paste a link or drop in a podcast, interview or game video. ShortsFlow finds the best moments, crops them to vertical, follows whoever is speaking and adds word-by-word captions. Free, open source, no watermark, no credits.</p>
+        <h1>Turn long videos into Shorts. Automatically.</h1>
+        <p class="lead">Upload a podcast, interview or YouTube video. ShortsFlow finds the engaging moments, follows the speaker, adds animated captions and exports vertical clips you can review and publish.</p>
+        <p class="lead" style="margin-top:-8px"><strong>Free. Open source. No watermark, no credit limits.</strong> It runs on your own computer.</p>
         <div class="cta">
           <a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download for Windows</a>
           <a class="btn ghost" href="#try">Mac, Linux or no install</a>
@@ -81,6 +90,16 @@
         <figcaption>A real run on a podcast: the crop follows the speaker, captions burned in.</figcaption>
       </figure>
     </div>
+
+    <section id="before-after">
+      <h2>Before and after</h2>
+      <p class="sub">One wide podcast video in, a vertical captioned clip out.</p>
+      <div class="ba">
+        <figure><img src="demos/podcast_original_frame.jpg" alt="A frame of the original 16:9 podcast video: the guest at a microphone" width="720" height="406"><figcaption>Before: the original 16:9 podcast video</figcaption></figure>
+        <div class="arrow" aria-hidden="true">&rarr;</div>
+        <figure><img src="demos/demo_podcast_cuts.gif" alt="The vertical 9:16 clip made from it, cutting between the two speakers with captions" width="240" height="427"><figcaption>After: a 9:16 clip that cuts to whoever speaks, with captions</figcaption></figure>
+      </div>
+    </section>
 
     <section id="how">
       <h2>How it works</h2>
@@ -104,10 +123,10 @@
     </section>
 
     <section id="try">
-      <h2>Try it</h2>
-      <p class="sub">Pick whichever is easiest.</p>
+      <h2>Choose how you want to run ShortsFlow</h2>
+      <p class="sub">There is no hosted demo yet: ShortsFlow runs on your own computer or in a free Colab notebook. Pick whichever is easiest.</p>
       <div class="grid wide">
-        <div class="card"><h3>Windows installer</h3><p>Download, run it and open ShortsFlow from your desktop. No Python or API key to install first.</p><p style="margin-top:12px"><a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download</a></p></div>
+        <div class="card"><h3>Windows installer</h3><p>Download, run it and open ShortsFlow from your desktop. No Python or API key to install first.</p><p style="margin-top:8px"><strong>Good to know:</strong> the file is small (about 2 MB) and downloads roughly 2 GB on first run (about 5 GB with an NVIDIA card, for the GPU libraries). Needs an internet connection and no admin rights. Windows may show a blue "protected your PC" box because the installer is not code-signed yet: choose More info, then Run anyway.</p><p style="margin-top:12px"><a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download</a></p></div>
         <div class="card"><h3>Mac or Linux</h3><p>Needs Python 3.12 and FFmpeg. There is no one-click installer for these yet, so this is the route.</p><pre>pip install "shortsflow[clip]"
 shortsflow doctor
 shortsflow clip my_video.mp4</pre></div>
@@ -118,10 +137,12 @@ shortsflow clip my_video.mp4</pre></div>
     </section>
 
     <section id="local">
-      <h2>Your videos stay on your PC</h2>
-      <p class="sub">Local by default.</p>
+      <h2>What stays on your PC, and what can leave it</h2>
+      <p class="sub">Local by default. Here is exactly where data can go.</p>
       <div class="note">
-        <p style="margin:0 0 8px">Nothing is sent anywhere unless you add an API key or switch on a cloud feature. The optional parts are AI text from Gemini or Groq, Gemini picture descriptions, Google Drive upload, and the place names in trip recaps, which send rounded GPS to the free OpenStreetMap service. Each one can be turned off.</p>
+        <p style="margin:0 0 8px"><strong>Stays on your PC:</strong> your video files, the speech recognition, the cropping, the captions and the rendering.</p>
+        <p style="margin:0 0 8px"><strong>Fetched from the internet:</strong> a YouTube link is downloaded from YouTube to your PC when you paste one.</p>
+        <p style="margin:0 0 8px"><strong>Can leave your PC, only if you use it:</strong> the transcript text goes to the AI provider you choose (Gemini, Groq and others) for titles and translations; small video frames go to Gemini if you turn on picture descriptions; text for computer voices goes to Microsoft's Edge voice service (or ElevenLabs, if you set it up) in the dub and idea-to-video modes; a Google Drive upload sends the finished video to your Drive; trip recaps send rounded GPS to the free OpenStreetMap service for place names. Picking Ollama keeps the AI text on your PC.</p>
         <p style="margin:0">Honest limits: speech recognition is slow without an NVIDIA graphics card, and the quality of titles depends on the AI model you use.</p>
       </div>
     </section>

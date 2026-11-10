@@ -25,7 +25,7 @@ No account or API key is needed to clip a video. A key (or a free local Ollama) 
 - **It finds the moments.** Local Whisper reads the speech, an AI scores the hooks, and every clip comes with the reason it was picked.
 - **It frames the shot.** Face-tracked 9:16 crops, a cut to whoever is speaking, or a game-aware layout that keeps the HUD.
 - **It styles the result.** Animated spring captions (Hormozi, glow box, bounce), your logo and handle, and an editor to re-cut any clip.
-- **It stays on your PC.** Nothing leaves it unless you add an API key or turn on a cloud feature: Gemini/Groq for AI text, Gemini for picture descriptions (`--visual_context`), Google Drive upload. The one lookup that is on by default is the trip recap's place naming (rounded GPS to the free OpenStreetMap service); `--recap_no_geocode` turns it off.
+- **It stays on your PC.** Nothing leaves it unless you add an API key or turn on a cloud feature: Gemini/Groq (or another provider) for AI text, which receives the transcript text; Gemini for picture descriptions (`--visual_context`), which receives small frames; Microsoft's Edge voice service (or ElevenLabs) for computer voices in the dub and idea-to-video modes, which receives the text to speak; Google Drive upload. A pasted YouTube link is downloaded from YouTube to your PC. The one lookup that is on by default is the trip recap's place naming (rounded GPS to the free OpenStreetMap service); `--recap_no_geocode` turns it off. Choosing Ollama keeps the AI text on your PC.
 - **It scales up.** Browser app, CLI, Docker, REST API, an MCP server for AI agents, and 30+ idea-to-video formats.
 
 <p align="center">
