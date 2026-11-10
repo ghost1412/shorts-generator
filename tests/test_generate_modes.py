@@ -104,3 +104,11 @@ def test_horror_and_true_crime_use_their_own_title_on_screen():
     src = open(os.path.join(os.path.dirname(__file__), "..", "engine", "modes", "generate.py"), encoding="utf-8").read()
     assert 'mode == "HORROR" and \'horror_data\' in locals()' in src and "horror_data[\"title\"]" in src
     assert src.index('mode == "HORROR" and \'horror_data\'') < src.index("render_title = category.replace")   # before the category fallback
+
+
+def test_horror_picks_dark_footage_not_the_random_high_retention_clip():
+    import os
+    src = open(os.path.join(os.path.dirname(__file__), "..", "engine", "modes", "generate.py"), encoding="utf-8").read()
+    i = src.index('if mode == "HORROR":\n            # footage that fits the mood') if 'if mode == "HORROR":\n            # footage that fits the mood' in src else src.index('# footage that fits the mood')
+    block = src[i:i + 700]
+    assert "dark" in block and "literal = True" in block and "force_literal=literal" in src

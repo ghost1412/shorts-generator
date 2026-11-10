@@ -967,7 +967,14 @@ def run(args, target_bitrate, target_preset):
     else:
         bg_filename = os.path.join(session_dir, f"bg_{mode.lower()}.mp4")
         search_q = f"{category} {topic}".strip()
-        paths = get_bg_path(search_q, bg_filename, target_duration=total_bg_duration)
+        literal = False
+        if mode == "HORROR":
+            # footage that fits the mood: the category here is random ("kids") and half the time the random "high-retention" pick
+            # (slime, soap) would play under a horror story
+            search_q = random.choice(["dark empty hallway night", "foggy forest at night", "abandoned house dark interior",
+                                      "flickering light dark corridor", "old creepy staircase dark"])
+            literal = True
+        paths = get_bg_path(search_q, bg_filename, target_duration=total_bg_duration, force_literal=literal)
         if paths:
             bg_video_paths.extend(paths)
 
