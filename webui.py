@@ -188,7 +188,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
                caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider,
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None, auto_zoom=False, cold_open=False,
                spoken="en", auto_edit="none", edit_strength="medium", stat_pops=False,
-               game=False, game_mix="0.5", caption_position="default", caption_size="default"):
+               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto"):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
@@ -206,7 +206,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     cmd += web_args.edit_args(auto_edit, edit_strength)
     if use_remotion:
         cmd += web_args.caption_look_args(caption_position, caption_size)
-    cmd += web_args.game_args(game, game_mix)
+    cmd += web_args.game_args(game, game_mix, game_framing)
     yield from _run(cmd)
 
 
@@ -417,7 +417,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
                auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default",
-               game=False, game_mix="0.5", caption_position="default", caption_size="default"):
+               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -454,7 +454,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
         if captions:
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
             cmd += web_args.caption_look_args(caption_position, caption_size)
-        cmd += web_args.game_args(game, game_mix)
+        cmd += web_args.game_args(game, game_mix, game_framing)
         if (find or "").strip():
             cmd += ["--find", find.strip()]
         if (about or "").strip():
@@ -808,6 +808,8 @@ def build_ui():
                                                  info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay, even with nobody talking), and keeps the whole screen in frame so the minimap and the game's own subtitles are not cut off.")
                             q_game_mix = gr.Dropdown(web_args.GAME_MIX_CHOICES, value="0.5", label="Story or action",
                                                      info="How many of the shorts are story moments and how many are action. Only used for game footage.")
+                            q_game_frame = gr.Dropdown(web_args.GAME_FRAMING_CHOICES, value="auto", label="Framing for game footage",
+                                                       info="Automatic looks at frames of the chosen moments: a HUD or subtitles at the sides keep the whole picture over blurred bars, a clean picture gets a full-screen portrait crop.")
                             with gr.Row():
                                 q_cap_pos = gr.Dropdown(web_args.CAPTION_POSITION_CHOICES, value="default", label="Caption position",
                                                         info="Where the animated captions sit. Normal height is the default.")
@@ -956,7 +958,7 @@ def build_ui():
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
-                             q_game, q_game_mix, q_cap_pos, q_cap_size],
+                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
@@ -986,6 +988,8 @@ def build_ui():
                             clip_game = gr.Checkbox(label="This is game footage", value=False,
                                                     info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay), and keeps the whole screen in frame (Framing \"single\" becomes \"fit\").")
                             clip_game_mix = gr.Dropdown(web_args.GAME_MIX_CHOICES, value="0.5", label="Story or action")
+                            clip_game_frame = gr.Dropdown(web_args.GAME_FRAMING_CHOICES, value="auto", label="Framing for game footage",
+                                                          info="Automatic picks per video. Only used for game footage with Framing \"single\".")
                             with gr.Row():
                                 clip_cap_pos = gr.Dropdown(web_args.CAPTION_POSITION_CHOICES, value="default", label="Caption position")
                                 clip_cap_size = gr.Dropdown(web_args.CAPTION_SIZE_CHOICES, value="default", label="Caption size")
@@ -1012,7 +1016,7 @@ def build_ui():
                     [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
                      clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom, clip_cold,
                      clip_spoken, clip_edit, clip_edit_strength, clip_stats,
-                     clip_game, clip_game_mix, clip_cap_pos, clip_cap_size],
+                     clip_game, clip_game_mix, clip_cap_pos, clip_cap_size, clip_game_frame],
                     [clip_log, clip_videos],
                 )
                 clip_stop.click(stop_jobs, None, clip_log, cancels=[clip_run])

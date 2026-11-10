@@ -47,7 +47,11 @@ CAPTION_POSITION_CHOICES = [("Normal height", "default"), ("Top", "top"), ("Midd
 CAPTION_SIZE_CHOICES = [("Normal", "default"), ("Small", "small"), ("Large", "large"), ("Extra large", "xlarge")]
 
 
-def game_args(game=False, mix="0.5"):
+GAME_FRAMING_CHOICES = [("Automatic (looks at the video)", "auto"), ("Whole picture over blurred bars (keeps the HUD and subtitles)", "fit"),
+                        ("Full-screen portrait crop (may cut the HUD)", "crop")]
+
+
+def game_args(game=False, mix="0.5", framing="auto"):
     """`--content game` (story AND action moments, whole picture kept in frame) with the story/action mix."""
     if not game:
         return []
@@ -55,7 +59,10 @@ def game_args(game=False, mix="0.5"):
         share = max(0.0, min(1.0, float(mix)))
     except (TypeError, ValueError):
         share = 0.5
-    return ["--content", "game", "--game_mix", f"{share:g}"]
+    out = ["--content", "game", "--game_mix", f"{share:g}"]
+    if framing in ("fit", "crop"):
+        out += ["--game_framing", framing]
+    return out
 
 
 def caption_look_args(position="default", size="default"):

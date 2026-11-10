@@ -70,14 +70,14 @@ def test_web_quick_clip_inputs_match_its_parameters():
     src = _webui_source()
     inputs = _click_inputs(src, r"q_btn\.click\(quick_clip, \[(.*?)\],\s*\[q_status")
     params = _params(src, "quick_clip")
-    assert len(inputs) <= len(params) and inputs[-4:] == ["q_game", "q_game_mix", "q_cap_pos", "q_cap_size"]
-    assert params[len(inputs) - 4:len(inputs)] == ["game", "game_mix", "caption_position", "caption_size"]
+    assert len(inputs) <= len(params) and inputs[-5:] == ["q_game", "q_game_mix", "q_cap_pos", "q_cap_size", "q_game_frame"]
+    assert params[len(inputs) - 5:len(inputs)] == ["game", "game_mix", "caption_position", "caption_size", "game_framing"]
 
 
 def test_clip_tab_inputs_match_clip_video_parameters():
     src = _webui_source()
     inputs = _click_inputs(src, r"clip_btn\.click\(\s*clip_video,\s*\[(.*?)\],\s*\[clip_log")
     params = _params(src, "clip_video")
-    assert inputs[-4:] == ["clip_game", "clip_game_mix", "clip_cap_pos", "clip_cap_size"]
+    assert inputs[-5:] == ["clip_game", "clip_game_mix", "clip_cap_pos", "clip_cap_size", "clip_game_frame"]
     assert len(inputs) - 1 + 5 == len(params)       # *clip_settings stands for five inputs (style, aspect, remotion, llm, tts)
-    assert params[-4:] == ["game", "game_mix", "caption_position", "caption_size"]
+    assert params[-5:] == ["game", "game_mix", "caption_position", "caption_size", "game_framing"]

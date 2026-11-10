@@ -134,9 +134,13 @@ def run(args, target_bitrate, target_preset):
         from engine.media_gen import get_chapters_json_path
         chapters_path = get_chapters_json_path(source_url or args.source_video, session_dir)
 
-    if getattr(args, 'content', 'auto') == 'game' and args.layout == 'single' and not getattr(args, 'game_crop', False):
+    game_framing = "crop" if getattr(args, 'game_crop', False) else (getattr(args, 'game_framing', 'auto') or 'auto')
+    game_auto = getattr(args, 'content', 'auto') == 'game' and args.layout == 'single'      # an explicit --layout is respected
+    if game_auto and game_framing == "fit":
         args.layout = 'fit'   # gameplay: a centre crop loses the minimap, the HUD and the game's own subtitles
-        print("[Log] Game footage: using the 'fit' layout (whole picture over a blurred copy). --game_crop keeps the centre crop.")
+        print("[Log] Game footage: using the 'fit' layout (whole picture over a blurred copy).")
+    elif game_auto and game_framing == "crop":
+        print("[Log] Game footage: full-screen portrait crop (--game_framing crop); the minimap, HUD and subtitles at the sides are cut off.")
 
     from engine import timing
     timing.reset()
@@ -180,6 +184,13 @@ def run(args, target_bitrate, target_preset):
         from engine.zh_script import convert_highlights, convert_transcript
         transcript_path = convert_transcript(transcript_path, zh_script)
         convert_highlights(highlights, zh_script)
+
+    if game_auto and game_framing == "auto":
+        from engine import game_framing as _gf
+        args.layout, why = _gf.choose(args.source_video, highlights)
+        args.layout = "fit" if args.layout == "fit" else "single"
+        print(f"[Log] Game framing (auto): {'whole picture over a blurred copy (fit)' if args.layout == 'fit' else 'full-screen portrait crop'} - {why}. "
+              "Override with --game_framing fit or crop.")
 
     # 🟢 Print the beautiful new score table
     print_clip_score_table(highlights)
