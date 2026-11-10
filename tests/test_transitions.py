@@ -119,3 +119,11 @@ def test_subject_max_option():
     assert "--subject_max" not in web_args.trip_args(["a.mp4"], "s")
     a = web_args.trip_args(["a.mp4"], "s", subject_max=3)
     assert a[a.index("--subject_max") + 1] == "3"
+
+
+def test_recap_lines_and_open_result_args():
+    base = web_args.trip_args(["a.mp4"], "s")
+    assert "--recap_lines" not in base and "--recap_open_result" not in base
+    a = web_args.trip_args(["a.mp4"], "s", lines="Fry nuts\n\n Roast khoya ", open_result=True)
+    assert a[a.index("--recap_lines") + 1] == "Fry nuts|Roast khoya"
+    assert "--recap_open_result" in a

@@ -947,15 +947,16 @@ def resolve_look(grade_name, edit, auto_grade, text=""):
     return auto_grade or "", "automatic" if auto_grade else "none needed"
 
 
-def cut_sound_events(parts, kind):
-    """Sound-effect events {t, kind, why} at the start of every shot except the first: [(path, seconds)] of the recap's parts, in order."""
+def cut_sound_events(parts, kind, overlap=0.0):
+    """Sound-effect events {t, kind, why} at the start of every shot except the first: [(path, seconds)] of the recap's parts, in order.
+    overlap: seconds each join eats (a dissolve), so every later shot starts that much earlier."""
     events, t, prev = [], 0.0, ""
     for path, seconds in parts:
         name = re.sub(r"^trim_\d+_", "", os.path.basename(path))             # a shot trimmed for a subject cut-out is still a shot
         after_bridge = prev.startswith("bridge_")                              # the bridge already carries the cut: no second sound after it
         if t > 0 and not after_bridge and name.startswith(("clip_", "glimpse_", "trip_title", "bridge_")):
             events.append({"t": round(t, 3), "kind": kind, "why": "cut"})
-        t += float(seconds)
+        t += float(seconds) - overlap
         prev = name
     return events
 
@@ -1859,7 +1860,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
     cut_kind = ((director or {}).get("sfx") or {}).get("cut") or ((director or {}).get("sfx") or {}).get("broll")
     if director and cut_kind:                          # the director's cut sound under every shot change
         from engine import sfx_mix
-        events = cut_sound_events([(p, video_info(p)[0] or 0.0) for p in parts], cut_kind)
+        events = cut_sound_events([(p, video_info(p)[0] or 0.0) for p in parts], cut_kind, overlap=DISSOLVE_SECONDS if trans_name == "dissolve" else 0.0)
         edit_log["sfx"] = len(sfx_mix.mix_events(video, events, volume_db=strength["sfx_db"]))
     if director:
         edit_log.update({"style": edit, "strength": edit_strength, "zoom": round(zoom_amount, 3), "look": look_name})

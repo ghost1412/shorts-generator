@@ -378,3 +378,10 @@ def test_sampling_is_a_choice_not_hard_coded():
     assert "--recap_sample" not in web_args.trip_args(["a.mp4"], "s")
     a = web_args.trip_args(["a.mp4"], "s", sample="all")
     assert a[a.index("--recap_sample") + 1] == "all"
+
+
+def test_cut_sound_events_follow_the_dissolve_overlap():
+    parts = [("clip_1.mp4", 4.0), ("clip_2.mp4", 4.0), ("clip_3.mp4", 4.0)]
+    plain = [e["t"] for e in tr.cut_sound_events(parts, "whoosh")]
+    melt = [e["t"] for e in tr.cut_sound_events(parts, "whoosh", overlap=0.6)]
+    assert plain == [4.0, 8.0] and melt == [3.4, 6.8]
