@@ -440,7 +440,9 @@ def test_recap_options_for_pace_ending_and_counter_exist():
     src = open(os.path.join(root, "shortsflow", "_main.py"), encoding="utf-8").read()
     for flag in ('"--recap_speed"', '"--recap_end"', '"--recap_end_text"', '"--recap_counter"'):
         assert flag in src
-    assert 'default="card"' in src[src.index('"--recap_end"'):src.index('"--recap_end"') + 120]            # the old closing card stays the default
+    assert 'default=None' in src[src.index('"--recap_end"'):src.index('"--recap_end"') + 120]                       # not set: a steps file may choose
+    engine = open(os.path.join(root, "engine", "trip_recap.py"), encoding="utf-8").read()
+    assert 'getattr(args, "recap_end", "card") or "card"' in engine                                        # and not set means the old closing card
 
 
 def test_stops_can_be_separated_with_a_bar_like_the_recap_lines():

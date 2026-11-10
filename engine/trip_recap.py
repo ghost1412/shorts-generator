@@ -719,6 +719,9 @@ KINDS = {
                 "hook_none": "The day we had been waiting for", "facts": "the note, the names of the parts (the events of the day) or the descriptions"},
     "event": {**_NOT_GEO, "label": "Event", "recap": "event recap", "tagline": "An event recap", "hook": "You had to be there",
               "hook_none": "You had to be there", "facts": "the note, the names of the parts or the descriptions"},
+    "steps": {**_NOT_GEO, "label": "Step by step", "recap": "step-by-step how-to video", "unit": "Step", "stop_unit": "Step", "by": "Step by step",
+              "tagline": "Here is how", "hook": "Here is how it is done", "hook_none": "Here is how it is done",
+              "facts": "the note, the names of the steps or the descriptions"},
     "family": {**_NOT_GEO, "label": "Memories", "recap": "family memories film", "tagline": "Our memories", "hook": "These are the moments we keep",
                "hook_none": "These are the moments we keep", "facts": "the note, the names of the parts or the descriptions"},
 }
@@ -2033,6 +2036,12 @@ def _explicit_filter(args):
 
 
 def run(args, target_bitrate=None, target_preset=None):
+    try:
+        from engine import steps_recap
+        steps_recap.apply_steps(args)            # --steps_file: titles, captions, the needs card and the step-by-step defaults
+    except ValueError as e:
+        print(f"[Error] {e}")
+        sys.exit(2)
     paths = getattr(args, "trip_videos", None) or ([args.source_video] if getattr(args, "source_video", None) else [])
     session_dir = args.session_dir if args.session_dir else f"sessions/trip_{int(time.time())}"
     album = getattr(args, "trip_album", None)
@@ -2062,7 +2071,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       total_seconds=getattr(args, "recap_length", 60) or 60, music=getattr(args, "music", None),
                       visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
                       stops=getattr(args, "trip_stops", None), lines=getattr(args, "recap_lines", "") or "", open_with_result=bool(getattr(args, "recap_open_result", False)),
-                      extras={"speed": float(getattr(args, "recap_speed", 1.0) or 1.0), "end": getattr(args, "recap_end", "card") or "card", "end_text": getattr(args, "recap_end_text", "") or "", "counter": bool(getattr(args, "recap_counter", False)), "pace": getattr(args, "recap_pace", "normal") or "normal", "opening": getattr(args, "recap_opening", "normal") or "normal", "safe": bool(getattr(args, "recap_safe_text", False)), "ingredients": getattr(args, "recap_ingredients", "") or "", "ingredients_at": getattr(args, "recap_ingredients_at", "end") or "end"}, geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
+                      extras={"speed": float(getattr(args, "recap_speed", 1.0) or 1.0), "end": getattr(args, "recap_end", "card") or "card", "end_text": getattr(args, "recap_end_text", "") or "", "counter": bool(getattr(args, "recap_counter", False)), "pace": getattr(args, "recap_pace", "normal") or "normal", "opening": getattr(args, "recap_opening", "normal") or "normal", "ingredients_title": getattr(args, "recap_ingredients_title", "") or "", "safe": bool(getattr(args, "recap_safe_text", False)), "ingredients": getattr(args, "recap_ingredients", "") or "", "ingredients_at": getattr(args, "recap_ingredients_at", "end") or "end"}, geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
                       manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)),
                       grade_name=_explicit_filter(args), edit=getattr(args, "auto_edit", "") if getattr(args, "auto_edit", "none") != "none" else "",

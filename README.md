@@ -85,6 +85,30 @@ Source footage: six videos by Poiana11 on Wikimedia Commons (`HoiAnMarket`, `Hoi
 
 ---
 
+## 📝 Step-by-step videos: a recipe, a DIY job, a workout, a tutorial
+
+Write the steps in a text file, put your clips in step order (one folder per step, or one folder of clips in filming order) and ShortsFlow builds a vertical video that
+opens on the finished result, goes straight into the steps with a title and a caption for each, and can end on a "what you need" card:
+
+```
+Title: Build a bird house
+Hook: Done in one afternoon
+Needs: 4 pine boards | 30 screws | wood glue | a drill
+End: Ready to hang!
+
+1. Cut the boards | Cut four 20 cm sides and two 15 cm roof pieces
+2. Drill the hole | 3 cm hole, 12 cm above the floor
+3. Assemble | Glue, then 6 screws per side
+```
+
+`py main.py --mode TRIP --trip_videos step1 step2 step3 --steps_file steps.txt --music song.mp3`
+
+It uses a fast pace, a cinematic look, and keeps titles and captions in the part of the screen that Reels, Shorts and TikTok leave free; options you pass yourself win
+(`--recap_speed 2` plays each step as a time-lapse, `--recap_ingredients_at start` puts the needs card first). Use `Ingredients:`, `Materials:` or `Tools:` instead of
+`Needs:` to name the card. The music file is yours: with a song, the cuts follow its beat.
+
+---
+
 ## 🎮 Game footage demo: story moments and action moments
 
 <div align="center">
