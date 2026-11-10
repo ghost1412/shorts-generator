@@ -107,3 +107,18 @@ def test_the_command_line_has_the_steps_options():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     src = open(os.path.join(root, "shortsflow", "_main.py"), encoding="utf-8").read()
     assert '"--steps_file"' in src and '"--recap_ingredients_title"' in src and '"steps"]' in src
+
+
+def test_the_web_recap_tab_can_make_a_step_by_step_video():
+    from shortsflow import web_args
+    base = web_args.trip_args(["a.mp4"], "s")
+    assert "--steps_file" not in base
+    a = web_args.trip_args(["a.mp4"], "s", kind="steps", steps_file="steps.txt")
+    assert a[a.index("--steps_file") + 1] == "steps.txt" and a[a.index("--recap_kind") + 1] == "steps"
+    assert ("Step by step (a recipe, DIY, workout, tutorial)", "steps") in web_args.RECAP_KIND_CHOICES
+    assert len(web_args.recap_kind_labels("steps")) == 3
+    import ast
+    import os
+    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+    assert [a.arg for a in next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "trip_recap").args.args][-1] == "steps"
+    assert "t_lines, t_open_result, t_llm, t_steps]" in src

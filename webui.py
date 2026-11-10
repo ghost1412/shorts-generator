@@ -249,7 +249,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
 
 
 def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False, llm_provider="auto"):
+               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False, llm_provider="auto", steps=""):
     """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
@@ -259,8 +259,13 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
         raise gr.Error("Add your trip videos first (in the order you filmed them).")
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
+    steps_file = None
+    if (steps or "").strip():                       # a step-by-step video: the text box is the steps file
+        steps_file = os.path.join(session, "steps.txt")
+        with open(steps_file, "w", encoding="utf-8") as f:
+            f.write(steps)
     cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound,
-                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max, lines=lines, open_result=open_result, llm_provider=llm_provider)]
+                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max, lines=lines, open_result=open_result, llm_provider=llm_provider, steps_file=steps_file)]
     if reuse:
         copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
         if copied:
@@ -1102,6 +1107,9 @@ def build_ui():
                                                  placeholder="Fry the almonds in ghee\nRoast the khoya until golden",
                                                  info="Shown under each part's title and on its shots (a recipe step, a stop's note).")
                             t_llm = _ai_provider_dropdown()
+                            t_steps = gr.Textbox(label="Steps for a step-by-step video (optional)", lines=8,
+                                                 placeholder="Title: Build a bird house\nHook: Done in one afternoon\nNeeds: 4 pine boards | 30 screws | wood glue\nEnd: Ready to hang!\n\n1. Cut the boards | Cut four 20 cm sides\n2. Drill the hole | 3 cm hole, 12 cm up\n3. Assemble | Glue, then 6 screws per side",
+                                                 info="Fill this in for a how-to video (a recipe, DIY, workout, tutorial): it opens on the finished result and goes through the steps, each with a title and a caption. One numbered step per line as \"1. Title | caption\". Optional lines: Title, Hook, Needs (or Ingredients, Materials, Tools), End. Your videos are split into the steps in the order you filmed them, so add them in order.")
                             t_open_result = gr.Checkbox(value=False, label="Open with the result first",
                                                         info="The opening shots come from the LAST part (the finished dish, the summit) before the story starts.")
                             t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],
@@ -1147,7 +1155,7 @@ def build_ui():
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max, t_lines, t_open_result, t_llm],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max, t_lines, t_open_result, t_llm, t_steps],
                                     [t_status, t_log, t_video, t_md])
                 t_kind.change(recap_kind_changed, t_kind, [t_name, t_stops, t_note, t_places, t_keep])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])

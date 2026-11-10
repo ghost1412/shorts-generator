@@ -199,7 +199,8 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
 MAX_RECAP_SECONDS = 3600      # a wedding film can run 20-30 minutes; the engine itself has no limit
 
 RECAP_KIND_CHOICES = [("Trip (days, places named from GPS)", "trip"), ("Wedding (one part per event of the day)", "wedding"),
-                      ("Event or party", "event"), ("Family memories", "family")]
+                      ("Event or party", "event"), ("Family memories", "family"),
+                      ("Step by step (a recipe, DIY, workout, tutorial)", "steps")]
 # what each kind changes in the form: (name label, parts label + example, note label + example)
 RECAP_KIND_TEXT = {
     "trip": ("Trip name", "Stops (optional): one per line or comma separated, e.g. Pinemere Lake, Larkwater Lake", "A note about the trip (optional)"),
@@ -207,6 +208,7 @@ RECAP_KIND_TEXT = {
                 "A note (optional): who is getting married, what each part was, favourite moments"),
     "event": ("Event name", "Parts of the event in order (optional), e.g. Arrival, Cake, Dancing", "A note about the event (optional)"),
     "family": ("Title (optional)", "Parts in order (optional), e.g. Summer, Diwali, New Year", "A note (optional): who is in the videos, what happened"),
+    "steps": ("Title (optional)", "Steps in order (optional), e.g. Cut the boards, Drill the hole, Assemble", "A note (optional): what the video shows"),
 }
 
 
@@ -224,7 +226,7 @@ RECAP_GRADE_CHOICES =[("Automatic: a look only if the footage suits, otherwise n
 
 
 def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False, llm_provider="auto"):
+              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False, llm_provider="auto", steps_file=None):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -245,7 +247,7 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--recap_no_geocode"]
     if enhance:
         args += ["--enhance", "auto"]
-    if kind in ("wedding", "event", "family"):
+    if kind in ("wedding", "event", "family", "steps"):
         args += ["--recap_kind", kind]
     if keep_sound:
         args += ["--recap_keep_sound"]
@@ -267,6 +269,8 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
     if open_result:
         args += ["--recap_open_result"]
     args += llm_args(llm_provider)
+    if steps_file:
+        args += ["--steps_file", str(steps_file)]            # a step-by-step video: the file holds the titles, captions and the rest
     return args
 
 
