@@ -91,3 +91,21 @@ def test_game_clip_metadata_has_gaming_tags_and_no_podcast_hashtags():
     assert "podcast" not in m["description"].lower() and "gaming" in m["tags"] and "gta6" in m["tags"]
     plain = game_clip_metadata(None, "", "story")
     assert plain["title"] == "Story moment" and "#cutscene" in plain["description"]
+
+
+def test_game_moments_are_cached_per_settings(tmp_path, monkeypatch):
+    from engine import analysis
+    calls = []
+    fake = lambda *a, **k: calls.append(1) or [{"start": 0.0, "end": 30.0, "kind": "action", "score": 80}]
+    monkeypatch.setattr(analysis, "transcribe_video", lambda *a, **k: str(tmp_path / "t.json"))
+    monkeypatch.setattr(gm, "pick_game_moments", fake)
+    monkeypatch.setattr(analysis, "probe_duration", lambda p: 100.0)
+    video = tmp_path / "v.mp4"
+    video.write_bytes(b"x")
+    (tmp_path / "t.json").write_text('{"segments": []}')
+    run = lambda **kw: analysis.process_source_video(str(video), str(tmp_path), game=True, snap=False, **kw)
+    run(clip_count=1, use_cache=True)
+    run(clip_count=1, use_cache=True)
+    assert len(calls) == 1                       # second run reused the file
+    run(clip_count=2, use_cache=True)
+    assert len(calls) == 2                       # other settings: picked again

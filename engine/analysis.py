@@ -1614,8 +1614,26 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
     elif game and mode == "shorts":
         # game footage: story moments (cutscenes, dialogue) and action moments (fights, gameplay) from the words, sound and picture
         from engine.game_moments import pick_game_moments
-        highlights = pick_game_moments(video_path, transcript_path, output_dir, clip_count=clip_count,
-                                       target_duration=target_duration or 30, story_share=game_mix)
+        game_cache = os.path.join(output_dir, "highlights_game.json")
+        game_key = {"clip_count": clip_count, "target_duration": target_duration or 30, "story_share": game_mix}
+        if use_cache and os.path.exists(game_cache):                    # same video session and same settings: reuse the picked moments
+            try:
+                with open(game_cache, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                if cached.get("key") == game_key and cached.get("highlights"):
+                    highlights = cached["highlights"]
+                    print(f"[Log] Loaded cached game moments from {game_cache}")
+            except Exception as e:
+                print(f"[Warning] Failed to load cached game moments: {e}")
+        if highlights is None:
+            highlights = pick_game_moments(video_path, transcript_path, output_dir, clip_count=clip_count,
+                                           target_duration=target_duration or 30, story_share=game_mix)
+            if highlights:
+                try:
+                    with open(game_cache, "w", encoding="utf-8") as f:
+                        json.dump({"key": game_key, "highlights": highlights}, f, indent=2)
+                except Exception as e:
+                    print(f"[Warning] Failed to cache game moments: {e}")
         if not highlights:
             raise RuntimeError("Game mode found no story or action moments (is the video very short or silent and still?).")
     elif find_query:
