@@ -754,7 +754,7 @@ def _render_settings(with_aspect=True):
             llm_provider = gr.Dropdown(LLM_PROVIDERS, value="auto", label="LLM provider")
             tts_provider = gr.Dropdown(["auto", "edgetts", "elevenlabs", "voicestudio", "local"],
                                        value="auto", label="Voice (TTS) provider")
-        use_remotion = gr.Checkbox(value=True, label="Remotion animated captions (needs Node.js)")
+        use_remotion = gr.Checkbox(value=bool(shutil.which("node")), label="Remotion animated captions (needs Node.js)")   # off by default without Node: the render would fail
     return [caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider]
 
 

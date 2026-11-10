@@ -2,6 +2,7 @@
 import os
 
 os.environ.setdefault("WEBUI_HOST", "0.0.0.0")
+os.environ.setdefault("SHORTSFLOW_WHISPER_MODEL", "base")      # the free CPU hardware is slow: a smaller speech model
 
 from shortsflow import webui  # installed from requirements.txt
 

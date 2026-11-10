@@ -1056,6 +1056,10 @@ def run(args, target_bitrate, target_preset):
             render_title = top5_data.get("title", "Top 5 Countdown")
         elif mode == "CHAT_STORY" and 'chat_data' in locals() and isinstance(chat_data, dict):
             render_title = chat_data.get("title", "Chat Story")
+        elif mode == "HORROR" and 'horror_data' in locals() and isinstance(horror_data, dict) and str(horror_data.get("title", "")).strip():
+            render_title = str(horror_data["title"]).strip()     # its own title, not the random category ("Kids") the fallback below would show
+        elif mode == "TRUE_CRIME" and 'crime_data' in locals() and isinstance(crime_data, dict) and str(crime_data.get("title", "")).strip():
+            render_title = str(crime_data["title"]).strip()
         elif mode == "FACTS":
             render_title = "SPOT THE LIE"
         elif args.recap_title:

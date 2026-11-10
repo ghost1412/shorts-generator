@@ -646,6 +646,15 @@ def apply_stylish_captions(transcript_data, start_offset, end_offset, size=(1080
             
     return word_clips
 
+def word_display_seconds(start, spoken, next_start=None, minimum=0.6, floor=0.1):
+    """How long a one-word caption stays on screen: at least `minimum` seconds so it can be read, but it ends when the next word
+    starts (words are drawn at the same spot, so a longer stay prints two words on top of each other). The last word keeps `minimum`."""
+    seconds = max(minimum, float(spoken))
+    if next_start is not None and float(next_start) > float(start):
+        seconds = min(seconds, max(floor, float(next_start) - float(start)))
+    return seconds
+
+
 def generate_word_subtitles(subs_path, duration, y_pos=1500):
     """Generates subtitle clips from a word-timestamped JSON file."""
     if not subs_path or not os.path.exists(subs_path):
@@ -1822,7 +1831,7 @@ def create_reddit_video(audio_path, subs_path, reddit_data, video_paths, output_
             text = entry["word"].upper()
             start = entry["start"]
             c_img = create_text_image(text, font_size=120, color="white", y_pos=SAFE_MID)
-            c_dur = max(0.6, entry["duration"])
+            c_dur = word_display_seconds(start, entry["duration"], subtitles[i + 1]["start"] if i + 1 < len(subtitles) else None)
             c_clip = ImageClip(c_img).with_start(start).with_duration(c_dur).with_position((0, 0))
             
             # Bounce positional effect
@@ -2254,10 +2263,10 @@ def create_sound_challenge_video(audio_path, subs_path, sfx_path, obj_path, vide
 
     # 6. Captions
     word_clips = []
-    for entry in subtitles:
+    for i, entry in enumerate(subtitles):
         text = entry["word"].upper()
         c_img = create_text_image(text, font_size=110, color="cyan", y_pos=SAFE_MID + 300)
-        c_dur = max(0.6, entry["duration"])
+        c_dur = word_display_seconds(entry["start"], entry["duration"], subtitles[i + 1]["start"] if i + 1 < len(subtitles) else None)
         c_clip = ImageClip(c_img).with_start(entry["start"]).with_duration(c_dur)
         c_clip = c_clip.with_position(make_bounce_pos(entry["start"], 0))
         word_clips.append(c_clip)

@@ -169,7 +169,8 @@ def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx2
     cmd = [exe, "-y"]
     for p in paths:
         cmd += ["-i", os.path.abspath(p)]
-    cmd += ["-filter_complex_script", script, "-map", f"[{vcur}]", "-map", f"[{acur}]", "-c:v", codec, *params,
+    from engine.ffmpeg_compat import filter_complex_script_args
+    cmd += [*filter_complex_script_args(exe, script), "-map", f"[{vcur}]", "-map", f"[{acur}]", "-c:v", codec, *params,
             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", os.path.abspath(out_path)]
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     return r.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 1000

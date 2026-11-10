@@ -370,7 +370,8 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None, origin
         cmd += ["-i", _short_path(c["path"], session_dir)]     # relative to session_dir (the command runs there): far shorter
     if stem:
         cmd += ["-i", _short_path(stem, session_dir)]
-    cmd += ["-filter_complex_script", os.path.basename(script), "-map", "0:v:0", "-map", "[aout]"]
+    from engine.ffmpeg_compat import filter_complex_script_args
+    cmd += [*filter_complex_script_args(ffmpeg, os.path.basename(script)), "-map", "0:v:0", "-map", "[aout]"]
     if burn_srt:
         ass = os.path.splitext(burn_srt)[0] + ".ass"
         if os.path.exists(ass):  # script-aware captions written by dub_video; staged fonts sit next to it
@@ -452,7 +453,8 @@ def _mix_batch(ffmpeg, source_video, clips, total, session_dir, number):
     cmd = [ffmpeg, "-y", "-i", os.path.abspath(source_video)]        # input 0 is only there to keep the clip numbering from 1
     for c in clips:
         cmd += ["-i", _short_path(c["path"], session_dir)]
-    cmd += ["-filter_complex_script", os.path.basename(script), "-map", "[aout]", "-c:a", "pcm_s16le", "-t", f"{total:.3f}", os.path.basename(out)]
+    from engine.ffmpeg_compat import filter_complex_script_args
+    cmd += [*filter_complex_script_args(ffmpeg, os.path.basename(script)), "-map", "[aout]", "-c:a", "pcm_s16le", "-t", f"{total:.3f}", os.path.basename(out)]
     res = subprocess.run(cmd, capture_output=True, text=True, cwd=session_dir)
     if res.returncode != 0 or not os.path.exists(out):
         raise RuntimeError("FFmpeg dub batch mix failed: " + (res.stderr or "")[-600:])

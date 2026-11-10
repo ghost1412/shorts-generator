@@ -169,7 +169,8 @@ def render_edited_video(source, keeps, out_path, workdir):
     if not exe:
         import imageio_ffmpeg
         exe = imageio_ffmpeg.get_ffmpeg_exe()
-    cmd = [exe, "-y", "-i", source, "-filter_complex_script", script, "-map", "[v]", "-map", "[a]",
+    from engine.ffmpeg_compat import filter_complex_script_args
+    cmd = [exe, "-y", "-i", source, *filter_complex_script_args(exe, script), "-map", "[v]", "-map", "[a]",
            "-c:v", "libx264", "-preset", "fast", "-crf", "17", "-c:a", "aac", "-b:a", "192k", out_path]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0 or not os.path.exists(out_path):

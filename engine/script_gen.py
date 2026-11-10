@@ -1171,12 +1171,22 @@ QUOTE_CLICHES = ("in stillness", "in the quiet", "in the silence", "storm", "tem
                  "journey of a thousand")
 
 
+# A quote is posted for anyone to see: nothing about harming yourself or others, death or weapons, even as a metaphor.
+QUOTE_UNSAFE = re.compile(
+    r"suicid|\bkill(ing|s)?\s+(yourself|myself|themselves|himself|herself|them|him|her|you|me)\b|"
+    r"\b(hurt|harm|cut|hang|drown|poison|burn|starve|choke|stab|shoot)(ing|s)?\s+(yourself|myself|themselves|himself|herself)\b|"
+    r"\bend\s+(it\s+all|your\s+life|my\s+life|everything)|\btake\s+(your|my)\s+(own\s+)?life|"
+    r"\bdrive\s+(straight\s+|right\s+)?(off|into)\b|\bjump\s+(off|from)\b|overdos|\bnoose\b|\bgun\b|\bbleed|\bcorpse|\bgrave\b|"
+    r"\b(die[sd]?|dying|death|dead(ly)?)\b", re.I)
+
+
 def validate_quote(data):
     if not isinstance(data, dict):
         return False
     words = str(data.get("quote", "")).split()
     low = " ".join(words).lower()
-    return 8 <= len(words) <= 32 and not any(c in low for c in QUOTE_CLICHES) and not low.startswith("in ")
+    return (8 <= len(words) <= 32 and not any(c in low for c in QUOTE_CLICHES) and not low.startswith("in ")
+            and not QUOTE_UNSAFE.search(low))
 
 
 def generate_quote(category="stoic"):
@@ -1194,6 +1204,8 @@ RULES:
 - Do not begin with "In". No storms, tempests or stillness; no "believe in yourself" or "never give up".
 - It must be your own wording, not a famous quote.
 - Plain words, one sentence or two short ones. No hashtags, no URLs.
+- Safe for everyone: nothing about harming yourself or others, death, weapons or driving into danger, not even as a metaphor.
+- It must make sense on first reading: a concrete, sensible image, not a puzzle.
 - Valid JSON with double quotes only.
 
 Return JSON only, with this shape:

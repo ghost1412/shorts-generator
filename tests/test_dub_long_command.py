@@ -93,3 +93,28 @@ def test_recap_and_start_here_inputs_end_with_the_provider():
     fns = {n.name: [a.arg for a in n.args.args] for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
     assert fns["trip_recap"][-1] == "llm_provider" and fns["quick_clip"][-1] == "llm_provider"
     assert "t_lines, t_open_result, t_llm]" in src
+
+
+def test_filter_script_flag_follows_what_this_ffmpeg_understands(monkeypatch):
+    from engine import ffmpeg_compat as fc
+    fc._old_flag_works.cache_clear()
+    monkeypatch.setattr(fc, "_old_flag_works", lambda exe: True)
+    assert fc.filter_complex_script_args("ff", "g.txt") == ["-filter_complex_script", "g.txt"]
+    monkeypatch.setattr(fc, "_old_flag_works", lambda exe: False)
+    assert fc.filter_complex_script_args("ff", "g.txt") == ["-/filter_complex", "g.txt"]
+
+
+def test_the_chosen_spelling_really_runs_on_this_ffmpeg(tmp_path):
+    """The check that failed in CI: a newer FFmpeg refuses -filter_complex_script. Whatever this FFmpeg is, the helper's flag must work."""
+    from engine import ffmpeg_compat as fc
+    try:
+        ff = _ffmpeg()
+    except Exception:
+        pytest.skip("no ffmpeg")
+    fc._old_flag_works.cache_clear()
+    script = tmp_path / "g.txt"
+    script.write_text("[0:a]anull[a]", encoding="utf-8")
+    cmd = [ff, "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=d=0.05",
+           *fc.filter_complex_script_args(ff, str(script)), "-map", "[a]", "-f", "null", "-"]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-300:]

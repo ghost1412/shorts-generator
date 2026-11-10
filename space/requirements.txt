@@ -1,1 +1,1 @@
-shortsflow[webui,clip]
+shortsflow[webui,clip]==0.7.0
