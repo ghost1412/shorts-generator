@@ -71,5 +71,25 @@ def test_dub_tab_passes_the_resume_choice_last():
     import ast
     src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
     fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "dub_video")
-    assert [a.arg for a in fn.args.args][-3:] == ["resume", "tone", "delivery"]
-    assert "d_original, d_resume, d_tone, d_delivery]" in src
+    assert [a.arg for a in fn.args.args][-4:] == ["resume", "tone", "delivery", "llm_provider"]
+    assert "d_original, d_resume, d_tone, d_delivery, d_llm]" in src
+
+
+def test_ai_provider_flag_only_when_a_provider_is_picked():
+    from shortsflow import web_args
+    assert web_args.llm_args("auto") == [] and web_args.llm_args("") == [] and web_args.llm_args(None) == []
+    assert web_args.llm_args("ollama") == ["--llm_provider", "ollama"]
+    assert web_args.dub_args("v.mp4", "es") == web_args.dub_args("v.mp4", "es", llm_provider="auto")
+    assert web_args.trip_args(["a.mp4"], "s") == web_args.trip_args(["a.mp4"], "s", llm_provider="auto")
+    dub = web_args.dub_args("v.mp4", "es", llm_provider="ollama")
+    trip = web_args.trip_args(["a.mp4"], "s", llm_provider="groq")
+    assert dub[dub.index("--llm_provider") + 1] == "ollama" and trip[trip.index("--llm_provider") + 1] == "groq"
+    assert [v for _, v in web_args.AI_PROVIDER_CHOICES][0] == "auto"
+
+
+def test_recap_and_start_here_inputs_end_with_the_provider():
+    import ast
+    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+    fns = {n.name: [a.arg for a in n.args.args] for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
+    assert fns["trip_recap"][-1] == "llm_provider" and fns["quick_clip"][-1] == "llm_provider"
+    assert "t_lines, t_open_result, t_llm]" in src

@@ -210,7 +210,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     yield from _run(cmd)
 
 
-def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto", original="music", resume=None, tone="faithful", delivery="neutral"):
+def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_provider="auto", voice="auto", original="music", resume=None, tone="faithful", delivery="neutral", llm_provider="auto"):
     """Dub tab: translate a video's speech and re-voice it. Yields (status, log, video, srt)."""
     import time
     from shortsflow import onboarding
@@ -228,7 +228,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
             raise gr.Error("Choose the language to dub into.")
         session = os.path.join(ROOT, "sessions", time.strftime("dub_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
-    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session, tts_provider, voice, original, tone, delivery)]
+    cmd = [*_pipeline_cmd(), *web_args.dub_args(source, target_lang, spoken, burn_captions, session, tts_provider, voice, original, tone, delivery, llm_provider)]
     progress, seen = onboarding.Progress(steps=onboarding.DUB_STEPS), 0
     status = progress.message
     yield status, "", None, None
@@ -249,7 +249,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
 
 
 def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False):
+               grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False, llm_provider="auto"):
     """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
@@ -260,7 +260,7 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
     os.makedirs(session, exist_ok=True)
     cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound,
-                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max, lines=lines, open_result=open_result)]
+                                                            grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max, lines=lines, open_result=open_result, llm_provider=llm_provider)]
     if reuse:
         copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
         if copied:
@@ -424,7 +424,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
                auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default",
-               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto"):
+               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto", llm_provider="auto"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -462,6 +462,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
             cmd += web_args.caption_look_args(caption_position, caption_size)
         cmd += web_args.game_args(game, game_mix, game_framing)
+        cmd += web_args.llm_args(llm_provider)
         if (find or "").strip():
             cmd += ["--find", find.strip()]
         if (about or "").strip():
@@ -737,6 +738,12 @@ def zip_cards(cards):
     return gr.update(value=review.build_zip(cards, os.path.join(ROOT, "sessions", time.strftime("shorts_%Y%m%d_%H%M%S.zip"))), visible=True)
 
 
+def _ai_provider_dropdown():
+    """The same "AI text provider" choice on every tab that writes or translates text with an AI model."""
+    return gr.Dropdown(web_args.AI_PROVIDER_CHOICES, value="auto", label="AI text provider",
+                       info="Who writes the titles and translations. Automatic is fine; pick Local to keep the text on this PC (needs Ollama running).")
+
+
 def _render_settings(with_aspect=True):
     with gr.Accordion("Render settings", open=False):
         with gr.Row():
@@ -948,6 +955,7 @@ def build_ui():
                 with gr.Accordion("Want AI-written titles and descriptions? (optional, free)", open=False):
                     gr.Markdown("Pick any AI provider you have a key for. You can skip this; your shorts are made either way "
                                 "(with Ollama running on this PC no key is needed). The key is saved in your local `.env` file.")
+                    q_llm = _ai_provider_dropdown()
                     q_key_provider = gr.Dropdown(web_args.LLM_KEY_CHOICES, value="groq", label="Provider")
                     q_key_help = gr.Markdown(web_args.llm_key_help("groq"))
                     q_key = gr.Textbox(label="API key", type="password")
@@ -965,7 +973,7 @@ def build_ui():
                 demo.load(brand_fields, None, brand_form)
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
-                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame],
+                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
@@ -1050,6 +1058,7 @@ def build_ui():
                                                  info="Faithful keeps the speaker's own tone. The others make the AI rewrite each line (funny, sarcastic...) and keep the meaning; it can change what is said, so check the saved .json before you publish.")
                             d_delivery = gr.Dropdown(web_args.DUB_DELIVERY_CHOICES, value="neutral", label="How the voice speaks",
                                                      info="Speed and pitch of the computer voice, not real emotions.")
+                        d_llm = _ai_provider_dropdown()
                         d_resume = gr.Dropdown(label="Continue an earlier dub that stopped (optional)", choices=[], value=None, interactive=True,
                                                info="Pick it to finish where it stopped: the saved translation and finished voices are reused, so no AI text or voice service is called for them. The video, language and voice come from that run.")
                         d_btn = gr.Button("🌍 Dub my video", variant="primary")
@@ -1060,7 +1069,7 @@ def build_ui():
                         d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original, d_resume, d_tone, d_delivery], [d_status, d_log, d_video, d_srt])
+                d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original, d_resume, d_tone, d_delivery, d_llm], [d_status, d_log, d_video, d_srt])
                 d_stop.click(stop_jobs, None, d_status, cancels=[d_run])
                 demo.load(lambda: gr.update(choices=web_args.unfinished_dubs(ROOT)), None, d_resume)
 
@@ -1087,6 +1096,7 @@ def build_ui():
                             t_lines = gr.Textbox(label="A line for each part (optional), one per line, in order", lines=3,
                                                  placeholder="Fry the almonds in ghee\nRoast the khoya until golden",
                                                  info="Shown under each part's title and on its shots (a recipe step, a stop's note).")
+                            t_llm = _ai_provider_dropdown()
                             t_open_result = gr.Checkbox(value=False, label="Open with the result first",
                                                         info="The opening shots come from the LAST part (the finished dish, the summit) before the story starts.")
                             t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],
@@ -1132,7 +1142,7 @@ def build_ui():
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max, t_lines, t_open_result],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max, t_lines, t_open_result, t_llm],
                                     [t_status, t_log, t_video, t_md])
                 t_kind.change(recap_kind_changed, t_kind, [t_name, t_stops, t_note, t_places, t_keep])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])

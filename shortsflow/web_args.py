@@ -48,6 +48,17 @@ CAPTION_POSITION_CHOICES = [("Normal height", "default"), ("Top", "top"), ("Midd
 CAPTION_SIZE_CHOICES = [("Normal", "default"), ("Small", "small"), ("Large", "large"), ("Extra large", "xlarge")]
 
 
+AI_PROVIDER_CHOICES = [("Automatic (uses the first provider you have a key for; local Ollama is the last fallback)", "auto"),
+                       ("Local on this PC (Ollama): the text never leaves your PC", "ollama"),
+                       ("Gemini", "gemini"), ("Groq", "groq"), ("OpenAI", "openai"), ("Anthropic", "anthropic"),
+                       ("DeepSeek", "deepseek"), ("OpenRouter", "openrouter")]
+
+
+def llm_args(provider):
+    """`--llm_provider X`, left out for Automatic (the command line's default) so the command is unchanged unless a provider is picked."""
+    return ["--llm_provider", provider] if provider and provider != "auto" else []
+
+
 GAME_FRAMING_CHOICES = [("Automatic (looks at the video)", "auto"), ("Whole picture over blurred bars (keeps the HUD and subtitles)", "fit"),
                         ("Full-screen portrait crop (may cut the HUD)", "crop")]
 
@@ -157,7 +168,7 @@ DUB_DELIVERY_CHOICES = [("Neutral (the voice's own delivery)", "neutral"), ("Exc
 
 
 def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_dir=None, tts_provider="auto", voice="auto",
-             original="music", tone="faithful", delivery="neutral"):
+             original="music", tone="faithful", delivery="neutral", llm_provider="auto"):
     """Arguments (after the pipeline command) for `--mode DUB`. 'auto' voice / provider leave the flags out."""
     args = ["--mode", "DUB", "--source_video", source, "--target_lang", target_lang,
             "--language", (spoken or "auto")]
@@ -173,6 +184,7 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
         args += ["--dub_tone", tone]                      # "faithful" is the command line's default
     if delivery in ("excited", "calm", "serious"):
         args += ["--dub_delivery", delivery]              # "neutral" is the command line's default
+    args += llm_args(llm_provider)
     if session_dir:
         args += ["--session_dir", session_dir]
     return args
@@ -206,7 +218,7 @@ RECAP_GRADE_CHOICES =[("Automatic: a look only if the footage suits, otherwise n
 
 
 def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=60, style="hype", music=None, look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
-              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False):
+              grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False, llm_provider="auto"):
     """Arguments (after the pipeline command) for `--mode TRIP`. Empty options are left out.
     look: also look at the pictures (--visual_context: better captions, sideways clips turned upright); both: a portrait and a landscape
     recap; name_places: name the places from the videos' GPS (rounded coordinates go to OpenStreetMap; off = --recap_no_geocode)."""
@@ -248,6 +260,7 @@ def trip_args(videos, session_dir, name="", stops="", note="", hook="", length=6
         args += ["--recap_lines", "|".join(l.strip() for l in lines.splitlines() if l.strip())]
     if open_result:
         args += ["--recap_open_result"]
+    args += llm_args(llm_provider)
     return args
 
 
