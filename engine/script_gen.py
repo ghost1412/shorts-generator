@@ -1034,8 +1034,8 @@ def get_sub_topic(category, is_explainer=False):
 
 def generate_wyr(category="general"):
     """
-    Generates a 'Would You Rather' scenario with fake percentages.
-    Returns: {"option_a": str, "option_b": str, "percent_a": int, "percent_b": int}
+    Generates a 'Would You Rather' scenario (no vote percentages: nobody voted, so none are made up).
+    Returns: {"option_a": str, "option_b": str}
     """
     selected_sub = get_sub_topic(category)
     print(f"[Log] WYR: Selected sub-topic: {selected_sub}")
@@ -1056,17 +1056,13 @@ CRITICAL VALIDATION:
 Format as JSON ONLY:
 {{
   "option_a": "Option A relating to {selected_sub}",
-  "option_b": "Option B relating to {selected_sub}",
-  "percent_a": 50,
-  "percent_b": 50
+  "option_b": "Option B relating to {selected_sub}"
 }}
 """
 
     def llm_call(attempt):
         response_text = get_llm_response(prompt, temperature=0.2, max_tokens=1500)
         wyr = robust_json_parse(response_text)
-        if wyr.get("percent_a", 0) + wyr.get("percent_b", 0) != 100:
-            wyr["percent_b"] = 100 - wyr.get("percent_a", 50)
         return wyr
 
     return with_best_of_n(llm_call, validate_wyr, n=3)

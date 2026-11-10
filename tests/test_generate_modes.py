@@ -12,7 +12,7 @@ import engine.script_gen as sg
 LONG = " ".join(["word"] * 40)
 
 GOOD = {
-    "generate_wyr": ({"option_a": "Eat soup with a fork forever", "option_b": "Wear wet socks forever", "percent_a": 60, "percent_b": 30}, ()),
+    "generate_wyr": ({"option_a": "Eat soup with a fork forever", "option_b": "Wear wet socks forever"}, ()),
     "generate_trivia": ({"question": "Which planet has the most moons?", "answer": "Saturn", "options": ["Saturn", "Mars"]}, ()),
     "generate_quote": ({"quote": "The obstacle is the way forward for anyone", "author": "Marcus"}, ()),
     "generate_reddit_story": ({"title": "AITA for eating lunch", "story": LONG + " AITA?"}, ()),
@@ -56,10 +56,10 @@ def test_generator_gives_up_after_three_invalid_replies(name, monkeypatch):
         getattr(sg, name)("science")
 
 
-def test_wyr_percentages_are_forced_to_sum_to_100(monkeypatch):
+def test_wyr_makes_up_no_vote_percentages(monkeypatch):
     monkeypatch.setattr(sg, "get_llm_response", lambda *a, **k: json.dumps(GOOD["generate_wyr"][0]))
     out = sg.generate_wyr("food")
-    assert out["percent_a"] + out["percent_b"] == 100
+    assert out["option_a"]
 
 
 def test_llm_failure_propagates_so_the_run_stops_instead_of_posting_junk(monkeypatch):
