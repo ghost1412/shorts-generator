@@ -986,14 +986,14 @@ def pick_grade(ffmpeg, files, run=subprocess.run, sample=6):
         return CINEMATIC_GRADE
 
 
-def cinematic_layers(path_base, title, line="", small="", look=None, index=0, quick=False):
+def cinematic_layers(path_base, title, line="", small="", look=None, index=0, quick=False, safe=False):
     """Title over the footage as separate transparent layers that fade in one after another: [(png, start second), ...].
     The look comes from the shot: text goes where the picture is calmest, light or dark text by brightness, accent colour from the shot,
     and the layout rotates (centred / left-aligned / stacked words) so the cards are not all the same."""
     from PIL import Image, ImageDraw, ImageFont
     look = look or {"zone": "center", "dark": True, "accent": (232, 200, 140)}
     u = min(W, H) / 1080.0
-    zone = look["zone"]
+    zone = "upper" if safe else look["zone"]        # safe: the stack sits in the upper-middle band, clear of the app's top bar and bottom buttons
     ink = (255, 255, 255, 255) if look["dark"] else (22, 18, 14, 255)
     shadow = (0, 0, 0, 90) if look["dark"] else (255, 255, 255, 70)
     accent = tuple(look["accent"]) + (255,)
@@ -1001,7 +1001,7 @@ def cinematic_layers(path_base, title, line="", small="", look=None, index=0, qu
     words = str(title).split()
     stacked = left and index % 2 == 1 and len(words) > 1 and all(len(w) >= 3 for w in words) and not quick     # quick (fast pace): no giant stacked words
     cx = int(W * 0.08) if left else W // 2
-    cy = {"center": H // 2, "left": H // 2, "lower": int(H * 0.78), "upper": int(H * 0.22)}[zone]
+    cy = {"center": H // 2, "left": H // 2, "lower": int(H * 0.78), "upper": int(H * (0.30 if safe else 0.22))}[zone]
     anchor = "lm" if left else "mm"
 
     def font(size):
@@ -1160,6 +1160,49 @@ def cinematic_card_png(path, title, line="", small=""):
         y += 58
     if small:
         d.text((W // 2, H - 220), small.upper(), font=f_s, fill=(150, 145, 135), anchor="mm")
+    img.save(path)
+    return path
+
+
+_AMOUNT = re.compile(r"^(\d+(?:[./-]\d+)*\s?(?:kg|g|ml|l|liters?|litres?|cups?|tsp|tbsp|teaspoons?|tablespoons?|spoons?|pods?|cloves?|pieces?|pinch(?: of)?)?)\s+(.+)$", re.I)
+
+
+def split_amount(item):
+    """('250g', 'all-purpose flour (maida)') from '250g all-purpose flour (maida)'; ('', whole text) when it starts with no amount."""
+    text = str(item).strip()
+    m = _AMOUNT.match(text)
+    if m and m.group(2):
+        return m.group(1).strip(), m.group(2).strip()
+    return "", text
+
+
+def ingredients_card_png(path, items, title="Ingredients"):
+    """A quiet card that lists everything the recipe needs: amounts in gold on the left, names on the right. The list sits inside the
+    part of the screen that phone apps leave free (not under the top bar or the buttons and caption at the bottom)."""
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (W, H), (0, 0, 0))
+    d = ImageDraw.Draw(img)
+    f_t = _font(88, title)
+    top, bottom = int(H * 0.15), int(H * 0.76)
+    y = top + 50
+    d.text((W // 2, y), str(title).upper(), font=f_t, fill=(240, 232, 216), anchor="mm")
+    y += 80
+    d.line([(W // 2 - 70, y), (W // 2 + 70, y)], fill=(200, 170, 120), width=3)
+    y += 50
+    rows = [split_amount(i) for i in items]
+    n = max(1, len(rows))
+    gap = min(78, (bottom - y) // n)
+    size = max(30, min(48, int(gap * 0.62)))
+    x_amount, x_name = int(W * 0.36), int(W * 0.39)
+    f = _font(size, "".join(a + b for a, b in rows))
+    for amount, name in rows:
+        font = f
+        while d.textlength(name, font=font) > W - x_name - 50 and getattr(font, "size", size) > 26:
+            font = _font(font.size - 2, name)
+        if amount:
+            d.text((x_amount, y), amount, font=font, fill=(200, 170, 120), anchor="rm")
+        d.text((x_name if amount else W // 2, y), name, font=font, fill=(240, 232, 216), anchor="lm" if amount else "mm")
+        y += gap
     img.save(path)
     return path
 
@@ -1815,7 +1858,7 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             m0 = title_m or days[0]["moments"][0]
             out = os.path.join(parts_dir, "trip_title.mp4")
             lay = cinematic_layers(os.path.join(parts_dir, "trip_title"), it["title"], " · ".join(stops) if stops else (" · ".join(trip_places[:4]) or K["tagline"]), "",
-                                   look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0, quick=fast)
+                                   look=frame_look(ffmpeg, m0["file"], m0["start"] + 1.0), index=0, quick=fast, safe=bool(extras.get("safe")))
             render_clip(ffmpeg, m0["file"], m0["start"], title_s, out, None, layout, m0["size"], audio=has_audio(m0["file"]) and not mute_orig, grade=grade, fade_s=fade_s, layers=lay, layer_fade=((0.2, 0.25) if fast else (0.7, 0.4)), rotate=m0.get("rotate", 0), fix=fix_for(m0["file"]), **zoom_kw(), **trans_kw(m0["file"], m0["start"], title_s, m0["size"]))
             note_shot(out, m0["size"], [png for png, _ts in lay or []])
             parts.append(out)
@@ -1826,6 +1869,22 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
             parts.append(card)
     labels = moment_labels(days, cine)
     step_lines = parse_lines(lines)                      # --recap_lines: a line of text for each part (a recipe step, a stop)
+    ing_items = parse_lines(extras.get("ingredients"))       # --recap_ingredients: a card that lists everything needed
+    ing_at = str(extras.get("ingredients_at") or "end").lower()
+    ing_beat = locals().get("beat")                       # the music's beat length when the cuts follow a song
+
+    def add_ingredients_card():
+        card_png = ingredients_card_png(os.path.join(parts_dir, "ingredients.png"), ing_items, str(extras.get("ingredients_title") or "Ingredients"))
+        card_s = max(4.0, 0.42 * len(ing_items))
+        if ing_beat:
+            card_s = on_beat(card_s, ing_beat)
+        card_mp4 = os.path.join(parts_dir, "ingredients.mp4")
+        render_card(ffmpeg, card_png, card_mp4, seconds=card_s)
+        parts.append(card_mp4)
+        print(f"[Log] Ingredients card: {len(ing_items)} item(s), {card_s:.1f}s.")
+
+    if ing_items and ing_at == "start":
+        add_ingredients_card()
     for d, row in zip(days, it["days"]):
         day_places = list(dict.fromkeys(m["place"] for m in d["moments"] if m.get("place") and not is_plain_area(m["place"]) and m["place"] != "In flight"))
         if day_places:
@@ -1845,19 +1904,21 @@ def _make_recap(paths, session_dir, trip_name, note, total_seconds, music, visua
         for mi, (m, cap) in enumerate(zip(d["moments"], row["captions"]), 1):
             own = step_lines[di - 1] if di - 1 < len(step_lines) else ""            # --recap_lines: the part's own line
             label = (own if (own and not (cine and mi == 1)) else labels[di - 1][mi - 1] or ("" if cine else cap))   # cinematic: the place name only; no vague picture captions
-            cap_png = caption_png(os.path.join(parts_dir, f"cap_{di}_{mi}.png"), label, lower=cine) if label and not (cine and mi == 1) else None
+            cap_png = caption_png(os.path.join(parts_dir, f"cap_{di}_{mi}.png"), label, y_frac=(0.6 if extras.get("safe") else 0.74), lower=cine) if label and not (cine and mi == 1) else None
             out = os.path.join(parts_dir, f"clip_{di}_{mi}.mp4")
             lay, secs = None, m["end"] - m["start"]
             if cine and mi == 1:
                 lay = cinematic_layers(os.path.join(parts_dir, f"title_{di}"), row["title"], own or (f"{unit} {di}" if len(days) > 1 else ""),
                                        small=(f"{unit.upper()} {di} / {len(days)}" if extras.get("counter") and len(days) > 1 else ""),
-                                       look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di, quick=fast)
+                                       look=frame_look(ffmpeg, m["file"], m["start"] + 1.0), index=di, quick=fast, safe=bool(extras.get("safe")))
                 secs = max(secs, first_min)
             spd = timelapse_factor(extras.get("speed"), secs, (file_seconds(m["file"]) or 0.0) - m["start"]) if extras.get("speed") else 1.0        # --recap_speed: a longer stretch, played faster
             render_clip(ffmpeg, m["file"], m["start"], secs, out, cap_png, layout, m["size"], audio=has_audio(m["file"]) and not mute_orig and spd <= 1.2, speed=spd, grade=grade, fade_s=fade_s, layers=lay, layer_fade=((0.2, 0.25) if fast else (0.7, 0.4)), rotate=m.get("rotate", 0), fix=fix_for(m["file"]), **zoom_kw(), **trans_kw(m["file"], m["start"], secs, m["size"]))
             note_shot(out, m["size"], [cap_png] + [png for png, _ts in lay or []])
             parts.append(out)
         print(f"[Log] {K['unit']} {di} rendered.")
+    if ing_items and ing_at != "start":
+        add_ingredients_card()
     # a closing card, so the recap does not just fade out on the last shot
     end_mode = str(extras.get("end") or "card").lower()          # --recap_end: card (default), result (finish on the result shot), none
     result_pool = (locals().get("glimpses") or []) if open_with_result else []
@@ -2001,7 +2062,7 @@ def run(args, target_bitrate=None, target_preset=None):
                       total_seconds=getattr(args, "recap_length", 60) or 60, music=getattr(args, "music", None),
                       visual=bool(getattr(args, "visual_context", False)), hook=getattr(args, "recap_hook", "") or "",
                       stops=getattr(args, "trip_stops", None), lines=getattr(args, "recap_lines", "") or "", open_with_result=bool(getattr(args, "recap_open_result", False)),
-                      extras={"speed": float(getattr(args, "recap_speed", 1.0) or 1.0), "end": getattr(args, "recap_end", "card") or "card", "end_text": getattr(args, "recap_end_text", "") or "", "counter": bool(getattr(args, "recap_counter", False)), "pace": getattr(args, "recap_pace", "normal") or "normal", "opening": getattr(args, "recap_opening", "normal") or "normal"}, geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
+                      extras={"speed": float(getattr(args, "recap_speed", 1.0) or 1.0), "end": getattr(args, "recap_end", "card") or "card", "end_text": getattr(args, "recap_end_text", "") or "", "counter": bool(getattr(args, "recap_counter", False)), "pace": getattr(args, "recap_pace", "normal") or "normal", "opening": getattr(args, "recap_opening", "normal") or "normal", "safe": bool(getattr(args, "recap_safe_text", False)), "ingredients": getattr(args, "recap_ingredients", "") or "", "ingredients_at": getattr(args, "recap_ingredients_at", "end") or "end"}, geocode=not getattr(args, "recap_no_geocode", False), enhance=getattr(args, "enhance", "off") or "off",
                       enhance_strength=getattr(args, "enhance_strength", "medium") or "medium",
                       manual_rotate=getattr(args, "recap_rotate", "") or "", place_names=getattr(args, "place_names", "") or "", avoid=getattr(args, "recap_avoid", "") or "", kind=getattr(args, "recap_kind", "trip") or "trip", keep_sound=bool(getattr(args, "recap_keep_sound", False)),
                       grade_name=_explicit_filter(args), edit=getattr(args, "auto_edit", "") if getattr(args, "auto_edit", "none") != "none" else "",

@@ -465,3 +465,52 @@ def test_quick_text_layers_show_at_once_and_old_timings_are_unchanged(tmp_path, 
     tr.render_clip("ffmpeg", "src.mp4", 0, 3.0, str(tmp_path / "o2.mp4"), None, "crop", (1080, 1920), audio=False,
                    layers=[(str(tmp_path / "a.png"), 0.05)], layer_fade=(0.2, 0.25))
     assert "fade=t=in:st=0.05:d=0.2:alpha=1" in seen["filter"] and "fade=t=out:st=2.55:d=0.25:alpha=1" in seen["filter"]
+
+
+def test_ingredient_amounts_are_split_from_the_names():
+    assert tr.split_amount("250g all-purpose flour (maida)") == ("250g", "all-purpose flour (maida)")
+    assert tr.split_amount("1 liter refined oil") == ("1 liter", "refined oil")
+    assert tr.split_amount("6-8 green cardamom (choti elaichi)") == ("6-8", "green cardamom (choti elaichi)")
+    assert tr.split_amount("1/4 teaspoon salt") == ("1/4 teaspoon", "salt")
+    assert tr.split_amount("salt to taste") == ("", "salt to taste")
+
+
+def _ink_rows(path):
+    from PIL import Image
+    img = Image.open(path).convert("RGBA")
+    if img.getchannel("A").getextrema()[1] == 255 and img.convert("RGB").getextrema() != ((0, 0), (0, 0), (0, 0)):
+        box = img.convert("RGB").point(lambda v: 255 if v > 40 else 0).getbbox()          # an opaque card: anything lighter than black
+    else:
+        box = img.getchannel("A").point(lambda v: 255 if v > 20 else 0).getbbox()          # a transparent text layer
+    return box
+
+
+def test_ingredients_card_lists_everything_inside_the_free_part_of_the_screen(tmp_path):
+    items = ["250g all-purpose flour (maida)", "250g khoya (mava)", "1 liter refined oil", "6-8 green cardamom (choti elaichi)", "50g desiccated coconut powder",
+             "25g almonds (badam)", "25g cashews (kaju)", "25g raisins (kismis)", "50g semolina (suji)", "1/4 teaspoon salt", "1 cup water", "200g powdered sugar",
+             "1/2 cup ghee"]
+    png = tr.ingredients_card_png(str(tmp_path / "ing.png"), items)
+    from PIL import Image
+    assert Image.open(png).size == (tr.W, tr.H)
+    box = _ink_rows(png)
+    assert box and box[1] >= 0.12 * tr.H and box[3] <= 0.80 * tr.H            # clear of the top bar and the bottom buttons and caption
+
+
+def test_safe_text_keeps_the_whole_title_stack_in_the_upper_middle_band(tmp_path):
+    look = {"zone": "lower", "dark": True, "accent": (232, 200, 140)}          # the look that would put text at 78% of the height
+    long_line = "Add 200g powdered sugar and 6-8 cardamom pods, powdered, then mix: filling ready"
+    safe = tr.cinematic_layers(str(tmp_path / "s"), "Grind nuts and roast coconut", long_line, small="Part 3 / 7", look=look, index=1, quick=True, safe=True)
+    boxes = [_ink_rows(png) for png, _ts in safe]
+    assert all(b for b in boxes)
+    assert min(b[1] for b in boxes) >= 0.12 * tr.H and max(b[3] for b in boxes) <= 0.74 * tr.H
+    normal = tr.cinematic_layers(str(tmp_path / "n"), "Grind nuts and roast coconut", long_line, look=look, index=1)
+    assert max(_ink_rows(png)[3] for png, _ts in normal) > 0.74 * tr.H          # without the option the stack runs down into the unsafe part
+
+
+def test_recap_ingredients_and_safe_text_options_exist_and_are_off_by_default():
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "shortsflow", "_main.py"), encoding="utf-8").read()
+    for flag in ('"--recap_ingredients"', '"--recap_ingredients_at"', '"--recap_safe_text"'):
+        assert flag in src
+    assert '"--recap_ingredients_at", choices=["end", "start"], default="end"' in src
