@@ -2,7 +2,7 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
-## Unreleased
+## 0.7.1 (2026-11-10)
 
 ### Fixed
 - **Dubbing no longer chops sentences (`--dub_fit smart`, now the default on the command line and in the web app)**: speech recognition can cut a film into 1-2 second lines, and the dub voiced each one alone, so the new voice (2-3 times longer in Hindi) was sped up to its limit and then cut off mid-sentence, with a gap and a lead-in silence around every line. On a real 90-second Hindi test 54 of 59 clips were cut. Smart fit joins short neighbouring lines into sentences, trims the silence off each voice clip, tells the translator how many characters per second the language's voice speaks (Hindi, Marathi, Arabic and Cyrillic languages are slower than Latin ones), lets a voice that runs long continue into the next gap (up to about 3 s behind the picture) instead of cutting it, and puts the subtitles on the voice. The same test: 25 sentences, 2 clips shortened. `--dub_fit classic` keeps the old behaviour; library callers of `dub_video` still default to classic. A dub made before this change has different line boundaries, so it is translated again.
