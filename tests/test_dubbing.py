@@ -176,3 +176,46 @@ def test_dub_args_original_option():
     assert "--dub_original" not in web_args.dub_args("a.mp4", "en")                                  # the default needs no flag
     assert web_args.dub_args("a.mp4", "en", original="mute")[-2:] == ["--dub_original", "mute"]
     assert web_args.dub_args("a.mp4", "en", original="duck", session_dir="s")[-4:-2] == ["--dub_original", "duck"]
+
+
+def test_a_second_run_reuses_the_saved_translation_and_finished_voices(tmp_path, monkeypatch, transcript):
+    """A dub that crashed in the final mix is run again in the same folder: no AI text call, no voice call."""
+    _fake_media(monkeypatch)
+    monkeypatch.setattr(dubbing, "_parse", json.loads)
+    llm = lambda prompt: json.dumps({"translations": [{"id": 0, "text": "Hola"}, {"id": 1, "text": "Bienvenido"}]})  # noqa: E731
+    voiced = []
+
+    def synth(text, out):
+        voiced.append(text)
+        open(out, "wb").write(b"x" * 500)
+
+    def crashing_mixer(src, clips, out, session_dir, burn_srt=None):
+        raise OSError("[WinError 206] The filename or extension is too long")
+
+    with pytest.raises(OSError):
+        dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=llm, synth=synth, mixer=crashing_mixer)
+    assert len(voiced) == 2
+
+    def no_llm(prompt):
+        raise AssertionError("the AI text service must not be called again")
+
+    def no_voice(text, out):
+        raise AssertionError("a finished voice clip must not be made again")
+
+    def mixer(src, clips, out, session_dir, burn_srt=None):
+        open(out, "wb").write(b"video")
+
+    res = dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=no_llm, synth=no_voice, mixer=mixer)
+    assert res["failed_translations"] == 0 and res["failed_voices"] == 0
+    assert "Bienvenido" in open(res["srt"], encoding="utf-8").read()
+
+
+def test_saved_translation_is_ignored_when_it_does_not_match(tmp_path):
+    path = tmp_path / "x_es.json"
+    segs = [{"start": 0.0, "end": 2.0, "text": "a"}, {"start": 3.0, "end": 5.0, "text": "b"}]
+    path.write_text(json.dumps({"target_lang": "es", "segments": [dict(s, text="t") for s in segs]}), encoding="utf-8")
+    assert dubbing.saved_translation(str(path), "es", segs) == ["t", "t"]
+    assert dubbing.saved_translation(str(path), "fr", segs) is None                       # another language
+    assert dubbing.saved_translation(str(path), "es", segs[:1]) is None                   # another number of lines
+    assert dubbing.saved_translation(str(path), "es", [dict(segs[0], start=9.0), segs[1]]) is None   # different timing
+    assert dubbing.saved_translation(str(tmp_path / "missing.json"), "es", segs) is None

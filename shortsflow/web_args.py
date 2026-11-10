@@ -1,6 +1,7 @@
 """Command-line building blocks for the browser app (kept free of gradio so they can be tested anywhere)."""
 import glob
 import os
+import re
 
 FALLBACK_DUB_LANGUAGES = {
     "es": "Spanish", "hi": "Hindi", "de": "German", "fr": "French", "ja": "Japanese", "pt": "Portuguese",
@@ -314,3 +315,39 @@ def photo_reel_args(photos_dir, reel_type, name="", texts="", music=None, durati
 def find_photo_reel(session_dir):
     path = os.path.join(session_dir, "photo_reel.mp4")
     return path if os.path.isfile(path) else None
+
+
+def read_dub_session(session_dir):
+    """(source video, language code, translated lines) of a dubbing session folder, or None when it cannot be continued:
+    it needs the saved translation (`<name>_<lang>.json`) and the video the run used (`source_video.*`)."""
+    import json
+    sources = sorted(p for p in glob.glob(os.path.join(session_dir, "source_video.*")) if not p.endswith((".part", ".ytdl")))
+    if not sources:
+        return None
+    for path in sorted(glob.glob(os.path.join(session_dir, "*_*.json")), key=os.path.getmtime, reverse=True):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and data.get("target_lang") and isinstance(data.get("segments"), list):
+            return sources[0], data["target_lang"], len(data["segments"])
+    return None
+
+
+def unfinished_dubs(root, limit=10):
+    """[(label, session folder)] of dubbing runs that saved their translation but never produced the dubbed video (crashed or
+    stopped during the voices or the final mix), newest first."""
+    out = []
+    for d in sorted(glob.glob(os.path.join(root, "sessions", "dub_*")), reverse=True)[:30]:
+        if glob.glob(os.path.join(d, "*_dub_*.mp4")):
+            continue                                         # already finished
+        found = read_dub_session(d)
+        if not found:
+            continue
+        source, lang, lines = found
+        m = re.match(r"dub_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})", os.path.basename(d))
+        when = f"{m.group(3)}.{m.group(2)}.{m.group(1)} {m.group(4)}:{m.group(5)}" if m else os.path.basename(d)
+        name = {code: n for n, code in dub_languages()}.get(lang, lang)
+        out.append((f"{when} - into {name} - {lines} lines", d))
+    return out[:limit]

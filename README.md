@@ -4,7 +4,7 @@
 > The free, open-source alternative to Opus Clip, Klap and Vizard: no watermark, no credits, no subscription.
 
 <div align="center">
-  <img src="demos/demo_clipping_active.gif" width="260" alt="A podcast clip: the crop cuts to whoever is speaking, with word-by-word captions" />
+  <img src="demos/demo_podcast_cuts.gif" width="260" alt="A podcast clip: the crop cuts to whoever is speaking, with word-by-word captions" />
   <br/>
   <sub>A real run: the 9:16 crop cuts to whoever is talking, with word-timed captions. <code>shortsflow clip interview.mp4 --captions</code></sub>
 </div>
@@ -169,7 +169,7 @@ cd shorts-generator
 All GIFs are real renders from this repository.
 
 <div align="center">
-  <img src="demos/demo_clipping_active.gif" width="200" alt="Clipping a podcast with active-speaker switching" />
+  <img src="demos/demo_podcast_cuts.gif" width="200" alt="Clipping a podcast with active-speaker switching" />
   <img src="demos/demo_spot_the_lie.gif" width="200" alt="Spot the Lie short" />
   <img src="demos/demo_short.gif" width="200" alt="Viral short with animated captions" />
   <img src="demos/demo_facts.gif" width="200" alt="AI facts short" />
@@ -178,7 +178,7 @@ All GIFs are real renders from this repository.
 
 | GIF | What it shows |
 | :--- | :--- |
-| `demo_clipping_active.gif` | Long interview clipped with `--layout active`: the shot cuts to whoever is speaking, with word captions |
+| `demo_podcast_cuts.gif` | Long interview clipped with `--layout active`: the shot cuts to whoever is speaking, with word captions |
 | `demo_recap.gif` | Trip recap from six widescreen CC0 stock clips (not a best case: letterboxed, no GPS or music): hook, title cards, fast cuts |
 | `demo_game.gif` | `--content game`: a cutscene clip with captions, then a car chase, whole picture kept in frame (not a best case: small picture, blurred bars) |
 | `demo_spot_the_lie.gif` | The "Spot the Lie" quiz format that runs the daily YouTube channel |

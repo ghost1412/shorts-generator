@@ -327,15 +327,24 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None, origin
     if original == "music" and has_audio(source_video):
         from engine.stem_split import split_vocals
         stem = split_vocals(source_video, session_dir)         # None -> the faint-original fallback inside build_filter
+    if len(clips) > CHUNK_CLIPS and _inputs_length(clips, session_dir) > MAX_INPUT_CHARS:
+        # Windows refuses a command line over ~32,000 characters, and every dub clip is one input: mix the clips in batches
+        # into a few long wav files first (the same placement, tempo and trim), then mix those with the original sound.
+        merged = []
+        for k in range(0, len(clips), CHUNK_CLIPS):
+            merged.append({"path": _mix_batch(ffmpeg, source_video, clips[k:k + CHUNK_CLIPS], total, session_dir, k // CHUNK_CLIPS),
+                           "start": 0.0, "tempo": 1.0, "trim": None})
+        clips = merged
+        placements = [dict(c, index=i) for i, c in enumerate(clips, 1)]
     script = os.path.join(session_dir, "dub_filter.txt")
     with open(script, "w", encoding="utf-8") as f:
         f.write(build_filter(placements, total, has_audio(source_video), original, stem_index=len(clips) + 1 if stem else None))
     cmd = [ffmpeg, "-y", "-i", os.path.abspath(source_video)]
     for c in clips:
-        cmd += ["-i", os.path.abspath(c["path"])]
+        cmd += ["-i", _short_path(c["path"], session_dir)]     # relative to session_dir (the command runs there): far shorter
     if stem:
-        cmd += ["-i", os.path.abspath(stem)]
-    cmd += ["-filter_complex_script", os.path.abspath(script), "-map", "0:v:0", "-map", "[aout]"]
+        cmd += ["-i", _short_path(stem, session_dir)]
+    cmd += ["-filter_complex_script", os.path.basename(script), "-map", "0:v:0", "-map", "[aout]"]
     if burn_srt:
         ass = os.path.splitext(burn_srt)[0] + ".ass"
         if os.path.exists(ass):  # script-aware captions written by dub_video; staged fonts sit next to it
@@ -348,10 +357,66 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None, origin
     else:
         cmd += ["-c:v", "copy"]
     cmd += ["-c:a", "aac", "-b:a", "192k", "-t", f"{total:.3f}", os.path.abspath(output_path)]
-    res = subprocess.run(cmd, capture_output=True, text=True, cwd=session_dir if burn_srt else None)
+    res = subprocess.run(cmd, capture_output=True, text=True, cwd=session_dir)
     if res.returncode != 0 or not os.path.exists(output_path):
         raise RuntimeError("FFmpeg dub mix failed: " + (res.stderr or "")[-600:])
     return output_path
+
+
+def saved_translation(json_path, target, segments):
+    """The translated lines saved by an earlier run of this session, or None.
+    Only used when it is the same language and has the same number of lines at the same times as the segments being dubbed now."""
+    try:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    saved = data.get("segments") if isinstance(data, dict) else None
+    if data.get("target_lang") != target or not isinstance(saved, list) or len(saved) != len(segments):
+        return None
+    texts = []
+    for old, new in zip(saved, segments):
+        if not isinstance(old, dict) or not str(old.get("text", "")).strip():
+            return None
+        if abs(float(old.get("start", -1)) - float(new["start"])) > 0.05:
+            return None
+        texts.append(str(old["text"]))
+    return texts
+
+
+CHUNK_CLIPS = 120          # dub clips mixed per batch when the command line would be too long
+MAX_INPUT_CHARS = 20000    # Windows allows about 32,000 characters in one command line; keep well below it
+
+
+def _short_path(path, base):
+    """`path` relative to `base` when that is possible and shorter (another drive cannot be relative on Windows), else absolute."""
+    absolute = os.path.abspath(path)
+    try:
+        rel = os.path.relpath(absolute, os.path.abspath(base))
+    except ValueError:
+        return absolute
+    return rel if len(rel) < len(absolute) else absolute
+
+
+def _inputs_length(clips, session_dir):
+    """Characters the `-i <clip>` arguments of all clips add to the command line."""
+    return sum(len(_short_path(c["path"], session_dir)) + 4 for c in clips)
+
+
+def _mix_batch(ffmpeg, source_video, clips, total, session_dir, number):
+    """Mix a batch of dub clips (placed, tempo-fitted, trimmed) into one full-length wav; returns its path."""
+    out = os.path.join(session_dir, f"dub_batch_{number}.wav")
+    script = os.path.join(session_dir, f"dub_batch_{number}_filter.txt")
+    with open(script, "w", encoding="utf-8") as f:
+        f.write(build_filter([dict(c, index=i) for i, c in enumerate(clips, 1)], total, source_has_audio=False, original="mute"))
+    cmd = [ffmpeg, "-y", "-i", os.path.abspath(source_video)]        # input 0 is only there to keep the clip numbering from 1
+    for c in clips:
+        cmd += ["-i", _short_path(c["path"], session_dir)]
+    cmd += ["-filter_complex_script", os.path.basename(script), "-map", "[aout]", "-c:a", "pcm_s16le", "-t", f"{total:.3f}", os.path.basename(out)]
+    res = subprocess.run(cmd, capture_output=True, text=True, cwd=session_dir)
+    if res.returncode != 0 or not os.path.exists(out):
+        raise RuntimeError("FFmpeg dub batch mix failed: " + (res.stderr or "")[-600:])
+    return out
 
 
 def dub_video(source_video, target_lang, session_dir, output_path=None, language="en", provider="auto",
@@ -379,11 +444,21 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
     if note:
         print(f"[Warning] {note}")
 
-    texts, failed_tr = translate_segments(segments, target, llm=llm, about=about)
+    base = os.path.splitext(os.path.basename(source_video))[0]
+    json_path = os.path.join(session_dir, f"{base}_{target}.json")
+    saved = saved_translation(json_path, target, segments)         # an earlier run of this session already translated it
+    if saved:
+        texts, failed_tr = saved, 0
+        print(f"[Log] Reusing the saved {LANG_NAMES.get(target, target)} translation ({len(texts)} lines) and any finished voice clips from "
+              f"this session: no AI text or voice service is called for them. Delete {os.path.basename(json_path)} to translate again.")
+    else:
+        texts, failed_tr = translate_segments(segments, target, llm=llm, about=about)
     if failed_tr == len(segments):
         raise RuntimeError("Translation failed for every segment (no LLM answered). Check your AI key / Ollama "
                            "(see `shortsflow doctor`); nothing was dubbed.")
     translated = [dict(s, text=t) for s, t in zip(segments, texts)]
+    with open(json_path, "w", encoding="utf-8") as f:              # saved right away: a crash later (voices, mix) keeps the translation
+        json.dump({"target_lang": target, "source_lang": source_lang, "segments": translated}, f, ensure_ascii=False, indent=2)
 
     synth = synth or (lambda text, out: synthesize(text, target, out, provider, voice))
     clips_dir = os.path.join(session_dir, "dub_clips")
@@ -393,6 +468,8 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
 
     def make(i):
         path = os.path.join(clips_dir, f"seg_{i:04d}.mp3")
+        if saved and os.path.exists(path) and os.path.getsize(path) > 200:
+            return path                                  # voiced by an earlier run on this same translation: keep it
         try:
             synth(texts[i], path)
             if os.path.exists(path) and os.path.getsize(path) > 200:
