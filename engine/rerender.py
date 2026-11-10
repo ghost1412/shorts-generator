@@ -146,8 +146,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     if hook_on:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
     prev_size_env = os.environ.get("SHORTSFLOW_CAPTION_SIZE")
+    prev_off_env = os.environ.get("SHORTSFLOW_NO_CAPTIONS")
     if float(settings.get("caption_size") or 1.0) != 1.0:
         os.environ["SHORTSFLOW_CAPTION_SIZE"] = str(settings["caption_size"])   # --caption_size: the same caption size again
+    if settings.get("captions_off"):
+        os.environ["SHORTSFLOW_NO_CAPTIONS"] = "1"       # --caption_position off: still no captions
     zoom_on = bool(settings.get("auto_zoom"))        # --auto_zoom: the same punch-ins again
     prev_zoom_env = os.environ.get("SHORTSFLOW_AUTO_ZOOM")
     if zoom_on:
@@ -259,6 +262,10 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             os.environ.pop("SHORTSFLOW_CAPTION_SIZE", None)
         else:
             os.environ["SHORTSFLOW_CAPTION_SIZE"] = prev_size_env
+        if prev_off_env is None:
+            os.environ.pop("SHORTSFLOW_NO_CAPTIONS", None)
+        else:
+            os.environ["SHORTSFLOW_NO_CAPTIONS"] = prev_off_env
         if zoom_on:
             if prev_zoom_env is None:
                 os.environ.pop("SHORTSFLOW_AUTO_ZOOM", None)

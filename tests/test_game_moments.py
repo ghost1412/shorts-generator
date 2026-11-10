@@ -109,3 +109,10 @@ def test_game_moments_are_cached_per_settings(tmp_path, monkeypatch):
     assert len(calls) == 1                       # second run reused the file
     run(clip_count=2, use_cache=True)
     assert len(calls) == 2                       # other settings: picked again
+
+
+def test_caption_off_is_a_manual_choice_for_the_cli_and_the_web():
+    from shortsflow import web_args
+    assert web_args.caption_look_args("off") == ["--caption_position", "off"]
+    assert web_args.caption_look_args("default") == []
+    assert ("No captions (the video already has subtitles)", "off") in web_args.CAPTION_POSITION_CHOICES

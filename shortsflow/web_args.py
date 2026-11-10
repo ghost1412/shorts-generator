@@ -43,7 +43,7 @@ SUBJECT_COLOR_CHOICES = _subject_cut.COLOR_CHOICES
 
 GAME_MIX_CHOICES = [("Half story, half action", "0.5"), ("Mostly action", "0.2"), ("Mostly story", "0.8"),
                     ("Only action", "0"), ("Only story", "1")]
-CAPTION_POSITION_CHOICES = [("Normal height", "default"), ("Top", "top"), ("Middle", "middle"), ("Bottom", "bottom")]
+CAPTION_POSITION_CHOICES = [("Normal height", "default"), ("Top", "top"), ("Middle", "middle"), ("Bottom", "bottom"), ("No captions (the video already has subtitles)", "off")]
 CAPTION_SIZE_CHOICES = [("Normal", "default"), ("Small", "small"), ("Large", "large"), ("Extra large", "xlarge")]
 
 
@@ -61,7 +61,7 @@ def game_args(game=False, mix="0.5"):
 def caption_look_args(position="default", size="default"):
     """`--caption_position` / `--caption_size`, only when they differ from the normal look."""
     out = []
-    if position in ("top", "middle", "bottom"):
+    if position in ("top", "middle", "bottom", "off"):
         out += ["--caption_position", position]
     if size in ("small", "large", "xlarge"):
         out += ["--caption_size", size]

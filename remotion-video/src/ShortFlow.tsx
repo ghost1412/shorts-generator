@@ -150,6 +150,7 @@ export const shortFlowSchema = z.object({
   category: z.string().default("general"),
   titleText: z.string().optional(),
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
+  captionsOff: z.boolean().default(false), // --caption_position off: draw no captions at all
   captionSize: z.number().default(1), // scales the whole caption block from its top edge (0.8 small, 1.3 large)
   captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"]).default("HORMOZI"),
   captionColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // --caption_color: accent colour of the active word (any style)
@@ -1249,6 +1250,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   titleText,
   subtitleYPos,
   captionSize = 1,
+  captionsOff = false,
   captionStyle = "HORMOZI",
   captionColor,
   captionEmoji = false,
@@ -1649,7 +1651,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
       {statPops && statPops.length > 0 && <StatPopOverlay pops={statPops} fps={fps} frame={frame} />}
 
       {/* 5. STYLISH CAPTIONS */}
-      <div style={{ position: "absolute", inset: 0, transformOrigin: `50% ${subtitleYPos}px`, transform: captionSize !== 1 ? `scale(${captionSize})` : undefined, pointerEvents: "none" }}>
+      {!captionsOff && <div style={{ position: "absolute", inset: 0, transformOrigin: `50% ${subtitleYPos}px`, transform: captionSize !== 1 ? `scale(${captionSize})` : undefined, pointerEvents: "none" }}>
         <Subtitles
           words={words}
           currentTime={currentTime}
@@ -1659,7 +1661,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
           captionEmoji={captionEmoji}
           accent={captionColor}
         />
-      </div>
+      </div>}
 
       {/* 6. CARTOON AVATAR OVERLAY (Big & Centered News Anchor / TV Window) */}
       {avatarUrl && (

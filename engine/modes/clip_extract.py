@@ -664,7 +664,7 @@ def run(args, target_bitrate, target_preset):
                 "extract_mode": args.extract_mode, "layout": getattr(args, "layout", "single"), "filler_video": getattr(args, "filler_video", None),
                 "smart_crop": bool(args.smart_crop), "tighten": bool(args.tighten), "tighten_mode": args.tighten_mode,
                 "use_remotion": bool(args.use_remotion), "caption_style": args.caption_style,
-                "subtitle_y_pos": args.subtitle_y_pos, "caption_size": float(os.getenv("SHORTSFLOW_CAPTION_SIZE") or 1.0), "brand": getattr(args, "brand", None),
+                "subtitle_y_pos": args.subtitle_y_pos, "caption_size": float(os.getenv("SHORTSFLOW_CAPTION_SIZE") or 1.0), "captions_off": os.getenv("SHORTSFLOW_NO_CAPTIONS") == "1", "brand": getattr(args, "brand", None),
                 "caption_lang": getattr(args, "caption_lang", None), "zh_script": getattr(args, "zh_script", "auto"),
                 "clean_audio": bool(getattr(args, "clean_audio", False)), "hook_overlay": bool(getattr(args, "hook_overlay", False)),
                 "broll": bool(getattr(args, "broll", False)),

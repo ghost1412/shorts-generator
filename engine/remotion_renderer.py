@@ -428,6 +428,7 @@ def render_with_remotion(
           "titleText": title_text,
           "subtitleYPos": subtitle_y_pos,
           "captionSize": _caption_size_from_env(),
+          "captionsOff": os.getenv("SHORTSFLOW_NO_CAPTIONS") == "1",
           "captionStyle": caption_style,
           **overlay_props(hook_text),
           "avatarUrl": rel_avatar_path if rel_avatar_path else None,
