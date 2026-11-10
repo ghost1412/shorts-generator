@@ -219,3 +219,116 @@ def test_saved_translation_is_ignored_when_it_does_not_match(tmp_path):
     assert dubbing.saved_translation(str(path), "es", segs[:1]) is None                   # another number of lines
     assert dubbing.saved_translation(str(path), "es", [dict(segs[0], start=9.0), segs[1]]) is None   # different timing
     assert dubbing.saved_translation(str(tmp_path / "missing.json"), "es", segs) is None
+
+
+def _prompt_for(tone, segments=None):
+    seen = []
+    segs = segments or [{"start": 0.0, "end": 2.0, "text": "Hello there"}]
+
+    def llm(prompt):
+        seen.append(prompt)
+        return json.dumps({"translations": [{"id": 0, "text": "Hola"}]})
+
+    import json as _j
+    old = dubbing._parse
+    dubbing._parse = _j.loads
+    try:
+        dubbing.translate_segments(segs, "es", llm=llm, tone=tone) if tone is not None else dubbing.translate_segments(segs, "es", llm=llm)
+    finally:
+        dubbing._parse = old
+    return seen[0]
+
+
+def test_default_tone_leaves_the_translation_prompt_exactly_as_it_was():
+    plain = _prompt_for(None)
+    assert _prompt_for("faithful") == plain and _prompt_for("nonsense") == plain
+    assert "Rewrite each line" not in plain
+    assert "Keep the meaning and tone." in plain
+
+
+def test_a_chosen_tone_adds_one_instruction():
+    for tone in ("funny", "sarcastic", "dramatic", "formal", "casual"):
+        prompt = _prompt_for(tone)
+        assert dubbing.TONES[tone] in prompt and "keep the meaning and every fact" in prompt
+
+
+def test_neutral_delivery_calls_the_voice_exactly_as_before_and_others_set_speed_and_pitch(tmp_path, monkeypatch):
+    import sys
+    import types
+    calls = []
+
+    class Fake:
+        def __init__(self, *a, **k):
+            calls.append((a, k))
+
+        async def save(self, out):
+            open(out, "wb").write(b"x" * 300)
+
+    monkeypatch.setitem(sys.modules, "edge_tts", types.SimpleNamespace(Communicate=Fake))
+    dubbing.synthesize("hola", "es", str(tmp_path / "a.mp3"))
+    dubbing.synthesize("hola", "es", str(tmp_path / "b.mp3"), delivery="neutral")
+    dubbing.synthesize("hola", "es", str(tmp_path / "c.mp3"), delivery="excited")
+    assert calls[0] == calls[1] and calls[0][1] == {}                 # no rate or pitch: the old call
+    assert calls[2][1] == {"rate": "+12%", "pitch": "+3Hz"}
+
+
+def test_web_and_cli_flags_appear_only_for_a_chosen_tone_or_delivery():
+    from shortsflow import web_args
+    base = web_args.dub_args("v.mp4", "es")
+    assert "--dub_tone" not in base and "--dub_delivery" not in base
+    assert web_args.dub_args("v.mp4", "es", tone="faithful", delivery="neutral") == base
+    more = web_args.dub_args("v.mp4", "es", tone="sarcastic", delivery="calm")
+    assert more[more.index("--dub_tone") + 1] == "sarcastic" and more[more.index("--dub_delivery") + 1] == "calm"
+    assert [v for _, v in web_args.DUB_TONE_CHOICES] == list(dubbing.TONES)
+    assert [v for _, v in web_args.DUB_DELIVERY_CHOICES] == list(dubbing.DELIVERIES)
+
+
+def _dub(tmp_path, transcript, llm, synth, **kw):
+    def mixer(src, clips, out, session_dir, burn_srt=None):
+        open(out, "wb").write(b"video")
+    return dubbing.dub_video("clip.mp4", "es", str(tmp_path), transcribe=lambda: transcript, llm=llm, synth=synth, mixer=mixer, **kw)
+
+
+def test_resume_is_safe_with_tones_deliveries_and_old_sessions(tmp_path, monkeypatch, transcript):
+    _fake_media(monkeypatch)
+    monkeypatch.setattr(dubbing, "_parse", json.loads)
+    asked, voiced = [], []
+
+    def llm(prompt):
+        asked.append(prompt)
+        return json.dumps({"translations": [{"id": 0, "text": "Hola"}, {"id": 1, "text": "Bienvenido"}]})
+
+    def synth(text, out):
+        voiced.append(text)
+        open(out, "wb").write(b"x" * 500)
+
+    _dub(tmp_path, transcript, llm, synth)                                   # first run: 1 translation call, 2 voices
+    assert len(asked) == 1 and len(voiced) == 2
+    _dub(tmp_path, transcript, llm, synth)                                   # same settings: everything reused
+    assert len(asked) == 1 and len(voiced) == 2
+    _dub(tmp_path, transcript, llm, synth, delivery="calm")                  # same translation, new delivery: voices again, no translation
+    assert len(asked) == 1 and len(voiced) == 4
+    _dub(tmp_path, transcript, llm, synth, delivery="calm")                  # and that is reused in turn
+    assert len(voiced) == 4
+    _dub(tmp_path, transcript, llm, synth, tone="sarcastic", delivery="calm")   # another tone: translated and voiced again
+    assert len(asked) == 2 and len(voiced) == 6
+
+
+def test_a_session_saved_before_tones_existed_still_resumes(tmp_path, monkeypatch, transcript):
+    _fake_media(monkeypatch)
+    monkeypatch.setattr(dubbing, "_parse", json.loads)
+    segs = dubbing.segments_from_transcript(json.load(open(transcript, encoding="utf-8")))
+    old = {"target_lang": "es", "source_lang": "en", "segments": [dict(s, text="viejo") for s in segs]}   # no tone, no delivery keys
+    (tmp_path / "clip_es.json").write_text(json.dumps(old), encoding="utf-8")
+    (tmp_path / "dub_clips").mkdir()
+    for i in range(len(segs)):
+        (tmp_path / "dub_clips" / f"seg_{i:04d}.mp3").write_bytes(b"x" * 500)                  # clips without a .voice note
+
+    def no_llm(prompt):
+        raise AssertionError("must not translate again")
+
+    def no_voice(text, out):
+        raise AssertionError("must not voice again")
+
+    res = _dub(tmp_path, transcript, no_llm, no_voice)
+    assert res["failed_translations"] == 0 and res["failed_voices"] == 0

@@ -150,9 +150,14 @@ DUB_ORIGINAL_CHOICES = [("Remove the original voice, keep the music and effects 
                         ("Keep all of it very quiet under the new voice", "quiet"),
                         ("Lower it only while the new voice speaks", "duck"), ("Remove the original sound completely", "mute")]
 
+DUB_TONE_CHOICES = [("Faithful (the speaker's own tone)", "faithful"), ("Funny", "funny"), ("Sarcastic", "sarcastic"),
+                    ("Dramatic", "dramatic"), ("Formal", "formal"), ("Casual", "casual")]
+DUB_DELIVERY_CHOICES = [("Neutral (the voice's own delivery)", "neutral"), ("Excited (faster, higher)", "excited"),
+                        ("Calm (slower, softer)", "calm"), ("Serious (slower, lower)", "serious")]
+
 
 def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_dir=None, tts_provider="auto", voice="auto",
-             original="music"):
+             original="music", tone="faithful", delivery="neutral"):
     """Arguments (after the pipeline command) for `--mode DUB`. 'auto' voice / provider leave the flags out."""
     args = ["--mode", "DUB", "--source_video", source, "--target_lang", target_lang,
             "--language", (spoken or "auto")]
@@ -164,6 +169,10 @@ def dub_args(source, target_lang, spoken="auto", burn_captions=False, session_di
         args += ["--dub_original", original]          # "music" is the command line's default
     if tts_provider and tts_provider != "auto":
         args += ["--tts_provider", tts_provider]
+    if tone in ("funny", "sarcastic", "dramatic", "formal", "casual"):
+        args += ["--dub_tone", tone]                      # "faithful" is the command line's default
+    if delivery in ("excited", "calm", "serious"):
+        args += ["--dub_delivery", delivery]              # "neutral" is the command line's default
     if session_dir:
         args += ["--session_dir", session_dir]
     return args

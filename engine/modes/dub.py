@@ -30,6 +30,8 @@ def run(args, target_bitrate=None, target_preset=None):
             voice=getattr(args, "dub_voice", None),
             original=getattr(args, "dub_original", "music") or "music",
             about=getattr(args, "user_context", None),
+            tone=getattr(args, "dub_tone", "faithful") or "faithful",
+            delivery=getattr(args, "dub_delivery", "neutral") or "neutral",
         )
     except (ValueError, RuntimeError) as e:
         print(f"[Error] {e}")

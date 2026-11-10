@@ -120,7 +120,30 @@ def _parse(response):
     return robust_json_parse(response)
 
 
-def translate_segments(segments, target_lang, llm=None, parse=None, about=None):
+TONES = {
+    "faithful": "",                       # the default: keep the speaker's own tone, exactly the old behaviour
+    "funny": "Rewrite each line in a playful, funny tone, with light jokes where they fit, but keep the meaning and every fact.",
+    "sarcastic": "Rewrite each line in a dry, sarcastic tone, as if the speaker is rolling their eyes, but keep the meaning and every fact.",
+    "dramatic": "Rewrite each line in an intense, dramatic, trailer-voice tone, but keep the meaning and every fact.",
+    "formal": "Rewrite each line in a polite, formal, professional tone, but keep the meaning and every fact.",
+    "casual": "Rewrite each line in relaxed, casual, everyday street talk, but keep the meaning and every fact.",
+}
+TONE_CHOICES = [("Faithful (the speaker's own tone)", "faithful"), ("Funny", "funny"), ("Sarcastic", "sarcastic"),
+                ("Dramatic", "dramatic"), ("Formal", "formal"), ("Casual", "casual")]
+
+# speed and pitch of the computer voice (edge-tts takes rate and pitch, not real emotions): neutral = the voice's own delivery
+DELIVERIES = {"neutral": None, "excited": ("+12%", "+3Hz"), "calm": ("-8%", "-2Hz"), "serious": ("-5%", "-4Hz")}
+DELIVERY_CHOICES = [("Neutral (the voice's own delivery)", "neutral"), ("Excited (faster, higher)", "excited"),
+                    ("Calm (slower, softer)", "calm"), ("Serious (slower, lower)", "serious")]
+
+
+def tone_line(tone):
+    """The extra translation instruction for a tone, "" for faithful or an unknown name (the prompt is then unchanged)."""
+    text = TONES.get((tone or "faithful").lower(), "")
+    return text + "\n" if text else ""
+
+
+def translate_segments(segments, target_lang, llm=None, parse=None, about=None, tone="faithful"):
     """Translate each segment keeping one-to-one timing. Returns (texts, failed_count).
     A segment the LLM did not return stays in the source language and counts as failed."""
     llm, parse = llm or _default_llm, parse or _parse
@@ -137,6 +160,7 @@ def translate_segments(segments, target_lang, llm=None, parse=None, about=None):
             "so stay at or below max_chars when you can. Do not merge or split lines.\n"
             "The lines come from speech recognition, so a word can be misheard: when a line makes no sense, translate what was "
             "most likely meant, and keep names as proper names.\n"
+            + tone_line(tone)
             + (f"What the video is about (use it to fix misheard names and terms): {str(about).strip()[:400]}\n" if about else "") + "\n"
             f"Lines: {json.dumps(items, ensure_ascii=False)}\n\n"
             'Return raw JSON only: {"translations": [{"id": <id>, "text": "<translated line>"}]}'
@@ -251,7 +275,7 @@ def has_audio(path):
     return bool(re.search(r"Stream #.*Audio", err))
 
 
-def synthesize(text, lang, out_path, provider="auto", voice=None):
+def synthesize(text, lang, out_path, provider="auto", voice=None, delivery="neutral"):
     """Speak `text` to an audio file. edge-tts by default; local Kokoro (English only) when asked for or as fallback."""
     lang = normalize_lang(lang)
     if provider == "kokoro" and lang == "en":
@@ -265,7 +289,9 @@ def synthesize(text, lang, out_path, provider="auto", voice=None):
     try:
         import asyncio
         import edge_tts
-        asyncio.run(edge_tts.Communicate(text, voice_name).save(out_path))
+        speed = DELIVERIES.get((delivery or "neutral").lower())
+        talk = edge_tts.Communicate(text, voice_name, rate=speed[0], pitch=speed[1]) if speed else edge_tts.Communicate(text, voice_name)
+        asyncio.run(talk.save(out_path))
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
             return out_path
         raise RuntimeError("edge-tts wrote no audio")
@@ -363,7 +389,19 @@ def mix_dub(source_video, clips, output_path, session_dir, burn_srt=None, origin
     return output_path
 
 
-def saved_translation(json_path, target, segments):
+def _voice_matches(sidecar, tag):
+    """True when a finished voice clip may be reused: its note says it was made from this text and delivery, or it has no note
+    (a clip from before notes existed: kept, as it always was on a resume)."""
+    try:
+        with open(sidecar, "r", encoding="utf-8") as f:
+            return f.read() == tag
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
+
+
+def saved_translation(json_path, target, segments, tone="faithful"):
     """The translated lines saved by an earlier run of this session, or None.
     Only used when it is the same language and has the same number of lines at the same times as the segments being dubbed now."""
     try:
@@ -374,6 +412,8 @@ def saved_translation(json_path, target, segments):
     saved = data.get("segments") if isinstance(data, dict) else None
     if data.get("target_lang") != target or not isinstance(saved, list) or len(saved) != len(segments):
         return None
+    if (data.get("tone") or "faithful") != (tone or "faithful"):
+        return None                                              # another tone asked for: translate again
     texts = []
     for old, new in zip(saved, segments):
         if not isinstance(old, dict) or not str(old.get("text", "")).strip():
@@ -420,7 +460,8 @@ def _mix_batch(ffmpeg, source_video, clips, total, session_dir, number):
 
 
 def dub_video(source_video, target_lang, session_dir, output_path=None, language="en", provider="auto",
-              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None, original="music", about=None):
+              captions=False, transcribe=None, llm=None, synth=None, mixer=None, workers=4, voice=None, original="music", about=None,
+              tone="faithful", delivery="neutral"):
     """Full pipeline. Returns {"video", "srt", "json", "segments", "failed_translations", "failed_voices"}.
     transcribe/llm/synth/mixer can be replaced (tests, custom backends)."""
     target = normalize_lang(target_lang)
@@ -446,21 +487,26 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
 
     base = os.path.splitext(os.path.basename(source_video))[0]
     json_path = os.path.join(session_dir, f"{base}_{target}.json")
-    saved = saved_translation(json_path, target, segments)         # an earlier run of this session already translated it
+    saved = saved_translation(json_path, target, segments, tone)         # an earlier run of this session already translated it
     if saved:
         texts, failed_tr = saved, 0
         print(f"[Log] Reusing the saved {LANG_NAMES.get(target, target)} translation ({len(texts)} lines) and any finished voice clips from "
               f"this session: no AI text or voice service is called for them. Delete {os.path.basename(json_path)} to translate again.")
     else:
-        texts, failed_tr = translate_segments(segments, target, llm=llm, about=about)
+        texts, failed_tr = translate_segments(segments, target, llm=llm, about=about, tone=tone)
     if failed_tr == len(segments):
         raise RuntimeError("Translation failed for every segment (no LLM answered). Check your AI key / Ollama "
                            "(see `shortsflow doctor`); nothing was dubbed.")
     translated = [dict(s, text=t) for s, t in zip(segments, texts)]
     with open(json_path, "w", encoding="utf-8") as f:              # saved right away: a crash later (voices, mix) keeps the translation
-        json.dump({"target_lang": target, "source_lang": source_lang, "segments": translated}, f, ensure_ascii=False, indent=2)
+        json.dump({"target_lang": target, "source_lang": source_lang, "tone": tone or "faithful", "delivery": delivery or "neutral",
+                   "segments": translated}, f, ensure_ascii=False, indent=2)
 
-    synth = synth or (lambda text, out: synthesize(text, target, out, provider, voice))
+    if not synth:
+        if (delivery or "neutral") == "neutral":       # the default keeps the exact old call (custom backends may not take `delivery`)
+            synth = lambda text, out: synthesize(text, target, out, provider, voice)  # noqa: E731
+        else:
+            synth = lambda text, out: synthesize(text, target, out, provider, voice, delivery)  # noqa: E731
     clips_dir = os.path.join(session_dir, "dub_clips")
     os.makedirs(clips_dir, exist_ok=True)
 
@@ -468,11 +514,17 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
 
     def make(i):
         path = os.path.join(clips_dir, f"seg_{i:04d}.mp3")
-        if saved and os.path.exists(path) and os.path.getsize(path) > 200:
-            return path                                  # voiced by an earlier run on this same translation: keep it
+        tag = f"{delivery or 'neutral'}\n{texts[i]}"      # what this clip was voiced from, kept next to it
+        if saved and os.path.exists(path) and os.path.getsize(path) > 200 and _voice_matches(path + ".voice", tag):
+            return path                                  # voiced by an earlier run on this same translation and delivery: keep it
         try:
             synth(texts[i], path)
             if os.path.exists(path) and os.path.getsize(path) > 200:
+                try:
+                    with open(path + ".voice", "w", encoding="utf-8") as f:
+                        f.write(tag)
+                except OSError:
+                    pass
                 return path
             raise RuntimeError("the voice service returned an empty file")
         except Exception as e:
@@ -508,7 +560,8 @@ def dub_video(source_video, target_lang, session_dir, output_path=None, language
             f.write(build_ass(translated, video_size(source_video)))
     json_path = os.path.join(session_dir, f"{base}_{target}.json")
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump({"target_lang": target, "source_lang": source_lang, "segments": translated}, f, ensure_ascii=False, indent=2)
+        json.dump({"target_lang": target, "source_lang": source_lang, "tone": tone or "faithful", "delivery": delivery or "neutral",
+                   "segments": translated}, f, ensure_ascii=False, indent=2)
 
     output_path = output_path or os.path.join(session_dir, f"{base}_dub_{target}.mp4")
     if mixer is None:
