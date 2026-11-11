@@ -746,12 +746,23 @@ ANSWER FORMAT (two parts, in this order):
 
     return with_best_of_n(llm_call, validate_manim, n=3)
 
-def generate_mixed_facts(category="science"):
+def generate_mixed_facts(category="science", topic_tries=3):
     """
     Generates a curiosity-driven 'True or False' fact list.
     Returns: {"hook": str, "facts": [{"fact": str, "truth": bool}]}
+    A sub-topic the fact checker keeps disputing (a popular myth) is dropped for a new one, up to `topic_tries` times.
     """
-    selected_sub = get_sub_topic(category)
+    last_err = None
+    for _ in range(max(1, topic_tries)):
+        try:
+            return _mixed_facts_for(get_sub_topic(category))
+        except RuntimeError as e:
+            last_err = e
+            print(f"[Log] FACTS: giving up on this sub-topic ({e}); trying another")
+    raise last_err
+
+
+def _mixed_facts_for(selected_sub):
     print(f"[Log] FACTS: Selected sub-topic: {selected_sub}")
 
     prompt = f"""Write a "spot the lie" YouTube Short about {selected_sub}: 2 true facts and 1 lie.

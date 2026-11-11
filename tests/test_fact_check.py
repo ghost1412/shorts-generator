@@ -64,3 +64,21 @@ def test_generate_mixed_facts_gives_up_when_the_judge_never_agrees(monkeypatch):
 def test_a_reply_that_is_not_a_verdict_list_is_unreadable():
     assert fc._verdicts('[{"fact": "x", "truth": true}, {"fact": "y"}, {"fact": "z"}]', 3) is None
     assert fc._verdicts('[{"verdict": "True"}, {"verdict": "false"}]', 2) == ["true", "false"]
+
+
+def test_a_disputed_sub_topic_is_swapped_for_a_new_one(monkeypatch):
+    import engine.script_gen as sg
+    topics = iter(["myth topic", "solid topic"])
+    seen = []
+    monkeypatch.setattr(sg, "get_sub_topic", lambda c: next(topics))
+
+    def fake(p, *a, **k):
+        if "fact checker" in p:
+            return '["true", "true", "false"]' if "solid topic" in seen[-1] else '["false", "true", "false"]'
+        seen.append(p)
+        return json.dumps(FACTS)
+
+    monkeypatch.setattr(sg, "get_llm_response", fake)
+    out = sg.generate_mixed_facts("science")
+    assert sum(1 for f in out["facts"] if not f["truth"]) == 1
+    assert any("myth topic" in p for p in seen) and any("solid topic" in p for p in seen)
