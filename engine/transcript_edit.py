@@ -162,7 +162,9 @@ def render_edited_video(source, keeps, out_path, workdir):
         parts.append(f"[0:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS[v{k}]")
         parts.append(f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS[a{k}]")
     parts.append("".join(f"[v{k}][a{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=1[v][a]")
-    script = os.path.join(workdir, "cut.filter")
+    # one script per output: shorts are cut in parallel threads, and a shared "cut.filter" was overwritten mid-use
+    # (ffmpeg then read two plans mixed together and 4 of 5 shorts were left untightened)
+    script = os.path.join(workdir, os.path.splitext(os.path.basename(out_path))[0] + ".cut.filter")
     with open(script, "w", encoding="utf-8") as f:
         f.write(";\n".join(parts))
     exe = shutil.which("ffmpeg")
