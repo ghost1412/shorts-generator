@@ -175,6 +175,15 @@ try:
         assert float(end_box_t.input_value()) == 35.0, f"End -1 s gave {end_box_t.input_value()}"
         assert page.get_by_text("0:13 to 0:35").first.is_visible(), "the strip did not follow the buttons"
         page.locator(".sf-tl").first.scroll_into_view_if_needed()
+        # drag the end handle to the left: the End box must follow
+        box = page.locator(".sf-tl").first.bounding_box()
+        h = page.locator(".sf-tl-he").first.bounding_box()
+        page.mouse.move(h["x"] + h["width"] / 2, h["y"] + h["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(box["x"] + box["width"] * 0.4, h["y"] + h["height"] / 2, steps=6)
+        page.mouse.up()
+        page.wait_for_timeout(1000)
+        assert float(end_box_t.input_value()) < 35.0, f"dragging the end handle left did not change End ({end_box_t.input_value()})"
         page.screenshot(path=os.path.join(out_dir, "02d_timeline.png"), full_page=False)
         page.get_by_text("Edit this short: style, start and end").first.click()
 

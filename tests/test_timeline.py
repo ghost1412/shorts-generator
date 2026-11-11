@@ -34,3 +34,10 @@ def test_nudge_view_moves_the_box_and_redraws_the_strip():
     assert "0:13 to 0:36" in html_out
     s, e, html_out = timeline.nudge_view(12, 36, -1, False, 53)
     assert (s, e) == (12, 35.0) and "0:12 to 0:35" in html_out
+
+
+def test_strip_has_drag_handles_and_total():
+    out = timeline.timeline_html(10, 40, [], 100)
+    assert 'data-total="100.00"' in out and "sf-tl-hs" in out and "sf-tl-he" in out
+    assert 'data-t="10.0"' in out and 'data-t="40.0"' in out
+    assert "sf-tl-h" in timeline.DRAG_JS and "Start (seconds" in timeline.DRAG_JS

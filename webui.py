@@ -776,6 +776,8 @@ def build_ui():
             "[GitHub](https://github.com/ghost1412/shorts-generator) · ⭐ Star if it helps!"
         )
         gr.HTML(WORDS_CSS)
+        from shortsflow.timeline import DRAG_JS
+        demo.load(None, None, None, js=DRAG_JS)
         with gr.Tabs():
             with gr.Tab("🚀 Start here"):
                 gr.Markdown("### Make shorts from a video in one click\n"

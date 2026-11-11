@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Browser app: the timeline strip in "Edit this short" has drag handles. Drag the blue start or end edge; letting go fills the Start/End box (1 s minimum between them) and redraws the strip.
 - Without an AI key: picked shorts are at least 30 s apart (the top-scoring windows could be neighbours, one scene cut in two).
 - `--tighten` works for every short again: the shorts are cut in parallel and shared one filter-script file, so ffmpeg read two plans mixed together and most shorts were silently left untightened (4 of 5 in a podcast run). Each short now has its own.
 - `--tighten` never cuts a spoken word: on stage recordings (a keynote with applause) the loudness rule took 6-17 s of speech out of every clip, mid-sentence. Now every transcribed word is kept and only what lies between words is cut (speech lost on that keynote: 0).
