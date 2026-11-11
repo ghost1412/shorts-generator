@@ -11,9 +11,19 @@ on:
         required: false
         default: 'https://upload.wikimedia.org/wikipedia/commons/7/73/NASA_Astronaut_Don_Pettit_Talks_with_Neil_deGrasse_Tyson%E2%80%99s_%E2%80%9CStar_Talk%E2%80%9D_%E2%80%93_April_3%2C_2025_%28iss072m260931539%29.webm'
       clip_count:
-        description: 'Number of clips to extract'
+        description: 'Number of clips to extract (shorts mode)'
         required: false
         default: '5'
+      mode:
+        description: 'shorts (vertical clips) or long (one highlights video)'
+        required: false
+        default: 'shorts'
+        type: choice
+        options: ['shorts', 'long']
+      reel_seconds:
+        description: 'Target length of the highlights video in seconds (long mode)'
+        required: false
+        default: '180'
 
 concurrency:
   group: clip-benchmark-${{ github.ref }}
@@ -56,13 +66,27 @@ jobs:
         env:
           SHORTSFLOW_WHISPER_MODEL: base
           CLIP_COUNT: ${{ github.event.inputs.clip_count || '5' }}
+          MODE: ${{ github.event.inputs.mode || 'shorts' }}
+          REEL_SECONDS: ${{ github.event.inputs.reel_seconds || '180' }}
         run: |
-          python main.py --source_video video.webm --extract_mode shorts --clip_count "$CLIP_COUNT" \
-            --target_duration 30 --min_duration 18 --smart_crop --tighten --layout auto \
-            --skip-upload --session_dir bench --output_json bench/results.json
+          if [ "$MODE" = "long" ]; then
+            python main.py --source_video video.webm --extract_mode long --target_duration "$REEL_SECONDS" \
+              --skip-upload --session_dir bench --output_json bench/results.json
+          else
+            python main.py --source_video video.webm --extract_mode shorts --clip_count "$CLIP_COUNT" \
+              --target_duration 30 --min_duration 18 --smart_crop --tighten --layout auto \
+              --skip-upload --session_dir bench --output_json bench/results.json
+          fi
 
       - name: Benchmark report
-        run: python scripts/clip_benchmark.py bench --picture --json bench/report.json
+        env:
+          MODE: ${{ github.event.inputs.mode || 'shorts' }}
+        run: |
+          if [ "$MODE" = "long" ]; then
+            python scripts/clip_benchmark.py bench --json bench/report.json
+          else
+            python scripts/clip_benchmark.py bench --picture --json bench/report.json
+          fi
 
       - name: Job summary
         if: always()

@@ -17,7 +17,7 @@ from engine import clip_quality  # noqa: E402
 
 COLUMNS = [("clips", "clips"), ("median_length_s", "len s"), ("length_in_range", "len ok"), ("starts_at_sentence", "start ok"),
            ("ends_at_sentence", "end ok"), ("overlap_s", "overlap"), ("spread", "spread"), ("median_words_per_s", "words/s"),
-           ("titles_grounded", "titles ok"), ("gaps_s", "gaps s"), ("cut_s", "cut s"), ("recall", "recall"), ("precision", "prec"),
+           ("titles_grounded", "titles ok"), ("gaps_s", "gaps s"), ("cut_s", "cut s"), ("reel_s", "reel s"), ("target_s", "target s"), ("reel_file_s", "file s"), ("recall", "recall"), ("precision", "prec"),
            ("face_found", "face"), ("centered", "centred"), ("jitter", "jitter"), ("silence", "silence")]
 
 

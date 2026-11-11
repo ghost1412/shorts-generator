@@ -225,12 +225,25 @@ def report(session_dir, gold=None, picture=False):
     if segs is None:
         return None
     out = {"session": os.path.basename(os.path.normpath(session_dir)), "video": video_key(res, session_dir)}
-    out.update(measure(segs, res))
+    settings = (res or {}).get("settings") or {}
+    reel = settings.get("extract_mode") == "long"
+    # a highlights video's moments may be longer than a short; its "clips" are the moments of ONE file
+    out.update(measure(segs, res, min_len=8.0, max_len=180.0) if reel else measure(segs, res))
     if gold:
         out.update(gold_scores(res.get("clips", []), gold.get(out["video"])))
-    cut = cut_seconds(res, session_dir)
-    if cut is not None:
-        out["cut_s"] = cut
+    if reel:
+        clips = [c for c in res.get("clips", []) if "start" in c and "end" in c]
+        out["reel_s"] = round(sum(float(c["end"]) - float(c["start"]) for c in clips), 1)
+        if settings.get("target_duration"):
+            out["target_s"] = float(settings["target_duration"])
+        files = clip_videos({"clips": clips[:1]}, session_dir)
+        secs = _file_seconds(files[0]) if files else None
+        if secs is not None:
+            out["reel_file_s"] = round(secs, 1)
+    else:
+        cut = cut_seconds(res, session_dir)
+        if cut is not None:
+            out["cut_s"] = cut
     if picture:
         from engine import clip_picture
         out.update(clip_picture.measure_videos(clip_videos(res, session_dir)))

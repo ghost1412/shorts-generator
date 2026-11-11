@@ -102,3 +102,16 @@ def test_speech_gaps_count_pauses_lead_in_and_tail():
     # lead-in 0-1 (1.0), gap 2.0-4.0 (2.0), tail 4.5-6 (1.5); the 0.1 s gap between a and b is speech
     assert speech_gaps(segs, 0, 6) == 4.5
     assert speech_gaps(segs, 7, 9) == 2.0                 # no words at all: the whole span
+
+
+def test_highlights_run_reports_reel_length_and_target(tmp_path):
+    import json
+    from engine.clip_quality import report
+    words = [{"word": f"w{i}.", "start": i * 1.0, "end": i * 1.0 + 0.5} for i in range(200)]
+    (tmp_path / "transcript.json").write_text(json.dumps({"segments": [{"start": 0, "end": 200, "text": "x", "words": words}]}))
+    (tmp_path / "results.json").write_text(json.dumps({"settings": {"extract_mode": "long", "target_duration": 120},
+                                                       "clips": [{"start": 10, "end": 70}, {"start": 100, "end": 160}]}))
+    r = report(str(tmp_path))
+    assert r["reel_s"] == 120.0 and r["target_s"] == 120.0
+    assert r["length_in_range"] == 1.0                    # 60 s moments are fine in a highlights video
+    assert "cut_s" not in r
