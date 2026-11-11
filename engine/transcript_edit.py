@@ -284,3 +284,46 @@ def tighten_segment(task_path, hi, silence_intervals, transcript_data, out_dir, 
     with open(sub, "w", encoding="utf-8") as f:
         json.dump(clip_transcript(transcript_data, start, end, keeps), f)
     return video, sub, kept
+
+
+PAUSE_MIN, PAUSE_MAX, PAUSE_MARGIN = 0.8, 4.0, 0.2
+
+
+def word_pause_cuts(transcript_data, min_gap=PAUSE_MIN, max_gap=PAUSE_MAX, margin=PAUSE_MARGIN):
+    """[(start, end)] source seconds to cut: pauses between two spoken words that last min_gap..max_gap seconds, minus
+    `margin` on each side. Loudness-independent, so it also works when steady background noise (a fan, a station's hum, a
+    room tone) keeps the pause from sounding silent. Longer gaps are left alone: they are usually music, action or a
+    reaction, not a pause."""
+    times = sorted((float(w["start"]), float(w["end"])) for s in (transcript_data or {}).get("segments", [])
+                   for w in (s.get("words") or []) if isinstance(w, dict) and "start" in w and "end" in w)
+    cuts, prev_end = [], None
+    for ws, we in times:
+        if prev_end is not None:
+            gap = ws - prev_end
+            if min_gap <= gap <= max_gap:
+                cuts.append((round(prev_end + margin, 3), round(ws - margin, 3)))
+        prev_end = we if prev_end is None else max(prev_end, we)
+    return cuts
+
+
+def subtract_intervals(keeps, cuts):
+    """`keeps` (sorted (start, end) intervals) with every `cuts` interval removed."""
+    out = []
+    cuts = sorted(cuts)
+    for ks, ke in sorted(keeps):
+        pieces = [(ks, ke)]
+        for cs, ce in cuts:
+            if ce <= ks or cs >= ke:
+                continue
+            nxt = []
+            for ps, pe in pieces:
+                if ce <= ps or cs >= pe:
+                    nxt.append((ps, pe))
+                    continue
+                if cs > ps:
+                    nxt.append((ps, cs))
+                if ce < pe:
+                    nxt.append((ce, pe))
+            pieces = nxt
+        out.extend(p for p in pieces if p[1] - p[0] > 1e-3)
+    return out

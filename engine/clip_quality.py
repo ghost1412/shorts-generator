@@ -122,7 +122,59 @@ def measure(segments, results, min_len=15.0, max_len=75.0):
         "spread": spread_share(clips, video_seconds),
         "median_words_per_s": _median(speech),
         "titles_grounded": grounded_share(clips, segments, str(((results or {}).get("settings") or {}).get("user_context") or "")),
+        "gaps_s": _median([speech_gaps(segments, float(c["start"]), float(c["end"])) for c in clips]),
     }
+
+
+def _file_seconds(path):
+    """Length of a video file from ffprobe/ffmpeg, None when it cannot be read."""
+    import re
+    import subprocess
+    try:
+        import imageio_ffmpeg
+        ff = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        ff = "ffmpeg"
+    try:
+        r = subprocess.run([ff, "-hide_banner", "-i", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = re.search(r"Duration: (\d+):(\d+):([\d.]+)", r.stderr)
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else None
+
+
+def cut_seconds(results, session_dir):
+    """Median seconds that tightening removed per clip: the picked span minus the finished file's length (clips with a
+    cold open are skipped: it adds seconds). None when the clip files are not there."""
+    cut = []
+    for c in (results or {}).get("clips", []):
+        if c.get("cold_open") or "start" not in c:
+            continue
+        files = clip_videos({"clips": [c]}, session_dir)
+        secs = _file_seconds(files[0]) if files else None
+        if secs is not None:
+            cut.append(max(0.0, float(c["end"]) - float(c["start"]) - secs))
+    return _median(cut)
+
+
+GAP_MIN = 0.6      # a pause between two words this long counts as dead air (the same length the picture check uses)
+
+
+def speech_gaps(segments, start, end, gap_min=GAP_MIN):
+    """Seconds of pauses (>= gap_min) between the timed words spoken inside [start, end], plus a silent lead-in and tail.
+    Loudness-independent: quiet speech still has word timings. Compare with cut_s (what tightening removed)."""
+    times = sorted((float(w["start"]), float(w["end"])) for s in segments for w in (s.get("words") or [])
+                   if isinstance(w, dict) and "start" in w and "end" in w and start <= float(w["start"]) < end)
+    if not times:
+        return round(end - start, 2)
+    total, prev = 0.0, start
+    for ws, we in times:
+        if ws - prev >= gap_min:
+            total += ws - prev
+        prev = max(prev, we)
+    if end - prev >= gap_min:
+        total += end - prev
+    return round(total, 2)
 
 
 def overlap_with(a, b):
@@ -176,6 +228,9 @@ def report(session_dir, gold=None, picture=False):
     out.update(measure(segs, res))
     if gold:
         out.update(gold_scores(res.get("clips", []), gold.get(out["video"])))
+    cut = cut_seconds(res, session_dir)
+    if cut is not None:
+        out["cut_s"] = cut
     if picture:
         from engine import clip_picture
         out.update(clip_picture.measure_videos(clip_videos(res, session_dir)))

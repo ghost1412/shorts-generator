@@ -93,3 +93,12 @@ def test_clip_videos_prefers_the_session_folder_over_the_current_folder(tmp_path
     # An absolute path is used as given; a missing session file falls back to the bare relative path.
     assert q.clip_videos({"clips": [{"video_path": str(run_a / "video_clip_1.mp4")}]}, str(run_b)) == [str(run_a / "video_clip_1.mp4")]
     assert q.clip_videos({"clips": [{"video_path": "video_clip_1.mp4"}]}, str(tmp_path / "missing")) == ["video_clip_1.mp4"]
+
+
+def test_speech_gaps_count_pauses_lead_in_and_tail():
+    from engine.clip_quality import speech_gaps
+    segs = [{"start": 0, "end": 10, "words": [{"word": "a", "start": 1.0, "end": 1.5}, {"word": "b", "start": 1.6, "end": 2.0},
+                                                {"word": "c", "start": 4.0, "end": 4.5}]}]
+    # lead-in 0-1 (1.0), gap 2.0-4.0 (2.0), tail 4.5-6 (1.5); the 0.1 s gap between a and b is speech
+    assert speech_gaps(segs, 0, 6) == 4.5
+    assert speech_gaps(segs, 7, 9) == 2.0                 # no words at all: the whole span

@@ -2,6 +2,11 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- `--tighten` also cuts pauses between spoken words (0.8-4 s, a margin kept), so pauses under steady background noise are removed too; loudness alone left them in. On the NASA sample: silent share 4% -> 0%, a 25 s clip lost 3.7 s of pauses. Not applied to game footage; longer gaps (music, action) are kept.
+- Clip benchmark: `gaps s` (pauses between words in the picked span) and `cut s` (what tightening removed, from the finished files).
+
 ## 0.7.5 (2026-11-11)
 
 - Without an AI key: shorts are cut to the asked length (they were whole 1.5x context windows, e.g. 45 s for 30 s), and titles and descriptions are clean sentences from the clip (no "uh", no stutters like "it, it", no leading "And", never cut mid-word) instead of the raw first 80 characters of the transcript.
