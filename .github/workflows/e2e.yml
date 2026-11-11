@@ -56,9 +56,10 @@ jobs:
       - name: System packages (FFmpeg, Pango, Chromium libs, MS core fonts)
         if: env.PEXELS_API_KEY != ''
         run: |
-          sudo apt-get update
+          apt() { for i in 1 2 3 4; do sudo apt-get -o Acquire::Retries=5 "$@" && return 0; echo "apt-get failed ($i/4), retrying in 30 s"; sleep 30; done; return 1; }
+          apt update
           echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
-          sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config libglib2.0-dev \
+          apt install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config libglib2.0-dev \
             libnss3 libatk-bridge2.0-0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 \
             libpangocairo-1.0-0 libgtk-3-0 ttf-mscorefonts-installer
           echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV

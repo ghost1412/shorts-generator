@@ -16,7 +16,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install FFmpeg
         run: |
-          if [ "$(uname)" = "Darwin" ]; then brew install ffmpeg; else sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+          apt() { for i in 1 2 3 4; do sudo apt-get -o Acquire::Retries=5 "$@" && return 0; echo "apt-get failed ($i/4), retrying in 30 s"; sleep 30; done; return 1; }
+          if [ "$(uname)" = "Darwin" ]; then brew install ffmpeg; else apt update && apt install -y ffmpeg; fi
       - name: Run the installer (base package only, to keep it quick)
         run: SHORTSFLOW_EXTRA="" sh install.sh
       - name: The command works
