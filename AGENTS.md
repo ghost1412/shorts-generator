@@ -139,6 +139,8 @@ python gui_app.py
    * Maintain the Multi-LLM fallback order: **Gemini API -> Local Ollama -> HuggingFace**.
 3. **Subtitles & Caption Positioning**:
    * Remotion captions use vertical `y_pos` offset defaulting to `1150` for 9:16 vertical resolution (1080x1920).
+   * Left at the default, plain (non-Remotion) clip captions use the lower third (`video_gen.plain_caption_y`, 1400), and animated captions move to 1400 on close-up faces (`caption_layout.face_safe_y`). An explicit height or `--caption_position` is used as given.
+   * Measure clip changes before and after with `python scripts/clip_benchmark.py <session> --picture`; try it on the public-domain sample (`shortsflow/sample.py`).
 4. **Privacy of the optional cloud helpers**:
    * Everything runs locally by default. Only these leave the PC, and each is optional: Gemini/Groq/HF LLM calls (`--llm_provider`), Gemini picture descriptions (`--visual_context` with a key), OpenStreetMap place names (trip recap; off with `--recap_no_geocode`), Google Drive upload (only when asked). Say so in any docs or UI text you add about them.
    * Personal footage, its recaps and any user-pasted links (Drive, Photos) never go into the README, docs, tests or the CHANGELOG; use made-up ids in tests.
