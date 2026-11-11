@@ -127,7 +127,7 @@
       <p class="sub">There is no hosted demo yet: ShortsFlow runs on your own computer or in a free Colab notebook. Pick whichever is easiest.</p>
       <div class="grid wide">
         <div class="card"><h3>Windows installer</h3><p>Download, run it and open ShortsFlow from your desktop. No Python or API key to install first.</p><p style="margin-top:8px"><strong>Good to know:</strong> the file is small (about 2 MB) and downloads roughly 2 GB on first run (about 5 GB with an NVIDIA card, for the GPU libraries). Needs an internet connection and no admin rights. Windows may show a blue "protected your PC" box because the installer is not code-signed yet: choose More info, then Run anyway.</p><p style="margin-top:12px"><a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download</a></p></div>
-        <div class="card"><h3>Mac or Linux</h3><p>Needs Python 3.12 and FFmpeg. There is no one-click installer for these yet, so this is the route.</p><pre>pip install "shortsflow[clip]"
+        <div class="card"><h3>Mac or Linux</h3><p>Needs Python 3.10 or newer and FFmpeg. One line installs it into its own folder (<code>~/.shortsflow</code>); nothing else on your computer is touched.</p><pre>curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh | sh
 shortsflow doctor
 shortsflow clip my_video.mp4</pre></div>
         <div class="card"><h3>Docker</h3><p>The browser app in a container, on any system that runs Docker.</p><pre>docker run -p 7860:7860 \
