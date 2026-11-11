@@ -26,3 +26,11 @@ def test_timeline_html_empty_for_bad_input():
     assert timeline.timeline_html(None, 5, [], 100) == ""
     assert timeline.timeline_html(5, 5, [], 100) == ""
     assert timeline.timeline_html(5, 9, [], 0) == ""
+
+
+def test_nudge_view_moves_the_box_and_redraws_the_strip():
+    s, e, html_out = timeline.nudge_view(12, 36, 1, True, 53, [], [(24, 48)])
+    assert (s, e) == (13.0, 36)
+    assert "0:13 to 0:36" in html_out
+    s, e, html_out = timeline.nudge_view(12, 36, -1, False, 53)
+    assert (s, e) == (12, 35.0) and "0:12 to 0:35" in html_out

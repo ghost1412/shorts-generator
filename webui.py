@@ -912,14 +912,17 @@ def build_ui():
                                         _others = [(o.get("start"), o.get("end")) for o in cards if o["index"] != c["index"]]
                                         _strip = _tl.timeline_html(c.get("start"), c.get("end"), c.get("cuts"), _total, _others)
                                         if _strip:
-                                            gr.HTML(_strip)
+                                            _strip_box = gr.HTML(_strip)
                                             with gr.Row():
                                                 for _lbl, _d, _is_start in (("Start -1 s", -1, True), ("Start +1 s", 1, True),
                                                                             ("End -1 s", -1, False), ("End +1 s", 1, False)):
                                                     _b = gr.Button(_lbl, size="sm")
-                                                    _tgt, _oth = (t0, t1) if _is_start else (t1, t0)
-                                                    _b.click(lambda v, o, d=_d, s=_is_start, t=_total: _tl.nudge(v, d, o, s, t),
-                                                             [_tgt, _oth], _tgt)
+                                                    _b.click(lambda a, b, d=_d, s=_is_start, t=_total, cu=c.get("cuts"), ot=_others:
+                                                             _tl.nudge_view(a, b, d, s, t, cu, ot),
+                                                             [t0, t1], [t0, t1, _strip_box])
+                                            for _box in (t0, t1):     # typed values redraw the strip too
+                                                _box.change(lambda a, b, t=_total, cu=c.get("cuts"), ot=_others:
+                                                            _tl.timeline_html(a, b, cu, t, ot) or gr.update(), [t0, t1], _strip_box)
                                         if c.get("animated_captions"):
                                             cy = gr.Slider(300, 1700, value=c.get("caption_y") or 1150, step=10,
                                                            label="Caption height (pixels from the top of the 1920 px tall short; lower number = higher up)",

@@ -156,6 +156,20 @@ try:
         ticked = page.locator(".sf-words input[type=checkbox]:checked").count()
         assert ticked == 3, f"the phrase should tick 3 words, ticked {ticked}"
         page.screenshot(path=os.path.join(out_dir, "02c_word_cuts.png"), full_page=True)
+        # timeline strip: this short, the other short, and the start/end nudge buttons move the boxes
+        assert page.locator(".sf-tl-clip >> visible=true").count() >= 1, "the timeline strip did not show"
+        assert page.locator(".sf-tl-other >> visible=true").count() >= 1, "the other short is missing from the strip"
+        start_box = page.get_by_label("Start (seconds in the original video)").first
+        end_box_t = page.get_by_label("End (seconds)").first
+        page.get_by_role("button", name="Start +1 s").first.click()
+        page.wait_for_timeout(1000)
+        assert float(start_box.input_value()) == 13.0, f"Start +1 s gave {start_box.input_value()}"
+        page.get_by_role("button", name="End -1 s").first.click()
+        page.wait_for_timeout(1000)
+        assert float(end_box_t.input_value()) == 35.0, f"End -1 s gave {end_box_t.input_value()}"
+        assert page.get_by_text("0:13 to 0:35").first.is_visible(), "the strip did not follow the buttons"
+        page.locator(".sf-tl").first.scroll_into_view_if_needed()
+        page.screenshot(path=os.path.join(out_dir, "02d_timeline.png"), full_page=False)
         page.get_by_text("Edit this short: style, start and end").first.click()
 
         page.get_by_role("button", name="Remove this short").first.click()

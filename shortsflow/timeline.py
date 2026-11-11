@@ -65,3 +65,12 @@ def timeline_html(start, end, cuts, total, others=()):
     legend = (f'<div class="sf-tl-legend"><span>0:00</span><span>Blue: this short ({_clock(start)} to {_clock(end)}) · '
               f'red: cut words · grey: your other shorts</span><span>{_clock(total)}</span></div>')
     return f'{style}<div class="sf-tl">{"".join(parts)}</div>{legend}'
+
+
+def nudge_view(start, end, delta, is_start, total, cuts=None, others=()):
+    """(start, end, strip_html) after one Start/End button press, so the boxes and the strip move together."""
+    if is_start:
+        start = nudge(start, delta, end, True, total)
+    else:
+        end = nudge(end, delta, start, False, total)
+    return start, end, timeline_html(start, end, cuts, total, others)
