@@ -202,3 +202,19 @@ def _resolve_overlaps(clips, spans, o):
                 clips.pop(pair[1])
     clips.sort(key=lambda c: float(c["start"]))
     return clips
+
+
+def merge_close_moments(highlights, gap=3.0):
+    """Highlights-reel moments that sit less than `gap` seconds apart become one continuous moment: a crossfade between two
+    spots a second or two apart looks like a stutter, and the few seconds between them are usually part of the same scene.
+    Moments the user chose by time are kept as given."""
+    out = []
+    for h in sorted(highlights, key=lambda x: float(x["start"])):
+        if out and not h.get("user_moment") and not out[-1].get("user_moment") \
+                and float(h["start"]) - float(out[-1]["end"]) < gap:
+            prev = out[-1]
+            out[-1] = dict(prev, end=max(float(prev["end"]), float(h["end"])),
+                           viral_score=max(prev.get("viral_score", 0) or 0, h.get("viral_score", 0) or 0), merged=True)
+        else:
+            out.append(dict(h))
+    return out

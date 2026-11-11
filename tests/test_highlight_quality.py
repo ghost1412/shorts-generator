@@ -140,3 +140,11 @@ def test_fit_to_target_never_leaves_a_piece_below_the_floor():
     out = fit_to_target(hs, 220, min_len=25.0)
     assert all(h["end"] - h["start"] >= 25.0 for h in out)
     assert sum(h["end"] - h["start"] for h in out) <= 220 * 1.08 + 1e-6
+
+
+def test_moments_seconds_apart_are_joined_but_user_moments_are_not():
+    from engine.highlight_quality import merge_close_moments
+    out = merge_close_moments([{"start": 0, "end": 20}, {"start": 21.5, "end": 40}, {"start": 60, "end": 80}])
+    assert [(h["start"], h["end"]) for h in out] == [(0, 40), (60, 80)]
+    kept = merge_close_moments([{"start": 0, "end": 20, "user_moment": True}, {"start": 21, "end": 40}])
+    assert len(kept) == 2

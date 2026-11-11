@@ -1734,6 +1734,12 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             snap_opts = {"min_len": max(8.0, min_duration - 5.0)} if mode == "shorts" else {"min_len": 8.0, "max_len": 180.0}
             with open(transcript_path, 'r', encoding='utf-8') as f:
                 highlights = snap_highlights(highlights, json.load(f), **snap_opts)
+            if mode == "long":
+                from engine.highlight_quality import merge_close_moments
+                before = len(highlights)
+                highlights = merge_close_moments(highlights)
+                if len(highlights) < before:
+                    print(f"[Log] Highlights reel: joined {before - len(highlights)} moment(s) that were only seconds apart.")
             moved = sum(1 for h in highlights if h.get('snapped') and (h['start'] != h.get('orig_start') or h['end'] != h.get('orig_end')))
             print(f"[Log] Boundary snapping: {moved} of {len(highlights)} clip(s) moved to sentence boundaries.")
         except Exception as e:
