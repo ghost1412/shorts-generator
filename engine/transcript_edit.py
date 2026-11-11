@@ -327,3 +327,20 @@ def subtract_intervals(keeps, cuts):
             pieces = nxt
         out.extend(p for p in pieces if p[1] - p[0] > 1e-3)
     return out
+
+
+def protect_speech(keeps, transcript_data, pad=0.1):
+    """`keeps` (loudness-based keep intervals) with every transcribed word (plus `pad` each side) added back, merged.
+    Loudness alone can mark normal speech as silence when the loudest moments (applause, music, a shout) set the level:
+    on a stage keynote it cut 6-17 s of speech from every clip. Words are never cut by tightening; only what lies between
+    them is."""
+    words = [(max(0.0, float(w["start"]) - pad), float(w["end"]) + pad)
+             for s in (transcript_data or {}).get("segments", []) for w in (s.get("words") or [])
+             if isinstance(w, dict) and "start" in w and "end" in w]
+    merged = []
+    for s, e in sorted(list(keeps or []) + words):
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+    return merged

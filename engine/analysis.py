@@ -1817,13 +1817,16 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
     elif not tighten:
         print("[Log] Tighten (silence removal) disabled. Skipping silence interval detection to speed up extraction.")
 
-    if tighten and silence_intervals and not game:
-        # loudness alone misses pauses under steady background noise (room tone, a fan, a station's hum): also cut the
-        # pauses between spoken words (0.8-4 s, a margin kept on each side)
+    if tighten and silence_intervals:
+        # 1. never cut a spoken word: loudness can call normal speech "silence" when applause or music sets the level
+        #    (a stage keynote lost 6-17 s of speech per clip). 2. loudness misses pauses under steady background noise
+        #    (room tone, a fan, a station's hum): also cut the pauses between spoken words (0.8-4 s, a margin kept)
         try:
-            from engine.transcript_edit import subtract_intervals, word_pause_cuts
+            from engine.transcript_edit import protect_speech, subtract_intervals, word_pause_cuts
             with open(transcript_path, 'r', encoding='utf-8') as f:
-                pauses = word_pause_cuts(json.load(f))
+                tdata = json.load(f)
+            silence_intervals = protect_speech(silence_intervals, tdata)
+            pauses = word_pause_cuts(tdata) if not game else []
             if pauses:
                 silence_intervals = subtract_intervals(silence_intervals, pauses)
                 print(f"[Log] Tighten: also cutting {len(pauses)} pause(s) between words "

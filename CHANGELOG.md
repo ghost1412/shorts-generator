@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- `--tighten` never cuts a spoken word: on stage recordings (a keynote with applause) the loudness rule took 6-17 s of speech out of every clip, mid-sentence. Now every transcribed word is kept and only what lies between words is cut (speech lost on that keynote: 0).
 - `--tighten` also cuts pauses between spoken words (0.8-4 s, a margin kept), so pauses under steady background noise are removed too; loudness alone left them in. On the NASA sample: silent share 4% -> 0%, a 25 s clip lost 3.7 s of pauses. Not applied to game footage; longer gaps (music, action) are kept.
 - Clip benchmark: `gaps s` (pauses between words in the picked span) and `cut s` (what tightening removed, from the finished files).
 

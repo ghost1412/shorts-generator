@@ -22,3 +22,12 @@ def test_subtract_splits_keep_intervals_around_cuts():
 def test_no_words_means_no_cuts():
     assert word_pause_cuts({"segments": []}) == []
     assert word_pause_cuts(None) == []
+
+
+def test_protect_speech_adds_words_back_to_loudness_keeps():
+    from engine.transcript_edit import protect_speech
+    tr = _tr((1.0, 1.5), (5.0, 5.4))
+    # loudness kept only 0-0.5 and 4.9-5.1: both words come back whole (with 0.1 s each side)
+    assert protect_speech([(0.0, 0.5), (4.9, 5.1)], tr) == [(0.0, 0.5), (0.9, 1.6), (4.9, 5.5)]
+    assert protect_speech([(0, 10)], tr) == [(0, 10)]
+    assert protect_speech([], {"segments": []}) == []
