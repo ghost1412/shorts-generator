@@ -148,3 +148,10 @@ def test_moments_seconds_apart_are_joined_but_user_moments_are_not():
     assert [(h["start"], h["end"]) for h in out] == [(0, 40), (60, 80)]
     kept = merge_close_moments([{"start": 0, "end": 20, "user_moment": True}, {"start": 21, "end": 40}])
     assert len(kept) == 2
+
+
+def test_a_fallback_window_is_cut_to_the_asked_length():
+    from engine.analysis import trim_to_target
+    assert trim_to_target({"start": 10, "end": 55}, 30) == {"start": 10, "end": 40.0, "trimmed": True}
+    assert trim_to_target({"start": 10, "end": 44}, 30) == {"start": 10, "end": 44}       # within 20%: left alone
+    assert trim_to_target({"start": 10, "end": 55}, None) == {"start": 10, "end": 55}

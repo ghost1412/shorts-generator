@@ -1363,7 +1363,8 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             if mode == "shorts" and len(valid_highlights) < clip_count:
                 print(f"[Log] 🎬 Highlight count ({len(valid_highlights)}) is below requested count ({clip_count}). Backfilling top signal peaks...")
                 fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0), reverse=True)
-                valid_highlights += pick_backfill(fallback_candidates, valid_highlights, clip_count - len(valid_highlights))
+                valid_highlights += [trim_to_target(h, target_duration) for h in
+                                     pick_backfill(fallback_candidates, valid_highlights, clip_count - len(valid_highlights))]
 
             # 🟢 MANDATORY: Re-sort chronologically to ensure narrative flow and fix timing mismatch
             # This ensures that even if we picked top scores, they play back in order.
@@ -1386,13 +1387,13 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                 valid_highlights.extend(fit_to_target(heuristic, target_duration, min_len=max(15.0, min_duration - 5.0)))
             else:
                 for f in fallback_candidates[:clip_count]:
-                    valid_highlights.append({
+                    valid_highlights.append(trim_to_target({
                         "start": f['start'],
                         "end": f['end'],
                         "viral_score": int(f['norm_score'] * 100),
                         "final_score": int(f['norm_score'] * 100),
                         "reason": "High-Signal Moment (Heuristic Fallback)"
-                    })
+                    }, target_duration))
             
             valid_highlights.sort(key=lambda x: x['start'])
             valid_highlights = deduplicate_highlights(valid_highlights)
@@ -1482,6 +1483,18 @@ def fit_to_target(highlights, target, already=0.0, tolerance=0.08, min_len=15.0)
             picked.append(dict(h, end=h['start'] + room, trimmed=True))
             total += room
     return picked
+
+
+def trim_to_target(h, target, slack=1.2):
+    """A short picked without the LLM is a whole context window (1.5x the asked length). Cut it to the asked length from its
+    start; the boundary snapping that runs later finishes the sentence it now stops in."""
+    try:
+        target = float(target or 0)
+    except (TypeError, ValueError):
+        return h
+    if target <= 0 or float(h['end']) - float(h['start']) <= target * slack:
+        return h
+    return dict(h, end=round(float(h['start']) + target, 2), trimmed=True)
 
 
 def pick_backfill(candidates, chosen, need, min_gap=30.0, min_len=10.0):
