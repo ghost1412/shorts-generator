@@ -906,6 +906,20 @@ def build_ui():
                                         with gr.Row():
                                             t0 = gr.Number(value=c.get("start"), label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
                                             t1 = gr.Number(value=c.get("end"), label="End (seconds)", precision=1, minimum=0, interactive=True)
+                                        from shortsflow import timeline as _tl, word_edit as _we
+                                        _words = _we.load_words(c["session_dir"])
+                                        _total = _tl.source_length(_words, cards)
+                                        _others = [(o.get("start"), o.get("end")) for o in cards if o["index"] != c["index"]]
+                                        _strip = _tl.timeline_html(c.get("start"), c.get("end"), c.get("cuts"), _total, _others)
+                                        if _strip:
+                                            gr.HTML(_strip)
+                                            with gr.Row():
+                                                for _lbl, _d, _is_start in (("Start -1 s", -1, True), ("Start +1 s", 1, True),
+                                                                            ("End -1 s", -1, False), ("End +1 s", 1, False)):
+                                                    _b = gr.Button(_lbl, size="sm")
+                                                    _tgt, _oth = (t0, t1) if _is_start else (t1, t0)
+                                                    _b.click(lambda v, o, d=_d, s=_is_start, t=_total: _tl.nudge(v, d, o, s, t),
+                                                             [_tgt, _oth], _tgt)
                                         if c.get("animated_captions"):
                                             cy = gr.Slider(300, 1700, value=c.get("caption_y") or 1150, step=10,
                                                            label="Caption height (pixels from the top of the 1920 px tall short; lower number = higher up)",

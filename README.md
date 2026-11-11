@@ -15,6 +15,7 @@
 | | |
 |---|---|
 | 🪟 **Windows, no setup** | [⬇ ShortsFlow-Setup.exe](https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe) → open **ShortsFlow** → paste a link or drop a file → one button |
+| 🍎🐧 **Mac or Linux, one line** | `curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh \| sh` (needs Python 3.10+ and FFmpeg; installs into `~/.shortsflow`, nothing else is touched) |
 | 💻 **Any OS** | `pip install "shortsflow[clip]"` → `shortsflow doctor` → `shortsflow clip my_video.mp4` |
 | ☁️ **Nothing to install** | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb) free GPU, nothing to install (run the cells, open the link it prints, log in with the password shown under it) |
 

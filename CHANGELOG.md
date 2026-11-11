@@ -2,6 +2,11 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- Edit this short: a timeline strip shows where the short sits in the source video (your other shorts in grey, cut words in red), with Start/End -1 s / +1 s buttons.
+- `install.sh`: one-line installer for macOS and Linux (own environment in `~/.shortsflow`, checked in CI on Ubuntu and macOS).
+
 ## 0.7.1 (2026-11-10)
 
 ### Fixed

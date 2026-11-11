@@ -1,0 +1,23 @@
+name: install.sh (Mac and Linux)
+
+on:
+  push:
+    paths: ["install.sh", ".github/workflows/install_sh.yml"]
+  workflow_dispatch:
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FFmpeg
+        run: |
+          if [ "$(uname)" = "Darwin" ]; then brew install ffmpeg; else sudo apt-get update && sudo apt-get install -y ffmpeg; fi
+      - name: Run the installer (base package only, to keep it quick)
+        run: SHORTSFLOW_EXTRA="" sh install.sh
+      - name: The command works
+        run: ~/.local/bin/shortsflow doctor || ~/.local/bin/shortsflow --help
