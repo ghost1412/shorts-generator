@@ -738,8 +738,12 @@ def run(args, target_bitrate, target_preset):
                     search_query = f"{args.setting or category or 'magical forest'}"
             else:
                 search_query = f"{category} {story_data['title']}"
+                from engine import bg_mood
+                fitting = bg_mood.pick(f"{story_data['title']} {story_data.get('story', '')}")
+                literal = bool(fitting)
+                search_query = fitting or search_query
 
-            paths = get_bg_path(search_query, bg_filename, target_duration=seg_len)
+            paths = get_bg_path(search_query, bg_filename, target_duration=seg_len, force_literal=bool(not is_custom_kids and literal))
             bg_video_paths.extend(paths)
     elif mode == "FIND_IT" or mode == "FIND_CAT": # Supporting old flag for safety
         from engine.media_gen import get_puzzle_meme_assets
@@ -974,6 +978,11 @@ def run(args, target_bitrate, target_preset):
             search_q = random.choice(["dark empty hallway night", "foggy forest at night", "abandoned house dark interior",
                                       "flickering light dark corridor", "old creepy staircase dark"])
             literal = True
+        elif mode == "TRUE_CRIME":
+            from engine import bg_mood
+            fitting = bg_mood.pick(f"{category} {topic} {locals().get('full_script') or ''}")
+            if fitting:
+                search_q, literal = fitting, True
         paths = get_bg_path(search_q, bg_filename, target_duration=total_bg_duration, force_literal=literal)
         if paths:
             bg_video_paths.extend(paths)

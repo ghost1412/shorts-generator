@@ -2,6 +2,11 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- STORY and TRUE_CRIME backgrounds follow the story's mood (work, family, love, school, money, neighbours, travel) instead of sometimes a random satisfying clip; no clear mood keeps the old behaviour.
+- FACTS: a sub-topic the fact checker keeps disputing is swapped for a new one instead of failing the daily run.
+
 ## 0.7.2 (2026-11-11)
 
 - Edit this short: a timeline strip shows where the short sits in the source video (your other shorts in grey, cut words in red), with Start/End -1 s / +1 s buttons.
