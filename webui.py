@@ -784,6 +784,8 @@ def build_ui():
                     with gr.Column():
                         q_url = gr.Textbox(label="Video link (YouTube or other)", placeholder="https://www.youtube.com/watch?v=...")
                         q_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
+                        q_sample = gr.Button("🎬 No video handy? Try a 2-minute sample", size="sm")
+                        q_sample_note = gr.Markdown("")
                         q_mode = gr.Radio([("Short vertical clips (TikTok, Reels, Shorts)", "shorts"),
                                            ("One highlights video (long-form, landscape)", "long")],
                                           value="shorts", label="What do you want?")
@@ -993,6 +995,8 @@ def build_ui():
                 q_brand_save.click(save_brand, [q_logo, q_handle, q_endcard, q_color, q_pos], q_brand_msg)
                 q_brand_clear.click(clear_brand, None, brand_form)
                 demo.load(brand_fields, None, brand_form)
+                from shortsflow import sample as _sample
+                q_sample.click(_sample.use_sample, None, [q_url, q_upload, q_sample_note])
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
                              q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm],

@@ -2,6 +2,11 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- Start here: "Try a 2-minute sample" button fills in a public-domain NASA clip (downloaded from GitHub only when used), so you can see the result before finding your own video.
+- Edit this short: the timeline strip now follows the Start/End buttons and typed values.
+
 ## 0.7.3 (2026-11-11)
 
 - STORY and TRUE_CRIME backgrounds follow the story's mood (work, family, love, school, money, neighbours, travel) instead of sometimes a random satisfying clip; no clear mood keeps the old behaviour.

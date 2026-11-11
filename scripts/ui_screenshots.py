@@ -105,6 +105,11 @@ try:
         page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
         page.wait_for_timeout(1500)
         page.screenshot(path=os.path.join(out_dir, "01_start_here.png"), full_page=True)
+        # the sample button fills the link box and shows the credit
+        page.get_by_role("button", name="No video handy? Try a 2-minute sample").click()
+        page.get_by_text("public domain").first.wait_for(timeout=15000)
+        assert "samples-v1/shortsflow_sample_nasa.mp4" in page.get_by_label("Video link (YouTube or other)").input_value()
+        page.get_by_label("Video link (YouTube or other)").fill("")
 
         # the new options: Extras on Start here, the Dub tab, and Extras on Clip (advanced)
         page.get_by_text("Extras (optional)").first.click()
