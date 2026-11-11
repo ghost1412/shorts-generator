@@ -125,3 +125,18 @@ def test_a_user_moment_is_never_trimmed_by_an_overlap():
     mine = next(c for c in out if c.get("user_moment"))
     assert (mine["start"], mine["end"]) == (10, 40)
     assert _no_overlaps(out)
+
+
+def test_long_mode_options_keep_long_moments_whole():
+    tr, sp = _five_second_sentences(30)
+    out = snap_highlights([{"start": sp[2][0] + 1.0, "end": sp[22][0] + 1.0}], tr, min_len=8.0, max_len=180.0)
+    assert out[0]["end"] - out[0]["start"] > 60                          # a highlights-reel moment is not cut to a short's minute
+    assert any(abs(out[0]["start"] - s) < 0.06 for s, _ in sp)
+
+
+def test_fit_to_target_never_leaves_a_piece_below_the_floor():
+    from engine.analysis import fit_to_target
+    hs = [{"start": 0, "end": 200, "viral_score": 90}, {"start": 300, "end": 340, "viral_score": 80}]
+    out = fit_to_target(hs, 220, min_len=25.0)
+    assert all(h["end"] - h["start"] >= 25.0 for h in out)
+    assert sum(h["end"] - h["start"] for h in out) <= 220 * 1.08 + 1e-6

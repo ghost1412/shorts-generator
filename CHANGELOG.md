@@ -4,6 +4,8 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Highlights video (`--extract_mode long`): moments now start and end on sentences (they were joined mid-sentence, and a moment trimmed to fit the length ended wherever the time ran out); the no-LLM fallback no longer overshoots the target by a whole segment; trimmed pieces are never shorter than the length floor (they used to be dropped afterwards, leaving the reel short).
+- `.github/workflows/clip_benchmark.yml`: run the clip benchmark on a long public-domain video on GitHub's runners (manual).
 - Animated captions on a close-up talking head (large face low in the frame) move to the lower third (y 1400) when the height is left at the default; checked per clip on the finished crop.
 - Overlapping clips: settled at sentence boundaries, never trim a moment you picked by time, and a clip that would be a few-second stub is dropped.
 - FACTS: a provider outage is no longer retried with new topics (only a disputed topic is).

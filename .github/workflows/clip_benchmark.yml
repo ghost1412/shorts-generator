@@ -1,0 +1,89 @@
+name: Clip Benchmark
+
+# Manually benchmarks clip quality on a long public-domain video, so heavy runs
+# happen on GitHub's runners instead of the owner's PC. No API keys needed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'Long public-domain video to clip (direct file URL)'
+        required: false
+        default: 'https://upload.wikimedia.org/wikipedia/commons/7/73/NASA_Astronaut_Don_Pettit_Talks_with_Neil_deGrasse_Tyson%E2%80%99s_%E2%80%9CStar_Talk%E2%80%9D_%E2%80%93_April_3%2C_2025_%28iss072m260931539%29.webm'
+      clip_count:
+        description: 'Number of clips to extract'
+        required: false
+        default: '5'
+
+concurrency:
+  group: clip-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: System packages (FFmpeg, Pango/Cairo)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libcairo2-dev libpango1.0-dev pkg-config libglib2.0-dev
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig" >> $GITHUB_ENV
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download video
+        env:
+          VIDEO_URL: ${{ github.event.inputs.video_url }}
+        run: |
+          curl -fL --retry 3 -A "ShortsFlow-benchmark/1.0" -o video.webm "$VIDEO_URL"
+          ls -lh video.webm
+
+      - name: Extract clips (no upload)
+        env:
+          SHORTSFLOW_WHISPER_MODEL: base
+          CLIP_COUNT: ${{ github.event.inputs.clip_count || '5' }}
+        run: |
+          python main.py --source_video video.webm --extract_mode shorts --clip_count "$CLIP_COUNT" \
+            --target_duration 30 --min_duration 18 --smart_crop --tighten --layout auto \
+            --skip-upload --session_dir bench --output_json bench/results.json
+
+      - name: Benchmark report
+        run: python scripts/clip_benchmark.py bench --picture --json bench/report.json
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Clip benchmark"
+            echo
+            if [ -f bench/report.json ]; then
+              echo '```json'
+              cat bench/report.json
+              echo '```'
+            else
+              echo "No report produced."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: clip-benchmark
+          path: |
+            bench/report.json
+            bench/results.json
+            bench/transcript.json
+          if-no-files-found: warn
+          retention-days: 14

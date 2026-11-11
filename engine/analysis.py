@@ -1336,7 +1336,9 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                 valid_highlights = valid_highlights[:clip_count]
             elif mode == "long" and target_duration:
                 # 🟢 EXPERT REFINEMENT: Soft Duration Capping for Highlight Reels
-                valid_highlights = fit_to_target(valid_highlights, target_duration)
+                # trimmed pieces must survive the length floor applied below, or the reel ends up short with nothing to replace them
+                long_floor = max(15.0, min_duration - 5.0)
+                valid_highlights = fit_to_target(valid_highlights, target_duration, min_len=long_floor)
 
                 # 🟢 FILL-UP: Backfill from pruned segments if LLM under-delivered
                 current_total = sum(h['end'] - h['start'] for h in valid_highlights)
@@ -1350,7 +1352,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                         candidates.append({'start': seg['start'], 'end': seg['end'],
                             'viral_score': int(seg['pruning_score'] * 100),
                             'final_score': int(seg['pruning_score'] * 100), 'reason': 'Signal Peak (Backfill)'})
-                    valid_highlights += fit_to_target(candidates, target_duration, already=current_total)
+                    valid_highlights += fit_to_target(candidates, target_duration, already=current_total, min_len=long_floor)
                     current_total = sum(h['end'] - h['start'] for h in valid_highlights)
                     print(f"[Log] After backfill: {current_total:.0f}s, {len(valid_highlights)} segments")
             
@@ -1376,19 +1378,12 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0), reverse=True)
             
             if mode == "long" and target_duration:
-                accumulated_duration = 0
-                for f in fallback_candidates:
-                    seg_dur = f['end'] - f['start']
-                    if accumulated_duration >= target_duration:
-                        break
-                    valid_highlights.append({
-                        "start": f['start'],
-                        "end": f['end'],
-                        "viral_score": int(f['norm_score'] * 100),
-                        "final_score": int(f['norm_score'] * 100),
-                        "reason": "High-Signal Moment (Heuristic Fallback)"
-                    })
-                    accumulated_duration += seg_dur
+                # the same length rule as the LLM path (it used to add whole segments until the target was passed, up to a
+                # whole extra segment over); fit_to_target trims the last one and the snapping later ends it on a sentence
+                heuristic = [{"start": f['start'], "end": f['end'], "viral_score": int(f['norm_score'] * 100),
+                              "final_score": int(f['norm_score'] * 100), "reason": "High-Signal Moment (Heuristic Fallback)"}
+                             for f in fallback_candidates]
+                valid_highlights.extend(fit_to_target(heuristic, target_duration, min_len=max(15.0, min_duration - 5.0)))
             else:
                 for f in fallback_candidates[:clip_count]:
                     valid_highlights.append({
@@ -1730,12 +1725,15 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
         except Exception as e:
             print(f"[Warning] Failed to cache highlights: {e}")
 
-    if snap and mode == "shorts":
-        # Edges to sentence boundaries (also for --find and cached highlights: snapping an already snapped clip changes nothing)
+    if snap and mode in ("shorts", "long"):
+        # Edges to sentence boundaries (also for --find and cached highlights: snapping an already snapped clip changes nothing).
+        # The highlights reel gets it too: its moments were joined mid-sentence, and a moment trimmed to fit the target length
+        # ended wherever the time ran out. Its moments may be longer than a short.
         try:
             from engine.highlight_quality import snap_highlights
+            snap_opts = {"min_len": max(8.0, min_duration - 5.0)} if mode == "shorts" else {"min_len": 8.0, "max_len": 180.0}
             with open(transcript_path, 'r', encoding='utf-8') as f:
-                highlights = snap_highlights(highlights, json.load(f), min_len=max(8.0, min_duration - 5.0))
+                highlights = snap_highlights(highlights, json.load(f), **snap_opts)
             moved = sum(1 for h in highlights if h.get('snapped') and (h['start'] != h.get('orig_start') or h['end'] != h.get('orig_end')))
             print(f"[Log] Boundary snapping: {moved} of {len(highlights)} clip(s) moved to sentence boundaries.")
         except Exception as e:
