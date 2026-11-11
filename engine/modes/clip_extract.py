@@ -526,9 +526,23 @@ def run(args, target_bitrate, target_preset):
     print("[Log] Generating viral metadata for extracted clips...")
     highlights_meta = []
     
-    if args.extract_mode == "long" or getattr(args, "mashup", False):
+    if args.extract_mode == "long" and not getattr(args, "mashup", False):
+        # the reel's title and description come from what its moments actually say (grounded: no names the video never
+        # mentions; a clean sentence when no AI answers). The old call sent only the pick reasons with category "gaming",
+        # and a talk got a made-up game title copied from the prompt's example.
+        from engine.social_gen import clip_transcript_text, generate_clip_metadata
+        try:
+            with open(transcript_path, 'r', encoding='utf-8') as f:
+                reel_segments = json.load(f).get('segments', [])
+        except (OSError, ValueError):
+            reel_segments = []
+        said = " ".join(clip_transcript_text(reel_segments, h['start'], h['end'], limit=600) for h in highlights[:6])[:2500]
+        meta = generate_clip_metadata(said, hook=(highlights[0].get('hook_text') if highlights else None),
+                                      user_context=args.user_context)
+    elif args.extract_mode == "long" or getattr(args, "mashup", False):
         summary_context = " ".join([h.get('context', h.get('reason', '')) for h in highlights[:5]])
         meta = generate_viral_metadata(summary_context, mode="STORY", category="gaming")
+    if args.extract_mode == "long" or getattr(args, "mashup", False):
         filename = "mashup_reel.mp4" if getattr(args, "mashup", False) else "highlight_reel.mp4"
         reel_item = {
             "file": filename,
