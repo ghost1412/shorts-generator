@@ -129,11 +129,49 @@ def clip_transcript_text(segments, start, end, limit=1500):
     return " ".join(p for p in parts if p)[:limit]
 
 
+_FILLER_SOUNDS = re.compile(r"(?i)(?<![\w'])(?:uh+|um+|erm+|er|ah+|hmm+|mm+)(?![\w'])[,.]?\s*")
+_REPEATED_WORD = re.compile(r"(?i)\b(\w+)(?:[,.]?\s+\1\b)+")
+_LEADING_LINK = re.compile(r"(?i)^(?:and|so|but|well|yeah|okay|ok|now|then|because|like)\b[,]?\s+")
+
+
+def clean_spoken(text):
+    """Spoken transcript text made readable: filler sounds out ("uh", "um"), stutters collapsed ("a, a" -> "a")."""
+    t = _FILLER_SOUNDS.sub("", str(text or ""))
+    t = _REPEATED_WORD.sub(r"\1", t)
+    t = re.sub(r"\s+([,.!?])", r"\1", t)
+    t = re.sub(r"([,.!?])(?:\s*[,.])+", r"\1", t)
+    return re.sub(r"\s{2,}", " ", t).strip(" ,")
+
+
+def fallback_title(hook, text, limit=70):
+    """A title without an AI: the first clean, complete sentence of a sensible length from the hook or the clip's own words
+    (fillers and stutters removed, a leading "And/So/But" dropped, never cut mid-word)."""
+    def sentences(source):
+        out = []
+        for sentence in re.split(r"(?<=[.!?])\s+", clean_spoken(source)):
+            sentence = _LEADING_LINK.sub("", sentence.strip()).strip(" ,")
+            if sentence:
+                out.append(sentence)
+        return out
+    hook_s, text_s = sentences(hook), sentences(text)
+    pool = hook_s + text_s
+    if not pool:
+        return "Must-watch moment"
+    # the hook was chosen on purpose: a short one still wins; from the clip's own words, prefer a full-length sentence
+    good = [x for x in hook_s[:2] if 2 <= len(x.split()) <= 14] + [x for x in text_s[:8] if 4 <= len(x.split()) <= 14]
+    title = (good or pool)[0]
+    if len(title) > limit:
+        title = title[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-") + "..."
+    return title[0].upper() + title[1:]
+
+
 def _fallback_clip_metadata(text, hook):
-    first = (hook or text.split(".")[0] or "Must-watch moment").strip()
+    said = clean_spoken(text)
+    if len(said) > 200:
+        said = said[:200].rsplit(" ", 1)[0].rstrip(" ,;:-") + "..."
     return {
-        "title": first[:80],
-        "description": f"{text[:200].strip()}\n\nFollow for more. #shorts",
+        "title": fallback_title(hook, text),
+        "description": f"{said}\n\nFollow for more. #shorts",
         "tags": ["shorts", "clips", "viral"],
         "title_variants": [],
     }

@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Without an AI key: clip titles and descriptions are clean sentences from the clip (no "uh", no stutters like "it, it", no leading "And", never cut mid-word) instead of the raw first 80 characters of the transcript.
 - Highlights video (`--extract_mode long`): moments only seconds apart are joined into one (no stutter crossfade); moments now start and end on sentences (they were joined mid-sentence, and a moment trimmed to fit the length ended wherever the time ran out); the no-LLM fallback no longer overshoots the target by a whole segment; trimmed pieces are never shorter than the length floor (they used to be dropped afterwards, leaving the reel short).
 - `.github/workflows/clip_benchmark.yml`: run the clip benchmark on a long public-domain video on GitHub's runners (manual).
 - Animated captions on a close-up talking head (large face low in the frame) move to the lower third (y 1400) when the height is left at the default; checked per clip on the finished crop.
