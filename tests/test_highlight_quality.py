@@ -98,3 +98,30 @@ def test_overlapping_clips_are_split_at_a_sentence_not_mid_sentence():
     assert out[0]["end"] <= out[1]["start"]
     assert any(0 <= out[0]["end"] - e <= 0.45 for e in ends)          # the earlier clip ends after a whole sentence
     assert any(abs(out[1]["start"] - s) < 0.06 for s in starts)        # the later one starts on a sentence
+
+
+def _five_second_sentences(n=20):
+    return _t(*[f"sentence number {i} has exactly these words in it okay done now and here ends." for i in range(n)], gap=0.4)
+
+
+def _no_overlaps(clips):
+    cs = sorted(clips, key=lambda c: c["start"])
+    return all(a["end"] <= b["start"] for a, b in zip(cs, cs[1:]))
+
+
+def test_three_overlapping_clips_end_with_no_overlap_and_no_stubs():
+    tr, _ = _five_second_sentences()
+    for raw in ([{"start": 0, "end": 30}, {"start": 5, "end": 60}, {"start": 20, "end": 45}],
+                [{"start": 10, "end": 40}, {"start": 10, "end": 30}],
+                [{"start": 0, "end": 30}, {"start": 20, "end": 60}, {"start": 25, "end": 40}]):
+        out = snap_highlights(raw, tr, min_len=8.0)
+        assert out and _no_overlaps(out), (raw, out)
+        assert all(c["end"] - c["start"] >= 8.0 for c in out), (raw, out)
+
+
+def test_a_user_moment_is_never_trimmed_by_an_overlap():
+    tr, _ = _five_second_sentences()
+    out = snap_highlights([{"start": 10, "end": 40, "user_moment": True}, {"start": 30, "end": 60}], tr, min_len=8.0)
+    mine = next(c for c in out if c.get("user_moment"))
+    assert (mine["start"], mine["end"]) == (10, 40)
+    assert _no_overlaps(out)

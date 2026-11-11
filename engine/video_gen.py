@@ -2731,9 +2731,14 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     if layout == "fit" and mode == "shorts":
         subtitle_y_pos = fit_caption_y(subtitle_y_pos)       # captions below the centred picture
 
+    # clips cut with the plain one-person crop (smart or centre): their animated captions may move off a close-up face
+    single_crop_clips = set()
+
     for i, hi in enumerate(highlights):
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
         if use_cache and os.path.exists(target) and os.path.getsize(target) > 1000:
+            if mode == "shorts" and layout == "single" and not filler_path:
+                single_crop_clips.add(i)
             print(f"[Log] Segment {i} already exists at {target}. Skipping extraction.")
             continue
             
@@ -2772,7 +2777,9 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             elif interest_points:
                 crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)
                 vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
+                single_crop_clips.add(i)
             else:
+                single_crop_clips.add(i)
                 base_filter = f"{letterbox_crop}," if letterbox_crop else ""
                 crop_filter = f"{base_filter}{CENTER_CROP_9X16}"
                 vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
@@ -2988,6 +2995,17 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                             print(f"[Log] Tightened Short {i+1}: {hi['end'] - hi['start']:.1f}s -> {r_dur:.1f}s")
                     except Exception as e:
                         print(f"[Warning] Could not tighten Short {i+1} ({e}); rendering it untightened.")
+                clip_caption_y = subtitle_y_pos
+                if i in single_crop_clips and subtitle_y_pos == 1150:
+                    try:   # close-up talking head: the default caption height would sit on the mouth, use the lower third
+                        from engine.caption_layout import face_safe_y
+                        from engine.clip_picture import face_track
+                        clip_caption_y = face_safe_y(subtitle_y_pos, face_track(task_path, samples=12))
+                        if clip_caption_y != subtitle_y_pos:
+                            print(f"[Log] Short {i+1}: close-up face, captions moved to the lower third (y={clip_caption_y}).")
+                    except Exception as e:
+                        clip_caption_y = subtitle_y_pos
+                        print(f"[Warning] Face check for Short {i+1} captions skipped: {e}")
                 try:
                     from engine.remotion_renderer import render_with_remotion
                     render_with_remotion(
@@ -3000,7 +3018,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                         duration=r_dur,
                         start_offset=r_offset,
                         caption_style=caption_style,
-                        subtitle_y_pos=subtitle_y_pos,
+                        subtitle_y_pos=clip_caption_y,
                         hook_text=hi.get('hook_text') if os.getenv("SHORTSFLOW_HOOK_OVERLAY") == "1" else None,
                         # split_filler bakes clip + filler into one picture, so zooming it would move the seam: skip there
                         auto_zoom=os.getenv("SHORTSFLOW_AUTO_ZOOM") == "1" and layout != "split_filler"

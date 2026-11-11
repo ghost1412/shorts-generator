@@ -132,6 +132,8 @@ used as fan content; Grand Theft Auto VI footage © Rockstar Games.
 
 ## 🎛️ Review, restyle and brand your shorts
 
+No video handy? On the **Start here** tab, **Try a 2-minute sample** fills in a short public-domain NASA clip (credit: NASA, public domain). It is downloaded from GitHub (about 10 MB) only when you use it.
+
 After **Make my shorts**, the browser app (`shortsflow webui`) shows every short as a card instead of a bare file list:
 
 <div align="center">
@@ -139,7 +141,7 @@ After **Make my shorts**, the browser app (`shortsflow webui`) shows every short
 </div>
 
 - **Review:** a preview player, a *strong / good / okay / weak* label with the reason, and a title, description and hashtags ready to copy. Remove what you do not want, then **Download all as .zip**. Earlier runs can be reopened.
-- **Edit one short:** pick another caption style or change its start and end, and only that short is re-rendered (about a minute). **Undo** puts the previous version back.
+- **Edit one short:** pick another caption style or change its start and end, and only that short is re-rendered (about a minute). A timeline strip shows where the short sits in the source video (your other shorts in grey, cut words in red), and **Start/End -1 s / +1 s** buttons nudge the edges. **Undo** puts the previous version back.
 - **Caption styles** come with a preview, and your **brand** (logo, @handle, end card, accent colour) is saved once and added to every short.
 
 <div align="center">
@@ -186,7 +188,7 @@ git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
 cd shorts-generator
 ```
 
-> 🐧 **Linux / macOS**: `chmod +x setup.sh && ./setup.sh && python3 webui.py`
+> 🐧 **Linux / macOS**: the easy route is the one-line installer, no clone needed: `curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh | sh` (installs into `~/.shortsflow`; needs Python 3.10+ and FFmpeg). From a clone: `chmod +x setup.sh && ./setup.sh && python3 webui.py`
 
 ---
 
@@ -463,6 +465,8 @@ AUTO_DUCKING=true
 ## 🤖 AI Agent Onboarding
 
 If you are an AI Coding Agent (Cursor, Antigravity, Claude Code, Copilot, AutoGPT) onboarding into this codebase, see **[AGENTS.md](AGENTS.md)** for structured architectural context, module maps, CLI skills, and execution rules, and **[ROADMAP.md](ROADMAP.md)** for the open task board.
+
+To measure clip quality before and after a change, run `python scripts/clip_benchmark.py <session_dir> [--picture]` on a finished run: it reports whether clips start and end on a sentence, overlap, spread across the video and have titles that name nothing the clip does not say; `--picture` also checks the clip videos (face found, face centred, crop jitter, silence). No LLM or network needed.
 
 ---
 

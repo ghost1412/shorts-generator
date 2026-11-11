@@ -533,6 +533,10 @@ def get_llm_response(
     from engine.friendly_errors import NO_LLM_HELP
     raise RuntimeError(f"All configured LLM providers failed. Check API keys or local Ollama service status. {NO_LLM_HELP}")
 
+class ValidationFailed(RuntimeError):
+    """Every attempt produced output, but none passed the validator (as opposed to the LLM providers failing)."""
+
+
 def with_best_of_n(func, validator, n=3):
     """Retries a generation function up to n times until the validator passes."""
     last_err = None
@@ -547,7 +551,7 @@ def with_best_of_n(func, validator, n=3):
             last_err = e
     
     if last_err: raise last_err
-    raise RuntimeError("Failed to generate valid output after n attempts")
+    raise ValidationFailed("Failed to generate valid output after n attempts")
 
 # --- Specific Validators ---
 
@@ -756,7 +760,7 @@ def generate_mixed_facts(category="science", topic_tries=3):
     for _ in range(max(1, topic_tries)):
         try:
             return _mixed_facts_for(get_sub_topic(category))
-        except RuntimeError as e:
+        except ValidationFailed as e:          # the fact checker kept disputing it; a provider outage is not retried here
             last_err = e
             print(f"[Log] FACTS: giving up on this sub-topic ({e}); trying another")
     raise last_err

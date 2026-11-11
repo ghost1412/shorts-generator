@@ -4,6 +4,10 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Animated captions on a close-up talking head (large face low in the frame) move to the lower third (y 1400) when the height is left at the default; checked per clip on the finished crop.
+- Overlapping clips: settled at sentence boundaries, never trim a moment you picked by time, and a clip that would be a few-second stub is dropped.
+- FACTS: a provider outage is no longer retried with new topics (only a disputed topic is).
+- README: sample button, Mac/Linux one-liner, timeline strip, clip benchmark.
 - Clip edges: a start inside a long sentence goes back to the sentence start (up to 20 s when the clip stays a short), and overlapping clips are split at a sentence instead of mid-sentence. On the sample video: clips that start and end on a sentence went from 2/3 and 1/3 to 3/3.
 
 ## 0.7.4 (2026-11-11)

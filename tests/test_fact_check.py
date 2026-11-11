@@ -82,3 +82,17 @@ def test_a_disputed_sub_topic_is_swapped_for_a_new_one(monkeypatch):
     out = sg.generate_mixed_facts("science")
     assert sum(1 for f in out["facts"] if not f["truth"]) == 1
     assert any("myth topic" in p for p in seen) and any("solid topic" in p for p in seen)
+
+
+def test_a_provider_outage_is_not_retried_with_new_topics(monkeypatch):
+    import engine.script_gen as sg
+    calls = []
+    monkeypatch.setattr(sg, "get_sub_topic", lambda c: calls.append(c) or "any topic")
+
+    def down(*a, **k):
+        raise RuntimeError("All configured LLM providers failed.")
+
+    monkeypatch.setattr(sg, "get_llm_response", down)
+    with pytest.raises(RuntimeError):
+        sg.generate_mixed_facts("science")
+    assert len(calls) == 1

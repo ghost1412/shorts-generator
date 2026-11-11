@@ -165,21 +165,40 @@ def snap_highlights(highlights, transcript, **opts):
     if not spans:
         return highlights
     o = {**DEFAULTS, **opts}
-    snapped = [snap_clip(h, spans, **opts) for h in highlights]
-    order = sorted(range(len(snapped)), key=lambda i: float(snapped[i]["start"]))
-    for a, b in zip(order, order[1:]):
-        a_start, a_end = float(snapped[a]["start"]), float(snapped[a]["end"])
-        b_start, b_end = float(snapped[b]["start"]), float(snapped[b]["end"])
-        if a_end <= b_start:
-            continue
-        # resolve the overlap at a sentence boundary: end the earlier clip after its last whole sentence, else start the
-        # later one at its next sentence; only when neither leaves a usable clip, cut the earlier one where the later starts
+    clips = [snap_clip(h, spans, **opts) for h in highlights]
+    return _resolve_overlaps(clips, spans, o)
+
+
+def _resolve_overlaps(clips, spans, o):
+    """No two clips overlap afterwards. Each overlap is settled at a sentence boundary when possible (the earlier clip ends
+    after its last whole sentence, or the later one starts at its next sentence); a moment the user chose by time is never
+    trimmed; a clip that would end up shorter than min_len is dropped instead of kept as a stub."""
+    clips = [dict(c) for c in clips]
+    for _ in range(4 * len(clips) + 4):
+        clips.sort(key=lambda c: float(c["start"]))
+        pair = next(((i, i + 1) for i in range(len(clips) - 1) if float(clips[i]["end"]) > float(clips[i + 1]["start"])), None)
+        if pair is None:
+            break
+        A, B = clips[pair[0]], clips[pair[1]]
+        a_start, a_end, b_start, b_end = float(A["start"]), float(A["end"]), float(B["start"]), float(B["end"])
+        a_fixed, b_fixed = bool(A.get("user_moment")), bool(B.get("user_moment"))
+        if a_fixed and b_fixed:
+            break                                      # both chosen by the user: their choice wins
         done = [e for _, e, _ in spans if a_start + o["min_len"] <= e <= b_start - 0.05]
-        nxt = [s for s, _, _ in spans if a_end <= s <= b_end - o["min_len"]]
-        if done:
-            snapped[a] = dict(snapped[a], end=round(min(done[-1] + o["tail"], b_start - 0.01), 2))
-        elif nxt and not snapped[b].get("user_moment"):
-            snapped[b] = dict(snapped[b], start=round(nxt[0], 2))
+        nxt = [st for st, _, _ in spans if a_end <= st <= b_end - o["min_len"]]
+        if not a_fixed and done:
+            A["end"] = round(min(done[-1] + o["tail"], b_start - 0.01), 2)
+        elif not b_fixed and nxt:
+            B["start"] = round(nxt[0], 2)
+        elif not a_fixed:
+            if b_start - a_start >= o["min_len"]:
+                A["end"] = round(b_start - 0.01, 2)
+            else:
+                clips.pop(pair[0])                    # what is left would be a stub: drop it
         else:
-            snapped[a] = dict(snapped[a], end=round(max(b_start - 0.01, a_start + 1.0), 2))
-    return snapped
+            if b_end - a_end >= o["min_len"]:
+                B["start"] = round(a_end + 0.01, 2)
+            else:
+                clips.pop(pair[1])
+    clips.sort(key=lambda c: float(c["start"]))
+    return clips
