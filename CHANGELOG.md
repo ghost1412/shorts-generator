@@ -2,7 +2,7 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
-## Unreleased
+## 0.7.5 (2026-11-11)
 
 - Without an AI key: shorts are cut to the asked length (they were whole 1.5x context windows, e.g. 45 s for 30 s), and titles and descriptions are clean sentences from the clip (no "uh", no stutters like "it, it", no leading "And", never cut mid-word) instead of the raw first 80 characters of the transcript.
 - Highlights video: its title and description are written from what the moments say, with the same grounding check as shorts (it used to send only the pick reasons as "gaming", and a NASA talk got the prompt's example title "Ghost of Tsushima Insane Katana Duel!").
