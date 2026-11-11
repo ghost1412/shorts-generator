@@ -3,7 +3,8 @@
     python scripts/clip_benchmark.py sessions/run_a sessions/run_b [--gold gold.json] [--json out.json]
 
 Each folder needs transcript.json and results.json (what a normal run writes). With --gold (a file {"<video file name>": [[start, end], ...]})
-the report also shows recall and precision against moments you chose by hand. Compare two reports from before and after a change.
+the report also shows recall and precision against moments you chose by hand. --picture also checks the clip videos (face in frame,
+face centred, crop jitter, silent share; engine/clip_picture.py). Compare two reports from before and after a change.
 """
 import argparse
 import json
@@ -16,7 +17,8 @@ from engine import clip_quality  # noqa: E402
 
 COLUMNS = [("clips", "clips"), ("median_length_s", "len s"), ("length_in_range", "len ok"), ("starts_at_sentence", "start ok"),
            ("ends_at_sentence", "end ok"), ("overlap_s", "overlap"), ("spread", "spread"), ("median_words_per_s", "words/s"),
-           ("titles_grounded", "titles ok"), ("recall", "recall"), ("precision", "prec")]
+           ("titles_grounded", "titles ok"), ("recall", "recall"), ("precision", "prec"),
+           ("face_found", "face"), ("centered", "centred"), ("jitter", "jitter"), ("silence", "silence")]
 
 
 def fmt(v):
@@ -36,9 +38,10 @@ def main(argv=None):
     ap.add_argument("sessions", nargs="+")
     ap.add_argument("--gold", help="json file {video file name: [[start, end], ...]} of moments a person picked")
     ap.add_argument("--json", help="also write the report here")
+    ap.add_argument("--picture", action="store_true", help="also open the clip videos: face found, face centred, crop jitter, silence")
     a = ap.parse_args(argv)
     gold = json.load(open(a.gold, encoding="utf-8")) if a.gold else None
-    rows = [r for r in (clip_quality.report(s, gold) for s in a.sessions) if r]
+    rows = [r for r in (clip_quality.report(s, gold, picture=a.picture) for s in a.sessions) if r]
     skipped = len(a.sessions) - len(rows)
     if not rows:
         print("No readable runs (each folder needs transcript.json and results.json).")

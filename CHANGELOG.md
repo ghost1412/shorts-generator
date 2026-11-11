@@ -5,6 +5,8 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 - Start here: "Try a 2-minute sample" button fills in a public-domain NASA clip (downloaded from GitHub only when used), so you can see the result before finding your own video.
+- Plain (non-animated) clip captions sit in the lower third (top edge 1400 of 1920) instead of the exact middle, where they covered a close-up speaker's eyes; an explicit caption height still wins.
+- `scripts/clip_benchmark.py --picture`: also checks the clip videos (face found, face centred, crop jitter, silent share; `engine/clip_picture.py`).
 - Edit this short: the timeline strip now follows the Start/End buttons and typed values.
 
 ## 0.7.3 (2026-11-11)

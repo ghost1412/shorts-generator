@@ -93,6 +93,22 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
 FIT_CAPTION_Y = 1320       # Remotion caption top edge for --layout fit: just below a centred 16:9 picture
 
 
+PLAIN_CAPTION_Y = 1400
+
+
+def plain_caption_y(requested):
+    """Top edge of the plain (non-Remotion) clip captions. They used to sit in the exact middle (960), on a close-up speaker's
+    eyes; the default height now puts them in the lower third (1400, still above the app's bottom bar). An explicit
+    --subtitle_y_pos / caption position is used as given."""
+    try:
+        y = int(requested)
+    except (TypeError, ValueError):
+        return PLAIN_CAPTION_Y
+    if y == 1150:
+        return PLAIN_CAPTION_Y
+    return max(200, min(1700, y))
+
+
 def fit_caption_y(requested):
     """Caption position for --layout fit. The default (1150) would sit on the centred picture, so it moves below it; an explicit
     --subtitle_y_pos stays as the user set it."""
@@ -3050,10 +3066,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             # Caption selection based on style
             if "stylish" in styles:
                 print(f"[Log] Applying STYLISH Captions (Word-level highlights + Pop)")
-                subs = apply_stylish_captions(cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=960)
+                subs = apply_stylish_captions(cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=plain_caption_y(subtitle_y_pos))
             else:
                 # Simple word overlays (Default)
-                subs = apply_influencer_subtitles(sub, cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=960)
+                subs = apply_influencer_subtitles(sub, cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=plain_caption_y(subtitle_y_pos))
             
             overlays = subs
             

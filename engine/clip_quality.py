@@ -147,8 +147,23 @@ def video_key(results, session_dir):
     return os.path.basename(src.rstrip("/\\")) or os.path.basename(os.path.normpath(session_dir))
 
 
-def report(session_dir, gold=None):
-    """{"session", "video", metrics..., optional recall/precision} for one session folder, None when it has no readable run."""
+def clip_videos(results, session_dir):
+    """Existing clip video files of a run (results.json stores them relative to wherever the run started)."""
+    found = []
+    for c in (results or {}).get("clips", []):
+        p = str(c.get("video_path") or "")
+        if not p:
+            continue
+        for cand in (p, os.path.join(session_dir, p), os.path.join(session_dir, os.path.basename(p.replace("\\", "/")))):
+            if os.path.isfile(cand):
+                found.append(cand)
+                break
+    return found
+
+
+def report(session_dir, gold=None, picture=False):
+    """{"session", "video", metrics..., optional recall/precision} for one session folder, None when it has no readable run.
+    picture=True also opens the clip videos (engine.clip_picture: faces, crop jitter, silence)."""
     segs, res = load_run(session_dir)
     if segs is None:
         return None
@@ -156,4 +171,7 @@ def report(session_dir, gold=None):
     out.update(measure(segs, res))
     if gold:
         out.update(gold_scores(res.get("clips", []), gold.get(out["video"])))
+    if picture:
+        from engine import clip_picture
+        out.update(clip_picture.measure_videos(clip_videos(res, session_dir)))
     return out
