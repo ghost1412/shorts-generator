@@ -79,3 +79,17 @@ def test_a_long_pause_counts_as_a_sentence_edge_like_in_the_snapper():
              {"word": " it", "start": 3.0, "end": 3.2}, {"word": " worked.", "start": 3.3, "end": 3.9}]
     starts, ends = q.sentence_edges([{"start": 0.0, "end": 3.9, "text": " so we tried it it worked.", "words": words}])
     assert starts == [0.0, 3.0] and ends == [1.5, 3.9]
+
+
+def test_clip_videos_prefers_the_session_folder_over_the_current_folder(tmp_path, monkeypatch):
+    run_a, run_b = tmp_path / "run_a", tmp_path / "run_b"
+    for d in (run_a, run_b):
+        d.mkdir()
+        (d / "video_clip_1.mp4").write_bytes(b"x")
+    monkeypatch.chdir(run_a)
+    res = {"clips": [{"video_path": "video_clip_1.mp4"}, {"video_path": "sub\\video_clip_1.mp4"}]}
+    found = q.clip_videos(res, str(run_b))
+    assert [os.path.normcase(os.path.abspath(f)) for f in found] == [os.path.normcase(str(run_b / "video_clip_1.mp4"))] * 2
+    # An absolute path is used as given; a missing session file falls back to the bare relative path.
+    assert q.clip_videos({"clips": [{"video_path": str(run_a / "video_clip_1.mp4")}]}, str(run_b)) == [str(run_a / "video_clip_1.mp4")]
+    assert q.clip_videos({"clips": [{"video_path": "video_clip_1.mp4"}]}, str(tmp_path / "missing")) == ["video_clip_1.mp4"]

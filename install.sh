@@ -32,11 +32,23 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 
 # 3. Own environment, so nothing else on the computer is touched
+# A failed install removes the folder again, but only when this run created it.
+CREATED=0
+[ -e "$HOME_DIR" ] || CREATED=1
+undo() {
+    printf 'ERROR: %s\n' "$*" >&2
+    if [ "$CREATED" = 1 ]; then
+        rm -rf "$HOME_DIR"
+        printf 'Removed the half-made %s.\n' "$HOME_DIR" >&2
+    fi
+    printf 'Fix the problem above, then run the installer again to retry.\n' >&2
+    exit 1
+}
 say "Creating $HOME_DIR ..."
-"$PY" -m venv "$HOME_DIR" || fail "Could not create a Python environment (on Ubuntu/Debian: sudo apt install python3-venv)"
-"$HOME_DIR/bin/python" -m pip install --quiet --upgrade pip
+"$PY" -m venv "$HOME_DIR" || undo "Could not create a Python environment (on Ubuntu/Debian: sudo apt install python3-venv)"
+"$HOME_DIR/bin/python" -m pip install --quiet --upgrade pip || undo "Could not update pip in $HOME_DIR"
 say "Installing ShortsFlow (this downloads a few hundred MB; the speech model comes on first use) ..."
-"$HOME_DIR/bin/python" -m pip install --upgrade "shortsflow[$EXTRA]"
+"$HOME_DIR/bin/python" -m pip install --upgrade "shortsflow[$EXTRA]" || undo "Could not install ShortsFlow (check the internet connection and the messages above)"
 
 # 4. A command on the PATH
 mkdir -p "$BIN_DIR"

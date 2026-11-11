@@ -168,7 +168,7 @@ def parse_args():
     parser.add_argument("--caption_color", type=str, default=None, help="Accent colour of the active caption word as hex, e.g. '#FF3366' (any caption style; needs --use_remotion).")
     parser.add_argument("--caption_position", choices=["default", "top", "middle", "bottom", "off"], default="default", help="Where the animated captions sit (needs --use_remotion): top, middle or bottom of the screen; off draws none (the game or video already has its own subtitles). default keeps the normal height (and below the picture with --layout fit). An explicit --subtitle_y_pos wins.")
     parser.add_argument("--caption_size", choices=["small", "default", "large", "xlarge"], default="default", help="Size of the animated captions (needs --use_remotion): small 0.8x, large 1.3x, xlarge 1.6x. The top edge stays where it is.")
-    parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for animated (Remotion) captions on clips (default: 1150; moved up automatically for --layout split_filler).")
+    parser.add_argument("--subtitle_y_pos", type=int, default=1150, help="Vertical pixel position for animated (Remotion) captions on clips (default: 1150; moved up automatically for --layout split_filler). With the default 1150 the plain captions use the lower third (1400) and animated captions move to 1400 on close-up faces; to force 1150 exactly, pass 1151 or use --caption_position.")
     parser.add_argument("--max_workers", type=int, default=None, help="Force number of parallel rendering worker threads (e.g. 2 or 4 for Remotion/FFmpeg).")
     
     # Provider & Media Overrides

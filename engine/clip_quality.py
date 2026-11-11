@@ -154,7 +154,12 @@ def clip_videos(results, session_dir):
         p = str(c.get("video_path") or "")
         if not p:
             continue
-        for cand in (p, os.path.join(session_dir, p), os.path.join(session_dir, os.path.basename(p.replace("\\", "/")))):
+        # The session folder first, so a run started elsewhere never picks up a same-named clip of another run.
+        if os.path.isabs(p):
+            cands = (p,)
+        else:
+            cands = (os.path.join(session_dir, p), os.path.join(session_dir, os.path.basename(p.replace("\\", "/"))), p)
+        for cand in cands:
             if os.path.isfile(cand):
                 found.append(cand)
                 break
