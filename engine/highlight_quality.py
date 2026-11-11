@@ -18,7 +18,8 @@ FILLER_WORDS = {"so", "um", "uh", "er", "erm", "hmm", "well", "okay", "ok", "lik
 PAUSE_SPLIT = 0.9          # a silence this long between two words also separates sentences (Whisper often omits punctuation)
 
 DEFAULTS = {
-    "max_shift": 6.0,      # never move an edge by more than this many seconds
+    "max_shift": 6.0,      # move an edge by at most this many seconds when a boundary is that close
+    "long_shift": 20.0,    # inside a long sentence with no boundary that close: up to this far, if the clip stays a short
     "tail": 0.4,           # seconds kept after the last word of the clip
     "min_len": 8.0,        # a snapped clip shorter than this is dropped back to the original
     "max_len": 59.9,       # shorts stay under a minute
@@ -99,6 +100,12 @@ def snap_clip(clip, spans, **opts):
         cands = [c for c in (before, after) if c is not None and abs(c - start) <= o["max_shift"] and c < end - o["min_len"]]
         if cands:
             new_start = min(cands, key=lambda c: abs(c - start))
+        else:
+            # a long sentence with no boundary close by: rather start at its beginning than mid-sentence
+            far = [c for c in (before, after) if c is not None and abs(c - start) <= o["long_shift"] and c < end - o["min_len"]
+                   and end - c <= o["max_len"]]
+            if far:
+                new_start = min(far, key=lambda c: abs(c - start))
     elif inside is None:
         # the start sits in a pause: begin with the sentence that follows it
         following = [c for c in starts if c > start]
@@ -121,6 +128,11 @@ def snap_clip(clip, spans, **opts):
         if cands:
             # finish the thought (the payoff usually lands at the end of the sentence the clip stops in)
             new_end = forward if forward in cands else min(cands, key=lambda c: abs(c - end))
+        else:
+            far = [c for c in (forward, back) if c is not None and abs(c - end) <= o["long_shift"] and c > new_start + o["min_len"]
+                   and c - new_start <= o["max_len"]]
+            if far:
+                new_end = forward if forward in far else back
     elif inside_e is None:
         # the end sits in a pause: snap back to the sentence that just finished
         prev = [e for e in ends if e <= end + 0.05]
@@ -152,9 +164,22 @@ def snap_highlights(highlights, transcript, **opts):
     spans = sentence_spans(transcript)
     if not spans:
         return highlights
+    o = {**DEFAULTS, **opts}
     snapped = [snap_clip(h, spans, **opts) for h in highlights]
     order = sorted(range(len(snapped)), key=lambda i: float(snapped[i]["start"]))
     for a, b in zip(order, order[1:]):
-        if float(snapped[a]["end"]) > float(snapped[b]["start"]):
-            snapped[a] = dict(snapped[a], end=round(max(float(snapped[b]["start"]) - 0.01, float(snapped[a]["start"]) + 1.0), 2))
+        a_start, a_end = float(snapped[a]["start"]), float(snapped[a]["end"])
+        b_start, b_end = float(snapped[b]["start"]), float(snapped[b]["end"])
+        if a_end <= b_start:
+            continue
+        # resolve the overlap at a sentence boundary: end the earlier clip after its last whole sentence, else start the
+        # later one at its next sentence; only when neither leaves a usable clip, cut the earlier one where the later starts
+        done = [e for _, e, _ in spans if a_start + o["min_len"] <= e <= b_start - 0.05]
+        nxt = [s for s, _, _ in spans if a_end <= s <= b_end - o["min_len"]]
+        if done:
+            snapped[a] = dict(snapped[a], end=round(min(done[-1] + o["tail"], b_start - 0.01), 2))
+        elif nxt and not snapped[b].get("user_moment"):
+            snapped[b] = dict(snapped[b], start=round(nxt[0], 2))
+        else:
+            snapped[a] = dict(snapped[a], end=round(max(b_start - 0.01, a_start + 1.0), 2))
     return snapped

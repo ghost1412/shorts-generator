@@ -2,6 +2,10 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- Clip edges: a start inside a long sentence goes back to the sentence start (up to 20 s when the clip stays a short), and overlapping clips are split at a sentence instead of mid-sentence. On the sample video: clips that start and end on a sentence went from 2/3 and 1/3 to 3/3.
+
 ## 0.7.4 (2026-11-11)
 
 - Start here: "Try a 2-minute sample" button fills in a public-domain NASA clip (downloaded from GitHub only when used), so you can see the result before finding your own video.

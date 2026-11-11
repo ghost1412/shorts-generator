@@ -72,3 +72,29 @@ def test_benchmark_snapping_beats_raw_picks():
     assert snapped["leadin_free"] >= 0.95
     assert snapped["duration_ok"] == 1.0
     assert snapped["iou"] >= raw["iou"] - 0.02          # snapping must not drift away from the labelled moment
+
+
+def _long(n):
+    return " ".join(f"word{i}" for i in range(n)) + "."
+
+
+def test_start_inside_a_long_sentence_goes_back_to_its_beginning():
+    # 50 words ~ 16 s: no sentence edge within 6 s of a start placed 10 s into it
+    tr, sp = _t("Short opener here.", _long(50), "The next thought starts here.", "And it ends here.")
+    clip = {"start": sp[1][0] + 10.0, "end": sp[3][1]}
+    out = snap_clip(clip, sentence_spans(tr))
+    assert abs(out["start"] - sp[1][0]) < 0.06
+
+
+def test_overlapping_clips_are_split_at_a_sentence_not_mid_sentence():
+    tr, sp = _t("First idea is stated in full here now.", "Second idea also gets its own sentence.", _long(40),
+                "Closing words of the long part.")
+    a = {"start": sp[0][0], "end": sp[2][0] + 8.0}            # runs into the long sentence
+    b = {"start": sp[2][0] + 5.0, "end": sp[3][1]}            # starts inside it
+    out = sorted(snap_highlights([a, b], tr, min_len=3.0), key=lambda c: c["start"])
+    spans = sentence_spans(tr)
+    ends = [e for _, e, _ in spans]
+    starts = [s for s, _, _ in spans]
+    assert out[0]["end"] <= out[1]["start"]
+    assert any(0 <= out[0]["end"] - e <= 0.45 for e in ends)          # the earlier clip ends after a whole sentence
+    assert any(abs(out[1]["start"] - s) < 0.06 for s in starts)        # the later one starts on a sentence
