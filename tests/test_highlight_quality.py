@@ -155,3 +155,11 @@ def test_a_fallback_window_is_cut_to_the_asked_length():
     assert trim_to_target({"start": 10, "end": 55}, 30) == {"start": 10, "end": 40.0, "trimmed": True}
     assert trim_to_target({"start": 10, "end": 44}, 30) == {"start": 10, "end": 44}       # within 20%: left alone
     assert trim_to_target({"start": 10, "end": 55}, None) == {"start": 10, "end": 55}
+
+
+def test_backfill_from_nothing_keeps_picks_apart():
+    from engine.analysis import pick_backfill
+    segs = [{"start": 445, "end": 480, "norm_score": 0.9}, {"start": 489, "end": 524, "norm_score": 0.85},
+            {"start": 900, "end": 935, "norm_score": 0.5}]
+    out = pick_backfill(segs, [], 2)
+    assert [h["start"] for h in out] == [445, 900]        # the neighbour 9 s away is skipped while a far one exists

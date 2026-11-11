@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Without an AI key: picked shorts are at least 30 s apart (the top-scoring windows could be neighbours, one scene cut in two).
 - `--tighten` works for every short again: the shorts are cut in parallel and shared one filter-script file, so ffmpeg read two plans mixed together and most shorts were silently left untightened (4 of 5 in a podcast run). Each short now has its own.
 - `--tighten` never cuts a spoken word: on stage recordings (a keynote with applause) the loudness rule took 6-17 s of speech out of every clip, mid-sentence. Now every transcribed word is kept and only what lies between words is cut (speech lost on that keynote: 0).
 - `--tighten` also cuts pauses between spoken words (0.8-4 s, a margin kept), so pauses under steady background noise are removed too; loudness alone left them in. On the NASA sample: silent share 4% -> 0%, a 25 s clip lost 3.7 s of pauses. Not applied to game footage; longer gaps (music, action) are kept.

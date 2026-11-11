@@ -1386,14 +1386,10 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                              for f in fallback_candidates]
                 valid_highlights.extend(fit_to_target(heuristic, target_duration, min_len=max(15.0, min_duration - 5.0)))
             else:
-                for f in fallback_candidates[:clip_count]:
-                    valid_highlights.append(trim_to_target({
-                        "start": f['start'],
-                        "end": f['end'],
-                        "viral_score": int(f['norm_score'] * 100),
-                        "final_score": int(f['norm_score'] * 100),
-                        "reason": "High-Signal Moment (Heuristic Fallback)"
-                    }, target_duration))
+                # the best peaks, at least 30 s apart (the plain top-N took neighbouring windows: one scene cut in two)
+                for h in pick_backfill(fallback_candidates, [], clip_count):
+                    valid_highlights.append(trim_to_target(dict(h, reason="High-Signal Moment (Heuristic Fallback)"),
+                                                           target_duration))
             
             valid_highlights.sort(key=lambda x: x['start'])
             valid_highlights = deduplicate_highlights(valid_highlights)
