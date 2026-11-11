@@ -27,7 +27,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "${{ matrix.gradio }}" python-dotenv requests imageio-ffmpeg playwright
-      - run: python -m playwright install --with-deps chromium
+      - name: Install Chromium (apt mirrors on the runner are flaky: retry, then fall back to the browser alone)
+        run: |
+          for i in 1 2 3; do python -m playwright install --with-deps chromium && exit 0; sleep 20; done
+          python -m playwright install chromium
       - run: python scripts/ui_screenshots.py ui-screenshots
       - uses: actions/upload-artifact@v4
         with:
