@@ -16,16 +16,17 @@ def test_zoom_window_is_capped_centred_and_skipped_when_it_would_not_help():
     assert cx - scale / 2 >= 0 and cy - scale / 2 >= 0 and scale <= MAX_SCALE
 
 
-def _write_video(path, moving_region):
+def _write_video(path, moving_region, active_until=None, fps=10, seconds=40):
+    """Grey frames; the given region keeps changing brightness (a page that keeps changing).
+    `active_until` (seconds) stops the changes after that time."""
     cv2 = pytest.importorskip("cv2")
     import numpy as np
-    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), 10, (320, 180))
+    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), fps, (320, 180))
     x0, y0, x1, y1 = moving_region
-    rng = np.random.default_rng(0)
-    for n in range(400):
-        frame = np.full((180, 320, 3), 40, dtype=np.uint8)
-        frame[:, :, :] = frame                                       # static grey "chrome"
-        frame[y0:y1, x0:x1] = rng.integers(0, 255, (y1 - y0, x1 - x0, 3), dtype=np.uint8)   # the part that changes every frame
+    for n in range(fps * seconds):
+        frame = np.full((180, 320, 3), 90, dtype=np.uint8)
+        live = active_until is None or n / fps < active_until
+        frame[y0:y1, x0:x1] = 20 + (n % 40) * 5 if live else 20      # a ramp: frames 6 apart always differ by 30 levels
         out.write(frame)
     out.release()
 
@@ -37,6 +38,21 @@ def test_active_region_finds_the_changing_part_of_a_video(tmp_path):
     assert window is not None
     scale, cx, cy = window
     assert 0.6 <= scale <= MAX_SCALE and abs(cx - 0.5) < 0.1 and abs(cy - 0.5) < 0.1
+
+
+def test_a_small_changing_area_never_steers_a_zoom(tmp_path):
+    path = str(tmp_path / "cursor.avi")
+    _write_video(path, (10, 10, 40, 40))              # a cursor / webcam inset / sidebar-sized change
+    assert active_region(path, 1.0, 38.0) is None
+    path = str(tmp_path / "sidebar.avi")
+    _write_video(path, (0, 0, 70, 180))               # a narrow sidebar, under a quarter of the frame
+    assert active_region(path, 1.0, 38.0) is None
+
+
+def test_a_picture_that_changes_in_only_a_few_places_in_time_is_not_zoomed(tmp_path):
+    path = str(tmp_path / "brief.avi")
+    _write_video(path, (80, 40, 240, 140), active_until=6.0)      # changes only during the first seconds of the span
+    assert active_region(path, 1.0, 38.0) is None
 
 
 def test_active_region_is_none_when_the_whole_frame_changes_or_nothing_does(tmp_path):

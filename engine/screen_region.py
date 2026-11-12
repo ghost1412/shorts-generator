@@ -11,7 +11,9 @@ MIN_SCALE = 0.6        # the window is never smaller than this share of the fram
 MAX_SCALE = 0.88       # a window larger than this share is not worth a re-crop
 PAD = 1.12             # a little margin around the changing box
 DIFF = 24              # gray-level change that counts as "this pixel changed"
-MIN_COLUMN_SHARE = 0.004   # a row/column counts when this share of its pixels changed (ignores specks and a thin cursor trail)
+MIN_CHANGED_PIXELS = 30    # fewer changed pixels (of 160x90) than this in a frame pair is not a change
+MIN_ACTIVE_PAIRS = 3       # the picture must change in at least this many of the sampled pairs
+MIN_AREA = 0.25            # the changing box must cover this share of the frame (a cursor, sidebar or webcam inset must not steer a zoom)
 
 
 def zoom_window(box, scale_pad=PAD):
@@ -26,20 +28,23 @@ def zoom_window(box, scale_pad=PAD):
     return round(scale, 3), round(cx, 3), round(cy, 3)
 
 
-def changed_box(masks_sum):
-    """Box (x0, y0, x1, y1 as shares) of the rows/columns where enough pixels changed, from a 2-D count array; None when nothing did."""
+def changed_box(mask):
+    """Box (x0, y0, x1, y1 as 0..1 shares) holding the middle 94% of the changed pixels of a 0/1 mask (the 3rd to 97th percentile of
+    their columns and rows, so a few stray pixels at the edge do not stretch it); None when almost nothing changed."""
     import numpy as np
-    h, w = masks_sum.shape
-    cols = np.where(masks_sum.sum(axis=0) > MIN_COLUMN_SHARE * h * max(1, masks_sum.max()))[0]
-    rows = np.where(masks_sum.sum(axis=1) > MIN_COLUMN_SHARE * w * max(1, masks_sum.max()))[0]
-    if len(cols) == 0 or len(rows) == 0:
+    h, w = mask.shape
+    if mask.sum() < MIN_CHANGED_PIXELS:
         return None
-    return cols[0] / w, rows[0] / h, (cols[-1] + 1) / w, (rows[-1] + 1) / h
+    cols, rows = mask.sum(axis=0).cumsum(), mask.sum(axis=1).cumsum()
+    x0, x1 = np.searchsorted(cols, 0.03 * cols[-1]), np.searchsorted(cols, 0.97 * cols[-1]) + 1
+    y0, y1 = np.searchsorted(rows, 0.03 * rows[-1]), np.searchsorted(rows, 0.97 * rows[-1]) + 1
+    return x0 / w, y0 / h, min(1.0, x1 / w), min(1.0, y1 / h)
 
 
 def active_region(video, start, end, samples=10, gap=0.6):
-    """(scale, cx, cy) zoom window for the changing part of the picture in [start, end] of `video`, or None (no clear region,
-    too little change, or the frames cannot be read)."""
+    """(scale, cx, cy) zoom window for the changing part of the picture in [start, end] of `video`, or None: too little change (fewer
+    than MIN_ACTIVE_PAIRS of the frame pairs changed), a changing area under MIN_AREA of the frame (a cursor, a sidebar, a webcam
+    inset), a box that covers most of the frame anyway, or frames that cannot be read."""
     try:
         import cv2
         import numpy as np
@@ -50,7 +55,7 @@ def active_region(video, start, end, samples=10, gap=0.6):
         fps = cap.get(cv2.CAP_PROP_FPS) or 0
         if fps <= 0 or end - start < 2 * gap:
             return None
-        acc, pairs = None, 0
+        acc, pairs, active = None, 0, 0
         for i in range(samples):
             t = start + (i + 0.5) * (end - start - gap) / samples
             frames = []
@@ -59,17 +64,21 @@ def active_region(video, start, end, samples=10, gap=0.6):
                 ok, frame = cap.read()
                 if not ok:
                     break
-                small = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (160, 90))
-                frames.append(small)
+                frames.append(cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (160, 90)))
             if len(frames) < 2:
                 continue
             mask = (cv2.absdiff(frames[0], frames[1]) > DIFF).astype(np.uint8)
-            acc = mask if acc is None else acc + mask
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))      # specks and compression noise are not content
             pairs += 1
-        if acc is None or pairs < samples - 2 or acc.max() == 0:
+            if mask.sum() >= MIN_CHANGED_PIXELS:
+                active += 1
+            acc = mask.astype(np.int32) if acc is None else acc + mask
+        if acc is None or pairs < samples - 2 or active < MIN_ACTIVE_PAIRS:
             return None
-        box = changed_box(acc)
-        return zoom_window(box) if box else None
+        box = changed_box((acc > 0).astype(np.uint8))
+        if box is None or (box[2] - box[0]) * (box[3] - box[1]) < MIN_AREA:
+            return None
+        return zoom_window(box)
     except Exception:
         return None
     finally:
