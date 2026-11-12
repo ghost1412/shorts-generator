@@ -182,7 +182,7 @@ def speech_gaps(segments, start, end, gap_min=GAP_MIN):
     return round(total, 2)
 
 
-from engine.highlight_quality import WEAK_OPENERS  # noqa: E402
+from engine.highlight_quality import weak_opening  # noqa: E402
 HOOK_LEAD_S = 1.5      # the first word must come this soon after the clip start
 HOOK_MIN_WORDS = 4     # the first sentence needs this many words to stand alone
 HOOK_MIN_QUESTION_WORDS = 2     # a question needs fewer
@@ -195,11 +195,11 @@ def hook_ok(segments, start, end):
                    for s in segments for w in (s.get("words") or [])
                    if isinstance(w, dict) and "start" in w and start - 0.05 <= float(w["start"]) < end)
     if not words:        # no word times: judge the segment text
-        text = clip_text(segments, start, end).split()
-        return bool(text) and text[0].lower().strip(",.?!") not in WEAK_OPENERS and len(text) >= HOOK_MIN_WORDS
+        text = clip_text(segments, start, end)
+        return bool(text.split()) and not weak_opening(text) and len(text.split()) >= HOOK_MIN_WORDS
     if words[0][0] - start > HOOK_LEAD_S:
         return False
-    if words[0][1].lower().strip(",.?!\"'") in WEAK_OPENERS:
+    if weak_opening(" ".join(w for _, w in words[:6])):
         return False
     n, question = 0, False
     for _, w in words:

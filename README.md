@@ -221,7 +221,7 @@ All GIFs are real renders from this repository.
 | | ⚡ ShortsFlow | Paid clippers |
 |---|---|---|
 | **Price** | Free (MIT). You pay only for the LLM key you choose, or $0 with Ollama | ~$19-49 / month with minute or credit caps |
-| **Where your video goes** | Stays on your machine; Whisper runs locally | Uploaded to their cloud |
+| **Where your video goes** | Stays on your machine; Whisper runs locally (text goes to an AI provider only if you add a key) | Uploaded to their cloud |
 | **Watermark / export limits** | None | Watermark and caps on lower tiers |
 | **Face-tracked 9:16 reframing** | ✅ | ✅ |
 | **Podcast layouts** | ✅ single, stacked split, active-speaker switching | ✅ varies by tool |

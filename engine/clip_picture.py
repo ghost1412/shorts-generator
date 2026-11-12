@@ -25,9 +25,10 @@ def _ffmpeg():
         return "ffmpeg"
 
 
-def face_track(video, samples=SAMPLES, start=None, end=None):
+def face_track(video, samples=SAMPLES, start=None, end=None, min_face_div=12):
     """[(cx, cy, size) or None] for `samples` evenly spaced frames: the largest face's centre and height as shares of the frame.
-    `start` / `end` (seconds) limit the sampling to that part of the file (a clip inside a long source video)."""
+    `start` / `end` (seconds) limit the sampling to that part of the file (a clip inside a long source video).
+    A face counts when it is at least 1/`min_face_div` of the frame wide (12 suits a finished 9:16 crop; a wide source needs a smaller one)."""
     import cv2
     cap = cv2.VideoCapture(video)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -49,7 +50,7 @@ def face_track(video, samples=SAMPLES, start=None, end=None):
             continue
         h, w = frame.shape[:2]
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = [f for f in _detect_faces(frame, gray, det) if f[2] >= w // 12]     # ignore tiny faces in the background
+        faces = [f for f in _detect_faces(frame, gray, det) if f[2] >= w // min_face_div]     # ignore tiny faces in the background
         if not faces:
             out.append(None)
             continue

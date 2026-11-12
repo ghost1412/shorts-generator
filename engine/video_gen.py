@@ -117,7 +117,7 @@ def no_face_clip(source_path, start, end, samples=NO_FACE_SAMPLES):
     where a 9:16 centre crop would cut the content off (the auto layout then fits the whole picture). False on any doubt."""
     try:
         from engine.clip_picture import face_track
-        track = face_track(source_path, samples=samples, start=start, end=end)
+        track = face_track(source_path, samples=samples, start=start, end=end, min_face_div=40)   # a wide shot: a presenter is far smaller than in a crop
     except Exception as e:
         print(f"[Warning] Face check for the auto layout skipped: {e}")
         return False

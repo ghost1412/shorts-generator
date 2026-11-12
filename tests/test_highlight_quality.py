@@ -185,3 +185,37 @@ def test_a_good_opening_is_left_alone():
                    "That is the whole story about the strange effect we saw.")
     out = snap_clip({"start": spans[0][0], "end": spans[2][1]}, sentence_spans(tr))
     assert abs(out["start"] - spans[0][0]) < 0.06
+
+
+def test_so_and_that_at_the_start_are_real_openings_but_connectives_are_not():
+    from engine.highlight_quality import weak_opening
+    assert not weak_opening("So I quit my job and moved to Japan.")
+    assert not weak_opening("That is the single biggest mistake founders make.")
+    assert not weak_opening("Can you hear the difference between the two?")
+    assert weak_opening("So, the principle is simple.")
+    assert weak_opening("And then it just kept going.")
+    assert weak_opening("Can you hear me now?")
+    assert weak_opening("Yeah. Testing one, two, three.")
+
+
+def test_the_weak_opening_skip_does_not_add_up_when_a_clip_is_snapped_again():
+    tr, spans = _t("And one thing leads on.", "And another follows right after that.", "And a third comes next as well.",
+                   "And the fourth line closes the story out here today.", "Then a fifth sentence that ends the clip for good now.",
+                   "Final words close it all out in the end of it.")
+    clip = {"start": spans[0][0], "end": spans[5][1]}
+    once = snap_clip(clip, sentence_spans(tr))
+    twice = snap_clip(once, sentence_spans(tr))
+    assert twice["start"] == once["start"]
+    assert once["end"] - once["start"] >= 0.6 * (clip["end"] - clip["start"]) - 0.5      # never gives up more than 40%
+
+
+def test_the_weaker_overlapping_clip_gives_way_not_the_better_earlier_one():
+    tr, spans = _t("First sentence of the strong clip stands here.", "Second sentence of the strong clip stands here too.",
+                   "Third sentence of the strong clip is the payoff line.", "Fourth sentence belongs to the weaker clip only now.",
+                   "Fifth sentence of the weaker clip wraps up the whole thing.")
+    strong = {"start": spans[0][0], "end": spans[2][1], "final_score": 95}
+    weak = {"start": spans[1][0] + 0.1, "end": spans[4][1], "final_score": 40}
+    out = snap_highlights([strong, weak], tr, min_len=1.0)
+    best = next(c for c in out if c.get("final_score") == 95)
+    assert best["end"] >= spans[2][1] - 0.01                       # the strong clip keeps its payoff sentence
+    assert all(a["end"] <= b["start"] + 0.01 for a, b in zip(sorted(out, key=lambda c: c["start"]), sorted(out, key=lambda c: c["start"])[1:]))

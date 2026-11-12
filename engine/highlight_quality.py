@@ -10,7 +10,7 @@ level when there are no word timestamps, and to "leave the clip alone" when ther
 """
 import re
 
-SENTENCE_END = re.compile(r"[.!?…]+[\"')\]]*$")
+SENTENCE_END = re.compile(r"[.!?…。！？।]+[\"')\]」』]*$")
 # a trailing dot that does NOT end a sentence
 NOT_END = {"mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "st.", "vs.", "etc.", "e.g.", "i.e.", "u.s.", "no."}
 FILLER_WORDS = {"so", "um", "uh", "er", "erm", "hmm", "well", "okay", "ok", "like", "and", "but", "yeah", "right", "alright",
@@ -77,14 +77,28 @@ def sentence_spans(transcript):
     return spans
 
 
-MIC_CHECK = re.compile(r"\b(testing[, ]+(one|1)|one,? two,? three|can you hear|check,? check|is this (thing )?on|sound check)\b", re.I)
-WEAK_OPENERS = {"and", "so", "but", "or", "because", "then", "also", "uh", "um", "er", "like", "well", "yeah", "anyway", "which", "that", "cause"}
+MIC_CHECK = re.compile(r"\b(testing[, ]+(one|1)|one,? two,? three|can you hear me|check,? check|is this (thing )?on|sound check)\b", re.I)
+# a sentence starting with one of these leans on the one before it (never a good first line)
+DEPENDENT_OPENERS = {"and", "but", "or", "because", "which", "cause", "also", "then", "anyway", "uh", "um", "er", "erm"}
+# filler only when followed by a comma or an ellipsis ("So, ...", "Well, ..."): "So I quit my job" is a real opening
+SOFT_OPENERS = {"so", "well", "like", "yeah", "okay", "ok", "right", "now", "basically", "actually"}
+WEAK_OPENERS = DEPENDENT_OPENERS | SOFT_OPENERS
 
 
 def weak_opening(text):
-    """True when a sentence is a poor first line for a clip: a mic check, or its first word is a filler or a connective."""
-    words = re.findall(r"[a-z']+", str(text or "").lower())
-    return bool(words) and (words[0] in WEAK_OPENERS or bool(MIC_CHECK.search(" ".join(words[:12]))))
+    """True when a sentence is a poor first line for a clip: a mic check at its start, a connective or filler sound first
+    ("And ...", "Uh, ..."), or a soft filler followed by a comma ("So, ...", "Well, ..."). "So I quit my job" is not weak."""
+    text = str(text or "").strip()
+    m = re.match(r"([^\W\d_][\w']*)(\s*[,.…]|\s)", text)
+    if not m:
+        return False
+    first = m.group(1).lower()
+    head = " ".join(re.findall(r"[a-z0-9']+", text.lower())[:8])
+    if MIC_CHECK.search(head):
+        return True
+    if first in DEPENDENT_OPENERS:
+        return True
+    return first in SOFT_OPENERS and m.group(2).strip() != ""
 
 
 def _is_leadin(text, max_words):
@@ -131,12 +145,12 @@ def snap_clip(clip, spans, **opts):
             new_start = cand
             first += 1
     # a sentence that cannot open a clip (mic check, or it leans on the one before: "And, and it just goes ...", "Uh, 79% ...")
-    for _ in range(3):
+    for _ in range(0 if clip.get("snapped") else 3):      # a clip already snapped is not skipped again (the skips would add up)
         if first is None or first + 1 >= len(spans) or not weak_opening(spans[first][2]):
             break
         cand = starts[first + 1]
-        if cand - origin > o["skip_shift"] or cand >= end - o["min_len"]:
-            break
+        if cand - origin > o["skip_shift"] or cand >= end - o["min_len"] or end - cand < 0.6 * (end - start):
+            break                                         # never give up more than 40% of the clip for a better first line
         new_start, first = cand, first + 1
 
     # --- end: after the sentence the clip stops in (finish the thought), else back to the last complete sentence
@@ -190,6 +204,13 @@ def snap_highlights(highlights, transcript, **opts):
     return _resolve_overlaps(clips, spans, o)
 
 
+def _score(c):
+    try:
+        return float(c.get("final_score", c.get("viral_score", 0)) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _resolve_overlaps(clips, spans, o):
     """No two clips overlap afterwards. Each overlap is settled at a sentence boundary when possible (the earlier clip ends
     after its last whole sentence, or the later one starts at its next sentence); a moment the user chose by time is never
@@ -207,7 +228,9 @@ def _resolve_overlaps(clips, spans, o):
             break                                      # both chosen by the user: their choice wins
         done = [e for _, e, _ in spans if a_start + o["min_len"] <= e <= b_start - 0.05]
         nxt = [st for st, _, _ in spans if a_end <= st <= b_end - o["min_len"]]
-        if not a_fixed and done:
+        if not a_fixed and not b_fixed and nxt and _score(B) < _score(A):
+            B["start"] = round(nxt[0], 2)              # the weaker clip gives way, not the better one that happens to be earlier
+        elif not a_fixed and done:
             A["end"] = round(min(done[-1] + o["tail"], b_start - 0.01), 2)
         elif not b_fixed and nxt:
             B["start"] = round(nxt[0], 2)

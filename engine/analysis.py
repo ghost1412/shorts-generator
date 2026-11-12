@@ -1379,22 +1379,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         
         if not valid_highlights:
             print("[Warning] LLM analysis failed. Using Heuristic Signal Fallback (Top Peaks)...")
-            # 🟢 DYNAMIC RECOVERY: Use top heuristic signal peaks (Text + Audio)
-            fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) - opening_penalty(x.get('text')), reverse=True)
-            
-            if mode == "long" and target_duration:
-                # the same length rule as the LLM path (it used to add whole segments until the target was passed, up to a
-                # whole extra segment over); fit_to_target trims the last one and the snapping later ends it on a sentence
-                heuristic = [{"start": f['start'], "end": f['end'], "viral_score": int(f['norm_score'] * 100),
-                              "final_score": int(max(0.0, f['norm_score'] - opening_penalty(f.get('text'))) * 100), "reason": "High-Signal Moment (Heuristic Fallback)"}
-                             for f in fallback_candidates]
-                valid_highlights.extend(fit_to_target(heuristic, target_duration, min_len=max(15.0, min_duration - 5.0)))
-            else:
-                # the best peaks, at least 30 s apart (the plain top-N took neighbouring windows: one scene cut in two)
-                for h in pick_backfill(fallback_candidates, [], clip_count):
-                    valid_highlights.append(trim_to_target(dict(h, reason="High-Signal Moment (Heuristic Fallback)"),
-                                                           target_duration))
-            
+            valid_highlights.extend(signal_picks(compressed_segments, mode, clip_count, target_duration, min_duration))
             valid_highlights.sort(key=lambda x: x['start'])
             valid_highlights = deduplicate_highlights(valid_highlights)
 
@@ -1405,7 +1390,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             return [{"start": fallback_start, "end": fallback_start + fallback_duration, "viral_score": 30, "final_score": 30, "fallback": True, "hook_text": "Check this out!", "reason": "Draft Extraction (Failsafe)"}]
         
         # Final deduplication check
-        valid_highlights = deduplicate_highlights(valid_highlights)  # returns best-score-first
+        valid_highlights = deduplicate_highlights(valid_highlights)  # returns chronological order
         if mode != "shorts":
             valid_highlights.sort(key=lambda x: float(x['start']))  # a narrative reel plays in story order
         print(f"[Log] Curation complete: Selected {len(valid_highlights)} high-viral deduplicated segments.")
@@ -1414,6 +1399,13 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         print(f"[Error] Highlight identification failed: {e}")
         import traceback
         traceback.print_exc()
+        try:    # an error anywhere above used to return one fixed 30 s slot; the signal picks still fill the asked length / count
+            picks = signal_picks(compressed_segments, mode, clip_count, target_duration, min_duration)
+            if picks:
+                print(f"[Warning] Using the signal fallback instead: {len(picks)} moment(s).")
+                return sorted(picks, key=lambda x: float(x['start']))
+        except Exception as e2:
+            print(f"[Warning] Signal fallback failed too: {e2}")
         return [{"start": 10.0, "end": 40.0, "viral_score": 30, "final_score": 30, "fallback": True, "hook_text": "Epic Moment", "reason": "Epic Highlight (fallback: analysis failed)"}]
 
 def deduplicate_highlights(highlights, min_overlap_sec=5.0):
@@ -1470,19 +1462,38 @@ _FILLER_WORDS = {"uh", "um", "er", "erm", "uhh", "umm", "hmm", "yeah", "okay", "
 
 
 def opening_penalty(text):
-    """0..1 penalty for a window that would open badly when picked without an AI: a mic check, a filler or connective as the first word
-    ("and", "so", "uh"), or mostly filler words. The signal score alone liked a "testing, one two three" opening."""
-    from engine.highlight_quality import WEAK_OPENERS
-    words = re.findall(r"[A-Za-z']+", str(text or ""))
-    if not words:
+    """0..1 penalty for a window that would open badly when picked without an AI: a mic check, a connective or filler as the first
+    word ("And ...", "Uh, ...", "So, ..."), or mostly filler words. The signal score alone liked a "testing, one two three" opening.
+    Text with no Latin words (Hindi, Japanese ...) gets no penalty: the English word lists say nothing about it."""
+    from engine.highlight_quality import weak_opening
+    text = str(text or "").strip()
+    if not text:
         return 1.0
+    words = re.findall(r"[A-Za-z']+", text)
+    if len(words) < 3 or len(words) < 0.3 * len(text.split()):      # not (mostly) English
+        return 0.0
     penalty = 0.0
-    if _MIC_CHECK.search(" ".join(words[:25])):
+    if _MIC_CHECK.search(" ".join(w.lower() for w in words[:25])):
         penalty += 0.6
-    if words[0].lower() in WEAK_OPENERS or words[0].lower() in _FILLER_WORDS:
+    if weak_opening(text):
         penalty += 0.3
     penalty += min(0.4, 2 * sum(w.lower() in _FILLER_WORDS for w in words) / len(words))
     return min(1.0, penalty)
+
+
+def signal_picks(compressed_segments, mode, clip_count, target_duration, min_duration):
+    """Moments picked from the audio / text signals alone, with no AI: the best windows (a mic check or a filler opening ranks lower).
+    Highlights reel: filled to the target length (fit_to_target trims the last one); shorts: the best peaks at least 30 s apart,
+    each cut to the asked length."""
+    fallback_candidates = sorted(compressed_segments,
+                                 key=lambda x: x.get('norm_score', 0) + x.get('norm_audio', 0) - opening_penalty(x.get('text')), reverse=True)
+    if mode == "long" and target_duration:
+        heuristic = [{"start": f['start'], "end": f['end'], "viral_score": int(f.get('norm_score', 0) * 100),
+                      "final_score": int(max(0.0, f.get('norm_score', 0) - opening_penalty(f.get('text'))) * 100),
+                      "reason": "High-Signal Moment (Heuristic Fallback)"} for f in fallback_candidates]
+        return fit_to_target(heuristic, target_duration, min_len=max(15.0, min_duration - 5.0))
+    return [trim_to_target(dict(h, reason="High-Signal Moment (Heuristic Fallback)"), target_duration)
+            for h in pick_backfill(fallback_candidates, [], clip_count)]
 
 
 def fit_to_target(highlights, target, already=0.0, tolerance=0.08, min_len=15.0):

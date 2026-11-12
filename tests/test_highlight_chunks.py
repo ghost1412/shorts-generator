@@ -86,3 +86,24 @@ def test_opening_penalty_dislikes_mic_checks_and_weak_openers():
     assert opening_penalty("Whatever happens to your eyes is a zero G phenomenon") == 0
     assert opening_penalty("") == 1.0
 
+
+
+def test_opening_penalty_ignores_text_without_latin_words():
+    from engine.analysis import opening_penalty
+    assert opening_penalty("यह एक बहुत ही सामान्य वाक्य है जो हिंदी में लिखा गया है") == 0.0
+    assert opening_penalty("यह एक वाक्य है iPhone के बारे में जो हिंदी में लिखा गया है") == 0.0     # one Latin word does not decide
+    assert opening_penalty("Whatever happens to your eyes is purely a zero G effect") == 0.0
+
+
+def test_an_unexpected_error_in_the_analysis_falls_back_to_signal_picks(tmp_path, monkeypatch):
+    # an error after the model answered used to return one fixed 10-40 s "Epic Moment" clip
+    segs = [{"start": float(t), "end": float(t + 8), "text": f"sentence number {t} is here"} for t in range(0, 900, 10)]
+    p = tmp_path / "transcript.json"
+    p.write_text(json.dumps({"segments": segs}), encoding="utf-8")
+    import engine.script_gen as sg
+    monkeypatch.setattr(sg, "get_llm_response", lambda *a, **k: "START_JSON[]END_JSON")
+    monkeypatch.setattr(sg, "robust_json_parse", lambda *a, **k: (_ for _ in ()).throw(ValueError("boom")))
+    out = analysis.identify_highlights(str(p), video_path=None, clip_count=5, mode="long", target_duration=180,
+                                       min_duration=15, diversity=False, extra_signals=False)
+    assert 0.85 * 180 <= sum(h["end"] - h["start"] for h in out) <= 1.12 * 180
+    assert not any(h.get("reason", "").startswith("Epic Highlight") for h in out)

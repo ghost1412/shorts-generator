@@ -138,7 +138,7 @@ def test_hook_ok_needs_a_standalone_opening():
 def test_hook_ok_without_word_times_uses_the_text():
     from engine.clip_quality import hook_ok
     assert hook_ok([{"start": 0, "end": 5, "text": "This is a plain opening line"}], 0, 5)
-    assert not hook_ok([{"start": 0, "end": 5, "text": "So this is not a hook"}], 0, 5)
+    assert not hook_ok([{"start": 0, "end": 5, "text": "And this is not a hook"}], 0, 5)
 
 
 def test_placeholder_clip_titles_are_not_counted_as_ungrounded():
@@ -153,7 +153,7 @@ def test_no_face_clip_needs_every_sampled_frame_empty(monkeypatch):
     calls = {}
 
     def fake(track):
-        def f(video, samples=12, start=None, end=None):
+        def f(video, samples=12, start=None, end=None, min_face_div=12):
             calls["span"] = (start, end)
             return track
         return f
