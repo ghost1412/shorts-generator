@@ -88,7 +88,10 @@ def grounded_share(clips, segments, context=""):
     for c in clips:
         said = clip_text(segments, float(c["start"]), float(c["end"]))
         extras = (c.get("hook"), context)
-        problems = title_variants.grounding_problems(str(c.get("title") or ""), said, extras)
+        title = str(c.get("title") or "")
+        if title.startswith("Clip #") and title[6:].isdigit():
+            title = ""     # the placeholder of a highlights reel clip (the reel has one title): it claims nothing
+        problems = title_variants.grounding_problems(title, said, extras)
         problems += title_variants.grounding_problems(_description_lead(c.get("description")), said, extras, names=False, min_digits=2)
         ok += 0 if problems else 1
     return round(ok / len(clips), 2)

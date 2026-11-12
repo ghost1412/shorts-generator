@@ -137,3 +137,10 @@ def test_hook_ok_without_word_times_uses_the_text():
     from engine.clip_quality import hook_ok
     assert hook_ok([{"start": 0, "end": 5, "text": "This is a plain opening line"}], 0, 5)
     assert not hook_ok([{"start": 0, "end": 5, "text": "So this is not a hook"}], 0, 5)
+
+
+def test_placeholder_clip_titles_are_not_counted_as_ungrounded():
+    from engine.clip_quality import grounded_share
+    segs = [{"start": 0, "end": 10, "text": "We keep the water in a closed loop."}]
+    assert grounded_share([{"start": 0, "end": 10, "title": "Clip #2", "description": ""}], segs) == 1.0
+    assert grounded_share([{"start": 0, "end": 10, "title": "Water 99 times", "description": ""}], segs) == 0.0
