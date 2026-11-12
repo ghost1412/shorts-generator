@@ -1,0 +1,8 @@
+# MODEL-LABELLED (Claude read the transcript, 2026-11-12), not hand-picked by a person. Replace with human picks when available.
+0:36-1:17  # goal and definition of free music
+4:36-4:58  # linked open data is the enabler
+6:03-6:55  # hard tools you must learn
+11:00-11:45  # 82 epistles as data objects
+13:47-14:23  # songs on a map
+16:50-17:26  # results in numbers
+19:26-20:06  # the work will continue
