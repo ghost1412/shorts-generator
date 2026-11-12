@@ -16,6 +16,7 @@ chose. Nothing here calls an LLM or the network.
 """
 import json
 import os
+import re
 
 BOUNDARY_SLOP = 0.6          # seconds between a clip edge and the nearest sentence edge that still counts as "at the boundary"
 
@@ -140,6 +141,9 @@ def measure(segments, results, min_len=15.0, max_len=75.0):
         "median_words_per_s": _median(speech),
         "titles_grounded": grounded_share(clips, segments, str(((results or {}).get("settings") or {}).get("user_context") or "")),
         "hook_ok": round(sum(hook_ok(segments, float(c["start"]), float(c["end"])) for c in clips) / len(clips), 2) if clips else None,
+        "hook_cue": round(sum(hook_cue(segments, float(c["start"]), float(c["end"])) for c in clips) / len(clips), 2) if clips else None,
+        "self_contained": round(sum(self_contained_opening(segments, float(c["start"]), float(c["end"])) for c in clips) / len(clips), 2) if clips else None,
+        "clean_end": round(sum(clean_ending(segments, float(c["start"]), float(c["end"])) for c in clips) / len(clips), 2) if clips else None,
         "gaps_s": _median([speech_gaps(segments, float(c["start"]), float(c["end"])) for c in clips]),
     }
 
@@ -221,6 +225,44 @@ def hook_ok(segments, start, end):
             question = w.endswith("?")
             break
     return n >= (HOOK_MIN_QUESTION_WORDS if question else HOOK_MIN_WORDS)     # a short question ("Why does it float?") is a hook
+
+
+OPENING_CUES = {"you", "your", "you're", "nobody", "never", "why", "how", "what", "stop", "secret", "mistake", "wrong", "truth", "imagine"}
+DANGLING_PRONOUNS = {"it", "this", "that", "they", "he", "she", "these", "those", "them", "his", "her", "its", "their"}
+
+
+def _clip_words(segments, start, end):
+    """[(start_time, text)] of the timed words inside [start, end], in order."""
+    return sorted((float(w["start"]), str(w.get("word") or w.get("text") or "").strip())
+                  for s in segments for w in (s.get("words") or [])
+                  if isinstance(w, dict) and "start" in w and start - 0.05 <= float(w["start"]) < end)
+
+
+def hook_cue(segments, start, end, window=3.0):
+    """True when the first `window` seconds hold a reason to keep watching: a question, a number, or a word that speaks to the viewer or
+    promises something (you, never, why, how, mistake, secret ...). Cheap text cue, not a judgement of how catchy the line is."""
+    words = [(t, w) for t, w in _clip_words(segments, start, end) if t < start + window]
+    if not words:
+        text = clip_text(segments, start, min(end, start + window))
+        words = [(0.0, w) for w in text.split()]
+    return any(w.endswith("?") or any(ch.isdigit() for ch in w) or w.lower().strip(",.!?\"'") in OPENING_CUES for _, w in words)
+
+
+def self_contained_opening(segments, start, end):
+    """False when the first word is a pronoun or demonstrative that points at something said before the clip ("It was ...", "They said
+    ...", "This is why ..."): the viewer cannot tell what it refers to. A cheap check on the first word only."""
+    words = _clip_words(segments, start, end)
+    first = words[0][1] if words else (clip_text(segments, start, end).split() or [""])[0]
+    return first.lower().strip(",.!?\"'") not in DANGLING_PRONOUNS
+
+
+def clean_ending(segments, start, end):
+    """False when the clip stops on a word that needs a continuation ("... places that", "... data about"): the speaker was cut off."""
+    from engine.social_gen import _trails_off
+    words = _clip_words(segments, start, end)
+    text = " ".join(w for _, w in words) if words else clip_text(segments, start, end)
+    sentences = [x for x in re.split(r"(?<=[.!?])\s+", text.strip()) if x]
+    return not sentences or not _trails_off(sentences[-1])
 
 
 def overlap_with(a, b):

@@ -143,16 +143,7 @@ def clean_spoken(text):
     return re.sub(r"\s{2,}", " ", t).strip(" ,")
 
 
-_DANGLING = {"a", "an", "the", "of", "to", "in", "on", "at", "for", "with", "about", "that", "and", "or", "but", "so", "because", "as",
-             "is", "are", "was", "were", "from", "by", "this", "these", "those", "our", "your", "my", "their", "which", "who", "what",
-             "if", "when", "than", "into", "over", "its", "his", "her", "some", "any", "can", "will", "would", "could", "should"}
-
-
-def _trails_off(sentence):
-    """True when a sentence stops on a word that needs a continuation ("... places that.", "... data about."): a speaker who
-    trailed off, which Whisper writes as "..."; such a line is a poor title."""
-    words = re.findall(r"[A-Za-z']+", str(sentence or ""))
-    return bool(words) and words[-1].lower() in _DANGLING
+from engine.highlight_quality import trails_off as _trails_off  # noqa: E402  (a sentence that stops on a word needing a continuation)
 
 
 def fallback_title(hook, text, limit=70):

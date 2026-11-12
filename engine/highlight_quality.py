@@ -85,6 +85,18 @@ SOFT_OPENERS = {"so", "well", "like", "yeah", "okay", "ok", "right", "now", "bas
 WEAK_OPENERS = DEPENDENT_OPENERS | SOFT_OPENERS
 
 
+DANGLING_ENDINGS = {"a", "an", "the", "of", "to", "in", "on", "at", "for", "with", "about", "that", "and", "or", "but", "so", "because", "as",
+                    "is", "are", "was", "were", "from", "by", "this", "these", "those", "our", "your", "my", "their", "which", "who", "what",
+                    "if", "when", "than", "into", "over", "its", "his", "her", "some", "any", "can", "will", "would", "could", "should"}
+
+
+def trails_off(sentence):
+    """True when a sentence stops on a word that needs a continuation ("... places that.", "... data about."): a speaker who
+    trailed off (Whisper writes that as "..."). Such a line is a poor title and a poor place to end a clip."""
+    words = re.findall(r"[A-Za-z']+", str(sentence or ""))
+    return bool(words) and words[-1].lower() in DANGLING_ENDINGS
+
+
 def weak_opening(text):
     """True when a sentence is a poor first line for a clip: a mic check at its start, a connective or filler sound first
     ("And ...", "Uh, ..."), or a soft filler followed by a comma ("So, ...", "Well, ..."). "So I quit my job" is not weak."""
@@ -173,6 +185,13 @@ def snap_clip(clip, spans, **opts):
         prev = [e for e in ends if e <= end + 0.05]
         if prev and end - prev[-1] <= o["max_shift"] and prev[-1] > new_start + o["min_len"]:
             new_end = prev[-1]
+
+    # a last sentence that stops on a word needing a continuation ("... places that."): end on the sentence before it instead
+    if not clip.get("snapped"):
+        last = next((i for i, (_, e, _) in enumerate(spans) if abs(e - new_end) < 0.05), None)
+        if (last is not None and last > 0 and trails_off(spans[last][2]) and ends[last - 1] > new_start + o["min_len"]
+                and ends[last - 1] - new_start >= 0.7 * (new_end - new_start)):
+            new_end = ends[last - 1]
 
     # --- a short tail so the clip does not stop dead on the last word, but never into the next sentence
     nxt = [s for s in starts if s > new_end + 0.01]

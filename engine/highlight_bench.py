@@ -24,7 +24,7 @@ def build_transcript(seed, sentences=40):
         else:
             n = rng.randint(6, 14)
             subj = rng.choice(SUBJECTS)
-            n_text = f"Here is a point about {subj} number {i} " + " ".join(rng.choice(["really", "matters", "because", "most", "people", "never", "notice", "it"]) for _ in range(n - 7)) if n > 7 else f"Here is a point about {subj}"
+            n_text = f"Here is a point about {subj} number {i} " + " ".join(rng.choice(["really", "matters", "often", "most", "people", "never", "notice", "it"]) for _ in range(n - 7)) if n > 7 else f"Here is a point about {subj}"
             n_text = n_text.strip() + rng.choice([".", ".", ".", "?", "!"])
         words, start = [], t
         for w in n_text.split():

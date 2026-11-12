@@ -219,3 +219,22 @@ def test_the_weaker_overlapping_clip_gives_way_not_the_better_earlier_one():
     best = next(c for c in out if c.get("final_score") == 95)
     assert best["end"] >= spans[2][1] - 0.01                       # the strong clip keeps its payoff sentence
     assert all(a["end"] <= b["start"] + 0.01 for a, b in zip(sorted(out, key=lambda c: c["start"]), sorted(out, key=lambda c: c["start"])[1:]))
+
+
+def test_a_clip_does_not_end_on_a_sentence_that_trails_off():
+    tr, spans = _t("Whatever happens to your eyes is a zero G effect we measured.", "It has nothing to do with the air in the cabin at all.",
+                   "That is the whole story about the strange effect we saw.", "We looked at the results of the places that.",
+                   "A later sentence that the clip never reaches at all here.")
+    clip = {"start": spans[0][0], "end": spans[3][1]}
+    out = snap_clip(clip, sentence_spans(tr))
+    assert out["end"] <= spans[2][1] + 0.5 and out["end"] > spans[1][1]       # ends on the sentence before the dangling one
+    again = snap_clip(out, sentence_spans(tr))
+    assert again["end"] == out["end"]                                          # snapping again changes nothing
+
+
+def test_a_trailing_off_ending_is_kept_when_dropping_it_would_cost_too_much():
+    tr, spans = _t("Short opening line here for the clip itself.", "A very long second sentence that carries almost the whole clip with many many words in it.",
+                   "We looked at the places that.")
+    clip = {"start": spans[0][0], "end": spans[2][1]}
+    out = snap_clip(clip, sentence_spans(tr), min_len=1.0)
+    assert out["end"] >= spans[1][1] - 0.01
