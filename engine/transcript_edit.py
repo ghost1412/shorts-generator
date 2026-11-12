@@ -13,6 +13,7 @@ same way filler removal does it (see ``engine.fillers.carve``).
 """
 import difflib
 import json
+import math
 import re
 
 PAD_START = 0.02  # seconds trimmed before the first deleted word
@@ -354,9 +355,9 @@ def drop_loud_pauses(pauses, transcript_data, audio_path, ratio=LOUD_PAUSE_RATIO
         out = []
         for a, b in pauses:
             quiet_from = None
-            for k in range(int(round((b - a) / win))):
+            for k in range(int(math.ceil((b - a) / win - 1e-9))):
                 ws = a + k * win
-                if level(ws, ws + win) >= limit:                        # a loud window ends any quiet stretch
+                if level(ws, min(ws + win, b)) >= limit:                        # a loud window ends any quiet stretch
                     if quiet_from is not None and ws - quiet_from >= min_len:
                         out.append((round(quiet_from, 3), round(ws, 3)))
                     quiet_from = None

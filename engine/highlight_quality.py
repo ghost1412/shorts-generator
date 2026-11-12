@@ -122,6 +122,8 @@ def trails_off_end(sentence):
     if not words:
         return False
     last = words[-1].lower()
+    if words[-1] == "A":                    # a letter ("Plan A.", "vitamin A."), not the article
+        return False
     if text.rstrip("\"')]").endswith(("...", "\u2026")):
         return last in DANGLING_ENDINGS
     return last in NARROW_DANGLING
@@ -278,13 +280,12 @@ def _resolve_overlaps(clips, spans, o):
         done = [e for _, e, _ in spans if a_start + o["min_len"] <= e <= b_start - 0.05]
         nxt = [st for st, _, _ in spans if a_end <= st <= b_end - o["min_len"]]
         if not a_fixed and not b_fixed and _score(B) < _score(A):
-            # the weaker clip gives way, not the better one that happens to be earlier
+            # the weaker clip gives way, not the better one that happens to be earlier; it restarts at a sentence start
+            # or is dropped (never cut mid-sentence)
             if nxt:
                 B["start"] = round(nxt[0], 2)
-            elif b_end - a_end >= o["min_len"]:
-                B["start"] = round(a_end + 0.01, 2)
             else:
-                clips.pop(pair[1])                     # too little of it would be left
+                clips.pop(pair[1])
         elif not a_fixed and done:
             A["end"] = round(min(done[-1] + o["tail"], b_start - 0.01), 2)
         elif not b_fixed and nxt:

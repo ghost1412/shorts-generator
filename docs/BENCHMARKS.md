@@ -29,9 +29,9 @@ All values are shares of clips from 0 to 1 unless noted; higher is better except
 - **Overlap:** seconds where two clips show the same moment.
 - **Length near target:** within 25% of the asked length (here 22.5 to 37.5 s). A clip that gives up a few seconds to end on a complete sentence can fall outside it.
 - **Hook ok:** the clip opens on a line that stands alone: a word within 1.5 s, not a filler or connective ("and", "uh", "so,"), and a full first sentence (a short question counts).
-- **Hook cue:** the first 3 seconds hold a reason to keep watching: a question, a number, or a word that speaks to the viewer ("you", "never", "why"). This is a cheap text cue, not a judgement of how catchy the line is.
+- **Hook cue:** the first 3 seconds hold a reason to keep watching: a question, a number (any digit, so "In 2019, ..." counts), or a promise word ("never", "why", "how", "mistake", "secret"). The picker looks for the same cue in a clip's first sentence, so this is a rule the picker itself aims at, not an independent judgement of how catchy the line is.
 - **Self-contained:** the first word is not a pronoun that points at something said before the clip ("They said ...", "This is why ...").
-- **Clean end:** the last sentence does not stop on a word that needs a continuation ("... the places that").
+- **Clean end:** the last sentence does not stop on a word that needs a continuation ("... the places that"). The rule is narrow and the picker applies it too, so a score of 1.0 means little on its own.
 - **Titles grounded:** the title and description say only what the clip says (a number or name that is not in the transcript counts as invented).
 - **Face found / jitter:** on the finished 9:16 clips, the share of sampled frames with a face and how much the crop moves between samples (lower is steadier).
 - **Silence:** share of the clip that is silent, measured on the finished file after `--tighten`.

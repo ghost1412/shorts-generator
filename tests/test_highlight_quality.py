@@ -252,7 +252,7 @@ def test_snapping_twice_keeps_the_original_pick_for_the_move_count():
 
 def test_complete_sentences_are_never_called_trailing_off():
     from engine.highlight_quality import trails_off_end
-    for s in ("Look at this.", "Yes we can.", "That is what I was talking about.", "And that is what I am most proud of.", "You know what?"):
+    for s in ("Look at this.", "Yes we can.", "That is what I was talking about.", "And that is what I am most proud of.", "You know what?", "Take vitamin A.", "It is Plan A."):
         assert not trails_off_end(s), s
     assert trails_off_end("We looked at the places that...")          # Whisper's ellipsis after a word that needs a continuation
     assert trails_off_end("We looked at the results of the.")         # no complete sentence ends on "the"
@@ -283,3 +283,15 @@ def test_japanese_and_hindi_sentences_split_without_spaces():
                        {"start": 20.0, "end": 30.0, "text": "यह पहला वाक्य है। यह दूसरा वाक्य है।"}]}
     texts = [s[2] for s in sentence_spans(tr)]
     assert len(texts) == 5 and texts[0].endswith("。") and texts[3].endswith("।")
+
+
+def test_the_weaker_clip_without_a_sentence_start_left_does_not_open_mid_sentence():
+    tr, spans = _t("First sentence of the strong clip stands here.", "Second sentence of the strong clip stands here too.",
+                   "Third sentence is long and shared by both of the clips here.")
+    strong = {"start": spans[0][0], "end": spans[1][1], "final_score": 95}
+    weak = {"start": spans[1][0] + 0.1, "end": spans[2][1], "final_score": 40}
+    out = snap_highlights([strong, weak], tr, min_len=1.0)
+    starts = [s for s, _ in spans]
+    assert all(any(abs(c["start"] - st) < 0.06 for st in starts) for c in out)      # every clip still opens on a sentence start
+    srt = sorted(out, key=lambda c: c["start"])
+    assert all(a["end"] <= b["start"] + 0.01 for a, b in zip(srt, srt[1:]))

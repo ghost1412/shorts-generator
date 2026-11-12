@@ -1876,8 +1876,9 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
                 if not os.path.exists(wav):
                     print("[Log] Tighten: no audio file to check the pauses against; cutting them by timing only (laughter may be cut).")
                 kept_pauses = drop_loud_pauses(pauses, tdata, wav if os.path.exists(wav) else None)
-                if len(kept_pauses) < len(pauses):
-                    print(f"[Log] Tighten: kept {len(pauses) - len(kept_pauses)} loud pause(s) (laughter, applause, a reaction).")
+                kept_s = sum(b - a for a, b in pauses) - sum(b - a for a, b in kept_pauses)
+                if kept_s >= 0.2:
+                    print(f"[Log] Tighten: kept {kept_s:.1f}s of loud pause (laughter, applause, a reaction).")
                 pauses = kept_pauses
             if pauses:
                 silence_intervals = subtract_intervals(silence_intervals, pauses)
