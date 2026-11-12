@@ -4,6 +4,11 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Without an AI key, a highlights video (`--extract_mode long`) fills the asked length again: when no provider answered, one failed call returned a single fixed 30 s slot (a 33 s reel for a 180 s target); now the signal picks fill it (176 s for 180 s on the NASA sample).
+- Clips and highlights skip a weak opening: a mic check ("testing, one two three") or a sentence that leans on the one before it ("And, and it just goes ...", "Uh, ...") is skipped at the start (up to 20 s, never below the minimum length), and the no-AI picker ranks such windows lower.
+- Without an AI key, a title never ends on a trailing-off fragment ("... places that.", "... data about."); the next complete sentence is used.
+- `--layout auto` fits the whole picture (centred over a blurred copy) when no face shows on screen in a clip, as in slides or a screen recording, instead of cropping the content off the sides. Explicit layouts are unchanged.
+- Clip benchmark: `hook ok` (does a clip open on a line that stands alone), reel placeholder titles ("Clip #N") are not counted as ungrounded, and the workflow uploads one sample frame per clip.
 - Browser app: the timeline strip in "Edit this short" has drag handles. Drag the blue start or end edge; letting go fills the Start/End box (1 s minimum between them) and redraws the strip.
 - Without an AI key: picked shorts are at least 30 s apart (the top-scoring windows could be neighbours, one scene cut in two).
 - `--tighten` works for every short again: the shorts are cut in parallel and shared one filter-script file, so ffmpeg read two plans mixed together and most shorts were silently left untightened (4 of 5 in a podcast run). Each short now has its own.
