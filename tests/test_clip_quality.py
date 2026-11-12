@@ -115,3 +115,25 @@ def test_highlights_run_reports_reel_length_and_target(tmp_path):
     assert r["reel_s"] == 120.0 and r["target_s"] == 120.0
     assert r["length_in_range"] == 1.0                    # 60 s moments are fine in a highlights video
     assert "cut_s" not in r
+
+
+def _words(items):
+    return [{"start": 0, "end": items[-1][0] + 1, "text": " ".join(w for _, w in items),
+             "words": [{"start": t, "end": t + 0.4, "word": w} for t, w in items]}]
+
+
+def test_hook_ok_needs_a_standalone_opening():
+    from engine.clip_quality import hook_ok
+    good = _words([(10.0, "Nobody"), (10.4, "expected"), (10.8, "this"), (11.2, "result.")])
+    assert hook_ok(good, 10.0, 20.0)
+    assert not hook_ok(_words([(10.0, "And"), (10.4, "then"), (10.8, "we"), (11.2, "left.")]), 10.0, 20.0)   # connective first
+    assert not hook_ok(_words([(10.0, "Uh,"), (10.4, "yes"), (10.8, "it"), (11.2, "works.")]), 10.0, 20.0)    # filler first
+    assert not hook_ok(_words([(10.0, "Why?"), (10.4, "Because"), (10.8, "so"), (11.2, "it.")]), 10.0, 20.0)   # first sentence too short
+    assert not hook_ok(_words([(13.0, "Nobody"), (13.4, "expected"), (13.8, "this"), (14.2, "result.")]), 10.0, 20.0)  # silent lead-in
+    assert not hook_ok([], 10.0, 20.0)
+
+
+def test_hook_ok_without_word_times_uses_the_text():
+    from engine.clip_quality import hook_ok
+    assert hook_ok([{"start": 0, "end": 5, "text": "This is a plain opening line"}], 0, 5)
+    assert not hook_ok([{"start": 0, "end": 5, "text": "So this is not a hook"}], 0, 5)

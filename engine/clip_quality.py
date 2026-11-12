@@ -7,6 +7,7 @@ worse shows up as a number instead of a feeling:
 * boundaries  share of clips that start where a sentence starts and end where a sentence ends (a clip cut mid-sentence feels broken)
 * overlap     seconds of overlap between clips (picking the same moment twice)
 * spread      how many different parts of the video the clips come from (10 equal slices)
+* hook        share of clips that open on a line that stands alone (no filler or connective first, no long silent lead-in, 4+ words)
 * speech      words per second inside the clip (a very low number is dead air)
 * grounding   share of titles/descriptions that say nothing the clip does not (numbers and names checked against the transcript)
 
@@ -122,6 +123,7 @@ def measure(segments, results, min_len=15.0, max_len=75.0):
         "spread": spread_share(clips, video_seconds),
         "median_words_per_s": _median(speech),
         "titles_grounded": grounded_share(clips, segments, str(((results or {}).get("settings") or {}).get("user_context") or "")),
+        "hook_ok": round(sum(hook_ok(segments, float(c["start"]), float(c["end"])) for c in clips) / len(clips), 2) if clips else None,
         "gaps_s": _median([speech_gaps(segments, float(c["start"]), float(c["end"])) for c in clips]),
     }
 
@@ -175,6 +177,32 @@ def speech_gaps(segments, start, end, gap_min=GAP_MIN):
     if end - prev >= gap_min:
         total += end - prev
     return round(total, 2)
+
+
+WEAK_OPENERS = {"and", "so", "but", "or", "because", "then", "also", "uh", "um", "er", "like", "well", "yeah", "anyway", "which", "that", "cause"}
+HOOK_LEAD_S = 1.5      # the first word must come this soon after the clip start
+HOOK_MIN_WORDS = 4     # the first sentence needs this many words to stand alone
+
+
+def hook_ok(segments, start, end):
+    """True when the clip opens on a line that stands alone: a word within HOOK_LEAD_S of the start, a first word that is not a filler or
+    a connective ("and", "so", "uh" ...), and a first sentence of at least HOOK_MIN_WORDS words. It does not judge how catchy it is."""
+    words = sorted((float(w["start"]), str(w.get("word") or w.get("text") or "").strip())
+                   for s in segments for w in (s.get("words") or [])
+                   if isinstance(w, dict) and "start" in w and start - 0.05 <= float(w["start"]) < end)
+    if not words:        # no word times: judge the segment text
+        text = clip_text(segments, start, end).split()
+        return bool(text) and text[0].lower().strip(",.?!") not in WEAK_OPENERS and len(text) >= HOOK_MIN_WORDS
+    if words[0][0] - start > HOOK_LEAD_S:
+        return False
+    if words[0][1].lower().strip(",.?!\"'") in WEAK_OPENERS:
+        return False
+    n = 0
+    for _, w in words:
+        n += 1
+        if w.endswith((".", "?", "!")):
+            break
+    return n >= HOOK_MIN_WORDS
 
 
 def overlap_with(a, b):
