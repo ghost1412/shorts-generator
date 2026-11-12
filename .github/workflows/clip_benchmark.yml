@@ -88,12 +88,15 @@ jobs:
           MODE: ${{ github.event.inputs.mode || 'shorts' }}
           GOLD: ${{ github.event.inputs.gold }}
         run: |
-          GOLD_ARGS=""
-          if [ -n "$GOLD" ] && [ -f "$GOLD" ]; then GOLD_ARGS="--gold $GOLD"; fi
+          GOLD_ARGS=()
+          if [ -n "$GOLD" ]; then
+            if [ ! -f "$GOLD" ]; then echo "::error::gold file not found: $GOLD"; exit 1; fi
+            GOLD_ARGS=(--gold "$GOLD")
+          fi
           if [ "$MODE" = "long" ]; then
-            python scripts/clip_benchmark.py bench $GOLD_ARGS --json bench/report.json
+            python scripts/clip_benchmark.py bench "${GOLD_ARGS[@]}" --json bench/report.json
           else
-            python scripts/clip_benchmark.py bench --picture $GOLD_ARGS --json bench/report.json
+            python scripts/clip_benchmark.py bench --picture "${GOLD_ARGS[@]}" --json bench/report.json
           fi
 
       - name: Job summary

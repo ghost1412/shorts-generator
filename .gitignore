@@ -18,6 +18,7 @@ assets/subs.json
 *.json
 !package.json
 !package-lock.json
+!docs/gold/*.json
 !tsconfig.json
 !**/package.json
 !**/package-lock.json
