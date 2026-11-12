@@ -109,8 +109,8 @@ jobs:
         run: |
           mkdir -p bench/frames
           i=0
-          for f in $(python -c "import json; print(*[c['video_path'] for c in json.load(open('bench/results.json'))['clips'][:3] if c.get('video_path')])" 2>/dev/null); do
-            i=$((i+1)); ffmpeg -y -loglevel error -ss 5 -i "$f" -frames:v 1 -vf scale=360:-2 "bench/frames/clip$i.png" || true
+          python -c "import json; print(*[c['video_path'] for c in json.load(open('bench/results.json'))['clips'][:3] if c.get('video_path')], sep=chr(10))" 2>/dev/null | while IFS= read -r f; do
+            i=$((i+1)); ffmpeg -y -loglevel error -ss 5 -i "$f" -frames:v 1 -vf scale=360:-2 "bench/frames/clip$i.png" < /dev/null || true
           done
           ls bench/frames || true
 

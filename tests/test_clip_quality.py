@@ -180,3 +180,9 @@ def test_face_track_samples_only_the_asked_span(tmp_path):
     out.release()
     assert len(face_track(path, samples=4, start=2.0, end=6.0)) == 4
     assert not any(face_track(path, samples=4))
+
+
+def test_length_vs_target_counts_clips_within_a_quarter_of_the_asked_length():
+    from engine.clip_quality import length_vs_target
+    assert length_vs_target([30, 33, 22, 45], 30) == 0.5            # 30 and 33 fit (22.5..37.5), 22 and 45 do not
+    assert length_vs_target([30], None) is None and length_vs_target([], 30) is None and length_vs_target([30], "x") is None

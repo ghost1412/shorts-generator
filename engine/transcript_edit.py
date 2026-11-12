@@ -308,6 +308,54 @@ def word_pause_cuts(transcript_data, min_gap=PAUSE_MIN, max_gap=PAUSE_MAX, margi
     return cuts
 
 
+LOUD_PAUSE_RATIO = 0.75     # a pause as loud as this share of the speech level is a reaction (laughter, applause), not a pause
+
+
+def _wav_samples(path):
+    """(float samples scaled to -1..1, sample rate) of a 16-bit mono WAV, or (None, 0)."""
+    import wave
+
+    import numpy as np
+    with wave.open(path, "rb") as wf:
+        if wf.getsampwidth() != 2:
+            return None, 0
+        rate, channels = wf.getframerate(), wf.getnchannels()
+        data = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1)
+    return data, rate
+
+
+def drop_loud_pauses(pauses, transcript_data, audio_path, ratio=LOUD_PAUSE_RATIO):
+    """`pauses` without the ones that are loud: an interval whose level is at least `ratio` of the speech level is laughter,
+    applause or a sound that belongs to the moment, so it stays. Quiet gaps (and gaps under steady low background noise) are still
+    cut. Returns `pauses` unchanged when the audio cannot be read."""
+    if not pauses or not audio_path:
+        return pauses
+    try:
+        import numpy as np
+        data, rate = _wav_samples(audio_path)
+        if data is None or rate <= 0:
+            return pauses
+        words = sorted((float(w["start"]), float(w["end"])) for sg in (transcript_data or {}).get("segments", [])
+                       for w in (sg.get("words") or []) if isinstance(w, dict) and "start" in w and "end" in w)
+        if len(words) > 300:
+            words = words[::max(1, len(words) // 300)]
+
+        def level(a, b):
+            seg = data[max(0, int(a * rate)):max(0, int(b * rate))]
+            return float(np.sqrt(np.mean(seg ** 2))) if len(seg) else 0.0
+
+        speech = [level(a, b) for a, b in words if b - a >= 0.08]
+        speech = [v for v in speech if v > 0]
+        if len(speech) < 10:
+            return pauses
+        reference = float(np.median(speech))
+        return [(a, b) for a, b in pauses if level(a, b) < ratio * reference]
+    except Exception:
+        return pauses
+
+
 def subtract_intervals(keeps, cuts):
     """`keeps` (sorted (start, end) intervals) with every `cuts` interval removed."""
     out = []

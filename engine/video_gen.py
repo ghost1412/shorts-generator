@@ -2755,6 +2755,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         if use_cache and os.path.exists(target) and os.path.getsize(target) > 1000:
             if mode == "shorts" and layout == "single" and not filler_path:
                 single_crop_clips.add(i)
+            elif mode == "shorts" and layout == "auto" and not filler_path and no_face_clip(source_path, hi['start'], hi['end']):
+                fit_clips.add(i)         # the cached cut was made as a fit: its animated captions go below the picture too
             print(f"[Log] Segment {i} already exists at {target}. Skipping extraction.")
             continue
             

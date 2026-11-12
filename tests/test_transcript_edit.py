@@ -154,3 +154,31 @@ def test_tighten_segment_cuts_video_and_writes_retimed_transcript(tmp_path):
     words = [w["word"].strip() for s in json.load(open(subs))["segments"] for w in s["words"]]
     assert "cats" not in words and "So" in words  # 1.6-2.0 was in the cut gap
     assert tighten_segment(str(seg), hi, [(0.0, 3.6)], {"segments": SEGMENTS}, str(tmp_path), 1) is None
+
+
+def test_loud_pauses_are_kept_and_quiet_ones_still_cut(tmp_path):
+    import wave
+
+    import numpy as np
+    from engine.transcript_edit import drop_loud_pauses
+    rate = 8000
+    audio = np.zeros(rate * 40, dtype=np.float32)
+    rng = np.random.default_rng(1)
+    words = []
+    for k in range(20):                                   # twenty words of "speech" (level ~0.2), one every 1 s
+        a, b = 1.0 + k, 1.5 + k
+        audio[int(a * rate):int(b * rate)] = rng.normal(0, 0.2, int((b - a) * rate))
+        words.append({"start": a, "end": b})
+    audio[int(25.0 * rate):int(27.0 * rate)] = rng.normal(0, 0.18, 2 * rate)     # laughter: nearly as loud as speech
+    audio[int(30.0 * rate):int(32.0 * rate)] = rng.normal(0, 0.01, 2 * rate)     # a quiet pause
+    path = str(tmp_path / "a.wav")
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
+    tdata = {"segments": [{"words": words}]}
+    kept = drop_loud_pauses([(25.0, 27.0), (30.0, 32.0)], tdata, path)
+    assert kept == [(30.0, 32.0)]                         # the laughter stays, the quiet pause is still cut
+    assert drop_loud_pauses([(25.0, 27.0)], tdata, None) == [(25.0, 27.0)]
+    assert drop_loud_pauses([(25.0, 27.0)], tdata, str(tmp_path / "missing.wav")) == [(25.0, 27.0)]

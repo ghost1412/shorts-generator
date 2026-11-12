@@ -1859,6 +1859,13 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             silence_intervals = protect_speech(silence_intervals, tdata)
             pauses = word_pause_cuts(tdata) if not game else []
             if pauses:
+                from engine.transcript_edit import drop_loud_pauses
+                wav = os.path.join(output_dir, "audio_mono.wav")
+                kept_pauses = drop_loud_pauses(pauses, tdata, wav if os.path.exists(wav) else None)
+                if len(kept_pauses) < len(pauses):
+                    print(f"[Log] Tighten: kept {len(pauses) - len(kept_pauses)} loud pause(s) (laughter, applause, a reaction).")
+                pauses = kept_pauses
+            if pauses:
                 silence_intervals = subtract_intervals(silence_intervals, pauses)
                 print(f"[Log] Tighten: also cutting {len(pauses)} pause(s) between words "
                       f"({sum(b - a for a, b in pauses):.0f}s in the whole video).")

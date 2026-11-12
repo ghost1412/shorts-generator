@@ -105,6 +105,18 @@ def _median(values):
     return round(v[mid] if len(v) % 2 else (v[mid - 1] + v[mid]) / 2, 1)
 
 
+def length_vs_target(lengths, target, tolerance=0.25):
+    """Share of clips within +-`tolerance` of the asked length. Independent of the sentence rules the snapper uses, so a change that
+    shortens clips (for a better opening, say) shows up here. None without a target or for a highlights reel (one video)."""
+    try:
+        target = float(target or 0)
+    except (TypeError, ValueError):
+        return None
+    if target <= 0 or not lengths:
+        return None
+    return round(sum(abs(x - target) <= tolerance * target for x in lengths) / len(lengths), 2)
+
+
 def measure(segments, results, min_len=15.0, max_len=75.0):
     """The report (a dict of numbers) for one run. `min_len` / `max_len` are the allowed clip lengths in seconds."""
     clips = [c for c in (results or {}).get("clips", []) if "start" in c and "end" in c]
@@ -120,6 +132,7 @@ def measure(segments, results, min_len=15.0, max_len=75.0):
         "clips": len(clips),
         "median_length_s": _median(lengths),
         "length_in_range": round(sum(in_range) / len(in_range), 2) if clips else None,
+        "length_vs_target": length_vs_target(lengths, ((results or {}).get("settings") or {}).get("target_duration")),
         "starts_at_sentence": round(sum(_near(float(c["start"]), starts) for c in clips) / len(clips), 2) if clips else None,
         "ends_at_sentence": round(sum(_near(float(c["end"]), ends) for c in clips) / len(clips), 2) if clips else None,
         "overlap_s": overlap_seconds(clips),
@@ -262,6 +275,8 @@ def report(session_dir, gold=None, picture=False):
     reel = settings.get("extract_mode") == "long"
     # a highlights video's moments may be longer than a short; its "clips" are the moments of ONE file
     out.update(measure(segs, res, min_len=8.0, max_len=180.0) if reel else measure(segs, res))
+    if reel:
+        out.pop("length_vs_target", None)       # the target is the reel's length, not each moment's
     if gold:
         out.update(gold_scores(res.get("clips", []), gold.get(out["video"])))
     if reel:
