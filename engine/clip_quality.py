@@ -17,6 +17,7 @@ chose. Nothing here calls an LLM or the network.
 import json
 import os
 import re
+import sys
 
 BOUNDARY_SLOP = 0.6          # seconds between a clip edge and the nearest sentence edge that still counts as "at the boundary"
 
@@ -320,6 +321,9 @@ def report(session_dir, gold=None, picture=False):
     if reel:
         out.pop("length_vs_target", None)       # the target is the reel's length, not each moment's
     if gold:
+        if out["video"] not in gold:
+            print(f"warning: gold file has no entry for '{out['video']}' (keys: {', '.join(sorted(gold))}); no recall/precision for this run",
+                  file=sys.stderr)
         out.update(gold_scores(res.get("clips", []), gold.get(out["video"])))
     if reel:
         clips = [c for c in res.get("clips", []) if "start" in c and "end" in c]
