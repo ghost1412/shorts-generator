@@ -221,7 +221,7 @@ def snap_clip(clip, spans, **opts):
 
     out = dict(clip)
     out.update({"start": round(new_start, 2), "end": round(new_end, 2), "snapped": True,
-                "orig_start": round(start, 2), "orig_end": round(end, 2)})
+                "orig_start": clip.get("orig_start", round(start, 2)), "orig_end": clip.get("orig_end", round(end, 2))})   # keep the first pick across passes
     return out
 
 

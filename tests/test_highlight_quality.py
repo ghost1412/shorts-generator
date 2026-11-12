@@ -238,3 +238,13 @@ def test_a_trailing_off_ending_is_kept_when_dropping_it_would_cost_too_much():
     clip = {"start": spans[0][0], "end": spans[2][1]}
     out = snap_clip(clip, sentence_spans(tr), min_len=1.0)
     assert out["end"] >= spans[1][1] - 0.01
+
+
+def test_snapping_twice_keeps_the_original_pick_for_the_move_count():
+    tr, spans = _t("First sentence of the clip stands here today.", "Second sentence follows right after the first one.",
+                   "Third sentence closes the whole clip out here today.", "A fourth sentence the clip never reaches at all here.")
+    clip = {"start": spans[0][0] + 1.0, "end": spans[2][1] - 0.5}
+    once = snap_clip(clip, sentence_spans(tr))
+    twice = snap_clip(once, sentence_spans(tr))
+    assert once["orig_start"] == twice["orig_start"] == round(clip["start"], 2)
+    assert once["orig_end"] == twice["orig_end"] == round(clip["end"], 2)
