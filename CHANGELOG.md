@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- `scripts/gold_sheet.py`: turns a session's transcript into a time-stamped labelling sheet and your hand-picked moments (`12:30-13:05`) into the gold file the clip benchmark reads (`--gold`, recall and precision); the benchmark workflow takes an optional `gold` file.
 - A clip is no longer shortened because its last sentence is complete: only Whisper's "..." after a word that needs a continuation, or an ending on "a / the / and / because", counts as trailing off ("Look at this." and "...what I am most proud of." stay).
 - `--tighten` keeps laughter and applause inside a long pause: the pause is checked in 0.1 s windows and only the quiet stretches are cut (it used to average the whole gap). Without the audio file it says so and cuts by timing.
 - When two clips overlap and the weaker one is too short to give way, it is trimmed or dropped, never the better clip.

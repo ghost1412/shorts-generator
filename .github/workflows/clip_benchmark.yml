@@ -24,6 +24,10 @@ on:
         description: 'Target length of the highlights video in seconds (long mode)'
         required: false
         default: '180'
+      gold:
+        description: 'Optional gold file in the repo (json {"video.webm": [[start, end], ...]}) to add recall and precision'
+        required: false
+        default: ''
 
 concurrency:
   group: clip-benchmark-${{ github.ref }}
@@ -82,11 +86,14 @@ jobs:
       - name: Benchmark report
         env:
           MODE: ${{ github.event.inputs.mode || 'shorts' }}
+          GOLD: ${{ github.event.inputs.gold }}
         run: |
+          GOLD_ARGS=""
+          if [ -n "$GOLD" ] && [ -f "$GOLD" ]; then GOLD_ARGS="--gold $GOLD"; fi
           if [ "$MODE" = "long" ]; then
-            python scripts/clip_benchmark.py bench --json bench/report.json
+            python scripts/clip_benchmark.py bench $GOLD_ARGS --json bench/report.json
           else
-            python scripts/clip_benchmark.py bench --picture --json bench/report.json
+            python scripts/clip_benchmark.py bench --picture $GOLD_ARGS --json bench/report.json
           fi
 
       - name: Job summary
