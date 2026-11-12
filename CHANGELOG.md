@@ -2,8 +2,14 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
-## Unreleased
+## 0.7.7 (2026-11-13)
 
+- Without an AI key, windows full of greetings, thanks and sign-offs ("welcome to", "thanks for joining", "subscribe", "voice check") rank lower, so intro and outro talk is picked less often as a clip.
+- A weaker overlapping clip restarts at a sentence start or is dropped; it never opens mid-sentence. "Plan A." / "vitamin A." no longer count as trailing off.
+- The loud-pause check covers the tail of a pause and the log counts seconds kept.
+- Sentence splitting without word timings handles closing quotes; the hook cue stops at the first real sentence (not after "Dr." / "No.").
+- Opening rules treat a window as English only when it is mostly English (a Hindi window with a few English words no longer gets the English bonus).
+- Clip benchmark: warns when the gold file has no entry for a run's video; the workflow fails when the gold file is missing; model-labelled gold sets for the four public videos are in `docs/gold/`.
 - `scripts/gold_sheet.py`: turns a session's transcript into a time-stamped labelling sheet and your hand-picked moments (`12:30-13:05`) into the gold file the clip benchmark reads (`--gold`, recall and precision); the benchmark workflow takes an optional `gold` file.
 - A clip is no longer shortened because its last sentence is complete: only Whisper's "..." after a word that needs a continuation, or an ending on "a / the / and / because", counts as trailing off ("Look at this." and "...what I am most proud of." stay).
 - `--tighten` keeps laughter and applause inside a long pause: the pause is checked in 0.1 s windows and only the quiet stretches are cut (it used to average the whole gap). Without the audio file it says so and cuts by timing.
