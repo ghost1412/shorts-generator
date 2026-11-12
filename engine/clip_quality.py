@@ -227,7 +227,7 @@ def hook_ok(segments, start, end):
     return n >= (HOOK_MIN_QUESTION_WORDS if question else HOOK_MIN_WORDS)     # a short question ("Why does it float?") is a hook
 
 
-OPENING_CUES = {"you", "your", "you're", "nobody", "never", "why", "how", "what", "stop", "secret", "mistake", "wrong", "truth", "imagine"}
+from engine.highlight_quality import OPENING_CUES  # noqa: E402
 DANGLING_PRONOUNS = {"it", "this", "that", "they", "he", "she", "these", "those", "them", "his", "her", "its", "their"}
 
 

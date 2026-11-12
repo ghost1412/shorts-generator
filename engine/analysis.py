@@ -1366,7 +1366,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= floor]
             if mode == "shorts" and len(valid_highlights) < clip_count:
                 print(f"[Log] 🎬 Highlight count ({len(valid_highlights)}) is below requested count ({clip_count}). Backfilling top signal peaks...")
-                fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0) - opening_penalty(x.get('text')), reverse=True)
+                fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0) + opening_rank(x.get('text')), reverse=True)
                 valid_highlights += [trim_to_target(h, target_duration) for h in
                                      pick_backfill(fallback_candidates, valid_highlights, clip_count - len(valid_highlights))]
 
@@ -1461,6 +1461,18 @@ from engine.highlight_quality import MIC_CHECK as _MIC_CHECK  # noqa: E402
 _FILLER_WORDS = {"uh", "um", "er", "erm", "uhh", "umm", "hmm", "yeah", "okay", "ok"}
 
 
+HOOK_CUE_BONUS = 0.15      # rank bonus (the signal scores run 0..2) for a window that opens with a question, number or direct address
+
+
+def opening_rank(text):
+    """Rank adjustment for a window picked without an AI: a hook cue in its first words (+HOOK_CUE_BONUS) minus the opening penalty.
+    Not applied to text with no English words (the cue list is English)."""
+    from engine.highlight_quality import has_hook_cue
+    penalty = opening_penalty(text)
+    english = len(re.findall(r"[A-Za-z']+", str(text or ""))) >= 3
+    return (HOOK_CUE_BONUS if english and has_hook_cue(text) else 0.0) - penalty
+
+
 def opening_penalty(text):
     """0..1 penalty for a window that would open badly when picked without an AI: a mic check, a connective or filler as the first
     word ("And ...", "Uh, ...", "So, ..."), or mostly filler words. The signal score alone liked a "testing, one two three" opening.
@@ -1486,10 +1498,10 @@ def signal_picks(compressed_segments, mode, clip_count, target_duration, min_dur
     Highlights reel: filled to the target length (fit_to_target trims the last one); shorts: the best peaks at least 30 s apart,
     each cut to the asked length."""
     fallback_candidates = sorted(compressed_segments,
-                                 key=lambda x: x.get('norm_score', 0) + x.get('norm_audio', 0) - opening_penalty(x.get('text')), reverse=True)
+                                 key=lambda x: x.get('norm_score', 0) + x.get('norm_audio', 0) + opening_rank(x.get('text')), reverse=True)
     if mode == "long" and target_duration:
         heuristic = [{"start": f['start'], "end": f['end'], "viral_score": int(f.get('norm_score', 0) * 100),
-                      "final_score": int(max(0.0, f.get('norm_score', 0) - opening_penalty(f.get('text'))) * 100),
+                      "final_score": int(max(0.0, f.get('norm_score', 0) + opening_rank(f.get('text'))) * 100),
                       "reason": "High-Signal Moment (Heuristic Fallback)"} for f in fallback_candidates]
         return fit_to_target(heuristic, target_duration, min_len=max(15.0, min_duration - 5.0))
     return [trim_to_target(dict(h, reason="High-Signal Moment (Heuristic Fallback)"), target_duration)

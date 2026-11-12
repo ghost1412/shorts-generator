@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Without an AI key, the picker prefers a window that opens with a hook (a question, a number, or a word that speaks to the viewer: "you", "never", "why" ...) over an equally strong one that does not, so more clips start on a reason to keep watching.
 - The repository is now `ghost1412/shortsflow` (was `shorts-generator`). GitHub redirects the old address, including `git clone`, the raw install one-liner and release downloads; the demo page moved to https://ghost1412.github.io/shortsflow/ (the old page address is gone). The package, the installer and the commands are unchanged.
 
 ## 0.7.6 (2026-11-12)

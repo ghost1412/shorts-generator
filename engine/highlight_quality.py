@@ -97,6 +97,18 @@ def trails_off(sentence):
     return bool(words) and words[-1].lower() in DANGLING_ENDINGS
 
 
+OPENING_CUES = {"you", "your", "you're", "nobody", "never", "why", "how", "what", "stop", "secret", "mistake", "wrong", "truth", "imagine"}
+
+
+def has_hook_cue(text, words=25):
+    """True when the first `words` words hold a reason to keep watching: a question, a number, or a word that speaks to the viewer or
+    promises something (you, never, why, how, mistake, secret ...). A cheap text cue, not a judgement of how catchy the line is."""
+    head = " ".join(str(text or "").split()[:words])
+    if "?" in head or any(ch.isdigit() for ch in head):
+        return True
+    return any(w.strip(",.!?\"'").lower() in OPENING_CUES for w in head.split())
+
+
 def weak_opening(text):
     """True when a sentence is a poor first line for a clip: a mic check at its start, a connective or filler sound first
     ("And ...", "Uh, ..."), or a soft filler followed by a comma ("So, ...", "Well, ..."). "So I quit my job" is not weak."""

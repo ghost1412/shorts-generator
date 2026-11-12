@@ -107,3 +107,26 @@ def test_an_unexpected_error_in_the_analysis_falls_back_to_signal_picks(tmp_path
                                        min_duration=15, diversity=False, extra_signals=False)
     assert 0.85 * 180 <= sum(h["end"] - h["start"] for h in out) <= 1.12 * 180
     assert not any(h.get("reason", "").startswith("Epic Highlight") for h in out)
+
+
+def test_hook_cue_detector_and_rank():
+    from engine.analysis import HOOK_CUE_BONUS, opening_rank
+    from engine.highlight_quality import has_hook_cue
+    assert has_hook_cue("Why does water float in space? Because of the weightlessness.")
+    assert has_hook_cue("In 1969 they landed on the moon and nobody believed it")
+    assert has_hook_cue("You will never guess what happened next on the station")
+    assert not has_hook_cue("The water moves slowly along the tube and then it stops")
+    assert opening_rank("Why does water float in space? Because of weightlessness here") == HOOK_CUE_BONUS
+    assert opening_rank("The water moves slowly along the tube and then it stops") == 0.0
+    assert opening_rank("So, um, the water moves slowly along the tube and it stops") < 0
+    assert opening_rank("यह एक बहुत ही सामान्य वाक्य है जो हिंदी में लिखा गया है") == 0.0   # no English: no bonus, no penalty
+
+
+def test_no_ai_picks_prefer_the_window_that_opens_with_a_hook():
+    from engine.analysis import signal_picks
+    base = {"norm_score": 0.5, "norm_audio": 0.5}
+    segs = [dict(base, start=0.0, end=45.0, text="The water moves slowly along the tube and then it stops somewhere"),
+            dict(base, start=100.0, end=145.0, text="Why does the water float in space? Because there is no weight to pull it down"),
+            dict(base, start=200.0, end=245.0, text="The next section describes the apparatus and how it is cleaned each week")]
+    picks = signal_picks(segs, "shorts", 1, 30, 18)
+    assert len(picks) == 1 and picks[0]["start"] == 100.0
