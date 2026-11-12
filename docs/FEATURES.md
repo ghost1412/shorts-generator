@@ -38,7 +38,7 @@ No account or API key is needed to clip a video. A key (or a free local Ollama) 
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
   <a href="https://github.com/ghost1412/shortsflow/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shortsflow/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
   <a href="https://github.com/ghost1412/shortsflow/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shortsflow?style=flat&logo=github" alt="GitHub stars" /></a>
-  <a href="https://glama.ai/mcp/servers/ghost1412/shorts-generator"><img src="https://glama.ai/mcp/servers/ghost1412/shorts-generator/badges/score.svg" alt="ShortsFlow MCP server on Glama" /></a>
+  <a href="https://glama.ai/mcp/servers/ghost1412/shortsflow"><img src="https://glama.ai/mcp/servers/ghost1412/shortsflow/badges/score.svg" alt="ShortsFlow MCP server on Glama" /></a>
   <a href="https://remotion.dev"><img src="https://img.shields.io/badge/Remotion-React_Video-61DAFB?style=flat&logo=react" alt="Remotion" /></a>
   <a href="https://nvidia.com"><img src="https://img.shields.io/badge/CUDA-GPU_Accelerated-76B900?style=flat&logo=nvidia" alt="CUDA" /></a>
 </p>
@@ -297,7 +297,7 @@ _Honest take: the paid tools have a nicer editor, hosted convenience and tested 
 
 ShortsFlow AI Studio provides a native **MCP Server** (`mcp_server.py`) allowing AI assistants (Claude Desktop, Cursor, Antigravity, n8n, AutoGPT) to create shorts autonomously:
 
-Listed in the [Glama MCP directory](https://glama.ai/mcp/servers/ghost1412/shorts-generator) (its quality score is the Glama badge at the top of this page).
+Listed in the [Glama MCP directory](https://glama.ai/mcp/servers/ghost1412/shortsflow) (its quality score is the Glama badge at the top of this page).
 
 ```bash
 # Launch MCP Server over standard I/O for AI IDEs & Workflow Engines
