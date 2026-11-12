@@ -143,6 +143,18 @@ def clean_spoken(text):
     return re.sub(r"\s{2,}", " ", t).strip(" ,")
 
 
+_DANGLING = {"a", "an", "the", "of", "to", "in", "on", "at", "for", "with", "about", "that", "and", "or", "but", "so", "because", "as",
+             "is", "are", "was", "were", "from", "by", "this", "these", "those", "our", "your", "my", "their", "which", "who", "what",
+             "if", "when", "than", "into", "over", "its", "his", "her", "some", "any", "can", "will", "would", "could", "should"}
+
+
+def _trails_off(sentence):
+    """True when a sentence stops on a word that needs a continuation ("... places that.", "... data about."): a speaker who
+    trailed off, which Whisper writes as "..."; such a line is a poor title."""
+    words = re.findall(r"[A-Za-z']+", str(sentence or ""))
+    return bool(words) and words[-1].lower() in _DANGLING
+
+
 def fallback_title(hook, text, limit=70):
     """A title without an AI: the first clean, complete sentence of a sensible length from the hook or the clip's own words
     (fillers and stutters removed, a leading "And/So/But" dropped, never cut mid-word)."""
@@ -159,7 +171,7 @@ def fallback_title(hook, text, limit=70):
         return "Must-watch moment"
     # the hook was chosen on purpose: a short one still wins; from the clip's own words, prefer a full-length sentence
     good = [x for x in hook_s[:2] if 2 <= len(x.split()) <= 14] + [x for x in text_s[:8] if 4 <= len(x.split()) <= 14]
-    title = (good or pool)[0]
+    title = next((x for x in good if not _trails_off(x)), None) or next((x for x in pool if not _trails_off(x)), None) or (good or pool)[0]
     if len(title) > limit:
         title = title[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-") + "..."
     return title[0].upper() + title[1:]

@@ -25,3 +25,11 @@ def test_fallback_description_is_clean_and_cut_at_a_word():
     meta = _fallback_clip_metadata("Well, uh, " + " ".join(f"word{i}" for i in range(80)), None)
     first = meta["description"].split("\n")[0]
     assert "uh" not in first.split() and len(first) <= 203 and first.endswith("...")
+
+
+def test_title_skips_sentences_that_trail_off():
+    t = fallback_title(None, "You can have maps and places that... In those songs from the 70-90s you can see the whole story unfold.")
+    assert t.startswith("In those songs")
+    assert fallback_title(None, "How much detailed data about... Ten public events happened online last year.").startswith("Ten public events")
+    # when every sentence trails off the first one is still used (a title is always returned)
+    assert fallback_title(None, "We looked at the results of the.") == "We looked at the results of the."
