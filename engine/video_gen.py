@@ -2796,7 +2796,14 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             elif layout == "split":
                 vf_filter = generate_ffmpeg_split_screen_filter(w, h)
             elif layout == "fit" or auto_fit:
-                vf_filter = generate_ffmpeg_fit_filter(w, h, letterbox_crop)
+                zoom = None
+                if auto_fit and not letterbox_crop:        # a screen recording / slide deck: zoom in on the part that changes
+                    from engine.screen_region import active_region, crop_filter
+                    window = active_region(source_path, hi['start'], hi['end'])
+                    if window:
+                        zoom = crop_filter(window)
+                        print(f"[Log] Clip {i+1}: zooming into the active part of the screen ({1 / window[0]:.2f}x).")
+                vf_filter = generate_ffmpeg_fit_filter(w, h, zoom or letterbox_crop)
             elif interest_points:
                 crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)
                 vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"

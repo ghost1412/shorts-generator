@@ -8,6 +8,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 - Clips and highlights skip a weak opening: a mic check ("testing, one two three") or a sentence that leans on the one before it ("And, and it just goes ...", "Uh, ...") is skipped at the start (up to 20 s, never below the minimum length), and the no-AI picker ranks such windows lower.
 - Without an AI key, a title never ends on a trailing-off fragment ("... places that.", "... data about."); the next complete sentence is used.
 - `--layout auto` fits the whole picture (centred over a blurred copy) when no face shows on screen in a clip, as in slides or a screen recording, instead of cropping the content off the sides. Explicit layouts are unchanged.
+- Slides and screen recordings that take the fit layout under `--layout auto` also zoom into the part of the picture that changes (browser tabs and empty margins stay out; at most about 1.7x, same 16:9 window, so the captions stay below the picture). Not used when the whole screen changes.
 - Clip benchmark: `hook ok` (does a clip open on a line that stands alone), reel placeholder titles ("Clip #N") are not counted as ungrounded, and the workflow uploads one sample frame per clip.
 - Browser app: the timeline strip in "Edit this short" has drag handles. Drag the blue start or end edge; letting go fills the Start/End box (1 s minimum between them) and redraws the strip.
 - Without an AI key: picked shorts are at least 30 s apart (the top-scoring windows could be neighbours, one scene cut in two).
