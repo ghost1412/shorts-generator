@@ -429,17 +429,17 @@ py main.py --source_video "URL" --use_remotion --caption_style HORMOZI --caption
 # 1d. Fully local, zero-cost voice: Kokoro TTS (no API key; ~120 MB model downloads once)
 py main.py --mode FACTS --category "space" --tts_provider kokoro --voice af_heart --use_remotion
 
-# 2. High-Retention Short with Voice Cloning, Zoom Motion & Audio Ducking
-py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --auto_ducking --use_remotion
+# 2. High-Retention Short with Voice Cloning & Zoom Motion
+py main.py --mode FACTS --category "cyberpunk AI" --tts_provider voicestudio --clone_voice "my_voice.wav" --enable_zoom --use_remotion
 
-# 3. Render Landscape 16:9 YouTube Video with SFX
-py main.py --mode EXPLAINER --prompt "Quantum physics" --aspect_ratio 16:9 --sfx_preset whoosh
+# 3. Educational explainer (Manim)
+py main.py --mode EXPLAINER --prompt "Quantum physics" --skip-upload
 
 # 4. Translate and dub a video (basic: one synthetic voice, no cloning; --language auto if the source is not English)
 py main.py --mode DUB --source_video talk.mp4 --target_lang es --dub_captions
 
 # 5. Process Batch Content Calendar Queue
-py main.py --batch_file "topics.txt" --mode FACTS --aspect_ratio 9:16 --use_remotion
+py main.py --batch_file "topics.txt" --mode FACTS --use_remotion
 ```
 
 ---

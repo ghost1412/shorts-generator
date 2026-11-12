@@ -131,3 +131,10 @@ def test_make_reel_chapters_writes_file_and_survives_errors(tmp_path, monkeypatc
     assert not os.path.exists(other / "chapters.txt")
     # a broken transcript path does not raise
     assert len(clip_extract.make_reel_chapters(HIGHLIGHTS, str(tmp_path / "missing.json"), None, str(other))) == 5
+
+
+def test_keyword_title_skips_contractions_and_weak_words():
+    t = ch.keyword_title("I'm back. You're here. That's excellent. Bone density loss happens because bones aren't loaded, "
+                         "and exercise protects bone density and muscle.")
+    assert "'" not in t and not any(w in t.lower() for w in ("back", "excellent", "here"))
+    assert t.startswith("Bone")

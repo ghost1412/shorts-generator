@@ -186,3 +186,9 @@ def test_length_vs_target_counts_clips_within_a_quarter_of_the_asked_length():
     from engine.clip_quality import length_vs_target
     assert length_vs_target([30, 33, 22, 45], 30) == 0.5            # 30 and 33 fit (22.5..37.5), 22 and 45 do not
     assert length_vs_target([30], None) is None and length_vs_target([], 30) is None and length_vs_target([30], "x") is None
+
+
+def test_description_chapter_list_is_not_graded_as_a_claim():
+    from engine.social_gen import _description_lead
+    lead = _description_lead("Bones need load.\n\nFollow for more. #shorts\n\nChapters:\n0:00 Bone, Density\n8:26 Loaded")
+    assert "8:26" not in lead and "Chapters" not in lead and lead.startswith("Bones need load.")

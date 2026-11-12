@@ -13,7 +13,9 @@ MAX_CHAPTERS = 12
 TITLE_MAX = 48
 _STOP = set("""a an and are as at be but by for from had has have he her his i if in is it its just like me my no not of on or
 our out she so than that the their them then there these they this to too up us was we were what when which who will with you
-your yeah okay um uh gonna got get going know really very about into over also took said says say thing things people ask first""".split())
+your yeah okay um uh gonna got get going know really very about into over also took said says say thing things people ask first
+now back here right good great well one all can do does did would could should much many some more most other because still even way
+make made see look want need think thought let lot time come came go went yes sure actually basically excellent amazing""".split())
 
 
 def reel_timeline(highlights, xf=0.25, durations=None):
@@ -88,7 +90,7 @@ def keyword_title(text, max_len=TITLE_MAX):
     counts, first = {}, {}
     for i, w in enumerate(words):
         lw = w.lower()
-        if lw in _STOP:
+        if lw in _STOP or "'" in lw or "\u2019" in lw:      # a contraction (I'm, that's, don't) is not a topic
             continue
         counts[lw] = counts.get(lw, 0) + 1
         first.setdefault(lw, i)

@@ -201,8 +201,14 @@ def game_clip_metadata(hook, game="", kind=None):
 
 
 def _description_lead(description):
-    """The description without its hashtag line(s): hashtags are keywords, the sentences are claims that must be grounded."""
-    lines = [ln for ln in str(description or "").splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    """The description without its hashtag line(s) and chapter list: hashtags are keywords, the sentences are claims that must be grounded."""
+    lines = []
+    for ln in str(description or "").splitlines():
+        ln = ln.strip()
+        if ln.lower().startswith("chapters:"):
+            break                          # the chapter list (timestamps and keyword titles) is not a claim
+        if ln and not ln.startswith("#"):
+            lines.append(ln)
     return " ".join(lines)
 
 
