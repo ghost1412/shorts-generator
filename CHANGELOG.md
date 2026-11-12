@@ -2,7 +2,7 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
-## Unreleased
+## 0.7.6 (2026-11-12)
 
 - Without an AI key, a highlights video (`--extract_mode long`) fills the asked length again: when no provider answered, one failed call returned a single fixed 30 s slot (a 33 s reel for a 180 s target); now the signal picks fill it (176 s for 180 s on the NASA sample).
 - Clips and highlights skip a weak opening: a mic check ("testing, one two three") or a sentence that leans on the one before it ("And, and it just goes ...", "Uh, ...") is skipped at the start (up to 20 s, never below the minimum length), and the no-AI picker ranks such windows lower.
