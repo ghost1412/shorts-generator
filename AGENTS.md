@@ -16,7 +16,6 @@ ShortsFlow AI Studio is an open-source, local-first AI video generator and autom
 * **Animation & Rendering Engine (`remotion-video/`)**: React-based video engine rendering high-retention spring captions (Hormozi, Glow Box, Bounce, Minimal).
 * **Educational Explainer Engine (`Manim`)**: Renders programmatic 2D/3D math and computer science animations (`test_manim.py`).
 * **Desktop Studio GUI (`gui_app.py`)**: Single-window 3-column CustomTkinter studio interface with live 9:16 video canvas preview.
-* **Web Dashboard (`web/` & `server.py`)**: Next.js 15 App Router interface with Stripe/LemonSqueezy payments & YouTube OAuth.
 * **Automated CI/CD Workflows (`.github/workflows/daily_generate.yml`)**: GitHub Action for scheduled autonomous short generation and social posting.
 
 ---

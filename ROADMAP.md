@@ -77,7 +77,7 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 | [ ] | A5. Use the thumbnail badge generator for FACTS uploads | | |
 | [ ] | A6. Badge timing: show `FACT 1 / 3` only from the first "Number 1", not during the hook | | `ShortFlow.tsx` `BackgroundSegment` + `main.py` `find_fact_start_times` |
 
-### B. Automation API (new files: `api/` or `server.py` rewrite)
+### B. Automation API (new files under `api/`)
 | | Task | Owner | Notes |
 |---|---|---|---|
 | [x] | B1. FastAPI server with OpenAPI docs: `POST /v1/shorts`, `POST /v1/clips`, `GET /v1/jobs/{id}`, `GET /v1/jobs/{id}/files` | | Reuse the subprocess pattern from `webui.py` |
@@ -129,4 +129,3 @@ Workstreams A–F touch mostly separate files and can run at the same time.
 ## Open decisions (ask the repo owner)
 
 - ~~Should scheduled runs ever use modes other than FACTS?~~ Yes: weighted mix via `scripts/pick_scheduled_mode.py` (repo variable `SCHEDULED_MODE` overrides; 2026-11-07).
-- Is the hosted SaaS in `web/` (Stripe, Supabase) still maintained, or should docs focus on self-hosting?

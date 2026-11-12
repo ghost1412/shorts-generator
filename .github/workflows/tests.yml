@@ -44,7 +44,7 @@ jobs:
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=.git,web,remotion-video,scratch,sessions
 
       - name: Compile all Python
-        run: python -m compileall -q main.py webui.py mcp_server.py server.py engine shortsflow tests
+        run: python -m compileall -q main.py webui.py mcp_server.py engine shortsflow tests
 
       - name: Pytest
         run: python -m pytest -q
