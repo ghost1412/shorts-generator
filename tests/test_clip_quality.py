@@ -144,3 +144,37 @@ def test_placeholder_clip_titles_are_not_counted_as_ungrounded():
     segs = [{"start": 0, "end": 10, "text": "We keep the water in a closed loop."}]
     assert grounded_share([{"start": 0, "end": 10, "title": "Clip #2", "description": ""}], segs) == 1.0
     assert grounded_share([{"start": 0, "end": 10, "title": "Water 99 times", "description": ""}], segs) == 0.0
+
+
+def test_no_face_clip_needs_every_sampled_frame_empty(monkeypatch):
+    from engine import clip_picture, video_gen
+    calls = {}
+
+    def fake(track):
+        def f(video, samples=12, start=None, end=None):
+            calls["span"] = (start, end)
+            return track
+        return f
+
+    monkeypatch.setattr(clip_picture, "face_track", fake([None] * 8))
+    assert video_gen.no_face_clip("src.mp4", 10.0, 40.0) is True
+    assert calls["span"] == (10.0, 40.0)                                  # only the clip's own part of the source is sampled
+    monkeypatch.setattr(clip_picture, "face_track", fake([None] * 7 + [(0.5, 0.4, 0.2)]))
+    assert video_gen.no_face_clip("src.mp4", 10.0, 40.0) is False         # one face anywhere: keep the crop
+    monkeypatch.setattr(clip_picture, "face_track", fake([None] * 3))
+    assert video_gen.no_face_clip("src.mp4", 10.0, 40.0) is False         # too few frames read: no decision
+    monkeypatch.setattr(clip_picture, "face_track", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no cv2")))
+    assert video_gen.no_face_clip("src.mp4", 10.0, 40.0) is False
+
+
+def test_face_track_samples_only_the_asked_span(tmp_path):
+    cv2 = __import__("pytest").importorskip("cv2")
+    import numpy as np
+    from engine.clip_picture import face_track
+    path = str(tmp_path / "blank.avi")
+    out = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"MJPG"), 10, (160, 120))
+    for _ in range(100):
+        out.write(np.zeros((120, 160, 3), dtype=np.uint8))
+    out.release()
+    assert len(face_track(path, samples=4, start=2.0, end=6.0)) == 4
+    assert not any(face_track(path, samples=4))

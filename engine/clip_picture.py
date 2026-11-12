@@ -25,19 +25,25 @@ def _ffmpeg():
         return "ffmpeg"
 
 
-def face_track(video, samples=SAMPLES):
-    """[(cx, cy, size) or None] for `samples` evenly spaced frames: the largest face's centre and height as shares of the frame."""
+def face_track(video, samples=SAMPLES, start=None, end=None):
+    """[(cx, cy, size) or None] for `samples` evenly spaced frames: the largest face's centre and height as shares of the frame.
+    `start` / `end` (seconds) limit the sampling to that part of the file (a clip inside a long source video)."""
     import cv2
     cap = cv2.VideoCapture(video)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     if total <= 0:
         cap.release()
         return []
+    first = 0
+    if start is not None and end is not None:
+        fps = cap.get(cv2.CAP_PROP_FPS) or 0
+        if fps > 0 and end > start:
+            first, total = int(start * fps), max(1, int((end - start) * fps))
     from engine.speaker_focus import _detect_faces, _make_detector
     det = _make_detector()          # the same detector the crop uses (YuNet; Haar frontal + profile when it is missing)
     out = []
     for i in range(samples):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int((i + 0.5) * total / samples))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, first + int((i + 0.5) * total / samples))
         ok, frame = cap.read()
         if not ok:
             continue

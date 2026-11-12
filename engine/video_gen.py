@@ -109,6 +109,21 @@ def plain_caption_y(requested):
     return max(200, min(1700, y))
 
 
+NO_FACE_SAMPLES = 8
+
+
+def no_face_clip(source_path, start, end, samples=NO_FACE_SAMPLES):
+    """True when none of `samples` frames spread over [start, end] of the source shows a face: a slide deck or screen recording,
+    where a 9:16 centre crop would cut the content off (the auto layout then fits the whole picture). False on any doubt."""
+    try:
+        from engine.clip_picture import face_track
+        track = face_track(source_path, samples=samples, start=start, end=end)
+    except Exception as e:
+        print(f"[Warning] Face check for the auto layout skipped: {e}")
+        return False
+    return len(track) >= samples - 1 and not any(track)
+
+
 def fit_caption_y(requested):
     """Caption position for --layout fit. The default (1150) would sit on the centred picture, so it moves below it; an explicit
     --subtitle_y_pos stays as the user set it."""
@@ -2733,6 +2748,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
 
     # clips cut with the plain one-person crop (smart or centre): their animated captions may move off a close-up face
     single_crop_clips = set()
+    fit_clips = set()           # clips the auto layout cut as "whole picture over a blurred copy" (no face on screen)
 
     for i, hi in enumerate(highlights):
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
@@ -2763,6 +2779,13 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 print(f"[Log] Clip {i+1}: not a two-person shot, using the regular crop." +
                       (" (auto layout: single)" if layout == "auto" else ""))
 
+        auto_fit = False
+        if mode == "shorts" and layout == "auto" and not active_shots and not filler_path:
+            auto_fit = no_face_clip(source_path, hi['start'], hi['end'])
+            if auto_fit:
+                fit_clips.add(i)
+                print(f"[Log] Clip {i+1}: no face on screen (slides / screen recording?), fitting the whole picture instead of cropping it. (auto layout: fit)")
+
         if mode == "shorts":
             if filler_path:
                 # chain for the clip half only; the full graph is assembled below once colour grades are prepended
@@ -2772,7 +2795,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 vf_filter = build_active_speaker_filter(active_shots, w, h)
             elif layout == "split":
                 vf_filter = generate_ffmpeg_split_screen_filter(w, h)
-            elif layout == "fit":
+            elif layout == "fit" or auto_fit:
                 vf_filter = generate_ffmpeg_fit_filter(w, h, letterbox_crop)
             elif interest_points:
                 crop_filter = generate_ffmpeg_crop_filter(interest_points, hi['start'], hi['end'], w, h, orientation, letterbox_crop)
@@ -2995,7 +3018,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                             print(f"[Log] Tightened Short {i+1}: {hi['end'] - hi['start']:.1f}s -> {r_dur:.1f}s")
                     except Exception as e:
                         print(f"[Warning] Could not tighten Short {i+1} ({e}); rendering it untightened.")
-                clip_caption_y = subtitle_y_pos
+                clip_caption_y = fit_caption_y(subtitle_y_pos) if i in fit_clips else subtitle_y_pos   # below the centred picture
                 if i in single_crop_clips and subtitle_y_pos == 1150:
                     try:   # close-up talking head: the default caption height would sit on the mouth, use the lower third
                         from engine.caption_layout import face_safe_y
