@@ -185,6 +185,7 @@ def speech_gaps(segments, start, end, gap_min=GAP_MIN):
 from engine.highlight_quality import WEAK_OPENERS  # noqa: E402
 HOOK_LEAD_S = 1.5      # the first word must come this soon after the clip start
 HOOK_MIN_WORDS = 4     # the first sentence needs this many words to stand alone
+HOOK_MIN_QUESTION_WORDS = 2     # a question needs fewer
 
 
 def hook_ok(segments, start, end):
@@ -200,12 +201,13 @@ def hook_ok(segments, start, end):
         return False
     if words[0][1].lower().strip(",.?!\"'") in WEAK_OPENERS:
         return False
-    n = 0
+    n, question = 0, False
     for _, w in words:
         n += 1
         if w.endswith((".", "?", "!")):
+            question = w.endswith("?")
             break
-    return n >= HOOK_MIN_WORDS
+    return n >= (HOOK_MIN_QUESTION_WORDS if question else HOOK_MIN_WORDS)     # a short question ("Why does it float?") is a hook
 
 
 def overlap_with(a, b):

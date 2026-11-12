@@ -128,7 +128,9 @@ def test_hook_ok_needs_a_standalone_opening():
     assert hook_ok(good, 10.0, 20.0)
     assert not hook_ok(_words([(10.0, "And"), (10.4, "then"), (10.8, "we"), (11.2, "left.")]), 10.0, 20.0)   # connective first
     assert not hook_ok(_words([(10.0, "Uh,"), (10.4, "yes"), (10.8, "it"), (11.2, "works.")]), 10.0, 20.0)    # filler first
-    assert not hook_ok(_words([(10.0, "Why?"), (10.4, "Because"), (10.8, "so"), (11.2, "it.")]), 10.0, 20.0)   # first sentence too short
+    assert not hook_ok(_words([(10.0, "Why."), (10.4, "Because"), (10.8, "so"), (11.2, "it.")]), 10.0, 20.0)   # first sentence too short
+    assert hook_ok(_words([(10.0, "Why"), (10.4, "does"), (10.8, "it"), (11.2, "float?")]), 10.0, 20.0)
+    assert hook_ok(_words([(10.0, "Why"), (10.4, "me?"), (10.8, "Because"), (11.2, "so.")]), 10.0, 20.0)      # a short question is a hook
     assert not hook_ok(_words([(13.0, "Nobody"), (13.4, "expected"), (13.8, "this"), (14.2, "result.")]), 10.0, 20.0)  # silent lead-in
     assert not hook_ok([], 10.0, 20.0)
 
