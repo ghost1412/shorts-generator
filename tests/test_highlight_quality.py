@@ -295,3 +295,13 @@ def test_the_weaker_clip_without_a_sentence_start_left_does_not_open_mid_sentenc
     assert all(any(abs(c["start"] - st) < 0.06 for st in starts) for c in out)      # every clip still opens on a sentence start
     srt = sorted(out, key=lambda c: c["start"])
     assert all(a["end"] <= b["start"] + 0.01 for a, b in zip(srt, srt[1:]))
+
+
+def test_intro_and_outro_talk_ranks_below_content_without_an_ai():
+    from engine.analysis import opening_rank
+    from engine.highlight_quality import boilerplate_hits
+    intro = "Welcome to a very special episode. Please call station for a voice check. Thank you so much for being here."
+    content = "A cup is really a gravity machine. In weightlessness the fluid sits in a blob at the bottom of the cup."
+    assert boilerplate_hits(intro) >= 3 and boilerplate_hits(content) == 0
+    assert opening_rank(intro) < opening_rank(content) - 0.5
+    assert opening_rank("これは最初の文です。歓迎します。") == 0.0                      # no English words: the English list says nothing

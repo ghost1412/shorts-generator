@@ -1461,6 +1461,7 @@ from engine.highlight_quality import MIC_CHECK as _MIC_CHECK  # noqa: E402
 _FILLER_WORDS = {"uh", "um", "er", "erm", "uhh", "umm", "hmm", "yeah", "okay", "ok"}
 
 
+BOILERPLATE_PENALTY = 0.35     # per greeting / thanks / sign-off phrase in a window (at most 0.7)
 HOOK_CUE_BONUS = 0.15      # rank bonus (the signal scores run 0..2) for a window that opens with a question, number or direct address
 
 
@@ -1468,8 +1469,11 @@ def opening_rank(text):
     """Rank adjustment for a window picked without an AI: a hook cue in its first words (+HOOK_CUE_BONUS) minus the opening penalty.
     Not applied to text with no English words (the cue list is English)."""
     from engine.highlight_quality import has_hook_cue
+    from engine.highlight_quality import boilerplate_hits
     penalty = opening_penalty(text)
     english = len(re.findall(r"[A-Za-z']+", str(text or ""))) >= 3
+    if english:
+        penalty += min(0.7, BOILERPLATE_PENALTY * boilerplate_hits(text))        # intro / outro / housekeeping talk
     return (HOOK_CUE_BONUS if english and has_hook_cue(text) else 0.0) - penalty
 
 

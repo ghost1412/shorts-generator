@@ -100,6 +100,20 @@ def trails_off(sentence):
 OPENING_CUES = {"nobody", "never", "why", "how", "stop", "secret", "mistake", "wrong", "truth", "imagine"}
 
 
+BOILERPLATE = re.compile(
+    r"\b(welcome (back )?to|thanks? (you )?(so much )?for (being|joining|coming|taking|watching|listening|having|making)"
+    r"|thank you (so much |very much )?(all|everyone|for)|voice check|sound check|how do you hear|can you hear|that concludes"
+    r"|are you ready for the event|good luck|godspeed|subscribe|follow (us|them|along)|(use|using) the hashtag|see you (next|soon)"
+    r"|until next time|next episode|shameless plug|stay tuned|be right back|round of applause|please welcome|give it up"
+    r"|(my|our) guests? (today|this)|coming up (next|after)|right after this)\b", re.I)
+
+
+def boilerplate_hits(text):
+    """How many show-housekeeping phrases a stretch of speech holds (greetings, thanks, sign-offs, "follow us", "voice check"). A window full of them
+    is the intro or outro, not a moment a viewer wants as a clip."""
+    return len(BOILERPLATE.findall(str(text or "")))
+
+
 def has_hook_cue(text, words=25):
     """True when the FIRST SENTENCE (at most `words` words) holds a reason to keep watching: a question, a number, or a word that
     promises something (never, why, how, mistake, secret ...). A cheap text cue, not a judgement of how catchy the line is."""
