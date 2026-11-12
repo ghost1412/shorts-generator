@@ -1366,7 +1366,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
             valid_highlights = [h for h in valid_highlights if (h['end'] - h['start']) >= floor]
             if mode == "shorts" and len(valid_highlights) < clip_count:
                 print(f"[Log] 🎬 Highlight count ({len(valid_highlights)}) is below requested count ({clip_count}). Backfilling top signal peaks...")
-                fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0), reverse=True)
+                fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) + x.get('norm_motion', 0) - opening_penalty(x.get('text')), reverse=True)
                 valid_highlights += [trim_to_target(h, target_duration) for h in
                                      pick_backfill(fallback_candidates, valid_highlights, clip_count - len(valid_highlights))]
 
@@ -1380,7 +1380,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
         if not valid_highlights:
             print("[Warning] LLM analysis failed. Using Heuristic Signal Fallback (Top Peaks)...")
             # 🟢 DYNAMIC RECOVERY: Use top heuristic signal peaks (Text + Audio)
-            fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0), reverse=True)
+            fallback_candidates = sorted(compressed_segments, key=lambda x: x['norm_score'] + x.get('norm_audio', 0) - opening_penalty(x.get('text')), reverse=True)
             
             if mode == "long" and target_duration:
                 # the same length rule as the LLM path (it used to add whole segments until the target was passed, up to a
@@ -1463,6 +1463,26 @@ def order_for_mode(highlights, mode):
     if mode == "shorts" or not highlights:
         return highlights
     return sorted(highlights, key=lambda h: float(h["start"]))
+
+
+_MIC_CHECK = re.compile(r"\b(testing[, ]+(one|1)|one,? two,? three|can you hear|check,? check|is this (thing )?on|sound check)\b", re.I)
+_FILLER_WORDS = {"uh", "um", "er", "erm", "uhh", "umm", "hmm", "yeah", "okay", "ok"}
+
+
+def opening_penalty(text):
+    """0..1 penalty for a window that would open badly when picked without an AI: a mic check, a filler or connective as the first word
+    ("and", "so", "uh"), or mostly filler words. The signal score alone liked a "testing, one two three" opening."""
+    from engine.clip_quality import WEAK_OPENERS
+    words = re.findall(r"[A-Za-z']+", str(text or ""))
+    if not words:
+        return 1.0
+    penalty = 0.0
+    if _MIC_CHECK.search(" ".join(words[:25])):
+        penalty += 0.6
+    if words[0].lower() in WEAK_OPENERS or words[0].lower() in _FILLER_WORDS:
+        penalty += 0.3
+    penalty += min(0.4, 2 * sum(w.lower() in _FILLER_WORDS for w in words) / len(words))
+    return min(1.0, penalty)
 
 
 def fit_to_target(highlights, target, already=0.0, tolerance=0.08, min_len=15.0):

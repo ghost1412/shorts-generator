@@ -77,3 +77,12 @@ def test_long_highlights_without_any_llm_still_fill_the_target(tmp_path, monkeyp
                                        min_duration=15, diversity=False, extra_signals=False)
     total = sum(h["end"] - h["start"] for h in out)
     assert 0.85 * 180 <= total <= 1.12 * 180, total
+
+
+def test_opening_penalty_dislikes_mic_checks_and_weak_openers():
+    from engine.analysis import opening_penalty
+    assert opening_penalty("Yeah. Testing one, two, three testing. Uh, that is better.") >= 0.6
+    assert opening_penalty("And then we went home") >= 0.3
+    assert opening_penalty("Whatever happens to your eyes is a zero G phenomenon") == 0
+    assert opening_penalty("") == 1.0
+
