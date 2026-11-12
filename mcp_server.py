@@ -181,7 +181,7 @@ def run_main_command(job_id: str, args_list: list):
         # e.g. a minimal container that only serves tools/list: say so plainly instead of failing with a Python error
         with JOBS_LOCK:
             JOBS[job_id].update({"status": "failed", "error": "Rendering needs the full ShortsFlow checkout (main.py and its "
-                                 "requirements). Clone https://github.com/ghost1412/shorts-generator and run mcp_server.py from it."})
+                                 "requirements). Clone https://github.com/ghost1412/shortsflow and run mcp_server.py from it."})
         return
     cmd = [sys.executable, main_py, "--video_id", job_id, "--skip_upload"] + args_list
     results_json = None

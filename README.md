@@ -12,17 +12,17 @@
 <p align="center">
   <a href="https://pypi.org/project/shortsflow/"><img src="https://img.shields.io/pypi/v/shortsflow?style=flat&logo=pypi&logoColor=white&color=3775A9" alt="PyPI version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
-  <a href="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
+  <a href="https://github.com/ghost1412/shortsflow/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shortsflow/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
 </p>
 
 ## Try it in two minutes
 
 | | |
 |---|---|
-| 🪟 **Windows, no setup** | [⬇ ShortsFlow-Setup.exe](https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe), open **ShortsFlow**, press **Try a 2-minute sample**, then **Start**. |
-| 🍎🐧 **Mac or Linux** | `curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh \| sh` (needs Python 3.10+ and FFmpeg; installs into `~/.shortsflow`). |
+| 🪟 **Windows, no setup** | [⬇ ShortsFlow-Setup.exe](https://github.com/ghost1412/shortsflow/releases/latest/download/ShortsFlow-Setup.exe), open **ShortsFlow**, press **Try a 2-minute sample**, then **Start**. |
+| 🍎🐧 **Mac or Linux** | `curl -fsSL https://raw.githubusercontent.com/ghost1412/shortsflow/main/install.sh \| sh` (needs Python 3.10+ and FFmpeg; installs into `~/.shortsflow`). |
 | 💻 **Any OS** | `pip install "shortsflow[clip]"`, then `shortsflow doctor`, then `shortsflow clip my_video.mp4` |
-| ☁️ **Nothing to install** | [Open in Colab](https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb) (free GPU) |
+| ☁️ **Nothing to install** | [Open in Colab](https://colab.research.google.com/github/ghost1412/shortsflow/blob/main/ShortsFlow_Colab.ipynb) (free GPU) |
 
 No account or API key is needed to clip a video. A key (or a free local Ollama) only adds AI titles and descriptions.
 
@@ -72,7 +72,7 @@ game moments, and 30+ idea-to-video formats. They are documented in **[docs/FEAT
 
 ## Help and contributing
 
-- Something wrong? [Open an issue](https://github.com/ghost1412/shorts-generator/issues) with `shortsflow doctor` output.
+- Something wrong? [Open an issue](https://github.com/ghost1412/shortsflow/issues) with `shortsflow doctor` output.
 - Roadmap and open tasks: [ROADMAP.md](ROADMAP.md). Tests: `python -m pytest` (offline).
 - Sample footage in the demos is public domain or Creative Commons and credited where used.
 

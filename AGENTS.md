@@ -2,7 +2,7 @@
 
 > **System Prompt for AI Agents (Antigravity, Cursor, Claude Code, Copilot, AutoGPT, LLMs)**
 
-Welcome Agent! This document provides structured architectural context, setup instructions, CLI capabilities, and operational guidelines for working with **ShortsFlow AI Studio** (`shorts-generator`).
+Welcome Agent! This document provides structured architectural context, setup instructions, CLI capabilities, and operational guidelines for working with **ShortsFlow** (`shortsflow`).
 
 ---
 

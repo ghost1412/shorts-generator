@@ -236,7 +236,7 @@ jobs:
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         USER_ID: ${{ github.event.inputs.user_id }}
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-        SHORTSFLOW_DESCRIPTION_FOOTER: "Made with ShortsFlow, a free open-source short-video maker: https://github.com/ghost1412/shorts-generator"
+        SHORTSFLOW_DESCRIPTION_FOOTER: "Made with ShortsFlow, a free open-source short-video maker: https://github.com/ghost1412/shortsflow"
       run: |
         ARG_SKIP_UPLOAD=""
         if [ ! -f "token.json" ] || [ ! -s "token.json" ]; then

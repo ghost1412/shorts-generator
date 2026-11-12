@@ -5,7 +5,7 @@
 
 > **Turn a long video into captioned vertical Shorts, on your own PC.**
 > The free, open-source alternative to Opus Clip, Klap and Vizard: no watermark, no credits, no subscription.
-> **[Demo page](https://ghost1412.github.io/shorts-generator/)** · one-click installer for Windows; Mac, Linux and Docker use the options below.
+> **[Demo page](https://ghost1412.github.io/shortsflow/)** · one-click installer for Windows; Mac, Linux and Docker use the options below.
 
 <div align="center">
   <img src="../demos/demo_podcast_cuts.gif" width="260" alt="A podcast clip: the crop cuts to whoever is speaking, with word-by-word captions" />
@@ -17,10 +17,10 @@
 
 | | |
 |---|---|
-| 🪟 **Windows, no setup** | [⬇ ShortsFlow-Setup.exe](https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe) → open **ShortsFlow** → paste a link or drop a file → one button |
-| 🍎🐧 **Mac or Linux, one line** | `curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh \| sh` (needs Python 3.10+ and FFmpeg; installs into `~/.shortsflow`, nothing else is touched) |
+| 🪟 **Windows, no setup** | [⬇ ShortsFlow-Setup.exe](https://github.com/ghost1412/shortsflow/releases/latest/download/ShortsFlow-Setup.exe) → open **ShortsFlow** → paste a link or drop a file → one button |
+| 🍎🐧 **Mac or Linux, one line** | `curl -fsSL https://raw.githubusercontent.com/ghost1412/shortsflow/main/install.sh \| sh` (needs Python 3.10+ and FFmpeg; installs into `~/.shortsflow`, nothing else is touched) |
 | 💻 **Any OS** | `pip install "shortsflow[clip]"` → `shortsflow doctor` → `shortsflow clip my_video.mp4` |
-| ☁️ **Nothing to install** | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb) free GPU, nothing to install (run the cells, open the link it prints, log in with the password shown under it) |
+| ☁️ **Nothing to install** | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shortsflow/blob/main/ShortsFlow_Colab.ipynb) free GPU, nothing to install (run the cells, open the link it prints, log in with the password shown under it) |
 
 No account or API key is needed to clip a video. A key (or a free local Ollama) only adds AI titles and descriptions.
 
@@ -36,8 +36,8 @@ No account or API key is needed to clip a video. A key (or a free local Ollama) 
   <a href="https://pypi.org/project/shortsflow/"><img src="https://img.shields.io/pypi/v/shortsflow?style=flat&logo=pypi&logoColor=white&color=3775A9" alt="PyPI version" /></a>
   <a href="https://pypi.org/project/shortsflow/"><img src="https://img.shields.io/pypi/pyversions/shortsflow?style=flat&logo=python&logoColor=white" alt="Python versions" /></a>
   <a href="../LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=flat" alt="MIT License" /></a>
-  <a href="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shorts-generator/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
-  <a href="https://github.com/ghost1412/shorts-generator/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shorts-generator?style=flat&logo=github" alt="GitHub stars" /></a>
+  <a href="https://github.com/ghost1412/shortsflow/actions/workflows/tests.yml"><img src="https://github.com/ghost1412/shortsflow/actions/workflows/tests.yml/badge.svg" alt="Tests" /></a>
+  <a href="https://github.com/ghost1412/shortsflow/stargazers"><img src="https://img.shields.io/github/stars/ghost1412/shortsflow?style=flat&logo=github" alt="GitHub stars" /></a>
   <a href="https://glama.ai/mcp/servers/ghost1412/shorts-generator"><img src="https://glama.ai/mcp/servers/ghost1412/shorts-generator/badges/score.svg" alt="ShortsFlow MCP server on Glama" /></a>
   <a href="https://remotion.dev"><img src="https://img.shields.io/badge/Remotion-React_Video-61DAFB?style=flat&logo=react" alt="Remotion" /></a>
   <a href="https://nvidia.com"><img src="https://img.shields.io/badge/CUDA-GPU_Accelerated-76B900?style=flat&logo=nvidia" alt="CUDA" /></a>
@@ -140,7 +140,7 @@ After **Make my shorts**, the browser app (`shortsflow webui`) shows every short
 
 ## 🪟 Windows: one-click install
 
-**[⬇ Download ShortsFlow-Setup.exe](https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe)** (or see [all releases](https://github.com/ghost1412/shorts-generator/releases)), run it, then open **ShortsFlow** from your Desktop. A browser page opens where you paste a video link or upload a file and press one button. No Python, Node or API key to install first.
+**[⬇ Download ShortsFlow-Setup.exe](https://github.com/ghost1412/shortsflow/releases/latest/download/ShortsFlow-Setup.exe)** (or see [all releases](https://github.com/ghost1412/shortsflow/releases)), run it, then open **ShortsFlow** from your Desktop. A browser page opens where you paste a video link or upload a file and press one button. No Python, Node or API key to install first.
 
 - The installer downloads roughly 2 GB the first time (about 5 GB with an NVIDIA card, because of the GPU libraries; it fetches its own private Python, the speech-recognition components and Node), so it needs an internet connection and a few minutes. It does not need admin rights.
 - It is not code-signed yet, so Windows may show a blue "Windows protected your PC" box: click **More info**, then **Run anyway**.
@@ -159,19 +159,19 @@ Your shorts are saved in a `shortsflow` folder in your home directory (the comma
 
 | Option | Command | Best for |
 |---|---|---|
-| ☁️ **Google Colab** (free GPU, zero install) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb) | Trying it in 5 minutes |
-| 🐳 **Docker** (browser WebUI) | `docker run -p 7860:7860 -e GEMINI_API_KEY=your_key ghcr.io/ghost1412/shorts-generator` → open http://localhost:7860 | Servers, Linux, no Python setup |
+| ☁️ **Google Colab** (free GPU, zero install) | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shortsflow/blob/main/ShortsFlow_Colab.ipynb) | Trying it in 5 minutes |
+| 🐳 **Docker** (browser WebUI) | `docker run -p 7860:7860 -e GEMINI_API_KEY=your_key ghcr.io/ghost1412/shortsflow` → open http://localhost:7860 | Servers, Linux, no Python setup |
 | 📦 **pip** | `pip install shortsflow` then `shortsflow init` and `shortsflow doctor` (clipping: `pip install "shortsflow[clip]"`) | Using it as a command from anywhere |
 | 🌐 **Browser WebUI** | `pip install -r requirements-full.txt && python webui.py` | Local use with a GPU |
 | 🖥️ **Desktop Studio GUI** (Windows) | `setup.bat && launch.bat` | Windows desktop |
 | 🤖 **AI agents** | `python mcp_server.py` or point your agent at [`SKILL.md`](../SKILL.md) | Claude Code, Cursor, n8n |
 
 ```bash
-git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
-cd shorts-generator
+git clone --depth 1 https://github.com/ghost1412/shortsflow.git
+cd shortsflow
 ```
 
-> 🐧 **Linux / macOS**: the easy route is the one-line installer, no clone needed: `curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh | sh` (installs into `~/.shortsflow`; needs Python 3.10+ and FFmpeg). From a clone: `chmod +x setup.sh && ./setup.sh && python3 webui.py`
+> 🐧 **Linux / macOS**: the easy route is the one-line installer, no clone needed: `curl -fsSL https://raw.githubusercontent.com/ghost1412/shortsflow/main/install.sh | sh` (installs into `~/.shortsflow`; needs Python 3.10+ and FFmpeg). From a clone: `chmod +x setup.sh && ./setup.sh && python3 webui.py`
 
 ---
 
@@ -309,15 +309,15 @@ python mcp_server.py
 The MCP server runs from a checkout of this repo (it starts `main.py` next to it):
 
 ```bash
-git clone --depth 1 https://github.com/ghost1412/shorts-generator.git
-cd shorts-generator && pip install -r requirements.txt
-claude mcp add shortsflow -- python /full/path/to/shorts-generator/mcp_server.py      # Claude Code
+git clone --depth 1 https://github.com/ghost1412/shortsflow.git
+cd shortsflow && pip install -r requirements.txt
+claude mcp add shortsflow -- python /full/path/to/shortsflow/mcp_server.py      # Claude Code
 ```
 
 Claude Desktop / Cursor: add this under `mcpServers` in the tool's config JSON (use the full path):
 
 ```json
-{ "mcpServers": { "shortsflow": { "command": "python", "args": ["/full/path/to/shorts-generator/mcp_server.py"] } } }
+{ "mcpServers": { "shortsflow": { "command": "python", "args": ["/full/path/to/shortsflow/mcp_server.py"] } } }
 ```
 
 ### Available MCP Tools:
@@ -455,11 +455,11 @@ To measure clip quality before and after a change, run `python scripts/clip_benc
 
 ## 🐞 Report a problem
 
-Something broke? [Open an issue](https://github.com/ghost1412/shorts-generator/issues/new/choose) and paste the output of `shortsflow doctor` (it prints no keys). For installer problems also attach `install.log` from the install folder.
+Something broke? [Open an issue](https://github.com/ghost1412/shortsflow/issues/new/choose) and paste the output of `shortsflow doctor` (it prints no keys). For installer problems also attach `install.log` from the install folder.
 
 ## ⭐ Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=ghost1412/shorts-generator&type=Date)](https://star-history.com/#ghost1412/shorts-generator&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=ghost1412/shortsflow&type=Date)](https://star-history.com/#ghost1412/shortsflow&Date)
 
 ---
 

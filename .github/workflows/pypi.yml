@@ -2,7 +2,7 @@ name: Publish to PyPI
 
 # Releases are published with PyPI Trusted Publishing (no API token stored in the repo).
 # One-time setup on pypi.org: Account -> Publishing -> add a pending publisher with
-#   project shortsflow, owner ghost1412, repo shorts-generator, workflow pypi.yml, environment pypi.
+#   project shortsflow, owner ghost1412, repo shortsflow, workflow pypi.yml, environment pypi.
 # Then: git tag v0.1.0 && git push origin v0.1.0
 
 on:

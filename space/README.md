@@ -13,7 +13,7 @@ short_description: Open-source Opus Clip alternative, try it on CPU
 
 # ShortsFlow AI Studio (demo Space)
 
-A CPU-only try-out of [ShortsFlow](https://github.com/ghost1412/shorts-generator): paste a video link or upload a short
+A CPU-only try-out of [ShortsFlow](https://github.com/ghost1412/shortsflow): paste a video link or upload a short
 video and get vertical shorts with animated captions.
 
 - Runs on free CPU hardware, so it is slow and limited to short videos. For full speed (GPU transcription, Remotion

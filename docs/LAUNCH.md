@@ -8,7 +8,7 @@ Best timing: Show HN on a weekday morning US Eastern; stay around for the first 
 - [ ] `pip install shortsflow` works in a fresh venv; `shortsflow doctor` is green; `shortsflow clip some_video.mp4` makes shorts with no keys
 - [ ] The Windows installer (`ShortsFlow-Setup-<version>.exe` on the latest GitHub release) has been run end to end on a PC that is not yours (or a fresh VM) and made a short; note the SmartScreen "More info > Run anyway" step in your post
 - [ ] The daily channel workflow is green again (Groq model fix, 2026-11-03)
-- [ ] GHCR package `ghcr.io/ghost1412/shorts-generator` is public and `docker run` starts the WebUI
+- [ ] GHCR package `ghcr.io/ghost1412/shortsflow` is public and `docker run` starts the WebUI
 - [ ] Colab notebook runs top to bottom
 - [ ] `pip install -U edge-tts` (Edge TTS breaks when Microsoft rotates its token)
 - [ ] CI badge on the README is green
@@ -36,7 +36,7 @@ Best timing: Show HN on a weekday morning US Eastern; stay around for the first 
 **Title** (max 80 chars):
 Show HN: ShortsFlow – open-source, local-first alternative to Opus Clip
 
-**URL:** https://github.com/ghost1412/shorts-generator
+**URL:** https://github.com/ghost1412/shortsflow
 
 **Text:**
 I built ShortsFlow to make vertical Shorts/Reels without paying per minute for clipping SaaS, and without uploading footage anywhere.
@@ -70,9 +70,9 @@ Hi r/selfhosted! I've been building an open-source tool for making vertical shor
 - **Podcast mode**: cuts to the active speaker, or shows both stacked when it's unsure
 - **Fully local**: Whisper on your GPU, Ollama for the LLM, Kokoro for the voice; only stock footage (Pexels) needs an API key, and only for the generate-from-a-topic mode
 - **Automate it**: REST API with API keys and signed webhooks, n8n example included
-- **Install**: a one-click Windows installer from the Releases page (unsigned, so SmartScreen warns), `pip install shortsflow` then `shortsflow clip video.mp4` (no API key needed for clipping), `docker run -p 7860:7860 ghcr.io/ghost1412/shorts-generator`, or open the Colab
+- **Install**: a one-click Windows installer from the Releases page (unsigned, so SmartScreen warns), `pip install shortsflow` then `shortsflow clip video.mp4` (no API key needed for clipping), `docker run -p 7860:7860 ghcr.io/ghost1412/shortsflow`, or open the Colab
 
-Repo: https://github.com/ghost1412/shorts-generator
+Repo: https://github.com/ghost1412/shortsflow
 
 Feedback and issues welcome. ROADMAP.md lists what's open, and there are a few `good first issue` tickets.
 

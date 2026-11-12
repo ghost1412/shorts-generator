@@ -2,6 +2,10 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- The repository is now `ghost1412/shortsflow` (was `shorts-generator`). GitHub redirects the old address, including `git clone`, the raw install one-liner and release downloads; the demo page moved to https://ghost1412.github.io/shortsflow/ (the old page address is gone). The package, the installer and the commands are unchanged.
+
 ## 0.7.6 (2026-11-12)
 
 - Without an AI key, a highlights video (`--extract_mode long`) fills the asked length again: when no provider answered, one failed call returned a single fixed 30 s slot (a 33 s reel for a 180 s target); now the signal picks fill it (176 s for 180 s on the NASA sample).

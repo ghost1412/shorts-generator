@@ -3,7 +3,7 @@
 # Requires the GitHub CLI: winget install GitHub.cli && gh auth login
 # Run once: bash scripts/post_roadmap_issues.sh
 set -e
-R=ghost1412/shorts-generator
+R=ghost1412/shortsflow
 
 gh issue comment 27 -R $R --body "Shipped in fa2ff35 (shot-length fix in d34dc39) as \`--layout active\` (also in the WebUI and the MCP \`extract_clips\` tool), following the approach above - thanks again @dillonstreator:
 

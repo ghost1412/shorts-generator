@@ -773,7 +773,7 @@ def build_ui():
         gr.Markdown(
             "# ⚡ ShortsFlow AI Studio\n"
             "Open-source, local-first Opus Clip alternative. "
-            "[GitHub](https://github.com/ghost1412/shorts-generator) · ⭐ Star if it helps!"
+            "[GitHub](https://github.com/ghost1412/shortsflow) · ⭐ Star if it helps!"
         )
         gr.HTML(WORDS_CSS)
         from shortsflow.timeline import DRAG_JS

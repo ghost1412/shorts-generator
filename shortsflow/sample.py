@@ -4,7 +4,7 @@ The file is a two-minute excerpt of a public-domain NASA video (an astronaut on 
 podcast host), stored as an asset of the `samples-v1` GitHub release so it is downloaded only when someone asks for it.
 """
 
-SAMPLE_URL = "https://github.com/ghost1412/shorts-generator/releases/download/samples-v1/shortsflow_sample_nasa.mp4"
+SAMPLE_URL = "https://github.com/ghost1412/shortsflow/releases/download/samples-v1/shortsflow_sample_nasa.mp4"
 
 SAMPLE_CREDIT = ("Sample: a 2-minute excerpt of *NASA Astronaut Don Pettit Talks with Neil deGrasse Tyson's \"Star Talk\"* "
                  "(April 3, 2025), NASA Johnson Space Center, public domain "

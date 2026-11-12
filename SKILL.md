@@ -10,7 +10,7 @@ Local-first pipeline: Whisper transcription → LLM hook scoring → face-tracke
 ## Setup (once)
 
 ```bash
-git clone --depth 1 https://github.com/ghost1412/shorts-generator.git && cd shorts-generator
+git clone --depth 1 https://github.com/ghost1412/shortsflow.git && cd shortsflow
 pip install -r requirements-full.txt        # or requirements.txt for idea-to-video modes only
 cd remotion-video && npm install && cd ..
 cp env.example .env                         # set GEMINI_API_KEY (or use --llm_provider ollama)

@@ -52,8 +52,8 @@ full = ["shortsflow[clip,local-voice,explainer,webui,zh]", "gtts>=2.5,<3"]
 shortsflow = "shortsflow.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ghost1412/shorts-generator"
-Issues = "https://github.com/ghost1412/shorts-generator/issues"
+Homepage = "https://github.com/ghost1412/shortsflow"
+Issues = "https://github.com/ghost1412/shortsflow/issues"
 
 [tool.hatch.version]
 path = "shortsflow/__init__.py"

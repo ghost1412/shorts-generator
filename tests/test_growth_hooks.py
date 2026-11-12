@@ -13,7 +13,7 @@ def test_star_hint_only_in_a_terminal_and_can_be_switched_off(monkeypatch):
     assert pipeline.star_hint(io.StringIO()) is False            # a pipe or a log: nothing printed
     out = Tty()
     assert pipeline.star_hint(out) is True
-    assert "github.com/ghost1412/shorts-generator" in out.getvalue()
+    assert "github.com/ghost1412/shortsflow" in out.getvalue()
     monkeypatch.setenv("SHORTSFLOW_NO_STAR_HINT", "1")
     assert pipeline.star_hint(Tty()) is False
 

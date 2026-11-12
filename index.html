@@ -7,7 +7,7 @@
 <meta name="description" content="Turn a long video into captioned vertical Shorts on your own PC. Free, open source, no watermark, no credits.">
 <meta property="og:title" content="ShortsFlow: free, open-source Opus Clip alternative">
 <meta property="og:description" content="Turn a long video into captioned vertical Shorts on your own PC. No watermark, no credits.">
-<meta property="og:image" content="https://ghost1412.github.io/shorts-generator/demos/demo_podcast_cuts.gif">
+<meta property="og:image" content="https://ghost1412.github.io/shortsflow/demos/demo_podcast_cuts.gif">
 <style>
   :root {
     --bg: #fbfaf7; --surface: #ffffff; --ink: #1c1b19; --muted: #5d5a54; --line: #e4e0d8;
@@ -70,7 +70,7 @@
 <div class="wrap">
   <header class="top">
     <a class="brand" href="#">ShortsFlow</a>
-    <nav aria-label="Sections"><a href="#demos">Demos</a><a href="#try">Try it</a><a href="#local">Privacy</a><a href="https://github.com/ghost1412/shorts-generator">GitHub</a></nav>
+    <nav aria-label="Sections"><a href="#demos">Demos</a><a href="#try">Try it</a><a href="#local">Privacy</a><a href="https://github.com/ghost1412/shortsflow">GitHub</a></nav>
   </header>
 
   <main>
@@ -80,9 +80,9 @@
         <p class="lead">Upload a podcast, interview or YouTube video. ShortsFlow finds the engaging moments, follows the speaker, adds animated captions and exports vertical clips you can review and publish.</p>
         <p class="lead" style="margin-top:-8px"><strong>Free. Open source. No watermark, no credit limits.</strong> It runs on your own computer.</p>
         <div class="cta">
-          <a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download for Windows</a>
+          <a class="btn primary" href="https://github.com/ghost1412/shortsflow/releases/latest/download/ShortsFlow-Setup.exe">Download for Windows</a>
           <a class="btn ghost" href="#try">Mac, Linux or no install</a>
-          <a class="btn ghost" href="https://github.com/ghost1412/shorts-generator">View on GitHub</a>
+          <a class="btn ghost" href="https://github.com/ghost1412/shortsflow">View on GitHub</a>
         </div>
       </div>
       <figure>
@@ -126,13 +126,13 @@
       <h2>Choose how you want to run ShortsFlow</h2>
       <p class="sub">There is no hosted demo yet: ShortsFlow runs on your own computer or in a free Colab notebook. Pick whichever is easiest.</p>
       <div class="grid wide">
-        <div class="card"><h3>Windows installer</h3><p>Download, run it and open ShortsFlow from your desktop. No Python or API key to install first.</p><p style="margin-top:8px"><strong>Good to know:</strong> the file is small (about 2 MB) and downloads roughly 2 GB on first run (about 5 GB with an NVIDIA card, for the GPU libraries). Needs an internet connection and no admin rights. Windows may show a blue "protected your PC" box because the installer is not code-signed yet: choose More info, then Run anyway.</p><p style="margin-top:12px"><a class="btn primary" href="https://github.com/ghost1412/shorts-generator/releases/latest/download/ShortsFlow-Setup.exe">Download</a></p></div>
-        <div class="card"><h3>Mac or Linux</h3><p>Needs Python 3.10 or newer and FFmpeg. One line installs it into its own folder (<code>~/.shortsflow</code>); nothing else on your computer is touched.</p><pre>curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh | sh
+        <div class="card"><h3>Windows installer</h3><p>Download, run it and open ShortsFlow from your desktop. No Python or API key to install first.</p><p style="margin-top:8px"><strong>Good to know:</strong> the file is small (about 2 MB) and downloads roughly 2 GB on first run (about 5 GB with an NVIDIA card, for the GPU libraries). Needs an internet connection and no admin rights. Windows may show a blue "protected your PC" box because the installer is not code-signed yet: choose More info, then Run anyway.</p><p style="margin-top:12px"><a class="btn primary" href="https://github.com/ghost1412/shortsflow/releases/latest/download/ShortsFlow-Setup.exe">Download</a></p></div>
+        <div class="card"><h3>Mac or Linux</h3><p>Needs Python 3.10 or newer and FFmpeg. One line installs it into its own folder (<code>~/.shortsflow</code>); nothing else on your computer is touched.</p><pre>curl -fsSL https://raw.githubusercontent.com/ghost1412/shortsflow/main/install.sh | sh
 shortsflow doctor
 shortsflow clip my_video.mp4</pre></div>
         <div class="card"><h3>Docker</h3><p>The browser app in a container, on any system that runs Docker.</p><pre>docker run -p 7860:7860 \
-  ghcr.io/ghost1412/shorts-generator</pre><p style="margin-top:10px">Then open <code>localhost:7860</code>.</p></div>
-        <div class="card"><h3>Nothing to install</h3><p>Open the notebook, run the cells and use the link it prints. Free GPU on Google Colab.</p><p style="margin-top:12px"><a class="btn ghost" href="https://colab.research.google.com/github/ghost1412/shorts-generator/blob/main/ShortsFlow_Colab.ipynb">Open in Colab</a></p></div>
+  ghcr.io/ghost1412/shortsflow</pre><p style="margin-top:10px">Then open <code>localhost:7860</code>.</p></div>
+        <div class="card"><h3>Nothing to install</h3><p>Open the notebook, run the cells and use the link it prints. Free GPU on Google Colab.</p><p style="margin-top:12px"><a class="btn ghost" href="https://colab.research.google.com/github/ghost1412/shortsflow/blob/main/ShortsFlow_Colab.ipynb">Open in Colab</a></p></div>
       </div>
     </section>
 
@@ -160,7 +160,7 @@ shortsflow clip my_video.mp4</pre></div>
 
   <footer>
     <p><strong>Footage credits.</strong> Podcast demo: <a href="https://www.youtube.com/watch?v=VIq8L_ZeqkA">Lila Rose Podcast E143</a> by Lila Rose, shared on YouTube under the <a href="https://creativecommons.org/licenses/by/3.0">Creative Commons Attribution licence</a>; cropped, re-framed and captioned (changes made). Recap demo: six stock videos by Poiana11 on Wikimedia Commons, <a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a>.</p>
-    <p>ShortsFlow is MIT licensed. <a href="https://github.com/ghost1412/shorts-generator">Source</a> · <a href="https://github.com/ghost1412/shorts-generator/issues">Report a problem</a> · <a href="https://github.com/ghost1412/shorts-generator/discussions">Discussions</a></p>
+    <p>ShortsFlow is MIT licensed. <a href="https://github.com/ghost1412/shortsflow">Source</a> · <a href="https://github.com/ghost1412/shortsflow/issues">Report a problem</a> · <a href="https://github.com/ghost1412/shortsflow/discussions">Discussions</a></p>
   </footer>
 </div>
 </body>

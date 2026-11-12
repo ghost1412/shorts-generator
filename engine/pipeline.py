@@ -78,7 +78,7 @@ def star_hint(stream=None):
     stream = stream or sys.stdout
     if os.getenv("SHORTSFLOW_NO_STAR_HINT") or not getattr(stream, "isatty", lambda: False)():
         return False
-    print("\nLiked the result? A star helps others find this free, local tool: https://github.com/ghost1412/shorts-generator", file=stream)
+    print("\nLiked the result? A star helps others find this free, local tool: https://github.com/ghost1412/shortsflow", file=stream)
     return True
 
 

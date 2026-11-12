@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # ShortsFlow installer for macOS and Linux.
-#   curl -fsSL https://raw.githubusercontent.com/ghost1412/shorts-generator/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/ghost1412/shortsflow/main/install.sh | sh
 # Installs into ~/.shortsflow (its own Python environment) and links a `shortsflow` command into ~/.local/bin.
 # Nothing outside those two places is changed. Remove it with: rm -rf ~/.shortsflow ~/.local/bin/shortsflow
 set -eu
