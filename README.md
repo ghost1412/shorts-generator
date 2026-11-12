@@ -46,7 +46,7 @@ python main.py --source_video "https://www.youtube.com/watch?v=VIDEO_ID" --extra
 
 Clip quality is checked on public-domain and Creative Commons videos with no AI key at all, with a benchmark that runs on GitHub's runners
 (`python scripts/clip_benchmark.py <session> --picture`): clips that start and end on a sentence, no overlap, length near the asked one,
-a standalone opening line, titles that say only what the clip says, a face found and centred. The workflow is `.github/workflows/clip_benchmark.yml`; a results table per release is planned. We do not claim to beat Opus Clip on every video; a side-by-side on public footage is the next thing to publish.
+a standalone opening line, titles that say only what the clip says, a face found and centred. The workflow is `.github/workflows/clip_benchmark.yml`. The results table, including the weak spots, is in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). We do not claim to beat Opus Clip on every video; a side-by-side on public footage is the next thing to publish.
 
 ## ShortsFlow vs Opus Clip, Klap and Vizard
 

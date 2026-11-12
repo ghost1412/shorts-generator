@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- `docs/BENCHMARKS.md`: the clip quality results on four public videos and a highlights video, measured on GitHub's runners with no AI key, with the weak spots listed (hook cue, low-resolution sources, slides, no comparison with Opus Clip yet).
 - Without an AI key, the picker prefers a window that opens with a hook (a question, a number, or a word that speaks to the viewer: "you", "never", "why" ...) over an equally strong one that does not, so more clips start on a reason to keep watching.
 - The repository is now `ghost1412/shortsflow` (was `shorts-generator`). GitHub redirects the old address, including `git clone`, the raw install one-liner and release downloads; the demo page moved to https://ghost1412.github.io/shortsflow/ (the old page address is gone). The package, the installer and the commands are unchanged.
 
