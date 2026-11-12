@@ -58,7 +58,7 @@ def sentence_spans(transcript):
         current.append(w)
         text = w["word"].lower()
         if w.get("segment"):               # a whole segment of text: split it on its own punctuation
-            parts = [p for p in re.split(r"(?<=[.!?…])\s+|(?<=[。！？।])\s*", w["word"]) if p.strip()]
+            parts = [p for p in re.split(r"(?<=[.!?…])[\"')\]」』”’]*\s+|(?<=[。！？।])[\"')\]」』”’]*\s*", w["word"]) if p.strip()]
             if len(parts) > 1:
                 current.pop()
                 dur = max(0.01, w["end"] - w["start"])
@@ -117,7 +117,9 @@ def boilerplate_hits(text):
 def has_hook_cue(text, words=25):
     """True when the FIRST SENTENCE (at most `words` words) holds a reason to keep watching: a question, a number, or a word that
     promises something (never, why, how, mistake, secret ...). A cheap text cue, not a judgement of how catchy the line is."""
-    first_sentence = re.split(r"(?<=[.!?])\s+", str(text or "").strip(), maxsplit=1)[0]
+    parts = str(text or "").strip().split()
+    cut = next((i + 1 for i, w in enumerate(parts) if SENTENCE_END.search(w) and w.lower() not in NOT_END), len(parts))
+    first_sentence = " ".join(parts[:cut])
     head = " ".join(first_sentence.split()[:words])
     if "?" in head or any(ch.isdigit() for ch in head):
         return True

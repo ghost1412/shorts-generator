@@ -305,3 +305,18 @@ def test_intro_and_outro_talk_ranks_below_content_without_an_ai():
     assert boilerplate_hits(intro) >= 3 and boilerplate_hits(content) == 0
     assert opening_rank(intro) < opening_rank(content) - 0.5
     assert opening_rank("これは最初の文です。歓迎します。") == 0.0                      # no English words: the English list says nothing
+
+
+def test_segment_text_splits_cjk_hindi_and_after_closing_quotes():
+    def spans_for(text):
+        return [t for _, _, t in sentence_spans({"segments": [{"start": 0.0, "end": 10.0, "text": text}]})]
+    assert len(spans_for("今天天气很好。我们去公园玩！你想来吗？")) == 3
+    assert len(spans_for("यह पहला वाक्य है। यह दूसरा वाक्य है।")) == 2
+    assert len(spans_for('He said "stop it." Then he left.')) == 2
+
+
+def test_hook_cue_looks_only_at_the_first_sentence_not_after_an_abbreviation():
+    from engine.highlight_quality import has_hook_cue
+    assert has_hook_cue("Dr. Smith never gave up on it. Then more.")        # "never" is in the first sentence
+    assert not has_hook_cue("Dr. Smith gave up on it. Why did he?")         # the question is the second sentence
+    assert has_hook_cue("Why does it work? Nobody knows.")
