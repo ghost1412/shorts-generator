@@ -320,3 +320,10 @@ def test_hook_cue_looks_only_at_the_first_sentence_not_after_an_abbreviation():
     assert has_hook_cue("Dr. Smith never gave up on it. Then more.")        # "never" is in the first sentence
     assert not has_hook_cue("Dr. Smith gave up on it. Why did he?")         # the question is the second sentence
     assert has_hook_cue("Why does it work? Nobody knows.")
+
+
+def test_opening_rank_ignores_text_that_is_mostly_another_script():
+    from engine.analysis import opening_rank
+    hindi_with_english = "यह बहुत ही अच्छा तरीका है और हम कभी नहीं रुकते why how never"
+    assert opening_rank(hindi_with_english) == 0.0
+    assert opening_rank("Why does this work? Nobody ever explains the real reason.") > 0
