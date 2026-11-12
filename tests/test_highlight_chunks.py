@@ -60,3 +60,20 @@ def test_identify_highlights_asks_each_stretch(tmp_path, monkeypatch):
     assert out and all(h["end"] <= 2400 for h in out)       # the invented time never gets through
     starts = sorted(h["start"] for h in out)
     assert starts[-1] > 1500                                 # the end of the video is represented
+
+
+def test_long_highlights_without_any_llm_still_fill_the_target(tmp_path, monkeypatch):
+    # a failing single-window LLM call used to return one fixed 30 s slot (a 33 s reel for a 180 s target)
+    segs = [{"start": float(t), "end": float(t + 8), "text": f"sentence number {t} is here"} for t in range(0, 900, 10)]
+    p = tmp_path / "transcript.json"
+    p.write_text(json.dumps({"segments": segs}), encoding="utf-8")
+
+    def boom(*a, **k):
+        raise RuntimeError("no provider answered")
+
+    import engine.script_gen as sg
+    monkeypatch.setattr(sg, "get_llm_response", boom)
+    out = analysis.identify_highlights(str(p), video_path=None, clip_count=5, mode="long", target_duration=180,
+                                       min_duration=15, diversity=False, extra_signals=False)
+    total = sum(h["end"] - h["start"] for h in out)
+    assert 0.85 * 180 <= total <= 1.12 * 180, total

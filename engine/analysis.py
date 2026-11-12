@@ -1239,10 +1239,14 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                 res_data += kept
             print(f"[Log] LLM analysis received {len(res_data)} moment(s) from {len(chunks)} stretches. Processing results...")
         else:
-            response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
+            try:
+                response_text = get_llm_response(prompt, system_prompt, max_tokens=dynamic_max)
+            except Exception as e:   # no provider answered: continue with an empty answer so the signal fallback below runs
+                print(f"[Warning] LLM curation failed ({str(e)[:120]}); using the signal fallback.")
+                response_text = ""
             print(f"[DEBUG] Raw LLM Response: {response_text}")
             print(f"[Log] LLM analysis received ({len(response_text)} chars). Processing results...")
-            res_data = robust_json_parse(response_text)
+            res_data = robust_json_parse(response_text) if response_text else []
         
         highlights = []
         if isinstance(res_data, list):
