@@ -94,7 +94,7 @@ Short description (reuse everywhere):
 > ShortsFlow MCP server: generate vertical Shorts from a topic or clip viral moments out of a YouTube video. Tools: generate_short, extract_clips (face tracking / active-speaker layout), get_render_status, generate_social_package, list_supported_modes. Local-first, MIT.
 
 - **awesome-mcp-servers** (github.com/punkpeye/awesome-mcp-servers): open a PR adding one line under a media/video category:
-  `- [ghost1412/shorts-generator](https://github.com/ghost1412/shorts-generator) 🐍 🏠 - Generate Shorts from topics or clip YouTube videos into captioned vertical shorts.`
+  `- [ghost1412/shortsflow](https://github.com/ghost1412/shortsflow) 🐍 🏠 - Generate Shorts from topics or clip YouTube videos into captioned vertical shorts.`
 - **Smithery** (smithery.ai): sign in with GitHub → "Add server" → point at the repo (`mcp_server.py`, stdio).
 - **Glama** (glama.ai/mcp/servers): "Add server" with the repo URL.
 

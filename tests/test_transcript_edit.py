@@ -182,3 +182,30 @@ def test_loud_pauses_are_kept_and_quiet_ones_still_cut(tmp_path):
     assert kept == [(30.0, 32.0)]                         # the laughter stays, the quiet pause is still cut
     assert drop_loud_pauses([(25.0, 27.0)], tdata, None) == [(25.0, 27.0)]
     assert drop_loud_pauses([(25.0, 27.0)], tdata, str(tmp_path / "missing.wav")) == [(25.0, 27.0)]
+
+
+def test_only_the_quiet_part_of_a_long_gap_is_cut_and_a_laugh_inside_it_stays(tmp_path):
+    import wave
+
+    import numpy as np
+    from engine.transcript_edit import drop_loud_pauses
+    rate = 8000
+    audio = np.zeros(rate * 60, dtype=np.float32)
+    rng = np.random.default_rng(2)
+    words = []
+    for k in range(20):
+        a, b = 1.0 + k, 1.5 + k
+        audio[int(a * rate):int(b * rate)] = rng.normal(0, 0.2, int((b - a) * rate))
+        words.append({"start": a, "end": b})
+    audio[int(41.0 * rate):int(42.0 * rate)] = rng.normal(0, 0.18, rate)       # a one-second laugh inside a 4 s gap (40-44)
+    audio[int(40.0 * rate):int(41.0 * rate)] = rng.normal(0, 0.01, rate)
+    audio[int(42.0 * rate):int(44.0 * rate)] = rng.normal(0, 0.01, 2 * rate)
+    path = str(tmp_path / "g.wav")
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
+    out = drop_loud_pauses([(40.0, 44.0)], {"segments": [{"words": words}]}, path)
+    assert len(out) == 2 and out[0][1] <= 41.1 and out[1][0] >= 41.9           # quiet before and after, the laugh in between kept
+    assert sum(b - a for a, b in out) >= 2.8

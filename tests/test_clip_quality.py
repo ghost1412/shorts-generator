@@ -196,13 +196,21 @@ def test_description_chapter_list_is_not_graded_as_a_claim():
 
 def test_hook_cue_self_contained_and_clean_end():
     from engine.clip_quality import clean_ending, hook_cue, self_contained_opening
-    seg = _words([(10.0, "Nobody"), (10.4, "expected"), (10.8, "this"), (11.2, "result."), (12.0, "We"), (12.4, "tested"), (12.8, "places"), (13.2, "that")])
+    seg = _words([(10.0, "Nobody"), (10.4, "expected"), (10.8, "this"), (11.2, "result."), (12.0, "We"), (12.4, "tested"), (12.8, "places"), (13.2, "that...")])
     assert hook_cue(seg, 10.0, 20.0)                                    # "Nobody" speaks to the viewer
     assert not hook_cue(_words([(10.0, "The"), (10.4, "water"), (10.8, "moves"), (11.2, "slowly.")]), 10.0, 20.0)
     assert hook_cue(_words([(10.0, "In"), (10.4, "1969"), (10.8, "it"), (11.2, "began.")]), 10.0, 20.0)      # a number
     assert hook_cue(_words([(10.0, "Does"), (10.4, "it"), (10.8, "float?"), (11.2, "Yes.")]), 10.0, 20.0)    # a question
     assert self_contained_opening(seg, 10.0, 20.0)
     assert not self_contained_opening(_words([(10.0, "They"), (10.4, "said"), (10.8, "no"), (11.2, "again.")]), 10.0, 20.0)
-    assert not self_contained_opening(_words([(10.0, "This"), (10.4, "is"), (10.8, "why"), (11.2, "it.")]), 10.0, 20.0)
+    assert self_contained_opening(_words([(10.0, "This"), (10.4, "is"), (10.8, "the"), (11.2, "mistake.")]), 10.0, 20.0)   # a real opening
+    assert not self_contained_opening(_words([(10.0, "He's"), (10.4, "not"), (10.8, "here"), (11.2, "today.")]), 10.0, 20.0)
     assert not clean_ending(seg, 10.0, 20.0)                            # last sentence stops on "that"
     assert clean_ending(_words([(10.0, "The"), (10.4, "water"), (10.8, "moves"), (11.2, "slowly.")]), 10.0, 20.0)
+
+
+def test_you_know_is_not_a_hook_but_a_promise_word_in_the_first_sentence_is():
+    from engine.highlight_quality import has_hook_cue
+    assert not has_hook_cue("I mean you know it was kind of a normal day. Never mind.")      # "Never" is in the second sentence
+    assert has_hook_cue("Never trust a rule you cannot test. It was a normal day.")
+    assert has_hook_cue("Why does it float? Nobody knows.")

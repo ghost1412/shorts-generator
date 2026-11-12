@@ -326,10 +326,10 @@ def _wav_samples(path):
     return data, rate
 
 
-def drop_loud_pauses(pauses, transcript_data, audio_path, ratio=LOUD_PAUSE_RATIO):
-    """`pauses` without the ones that are loud: an interval whose level is at least `ratio` of the speech level is laughter,
-    applause or a sound that belongs to the moment, so it stays. Quiet gaps (and gaps under steady low background noise) are still
-    cut. Returns `pauses` unchanged when the audio cannot be read."""
+def drop_loud_pauses(pauses, transcript_data, audio_path, ratio=LOUD_PAUSE_RATIO, win=0.1, min_len=0.3):
+    """The QUIET parts of `pauses`: each pause is looked at in `win`-second windows and only the stretches (at least `min_len` long)
+    whose level is below `ratio` of the speech level are returned, so laughter, applause or a reaction inside a long gap stays while the
+    dead air around it is still cut. Returns `pauses` unchanged when the audio cannot be read."""
     if not pauses or not audio_path:
         return pauses
     try:
@@ -350,8 +350,21 @@ def drop_loud_pauses(pauses, transcript_data, audio_path, ratio=LOUD_PAUSE_RATIO
         speech = [v for v in speech if v > 0]
         if len(speech) < 10:
             return pauses
-        reference = float(np.median(speech))
-        return [(a, b) for a, b in pauses if level(a, b) < ratio * reference]
+        limit = ratio * float(np.median(speech))
+        out = []
+        for a, b in pauses:
+            quiet_from = None
+            for k in range(int(round((b - a) / win))):
+                ws = a + k * win
+                if level(ws, ws + win) >= limit:                        # a loud window ends any quiet stretch
+                    if quiet_from is not None and ws - quiet_from >= min_len:
+                        out.append((round(quiet_from, 3), round(ws, 3)))
+                    quiet_from = None
+                elif quiet_from is None:
+                    quiet_from = ws
+            if quiet_from is not None and b - quiet_from >= min_len:
+                out.append((round(quiet_from, 3), round(b, 3)))
+        return out
     except Exception:
         return pauses
 

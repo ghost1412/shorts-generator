@@ -22,7 +22,7 @@
 | 💻 **Any OS** | `pip install "shortsflow[clip]"` → `shortsflow doctor` → `shortsflow clip my_video.mp4` |
 | ☁️ **Nothing to install** | [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ghost1412/shortsflow/blob/main/ShortsFlow_Colab.ipynb) free GPU, nothing to install (run the cells, open the link it prints, log in with the password shown under it) |
 
-No account or API key is needed to clip a video. A key (or a free local Ollama) only adds AI titles and descriptions.
+No account or API key is needed to clip a video. A key (or a free local Ollama) adds AI-written titles and descriptions and lets the AI pick and score the moments (a cloud provider then receives the transcript text).
 
 ### Why people use it
 
@@ -149,7 +149,7 @@ After **Make my shorts**, the browser app (`shortsflow webui`) shows every short
 
 ## 🚀 Your first shorts in 3 steps (no API key needed)
 
-Clipping a long video into vertical shorts works **without any account or API key**. A key (or a free local Ollama) only adds AI titles and descriptions, and is needed for the idea-to-video modes.
+Clipping a long video into vertical shorts works **without any account or API key**. A key (or a free local Ollama) adds AI-written titles and descriptions and lets the AI pick and score the moments (a cloud provider then receives the transcript text), and is needed for the idea-to-video modes.
 
 1. **Install** (needs [Python 3.12](https://python.org)): `pip install "shortsflow[clip]"`
 2. **Check your setup**: `shortsflow doctor` lists what is ready and what to fix, in plain words.

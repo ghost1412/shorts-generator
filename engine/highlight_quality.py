@@ -58,7 +58,7 @@ def sentence_spans(transcript):
         current.append(w)
         text = w["word"].lower()
         if w.get("segment"):               # a whole segment of text: split it on its own punctuation
-            parts = [p for p in re.split(r"(?<=[.!?…])\s+", w["word"]) if p.strip()]
+            parts = [p for p in re.split(r"(?<=[.!?…])\s+|(?<=[。！？।])\s*", w["word"]) if p.strip()]
             if len(parts) > 1:
                 current.pop()
                 dur = max(0.01, w["end"] - w["start"])
@@ -97,16 +97,34 @@ def trails_off(sentence):
     return bool(words) and words[-1].lower() in DANGLING_ENDINGS
 
 
-OPENING_CUES = {"you", "your", "you're", "nobody", "never", "why", "how", "what", "stop", "secret", "mistake", "wrong", "truth", "imagine"}
+OPENING_CUES = {"nobody", "never", "why", "how", "stop", "secret", "mistake", "wrong", "truth", "imagine"}
 
 
 def has_hook_cue(text, words=25):
-    """True when the first `words` words hold a reason to keep watching: a question, a number, or a word that speaks to the viewer or
-    promises something (you, never, why, how, mistake, secret ...). A cheap text cue, not a judgement of how catchy the line is."""
-    head = " ".join(str(text or "").split()[:words])
+    """True when the FIRST SENTENCE (at most `words` words) holds a reason to keep watching: a question, a number, or a word that
+    promises something (never, why, how, mistake, secret ...). A cheap text cue, not a judgement of how catchy the line is."""
+    first_sentence = re.split(r"(?<=[.!?])\s+", str(text or "").strip(), maxsplit=1)[0]
+    head = " ".join(first_sentence.split()[:words])
     if "?" in head or any(ch.isdigit() for ch in head):
         return True
     return any(w.strip(",.!?\"'").lower() in OPENING_CUES for w in head.split())
+
+
+NARROW_DANGLING = {"a", "an", "the", "and", "or", "but", "because"}      # words no complete sentence ends on
+
+
+def trails_off_end(sentence):
+    """True when a sentence that would END a clip stops where the speaker was cut off: Whisper's "..." after a word that needs a
+    continuation (the broad DANGLING_ENDINGS list), or no "..." but a last word no complete sentence ends on (a, the, and, because ...).
+    "Look at this." / "That is what I am most proud of." are complete sentences and are not flagged (the title rule is broader)."""
+    text = str(sentence or "").strip()
+    words = re.findall(r"[A-Za-z']+", text)
+    if not words:
+        return False
+    last = words[-1].lower()
+    if text.rstrip("\"')]").endswith(("...", "\u2026")):
+        return last in DANGLING_ENDINGS
+    return last in NARROW_DANGLING
 
 
 def weak_opening(text):
@@ -201,7 +219,7 @@ def snap_clip(clip, spans, **opts):
     # a last sentence that stops on a word needing a continuation ("... places that."): end on the sentence before it instead
     if not clip.get("snapped"):
         last = next((i for i, (_, e, _) in enumerate(spans) if abs(e - new_end) < 0.05), None)
-        if (last is not None and last > 0 and trails_off(spans[last][2]) and ends[last - 1] > new_start + o["min_len"]
+        if (last is not None and last > 0 and trails_off_end(spans[last][2]) and ends[last - 1] > new_start + o["min_len"]
                 and ends[last - 1] - new_start >= 0.7 * (new_end - new_start)):
             new_end = ends[last - 1]
 
@@ -259,8 +277,14 @@ def _resolve_overlaps(clips, spans, o):
             break                                      # both chosen by the user: their choice wins
         done = [e for _, e, _ in spans if a_start + o["min_len"] <= e <= b_start - 0.05]
         nxt = [st for st, _, _ in spans if a_end <= st <= b_end - o["min_len"]]
-        if not a_fixed and not b_fixed and nxt and _score(B) < _score(A):
-            B["start"] = round(nxt[0], 2)              # the weaker clip gives way, not the better one that happens to be earlier
+        if not a_fixed and not b_fixed and _score(B) < _score(A):
+            # the weaker clip gives way, not the better one that happens to be earlier
+            if nxt:
+                B["start"] = round(nxt[0], 2)
+            elif b_end - a_end >= o["min_len"]:
+                B["start"] = round(a_end + 0.01, 2)
+            else:
+                clips.pop(pair[1])                     # too little of it would be left
         elif not a_fixed and done:
             A["end"] = round(min(done[-1] + o["tail"], b_start - 0.01), 2)
         elif not b_fixed and nxt:

@@ -223,7 +223,7 @@ def test_the_weaker_overlapping_clip_gives_way_not_the_better_earlier_one():
 
 def test_a_clip_does_not_end_on_a_sentence_that_trails_off():
     tr, spans = _t("Whatever happens to your eyes is a zero G effect we measured.", "It has nothing to do with the air in the cabin at all.",
-                   "That is the whole story about the strange effect we saw.", "We looked at the results of the places that.",
+                   "That is the whole story about the strange effect we saw.", "We looked at the results of the places that...",
                    "A later sentence that the clip never reaches at all here.")
     clip = {"start": spans[0][0], "end": spans[3][1]}
     out = snap_clip(clip, sentence_spans(tr))
@@ -234,7 +234,7 @@ def test_a_clip_does_not_end_on_a_sentence_that_trails_off():
 
 def test_a_trailing_off_ending_is_kept_when_dropping_it_would_cost_too_much():
     tr, spans = _t("Short opening line here for the clip itself.", "A very long second sentence that carries almost the whole clip with many many words in it.",
-                   "We looked at the places that.")
+                   "We looked at the places that...")
     clip = {"start": spans[0][0], "end": spans[2][1]}
     out = snap_clip(clip, sentence_spans(tr), min_len=1.0)
     assert out["end"] >= spans[1][1] - 0.01
@@ -248,3 +248,38 @@ def test_snapping_twice_keeps_the_original_pick_for_the_move_count():
     twice = snap_clip(once, sentence_spans(tr))
     assert once["orig_start"] == twice["orig_start"] == round(clip["start"], 2)
     assert once["orig_end"] == twice["orig_end"] == round(clip["end"], 2)
+
+
+def test_complete_sentences_are_never_called_trailing_off():
+    from engine.highlight_quality import trails_off_end
+    for s in ("Look at this.", "Yes we can.", "That is what I was talking about.", "And that is what I am most proud of.", "You know what?"):
+        assert not trails_off_end(s), s
+    assert trails_off_end("We looked at the places that...")          # Whisper's ellipsis after a word that needs a continuation
+    assert trails_off_end("We looked at the results of the.")         # no complete sentence ends on "the"
+    assert trails_off_end("He said and")
+
+
+def test_a_clip_ending_on_a_complete_stranded_preposition_keeps_its_payoff():
+    tr, spans = _t("Whatever happens to your eyes is a zero G effect we measured.", "It has nothing to do with the air in the cabin at all.",
+                   "That is the whole story and that is what I am most proud of.")
+    clip = {"start": spans[0][0], "end": spans[2][1]}
+    out = snap_clip(clip, sentence_spans(tr))
+    assert out["end"] >= spans[2][1] - 0.01
+
+
+def test_the_better_clip_keeps_its_payoff_even_when_the_weaker_one_is_too_short_to_give_way():
+    tr, spans = _t("First sentence of the strong clip stands here today.", "Second sentence of the strong clip stands here too.",
+                   "Third sentence of the strong clip is the payoff line.", "Fourth sentence of the weaker clip only.")
+    strong = {"start": spans[0][0], "end": spans[2][1], "final_score": 95}
+    weak = {"start": spans[2][0] + 0.1, "end": spans[3][1], "final_score": 40}
+    out = snap_highlights([strong, weak], tr, min_len=3.0)
+    best = next(c for c in out if c.get("final_score") == 95)
+    assert best["end"] >= spans[2][1] - 0.01                                  # the strong clip is not trimmed
+    assert all(a["end"] <= b["start"] + 0.01 for a, b in zip(sorted(out, key=lambda c: c["start"]), sorted(out, key=lambda c: c["start"])[1:]))
+
+
+def test_japanese_and_hindi_sentences_split_without_spaces():
+    tr = {"segments": [{"start": 0.0, "end": 12.0, "text": "これは最初の文です。これは二番目の文です。三番目の文もあります。"},
+                       {"start": 20.0, "end": 30.0, "text": "यह पहला वाक्य है। यह दूसरा वाक्य है।"}]}
+    texts = [s[2] for s in sentence_spans(tr)]
+    assert len(texts) == 5 and texts[0].endswith("。") and texts[3].endswith("।")

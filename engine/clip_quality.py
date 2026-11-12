@@ -228,7 +228,7 @@ def hook_ok(segments, start, end):
 
 
 from engine.highlight_quality import OPENING_CUES  # noqa: E402
-DANGLING_PRONOUNS = {"it", "this", "that", "they", "he", "she", "these", "those", "them", "his", "her", "its", "their"}
+DANGLING_PRONOUNS = {"it", "they", "he", "she", "them", "these", "those", "it's", "he's", "she's", "they're", "they've", "it'll"}
 
 
 def _clip_words(segments, start, end):
@@ -253,16 +253,16 @@ def self_contained_opening(segments, start, end):
     ...", "This is why ..."): the viewer cannot tell what it refers to. A cheap check on the first word only."""
     words = _clip_words(segments, start, end)
     first = words[0][1] if words else (clip_text(segments, start, end).split() or [""])[0]
-    return first.lower().strip(",.!?\"'") not in DANGLING_PRONOUNS
+    return first.lower().replace("\u2019", "'").strip(",.!?\"'") not in DANGLING_PRONOUNS
 
 
 def clean_ending(segments, start, end):
     """False when the clip stops on a word that needs a continuation ("... places that", "... data about"): the speaker was cut off."""
-    from engine.social_gen import _trails_off
+    from engine.highlight_quality import trails_off_end
     words = _clip_words(segments, start, end)
     text = " ".join(w for _, w in words) if words else clip_text(segments, start, end)
     sentences = [x for x in re.split(r"(?<=[.!?])\s+", text.strip()) if x]
-    return not sentences or not _trails_off(sentences[-1])
+    return not sentences or not trails_off_end(sentences[-1])
 
 
 def overlap_with(a, b):

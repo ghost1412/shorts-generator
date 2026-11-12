@@ -4,6 +4,12 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- A clip is no longer shortened because its last sentence is complete: only Whisper's "..." after a word that needs a continuation, or an ending on "a / the / and / because", counts as trailing off ("Look at this." and "...what I am most proud of." stay).
+- `--tighten` keeps laughter and applause inside a long pause: the pause is checked in 0.1 s windows and only the quiet stretches are cut (it used to average the whole gap). Without the audio file it says so and cuts by timing.
+- When two clips overlap and the weaker one is too short to give way, it is trimmed or dropped, never the better clip.
+- Japanese and Hindi text without word timings splits into sentences at 。！？।.
+- The hook cue is stricter: the first sentence only, and "you" / "what" no longer count. `self-cont` no longer flags "This is ..." and now catches "He's / It's ..."; `clean end` uses the same evidence rule.
+- README and browser app: a key also lets the AI pick and score the moments (the transcript goes to the provider), and the footer lists the OpenStreetMap lookup. Removed the leftover dashboard setup guide, database schema and webhook default.
 - `docs/BENCHMARKS.md`: the clip quality results on four public videos and a highlights video, measured on GitHub's runners with no AI key, with the weak spots listed (hook cue, low-resolution sources, slides, no comparison with Opus Clip yet).
 - Without an AI key, the picker prefers a window that opens with a hook (a question, a number, or a word that speaks to the viewer: "you", "never", "why" ...) over an equally strong one that does not, so more clips start on a reason to keep watching.
 - The repository is now `ghost1412/shortsflow` (was `shorts-generator`). GitHub redirects the old address, including `git clone`, the raw install one-liner and release downloads; the demo page moved to https://ghost1412.github.io/shortsflow/ (the old page address is gone). The package, the installer and the commands are unchanged.

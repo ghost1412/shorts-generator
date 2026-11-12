@@ -1873,6 +1873,8 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
             if pauses:
                 from engine.transcript_edit import drop_loud_pauses
                 wav = os.path.join(output_dir, "audio_mono.wav")
+                if not os.path.exists(wav):
+                    print("[Log] Tighten: no audio file to check the pauses against; cutting them by timing only (laughter may be cut).")
                 kept_pauses = drop_loud_pauses(pauses, tdata, wav if os.path.exists(wav) else None)
                 if len(kept_pauses) < len(pauses):
                     print(f"[Log] Tighten: kept {len(pauses) - len(kept_pauses)} loud pause(s) (laughter, applause, a reaction).")

@@ -1236,7 +1236,7 @@ def build_ui():
         gr.Markdown("API keys are read from `.env` (`GEMINI_API_KEY`, `PEXELS_API_KEY`, ...). "
                     "See `env.example`. Your video files stay on this PC. Only what you switch on goes out: transcript text to an AI text provider when a key is set, "
                     "small frames to Gemini for `--visual_context` when a key is set, text to the voice service in the dub and idea-to-video modes, "
-                    "stock-footage search words to Pexels, and any upload you ask for.")
+                    "stock-footage search words to Pexels, place names looked up on OpenStreetMap in trip recaps (turn it off with `--recap_no_geocode`), and any upload you ask for.")
     return demo
 
 
