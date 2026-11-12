@@ -179,7 +179,7 @@ def speech_gaps(segments, start, end, gap_min=GAP_MIN):
     return round(total, 2)
 
 
-WEAK_OPENERS = {"and", "so", "but", "or", "because", "then", "also", "uh", "um", "er", "like", "well", "yeah", "anyway", "which", "that", "cause"}
+from engine.highlight_quality import WEAK_OPENERS  # noqa: E402
 HOOK_LEAD_S = 1.5      # the first word must come this soon after the clip start
 HOOK_MIN_WORDS = 4     # the first sentence needs this many words to stand alone
 

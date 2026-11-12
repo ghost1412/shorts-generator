@@ -24,6 +24,7 @@ DEFAULTS = {
     "min_len": 8.0,        # a snapped clip shorter than this is dropped back to the original
     "max_len": 59.9,       # shorts stay under a minute
     "leadin_max_words": 5,
+    "skip_shift": 20.0,    # skip a weak opening sentence (mic check, "And ...") when the next sentence starts within this many seconds
 }
 
 
@@ -76,6 +77,16 @@ def sentence_spans(transcript):
     return spans
 
 
+MIC_CHECK = re.compile(r"\b(testing[, ]+(one|1)|one,? two,? three|can you hear|check,? check|is this (thing )?on|sound check)\b", re.I)
+WEAK_OPENERS = {"and", "so", "but", "or", "because", "then", "also", "uh", "um", "er", "like", "well", "yeah", "anyway", "which", "that", "cause"}
+
+
+def weak_opening(text):
+    """True when a sentence is a poor first line for a clip: a mic check, or its first word is a filler or a connective."""
+    words = re.findall(r"[a-z']+", str(text or "").lower())
+    return bool(words) and (words[0] in WEAK_OPENERS or bool(MIC_CHECK.search(" ".join(words[:12]))))
+
+
 def _is_leadin(text, max_words):
     words = re.findall(r"[a-z']+", text.lower())
     return 0 < len(words) <= max_words and all(w in FILLER_WORDS for w in words)
@@ -113,10 +124,20 @@ def snap_clip(clip, spans, **opts):
             new_start = following[0]
     # skip a filler sentence at the very start ("So, um, okay.")
     first = next((i for i, (s, _, _) in enumerate(spans) if abs(s - new_start) < 0.05), None)
+    origin = new_start
     if first is not None and first + 1 < len(spans) and _is_leadin(spans[first][2], o["leadin_max_words"]):
         cand = starts[first + 1]
-        if cand - new_start <= o["max_shift"] and cand < end - o["min_len"]:
+        if cand - new_start <= o["skip_shift"] and cand < end - o["min_len"]:
             new_start = cand
+            first += 1
+    # a sentence that cannot open a clip (mic check, or it leans on the one before: "And, and it just goes ...", "Uh, 79% ...")
+    for _ in range(3):
+        if first is None or first + 1 >= len(spans) or not weak_opening(spans[first][2]):
+            break
+        cand = starts[first + 1]
+        if cand - origin > o["skip_shift"] or cand >= end - o["min_len"]:
+            break
+        new_start, first = cand, first + 1
 
     # --- end: after the sentence the clip stops in (finish the thought), else back to the last complete sentence
     new_end = end

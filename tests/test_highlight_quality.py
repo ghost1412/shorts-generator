@@ -163,3 +163,25 @@ def test_backfill_from_nothing_keeps_picks_apart():
             {"start": 900, "end": 935, "norm_score": 0.5}]
     out = pick_backfill(segs, [], 2)
     assert [h["start"] for h in out] == [445, 900]        # the neighbour 9 s away is skipped while a far one exists
+
+
+def test_a_mic_check_or_weak_opening_sentence_is_skipped_at_the_start():
+    tr, spans = _t("Testing one, two, three testing.", "Whatever happens to your eyes is a zero G effect.",
+                   "It has nothing to do with the air in the cabin at all.", "That is the whole story about the strange effect we saw.",
+                   "Nobody expected the result to look like this at all.")
+    out = snap_clip({"start": spans[0][0], "end": spans[4][1]}, sentence_spans(tr))
+    assert abs(out["start"] - spans[1][0]) < 0.06
+
+
+def test_a_clip_that_starts_on_and_skips_to_the_next_sentence():
+    tr, spans = _t("And, and it just goes right into your mouth.", "Then more fluid comes up from below the line.",
+                   "Nobody expected the result to look like this at all.", "A last sentence closes out the whole clip here today.")
+    out = snap_clip({"start": spans[0][0], "end": spans[3][1]}, sentence_spans(tr))
+    assert abs(out["start"] - spans[1][0]) < 0.06 or abs(out["start"] - spans[2][0]) < 0.06
+
+
+def test_a_good_opening_is_left_alone():
+    tr, spans = _t("Whatever happens to your eyes is a zero G effect.", "It has nothing to do with the air in the cabin at all.",
+                   "That is the whole story about the strange effect we saw.")
+    out = snap_clip({"start": spans[0][0], "end": spans[2][1]}, sentence_spans(tr))
+    assert abs(out["start"] - spans[0][0]) < 0.06

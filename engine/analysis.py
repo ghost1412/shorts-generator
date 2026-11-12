@@ -1386,7 +1386,7 @@ def identify_highlights(transcript_path, video_path=None, clip_count=5, mode="sh
                 # the same length rule as the LLM path (it used to add whole segments until the target was passed, up to a
                 # whole extra segment over); fit_to_target trims the last one and the snapping later ends it on a sentence
                 heuristic = [{"start": f['start'], "end": f['end'], "viral_score": int(f['norm_score'] * 100),
-                              "final_score": int(f['norm_score'] * 100), "reason": "High-Signal Moment (Heuristic Fallback)"}
+                              "final_score": int(max(0.0, f['norm_score'] - opening_penalty(f.get('text'))) * 100), "reason": "High-Signal Moment (Heuristic Fallback)"}
                              for f in fallback_candidates]
                 valid_highlights.extend(fit_to_target(heuristic, target_duration, min_len=max(15.0, min_duration - 5.0)))
             else:
@@ -1465,14 +1465,14 @@ def order_for_mode(highlights, mode):
     return sorted(highlights, key=lambda h: float(h["start"]))
 
 
-_MIC_CHECK = re.compile(r"\b(testing[, ]+(one|1)|one,? two,? three|can you hear|check,? check|is this (thing )?on|sound check)\b", re.I)
+from engine.highlight_quality import MIC_CHECK as _MIC_CHECK  # noqa: E402
 _FILLER_WORDS = {"uh", "um", "er", "erm", "uhh", "umm", "hmm", "yeah", "okay", "ok"}
 
 
 def opening_penalty(text):
     """0..1 penalty for a window that would open badly when picked without an AI: a mic check, a filler or connective as the first word
     ("and", "so", "uh"), or mostly filler words. The signal score alone liked a "testing, one two three" opening."""
-    from engine.clip_quality import WEAK_OPENERS
+    from engine.highlight_quality import WEAK_OPENERS
     words = re.findall(r"[A-Za-z']+", str(text or ""))
     if not words:
         return 1.0
