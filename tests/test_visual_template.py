@@ -120,3 +120,19 @@ def test_a_clip_template_can_choose_transitions(tmp_path):
     finally:
         auto_edit.PRESETS.clear()
         auto_edit.PRESETS.update(saved)
+
+
+def test_files_the_tests_and_docs_rely_on_are_not_git_ignored():
+    """A file that exists on this PC but is git-ignored is missing on CI (twice a test passed locally and failed there for this reason)."""
+    import shutil
+    import subprocess
+    git = shutil.which("git")
+    root = os.path.join(os.path.dirname(auto_edit.__file__), "..")
+    if not git or not os.path.isdir(os.path.join(root, ".git")):
+        pytest.skip("not a git checkout")
+    paths = ["templates/_example.json"]
+    paths += [f"docs/templates/{n}.jpg" for n in auto_edit.VISUAL_TEMPLATE_NAMES]
+    paths += [f"docs/templates/{n}-wide.jpg" for n in auto_edit.VISUAL_TEMPLATE_NAMES]
+    paths += [f"docs/templates/anim-{n}.mp4" for n in auto_edit.ANIMATION_NAMES]
+    ignored = [p for p in paths if subprocess.run([git, "check-ignore", "-q", p], cwd=root).returncode == 0]
+    assert not ignored, f"git-ignored: {ignored}"
