@@ -32,8 +32,8 @@ def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_
     return args
 
 
-EDIT_STYLE_CHOICES = [("No auto-edit (pick my own options)", "none"), ("Podcast / interview", "podcast"),
-                      ("Hype / gaming / reaction", "hype"), ("Educational / explainer", "educational"), ("Vlog / lifestyle", "vlog")]
+from engine import auto_edit as _auto_edit  # noqa: E402
+EDIT_STYLE_CHOICES = [("No auto-edit (pick my own options)", "none")] + _auto_edit.preset_choices()      # built-in and your own templates
 EDIT_STRENGTH_CHOICES = [("Subtle", "subtle"), ("Medium", "medium"), ("Hyped", "hyped")]
 from engine import transitions as _transitions  # noqa: E402
 TRANSITION_CHOICES = _transitions.LABELS

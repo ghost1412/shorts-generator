@@ -15,9 +15,33 @@ Ready-made ways to shape a video. Each is a choice, not a fixed layout: where it
 
 How a cinematic title is decided: the tool reads a frame of the shot under it, puts the text in the calmest area (centre, left, lower or upper), uses light or dark text by brightness there, takes the accent colour from the shot, and rotates the layout (centred, left-aligned, stacked words) so the titles are not all alike.
 
-## Auto-edit presets (`--auto_edit`, `--edit_strength subtle|medium|hyped`)
+## Clip templates (`--auto_edit NAME`, `--edit_strength subtle|medium|hyped`)
 
-`podcast` (clean, pauses and ums cut, subtitle bar, gentle zooms), `hype` (karaoke captions with emoji, frequent zooms, cutaways, teaser, vibrant colour), `educational` (subtitle bar, cutaways, number pop-ups, no teaser), `vlog` (glow captions, warm grade, teaser). Your own flags always win. A summary of what was done is written to `edit_plan.json`.
+One choice sets the pause and um cuts, captions, zooms, cutaways, teaser opening, colour and sound effects for a kind of video. Your own flags always win. A summary of what was done is written to `edit_plan.json`. In the browser app it is the "Auto-edit style" list.
+
+| Template | Feels like |
+| :-- | :-- |
+| `podcast` | Clean and calm: pauses and ums cut, subtitle bar, a teaser, gentle zooms |
+| `hype` | Fast and loud: karaoke captions with emoji, frequent zooms, cutaways, punchy colour |
+| `educational` | Clear: subtitle bar, stock cutaways, zooms on numbers, no teaser |
+| `vlog` | Warm and personal: glow captions, warm grade, teaser |
+| `minimal` | Quiet and tidy: plain captions, no zooms, no teaser, no sound effects |
+| `news` | Straight: subtitle bar, headline-style hook, cutaways, numbers pop out |
+| `storytime` | Moody and close: glow captions, dark grade, teaser |
+| `motivation` | Bold: big captions, teaser, frequent zooms, a hit on every cut |
+| `tutorial` | Steady: subtitle bar, zooms on numbers, no cutaways, whole picture shown (`fit`) |
+| `cinematic` | Film look: plain captions, warm teal-orange grade, teaser, quiet whooshes |
+
+### Make your own template
+
+Put a JSON file in `templates/` (next to the program) or in `~/.shortsflow/templates/` (or the folder in the `SHORTSFLOW_TEMPLATES` environment variable). The file name is the template's name (`my-channel.json` gives `--auto_edit my-channel`); it then appears in the command line and in the browser app list. `templates/_example.json` shows every setting; files starting with `_` are ignored. List only what you want to change and name a starting point with `based_on` (a built-in or another of your templates).
+
+```json
+{ "label": "My channel", "based_on": "podcast", "caption_style": "GLOW_BOX", "caption_emoji": true,
+  "video_filter": "cinematic_warm", "sfx": { "zoom": "pop", "cut": null } }
+```
+
+Settings: `label`, `about`, `based_on`; true/false switches `tighten`, `remove_fillers`, `clean_audio`, `caption_emoji`, `hook_overlay`, `cold_open`, `auto_zoom`, `broll`, `stat_pops`; `caption_style` (HORMOZI, GLOW_BOX, BOUNCE, MINIMAL, KARAOKE, NEON, BAR); `video_filter` (null or a named look such as `moody_dark`, `teal_orange`, `cinematic_warm`); `layout` (single, split, active, fit, split_filler); `sfx` with `zoom`, `broll`, `cut`, `stat` each null, `whoosh`, `pop` or `hit`. A wrong value skips that file with a warning that says what to fix; the others still load. A template with a built-in's name replaces it.
 
 ## Photo reel types (`--mode PHOTO_REEL --reel_type ...`)
 

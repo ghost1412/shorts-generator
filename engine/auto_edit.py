@@ -10,6 +10,7 @@ review card) so nothing is a black box.
 """
 import json
 import os
+import re
 
 PRESETS = {
     "podcast": {
@@ -37,6 +38,159 @@ PRESETS = {
         "sfx": {"zoom": None, "broll": "whoosh", "cut": "whoosh", "stat": None}, "stat_pops": False,
     },
 }
+
+# More built-in templates. Same keys as above; each one only uses features the pipeline already has.
+PRESETS.update({
+    "minimal": {
+        "label": "Minimal / clean", "about": "Quiet and tidy: pauses and ums cut, small plain captions, no zooms, no teaser, no sound effects.",
+        "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "MINIMAL", "caption_emoji": False,
+        "hook_overlay": False, "cold_open": False, "auto_zoom": False, "broll": False, "video_filter": None,
+        "sfx": {"zoom": None, "broll": None, "cut": None, "stat": None}, "stat_pops": False,
+    },
+    "news": {
+        "label": "News / commentary", "about": "Straight and readable: subtitle bar, a headline-style hook title, cutaways for the things named, numbers pop out.",
+        "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "BAR", "caption_emoji": False,
+        "hook_overlay": True, "cold_open": False, "auto_zoom": True, "broll": True, "video_filter": None,
+        "sfx": {"zoom": None, "broll": "whoosh", "cut": None, "stat": "pop"}, "stat_pops": True,
+    },
+    "storytime": {
+        "label": "Storytime / personal story", "about": "Moody and close: glow captions, a dark colour grade, a teaser opening, light cutaways, low sound effects.",
+        "tighten": True, "remove_fillers": False, "clean_audio": True, "caption_style": "GLOW_BOX", "caption_emoji": False,
+        "hook_overlay": True, "cold_open": True, "auto_zoom": True, "broll": True, "video_filter": "moody_dark",
+        "sfx": {"zoom": None, "broll": "whoosh", "cut": None, "stat": None}, "stat_pops": False,
+    },
+    "motivation": {
+        "label": "Motivation / big statements", "about": "Bold and punchy: big white-and-yellow captions, a teaser, frequent zooms, cutaways, a hit on every cut.",
+        "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "HORMOZI", "caption_emoji": False,
+        "hook_overlay": True, "cold_open": True, "auto_zoom": True, "broll": True, "video_filter": "teal_orange",
+        "sfx": {"zoom": "pop", "broll": "whoosh", "cut": "hit", "stat": "pop"}, "stat_pops": True,
+    },
+    "tutorial": {
+        "label": "Tutorial / how-to", "about": "Clear and steady: subtitle bar, zooms on numbers, no teaser and no stock cutaways that could distract from the steps.",
+        "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "BAR", "caption_emoji": False,
+        "hook_overlay": True, "cold_open": False, "auto_zoom": True, "broll": False, "video_filter": None,
+        "sfx": {"zoom": "pop", "broll": None, "cut": None, "stat": "pop"}, "stat_pops": True, "layout": "fit",
+    },
+    "cinematic": {
+        "label": "Cinematic / moody", "about": "Film look: plain captions, a warm teal-orange grade, a teaser opening, slow cutaways, quiet whooshes.",
+        "tighten": True, "remove_fillers": True, "clean_audio": True, "caption_style": "MINIMAL", "caption_emoji": False,
+        "hook_overlay": False, "cold_open": True, "auto_zoom": True, "broll": True, "video_filter": "cinematic_warm",
+        "sfx": {"zoom": None, "broll": "whoosh", "cut": "whoosh", "stat": None}, "stat_pops": False,
+    },
+})
+BUILTIN_NAMES = tuple(PRESETS)
+
+# ---- your own templates: a JSON file per template in ./templates/ (next to the program) or ~/.shortsflow/templates/
+# (or the folder in $SHORTSFLOW_TEMPLATES). The file name is the template's name. See docs/TEMPLATES.md.
+CAPTION_STYLES = ("HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR")
+GRADES = ("kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid",
+          "matrix_green", "sepia_western", "cold_thriller", "hdr_pop")
+LAYOUTS = ("single", "split", "active", "fit", "split_filler")
+SFX_KINDS = ("whoosh", "pop", "hit")
+SFX_SLOTS = ("zoom", "broll", "cut", "stat")
+BOOL_KEYS = ("tighten", "remove_fillers", "clean_audio", "caption_emoji", "hook_overlay", "cold_open", "auto_zoom", "broll", "stat_pops")
+NEUTRAL = {"label": "", "about": "", "tighten": True, "remove_fillers": False, "clean_audio": True, "caption_style": "HORMOZI",
+           "caption_emoji": False, "hook_overlay": False, "cold_open": False, "auto_zoom": False, "broll": False, "video_filter": None,
+           "sfx": {"zoom": None, "broll": None, "cut": None, "stat": None}, "stat_pops": False}
+TEMPLATE_PROBLEMS = []         # what went wrong when the template files were read (printed once by the command line)
+
+
+def templates_dirs():
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return [os.path.join(here, "templates"), os.environ.get("SHORTSFLOW_TEMPLATES") or os.path.join(os.path.expanduser("~"), ".shortsflow", "templates")]
+
+
+def _check_template(raw, base):
+    """The template `raw` (parsed JSON) on top of `base` (a preset dict), or raises ValueError saying what is wrong."""
+    if not isinstance(raw, dict):
+        raise ValueError("the file must hold one JSON object")
+    known = set(NEUTRAL) | {"layout", "based_on"}
+    extra = sorted(set(raw) - known)
+    if extra:
+        raise ValueError(f"unknown setting(s): {', '.join(extra)}")
+    out = json.loads(json.dumps(base))
+    for key, value in raw.items():
+        if key == "based_on":
+            continue
+        if key in BOOL_KEYS:
+            if not isinstance(value, bool):
+                raise ValueError(f"{key} must be true or false")
+        elif key == "caption_style":
+            if value not in CAPTION_STYLES:
+                raise ValueError(f"caption_style must be one of: {', '.join(CAPTION_STYLES)}")
+        elif key == "video_filter":
+            if value is not None and value not in GRADES:
+                raise ValueError(f"video_filter must be null or one of: {', '.join(GRADES)}")
+        elif key == "layout":
+            if value not in LAYOUTS:
+                raise ValueError(f"layout must be one of: {', '.join(LAYOUTS)}")
+        elif key == "sfx":
+            if not isinstance(value, dict) or set(value) - set(SFX_SLOTS) or any(v is not None and v not in SFX_KINDS for v in value.values()):
+                raise ValueError(f"sfx must be an object with keys from {', '.join(SFX_SLOTS)} and values null or one of {', '.join(SFX_KINDS)}")
+            out["sfx"].update(value)
+            continue
+        elif key in ("label", "about"):
+            if not isinstance(value, str):
+                raise ValueError(f"{key} must be text")
+        out[key] = value
+    return out
+
+
+def load_templates(dirs=None, builtin=None):
+    """({name: preset}, [problems]) from the JSON files in `dirs`. A broken file is skipped and reported, never fatal.
+    Files whose name starts with "_" (like _example.json) are ignored. "based_on" names a built-in or an earlier template to start from."""
+    builtin = PRESETS if builtin is None else builtin
+    pending, problems = {}, []          # name -> (path, parsed JSON)
+    for folder in (dirs if dirs is not None else templates_dirs()):
+        try:
+            names = sorted(n for n in os.listdir(folder) if n.lower().endswith(".json") and not n.startswith("_"))
+        except OSError:
+            continue
+        for fname in names:
+            name = fname[:-5].lower()
+            path = os.path.join(folder, fname)
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,30}", name):
+                problems.append(f"{path}: the file name must be letters, digits, - or _ (at most 31 characters)")
+                continue
+            try:
+                with open(path, "r", encoding="utf-8-sig") as f:
+                    pending[name] = (path, json.load(f))
+            except (OSError, ValueError) as e:
+                problems.append(f"{path}: {e}")
+    found = {}
+    while pending:                      # a template may start from another one, whatever the file order: resolve parents first
+        progressed = False
+        for name in list(pending):
+            path, raw = pending[name]
+            parent = raw.get("based_on") if isinstance(raw, dict) else None
+            if parent is not None and parent != name and parent in pending:
+                continue                # its parent is still to be read
+            del pending[name]
+            progressed = True
+            try:
+                if parent is not None and parent not in found and parent not in builtin:
+                    raise ValueError(f"based_on {parent!r} is not a known template")
+                base = (found.get(parent) or builtin.get(parent)) if parent else NEUTRAL
+                tpl = _check_template(raw, base)
+                tpl["label"] = raw.get("label") or name.replace("-", " ").replace("_", " ").title()      # never the parent's label
+                tpl["about"] = raw.get("about") or (f"Your template, based on {parent}." if parent else "Your template.")
+                found[name] = tpl
+            except ValueError as e:
+                problems.append(f"{path}: {e}")
+        if not progressed:              # a loop of templates that start from each other
+            for name, (path, _) in pending.items():
+                problems.append(f"{path}: based_on forms a loop")
+            break
+    return found, problems
+
+
+def register_templates(dirs=None):
+    """Add the user's templates to PRESETS (a template with a built-in's name replaces it). Returns the problems found."""
+    found, problems = load_templates(dirs)
+    PRESETS.update(found)
+    TEMPLATE_PROBLEMS[:] = problems
+    return problems
+
 
 # strength: how much of the edit shows. zoom_* feed engine/auto_zoom, sfx_db is the volume of the sound effects.
 STRENGTHS = {
@@ -97,6 +251,9 @@ def apply_preset(args, preset, strength="medium", argv=None):
     if getattr(args, "tighten_mode", "cut") != "cut":
         args.tighten_mode = "cut"
         notes.append("pauses are cut, not sped up (needed with animated captions)")
+    if p.get("layout") and not _given(argv, "--layout") and getattr(args, "layout", "single") == "single":
+        args.layout = p["layout"]
+        flags["layout"] = p["layout"]
     if not _given(argv, "--caption_style"):
         args.caption_style = p["caption_style"]
     flags["caption_style"] = args.caption_style
@@ -216,3 +373,6 @@ def write_plan(session_dir, plan, clip_logs):
     except OSError:
         return None
     return path
+
+
+register_templates()

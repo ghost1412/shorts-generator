@@ -50,7 +50,8 @@ def parse_args():
     parser.add_argument("--extract_mode", choices=["shorts", "long"], default="shorts")
     parser.add_argument("--clip_count", type=int, default=5)
     parser.add_argument("--target_duration", type=int, default=30)
-    parser.add_argument("--auto_edit", choices=["podcast", "hype", "educational", "vlog"], help="Edit like an editor: one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, teaser opening, colour and sound effects for this kind of video. Your own flags still win. Writes edit_plan.json.")
+    from engine import auto_edit as _auto_edit
+    parser.add_argument("--auto_edit", choices=_auto_edit.preset_names(), help="Edit like an editor (a template; add your own as JSON files, see docs/TEMPLATES.md): one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, teaser opening, colour and sound effects for this kind of video. Your own flags still win. Writes edit_plan.json.")
     parser.add_argument("--edit_strength", choices=["subtle", "medium", "hyped"], default="medium", help="With --auto_edit: how much of the edit shows (default medium).")
     parser.add_argument("--transitions", choices=["auto", "none", "dissolve", "mix", "punch", "whip", "flash", "glitch", "subject"], default="auto", help="--mode TRIP and the compiled highlight reel (--extract_mode long): a transition on every cut instead of a plain cut (auto = follows --auto_edit: hype mix, vlog punch, others none): punch (fast push-in), whip (slide with motion blur), flash (white), glitch (RGB split), mix (a different one each time) or subject (the person stays in front while the background changes; needs torch + torchvision + opencv, a cut without a clear person gets another type). Length follows --edit_strength.")
     parser.add_argument("--subject_look", choices=["auto", "plain", "glow", "glow_sweep", "spotlight"], default="auto", help="--transitions subject: how the cut-out looks. plain = person stays; glow = a bright outline builds up round the person before the background changes; glow_sweep = outline + a light band + darker background; spotlight = dark background, soft outline; auto (default) = plain for now; the outline looks are experimental.")
@@ -207,6 +208,8 @@ def parse_args():
     parser.add_argument("--enhance_audio", action="store_true", help="Apply studio audio mastering (highpass, noise gate, compressor, EBU R128 loudnorm).")
 
     args = parser.parse_args()
+    for problem in _auto_edit.TEMPLATE_PROBLEMS:
+        print(f"[Warning] Template skipped: {problem}")
     # Older option names that the engine never read are now aliases of the features that do the same job
     if args.enhance_audio and not args.clean_audio:
         args.clean_audio = True           # studio audio mastering == noise reduction + loudness normalisation
