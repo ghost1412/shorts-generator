@@ -46,3 +46,18 @@ def test_apply_leaves_the_video_alone_when_nothing_is_chosen(tmp_path):
     f.write_bytes(b"x")
     assert overlay.apply_to_video(str(f), {}) is False and f.read_bytes() == b"x"
     assert overlay.apply_to_video(str(f), {"introAnimation": "tiles"}, log=lambda *_: None) is False      # unreadable video: skipped, not a crash
+
+
+def test_the_work_folder_cleanup_removes_only_its_own_files(tmp_path):
+    work = tmp_path / "overlay_x"
+    work.mkdir()
+    (work / "piece_0.mov").write_bytes(b"x")
+    (work / "with_overlay.mp4").write_bytes(b"x")
+    overlay._remove_work_folder(str(work))
+    assert not work.exists()
+    other = tmp_path / "overlay_y"
+    other.mkdir()
+    (other / "piece_0.mov").write_bytes(b"x")
+    (other / "notes.txt").write_text("keep me")
+    overlay._remove_work_folder(str(other))
+    assert (other / "notes.txt").exists() and not (other / "piece_0.mov").exists()      # anything else in the folder is never touched, so the folder stays

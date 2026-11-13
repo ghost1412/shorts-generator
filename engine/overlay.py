@@ -85,6 +85,18 @@ def composite(video, pieces, out, codec="libx264", quality_params=None, ffmpeg="
     return r.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 1000
 
 
+def _remove_work_folder(work):
+    """Delete the temporary folder made by apply_to_video and nothing else: the files this module wrote in it, then the (now empty) folder.
+    A folder that holds anything else is left alone."""
+    try:
+        for name in os.listdir(work):
+            if name.startswith("piece_") and name.endswith(".mov") or name == "with_overlay.mp4":
+                os.remove(os.path.join(work, name))
+        os.rmdir(work)
+    except OSError:
+        pass
+
+
 def apply_to_video(video, props, codec="libx264", quality_params=None, log=print):
     """Draw the chosen visual template / covers over `video` (in place). Returns True when something was applied."""
     if not wanted(props):
@@ -115,5 +127,4 @@ def apply_to_video(video, props, codec="libx264", quality_params=None, log=print
         log(f"[Warning] Template / covers skipped for the highlights video ({e}); the video is unchanged.")
         return False
     finally:
-        import shutil
-        shutil.rmtree(work, ignore_errors=True)
+        _remove_work_folder(work)
