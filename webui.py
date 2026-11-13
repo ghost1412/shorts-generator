@@ -896,6 +896,12 @@ def build_ui():
                             with gr.Row():
                                 q_brand_save = gr.Button("Save my brand", variant="secondary")
                                 q_brand_clear = gr.Button("Remove brand")
+                        with gr.Accordion("Save these settings as my template", open=False):
+                            gr.Markdown("Keeps the Auto-edit style, caption style, extras, colour grade, visual template and covers chosen above under a name, "
+                                        "so you can pick them again in one step (or use them on the command line).")
+                            q_tpl_name = gr.Textbox(label="Template name", placeholder="my-channel", max_lines=1)
+                            q_tpl_save = gr.Button("Save as a template", variant="secondary")
+                            q_tpl_msg = gr.Markdown("")
                         q_btn = gr.Button("✨ Make my shorts", variant="primary")
                         q_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
@@ -1033,6 +1039,14 @@ def build_ui():
                 demo.load(brand_fields, None, brand_form)
                 from shortsflow import sample as _sample
                 q_sample.click(_sample.use_sample, None, [q_url, q_upload, q_sample_note])
+                def _save_template(name, edit, style, clean, hook, emoji, broll, zoom, cold, stats, grade, tpl, intro, outro):
+                    ok, msg = web_args.save_look_template(name, edit, style, clean, hook, emoji, broll, zoom, cold, stats, grade, tpl, intro, outro)
+                    if not ok:
+                        return msg, gr.update()
+                    new = (name or "").strip().lower().replace(" ", "-")
+                    return msg, gr.update(choices=web_args.edit_style_choices(), value=new if new else edit)
+                q_tpl_save.click(_save_template, [q_tpl_name, q_edit, q_style, q_clean, q_hook, q_emoji, q_broll, q_zoom, q_cold, q_stats, q_grade,
+                                                  q_look[0], q_look[1], q_look[2]], [q_tpl_msg, q_edit])
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
                              q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm, *q_look],

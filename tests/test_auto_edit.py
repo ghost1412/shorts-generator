@@ -159,3 +159,38 @@ def test_a_template_without_based_on_starts_neutral_and_the_shipped_example_is_v
     shutil.copy(os.path.join(os.path.dirname(auto_edit.__file__), "..", "templates", "_example.json"), ex / "example-copy.json")
     f2, p2 = auto_edit.load_templates([str(ex)])
     assert not p2 and f2["example-copy"]["caption_style"] == "GLOW_BOX"
+
+
+def test_a_template_saved_from_the_browser_settings_round_trips(tmp_path, monkeypatch):
+    from shortsflow import web_args
+    saved = dict(auto_edit.PRESETS)
+    try:
+        ok, msg = web_args.save_look_template("My Channel", "podcast", "MARKER", clean_audio=True, hook_overlay=True, caption_emoji=True, grade="teal_orange",
+                                              visual="neon-frame", intro="tiles", outro="iris", folder=str(tmp_path))
+        assert ok and "my-channel" in msg and "--auto_edit my-channel" in msg
+        data = json.loads((tmp_path / "my-channel.json").read_text(encoding="utf-8"))
+        assert data["caption_style"] == "MARKER" and data["caption_emoji"] is True and data["video_filter"] == "teal_orange"
+        assert data["visual"] == "neon-frame" and data["intro_animation"] == "tiles" and data["outro_animation"] == "iris"
+        assert data["sfx"]["broll"] == "whoosh" and data["label"] == "My Channel"                 # the podcast style's sound effects came along
+        found, problems = auto_edit.load_templates([str(tmp_path)])                              # and the file loads again without problems
+        assert not problems and found["my-channel"]["caption_style"] == "MARKER"
+        assert "my-channel" in auto_edit.PRESETS and ("My Channel", "my-channel") in auto_edit.preset_choices()
+        a = _args(visual_template=None, intro_animation=None, outro_animation=None)
+        plan = auto_edit.apply_preset(a, "my-channel", "medium", [])
+        assert a.visual_template == "neon-frame" and a.intro_animation == "tiles" and plan["flags"]["visual_template"] == "neon-frame"
+        # saving again under the same name replaces the user's file; built-in names and bad names are refused with a plain message
+        assert web_args.save_look_template("my channel", "none", "SOFT", folder=str(tmp_path))[0]
+        assert json.loads((tmp_path / "my-channel.json").read_text(encoding="utf-8"))["caption_style"] == "SOFT"
+        for bad, word in (("podcast", "built-in"), ("", "name"), ("a/b", "name"), ("x" * 40, "name")):
+            ok, msg = web_args.save_look_template(bad, folder=str(tmp_path))
+            assert not ok and word in msg and msg.startswith("Not saved")
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["my-channel.json"]                 # nothing else was written
+    finally:
+        auto_edit.PRESETS.clear()
+        auto_edit.PRESETS.update(saved)
+
+
+def test_edit_style_choices_follow_the_current_templates():
+    from shortsflow import web_args
+    assert web_args.edit_style_choices()[0] == ("No auto-edit (pick my own options)", "none")
+    assert [v for _, v in web_args.edit_style_choices()[1:]] == list(auto_edit.PRESETS)

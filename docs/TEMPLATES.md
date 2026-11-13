@@ -34,6 +34,8 @@ One choice sets the pause and um cuts, captions, zooms, cutaways, teaser opening
 
 ### Make your own template
 
+In the browser app (Start here), open **Save these settings as my template**, type a name and press the button: the Auto-edit style, caption style, extras, colour grade, visual template and covers you chose are saved as `~/.shortsflow/templates/<name>.json` and appear in the Auto-edit list at once. A built-in name cannot be used, and saving again under your own name replaces that file. You can also write the file by hand:
+
 Put a JSON file in `templates/` (next to the program) or in `~/.shortsflow/templates/` (or the folder in the `SHORTSFLOW_TEMPLATES` environment variable). The file name is the template's name (`my-channel.json` gives `--auto_edit my-channel`); it then appears in the command line and in the browser app list. `templates/_example.json` shows every setting; files starting with `_` are ignored. List only what you want to change and name a starting point with `based_on` (a built-in or another of your templates).
 
 ```json

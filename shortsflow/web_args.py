@@ -57,6 +57,27 @@ def template_args(template="none", intro="none", outro="none", speaker="", role=
     return args
 
 
+def edit_style_choices():
+    """The Auto-edit list as it is now (built-ins and the user's templates), for a dropdown that is refreshed after saving a template."""
+    return [("No auto-edit (pick my own options)", "none")] + _auto_edit.preset_choices()
+
+
+def save_look_template(name, edit_style="none", caption_style=None, clean_audio=False, hook_overlay=False, caption_emoji=False, broll=False,
+                       auto_zoom=False, cold_open=False, stat_pops=False, grade="default", visual="none", intro="none", outro="none", folder=None):
+    """Save the browser app's current look as a template. Returns (ok, message); the message says where it went or what to fix."""
+    try:
+        flags = {"clean_audio": clean_audio, "hook_overlay": hook_overlay, "caption_emoji": caption_emoji, "broll": broll, "auto_zoom": auto_zoom,
+                 "cold_open": cold_open, "stat_pops": stat_pops, "tighten": True}
+        tpl = _auto_edit.template_from_settings(edit_style, caption_style, flags, grade if grade not in ("default", "auto") else None,
+                                                None if visual in (None, "none") else visual, None if intro in (None, "none") else intro,
+                                                None if outro in (None, "none") else outro)
+        path = _auto_edit.save_user_template(name, tpl, folder)
+    except ValueError as e:
+        return False, f"Not saved: {e}"
+    shown = os.path.splitext(os.path.basename(path))[0]
+    return True, f"Saved as **{shown}** ({path}). It is in the Auto-edit style list now and works on the command line as `--auto_edit {shown}`."
+
+
 def template_preview(name):
     """Path of the preview picture of a visual template, or None."""
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "templates", f"{name}.jpg")

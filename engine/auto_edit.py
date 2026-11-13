@@ -424,4 +424,54 @@ def write_plan(session_dir, plan, clip_logs):
     return path
 
 
+NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,30}")
+
+
+def template_from_settings(auto_edit_style="none", caption_style=None, flags=None, video_filter=None, visual=None, intro=None, outro=None,
+                           label="", about=""):
+    """A complete template made from what is set in the browser app: the chosen Auto-edit style is the starting point (or a neutral one),
+    the ticked extras are turned on, the caption style, colour grade, visual template and covers are taken as chosen."""
+    base = json.loads(json.dumps(PRESETS.get(auto_edit_style) or NEUTRAL))
+    for key in BOOL_KEYS:
+        if (flags or {}).get(key):
+            base[key] = True
+    if caption_style in CAPTION_STYLES:
+        base["caption_style"] = caption_style
+    if video_filter in GRADES:
+        base["video_filter"] = video_filter
+    elif video_filter == "none":
+        base["video_filter"] = None
+    base["visual"] = visual if visual in VISUAL_TEMPLATE_NAMES else base.get("visual")
+    base["intro_animation"] = intro if intro in ANIMATION_NAMES else base.get("intro_animation")
+    base["outro_animation"] = outro if outro in ANIMATION_NAMES else base.get("outro_animation")
+    base["label"] = (label or "").strip()
+    base["about"] = (about or "").strip()
+    return {k: v for k, v in base.items() if v is not None or k == "video_filter"}
+
+
+def save_user_template(name, template, folder=None):
+    """Write `template` as <name>.json in the user's templates folder (the one next to ~/.shortsflow) and add it to PRESETS. Returns the path.
+    Raises ValueError for a bad name, a name that is a built-in template, or a template with a wrong value. Overwrites an earlier file of
+    the user's with the same name (that is what saving again means); nothing is ever deleted."""
+    name = (name or "").strip().lower().replace(" ", "-")
+    if not NAME_RE.fullmatch(name):
+        raise ValueError("Use letters, digits, - or _ for the name (at most 31 characters).")
+    if name in BUILTIN_NAMES:
+        raise ValueError(f"'{name}' is one of the built-in styles; pick another name.")
+    clean = _check_template({k: v for k, v in template.items() if k != "based_on"}, NEUTRAL)
+    clean.setdefault("label", "")
+    if not clean.get("label"):
+        clean["label"] = name.replace("-", " ").replace("_", " ").title()
+    folder = folder or templates_dirs()[1]
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name + ".json")
+    out = {k: v for k, v in clean.items() if v is not None or k == "video_filter"}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=2, ensure_ascii=False)
+    PRESETS[name] = _check_template(out, NEUTRAL)
+    PRESETS[name]["label"] = out["label"]
+    PRESETS[name]["about"] = out.get("about") or "Your template."
+    return path
+
+
 register_templates()
