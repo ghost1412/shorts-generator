@@ -70,14 +70,16 @@ def test_web_quick_clip_inputs_match_its_parameters():
     src = _webui_source()
     inputs = _click_inputs(src, r"q_btn\.click\(quick_clip, \[(.*?)\],\s*\[q_status")
     params = _params(src, "quick_clip")
-    assert len(inputs) <= len(params) and inputs[-6:] == ["q_game", "q_game_mix", "q_cap_pos", "q_cap_size", "q_game_frame", "q_llm"]
-    assert params[len(inputs) - 6:len(inputs)] == ["game", "game_mix", "caption_position", "caption_size", "game_framing", "llm_provider"]
+    # the last group, *q_look, stands for the nine look inputs (visual template, covers, template text)
+    assert inputs[-7:] == ["q_game", "q_game_mix", "q_cap_pos", "q_cap_size", "q_game_frame", "q_llm", "*q_look"]
+    assert len(inputs) - 1 + 9 == len(params)
+    assert params[-15:] == ["game", "game_mix", "caption_position", "caption_size", "game_framing", "llm_provider", 'visual_template', 'intro_animation', 'outro_animation', 'tpl_speaker', 'tpl_role', 'tpl_show', 'tpl_handle', 'tpl_headline', 'tpl_cta']
 
 
 def test_clip_tab_inputs_match_clip_video_parameters():
     src = _webui_source()
     inputs = _click_inputs(src, r"clip_btn\.click\(\s*clip_video,\s*\[(.*?)\],\s*\[clip_log")
     params = _params(src, "clip_video")
-    assert inputs[-5:] == ["clip_game", "clip_game_mix", "clip_cap_pos", "clip_cap_size", "clip_game_frame"]
-    assert len(inputs) - 1 + 5 == len(params)       # *clip_settings stands for five inputs (style, aspect, remotion, llm, tts)
-    assert params[-5:] == ["game", "game_mix", "caption_position", "caption_size", "game_framing"]
+    assert inputs[-6:] == ["clip_game", "clip_game_mix", "clip_cap_pos", "clip_cap_size", "clip_game_frame", "*clip_look"]
+    assert len(inputs) - 2 + 5 + 9 == len(params)       # *clip_settings stands for five inputs (style, aspect, remotion, llm, tts), *clip_look for nine
+    assert params[-14:] == ["game", "game_mix", "caption_position", "caption_size", "game_framing", 'visual_template', 'intro_animation', 'outro_animation', 'tpl_speaker', 'tpl_role', 'tpl_show', 'tpl_handle', 'tpl_headline', 'tpl_cta']
