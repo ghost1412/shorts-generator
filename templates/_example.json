@@ -1,0 +1,10 @@
+{
+  "label": "My channel look",
+  "about": "Copy this file to my-channel.json (no leading underscore) and change what you like. Only the settings you list change; the rest come from 'based_on'.",
+  "based_on": "podcast",
+  "caption_style": "GLOW_BOX",
+  "caption_emoji": true,
+  "video_filter": "cinematic_warm",
+  "layout": "single",
+  "sfx": {"zoom": "pop", "cut": null}
+}

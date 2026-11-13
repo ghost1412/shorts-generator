@@ -71,3 +71,5 @@ docs/launch_ready/
 !remotion-video/public/emoji/*.png
 # the old hosted dashboard was removed; a local leftover folder is not tracked
 /web/
+
+!templates/*.json
