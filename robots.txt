@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ghost1412.github.io/shortsflow/sitemap.xml

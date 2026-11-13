@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip a podcast into Shorts without uploading it | ShortsFlow</title>
+<meta name="description" content="ShortsFlow is a free, open-source tool that cuts a podcast or interview into captioned vertical clips on your own PC. No account, no API key, no watermark, no upload.">
+<link rel="canonical" href="https://ghost1412.github.io/shortsflow/clip-a-podcast-without-uploading.html">
+<meta property="og:title" content="Clip a podcast into Shorts without uploading it | ShortsFlow">
+<meta property="og:description" content="ShortsFlow is a free, open-source tool that cuts a podcast or interview into captioned vertical clips on your own PC. No account, no API key, no watermark, no upload.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ghost1412.github.io/shortsflow/clip-a-podcast-without-uploading.html">
+<meta property="og:image" content="https://ghost1412.github.io/shortsflow/demos/demo_podcast_cuts.gif">
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --ink: #1c1b19; --muted: #5d5a54; --line: #e4e0d8;
+    --accent: #d9480f; --accent-ink: #ffffff; --soft: #fff1e8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151412; --surface: #1f1d1a; --ink: #f1eee8; --muted: #b3aea4; --line: #34312c; --accent: #ff7a3d; --accent-ink: #1a1308; --soft: #2a1d14; }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header.top { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; gap: 12px; flex-wrap: wrap; }
+  .brand { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.01em; text-decoration: none; color: var(--ink); }
+  nav a { margin-left: 16px; text-decoration: none; color: var(--muted); font-size: 0.95rem; }
+  nav a:hover { color: var(--ink); }
+  .hero { display: grid; gap: 32px; align-items: center; padding: 28px 0 48px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .hero { grid-template-columns: 1.1fr 0.9fr; } }
+  h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.08; margin: 0 0 16px; letter-spacing: -0.02em; }
+  .lead { font-size: 1.15rem; color: var(--muted); margin: 0 0 24px; max-width: 34em; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 10px; font-weight: 700; text-decoration: none; border: 2px solid var(--accent); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.ghost { color: var(--accent); background: transparent; }
+  .btn:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .hero figure { margin: 0; text-align: center; }
+  .hero img { width: min(300px, 100%); height: auto; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); }
+  figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+  section { padding: 40px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 1.6rem; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .ba { display: flex; gap: 20px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .ba figure { margin: 0; text-align: center; }
+  .ba img { max-width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+  .ba figure:first-child { flex: 0 1 520px; min-width: 0; }
+  .ba figure:last-child { flex: 0 1 240px; min-width: 0; }
+  .ba figure img { width: 100%; }
+  .ba .arrow { font-size: 2rem; color: var(--accent); font-weight: 800; }
+  @media (max-width: 700px) { .ba .arrow { transform: rotate(90deg); } }
+  .grid.wide { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+  .step { counter-increment: s; position: relative; padding-top: 44px; }
+  .step::before { content: counter(s); position: absolute; top: 12px; left: 18px; width: 28px; height: 28px; border-radius: 50%; background: var(--soft); color: var(--accent); font-weight: 800; display: grid; place-items: center; }
+  .steps { counter-reset: s; }
+  .demos { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .demos figure { margin: 0; }
+  .demos img { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9rem; }
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .note { background: var(--soft); border-radius: 12px; padding: 14px 18px; color: var(--ink); }
+  footer { padding: 32px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; }
+  footer p { margin: 0 0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./">ShortsFlow</a>
+    <nav aria-label="Sections"><a href="#how">How it works</a><a href="#compare">Compared</a><a href="#faq">FAQ</a><a href="https://github.com/ghost1412/shortsflow">GitHub</a></nav>
+  </header>
+
+  <main>
+    <section style="border-top:0;padding-top:20px">
+      <h1>Clip a podcast into Shorts without uploading it anywhere</h1>
+      <p class="lead">ShortsFlow is a free, open-source tool that cuts a long podcast or interview into captioned vertical clips on your own computer. No account, no API key, no watermark, no credits. Your video is not uploaded.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/ghost1412/shortsflow/releases/latest/download/ShortsFlow-Setup.exe">Download for Windows</a>
+        <a class="btn ghost" href="https://github.com/ghost1412/shortsflow#try-it-in-two-minutes">Mac, Linux, pip, Colab</a>
+      </div>
+      <p class="sub" style="margin-top:14px">Open source (MIT). Windows installer, or <code>pip install "shortsflow[clip]"</code> on any system.</p>
+    </section>
+
+    <section id="how">
+      <h2>How it works</h2>
+      <p class="sub">Everything below runs on your machine.</p>
+      <div class="grid steps">
+        <div class="card step"><h3>1. Read the speech</h3><p>Whisper runs locally and writes a transcript with word timings. Nothing is sent anywhere.</p></div>
+        <div class="card step"><h3>2. Pick the moments</h3><p>Clips start and end on whole sentences, skip a mic check or a mumbled opening, and never overlap. Each clip says why it was picked.</p></div>
+        <div class="card step"><h3>3. Frame and caption</h3><p>A face-tracked 9:16 crop, a cut to whoever is speaking in a two-person talk, and animated word-by-word captions you can restyle.</p></div>
+      </div>
+      <pre>pip install "shortsflow[clip]"
+shortsflow doctor
+shortsflow clip my_episode.mp4 --captions</pre>
+    </section>
+
+    <section id="compare">
+      <h2>ShortsFlow compared with hosted clip tools</h2>
+      <p class="sub">An honest comparison. Hosted tools such as Opus Clip, Klap and Vizard are polished and need no setup, and ShortsFlow does not claim to beat them on every video.</p>
+      <div class="grid wide">
+        <div class="card"><h3>Where your video goes</h3><p>ShortsFlow keeps it on your machine. Hosted tools upload it to their cloud.</p></div>
+        <div class="card"><h3>Price and watermark</h3><p>ShortsFlow is free (MIT) with no watermark. Hosted tools use subscriptions or credits, and the free tiers usually add a watermark.</p></div>
+        <div class="card"><h3>Account</h3><p>ShortsFlow needs none. Hosted tools require one.</p></div>
+        <div class="card"><h3>Choosing the moments</h3><p>Without an AI key, ShortsFlow picks moments with transparent text and audio rules, which is weaker than an AI that reads the whole transcript. Adding a key (or a free local Ollama) lets an AI pick and score them, and then the transcript text goes to that provider.</p></div>
+        <div class="card"><h3>Convenience</h3><p>Hosted tools win here: nothing to install, and a web editor. ShortsFlow asks you to install a program.</p></div>
+      </div>
+      <p class="note" style="margin-top:20px">Results from public-domain and Creative Commons videos, including the weak spots, are on the <a href="https://github.com/ghost1412/shortsflow/blob/main/docs/BENCHMARKS.md">benchmarks page</a>.</p>
+    </section>
+
+    <section id="faq">
+      <h2>Questions</h2>
+      <div class="grid wide">
+        <div class="card"><h3>Is it really free?</h3><p>Yes. It is MIT licensed, with no credits and no watermark. Optional AI providers have their own pricing if you choose to add a key. Remotion, used for animated captions, has its own licence for companies above its size threshold.</p></div>
+        <div class="card"><h3>Does anything leave my computer?</h3><p>Not by default. Only optional features send data: an AI text provider receives the transcript if you add a key, and Google Drive upload happens only when you ask. A pasted YouTube link is downloaded to your PC.</p></div>
+        <div class="card"><h3>Do I need a GPU?</h3><p>No. A GPU makes transcription faster, but it runs on a CPU as well, only more slowly.</p></div>
+        <div class="card"><h3>Which formats come out?</h3><p>Vertical 9:16 MP4 clips with burned-in captions, sized for YouTube Shorts, TikTok and Instagram Reels. You review and post them yourself.</p></div>
+        <div class="card"><h3>Something broke. What now?</h3><p>Run <code>shortsflow doctor</code> and <a href="https://github.com/ghost1412/shortsflow/issues">open an issue</a> with its output.</p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p><a href="./">ShortsFlow home</a> · <a href="https://github.com/ghost1412/shortsflow">GitHub</a> · <a href="https://pypi.org/project/shortsflow/">PyPI</a> · MIT licence</p>
+  </footer>
+</div>
+</body>
+</html>
