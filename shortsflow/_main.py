@@ -108,6 +108,9 @@ def parse_args():
     parser.add_argument("--use_audio_detect", action="store_true", help="Use audio signals (energy/delta) for extraction.")
     parser.add_argument("--style", choices=["sarcastic", "meme", "funny", "action", "stylish"], action="append", help="Optional viral editing styles (can be used multiple times).")
     parser.add_argument("--caption_emoji", action="store_true", help="Pop an emoji next to keywords in HORMOZI/BOUNCE captions (bundled Twemoji images, no system emoji font needed; needs --use_remotion).")
+    parser.add_argument("--visual_template", choices=list(_auto_edit.VISUAL_TEMPLATE_NAMES), help="Draw a designed skin over the picture (animated renderer): podcast-card (speaker name tag, show chip, progress bar), neon-frame, news-banner (headline bar and ticker), minimal-line. Needs --use_remotion (turned on for you). Previews: docs/templates/.")
+    parser.add_argument("--template_text", action="append", metavar="KEY=VALUE", help="Text for a visual template, repeatable: speaker, role, show, handle, headline, label, cta. Example: --template_text speaker=\"Alex Morgan\" --template_text role=Host. Only what you give is drawn.")
+    parser.add_argument("--template_accent", help="Accent colour of the visual template as a hex code, e.g. #FFB703.")
     parser.add_argument("--hook_overlay", action="store_true", help="Show the clip's hook as a big title for the first ~3 seconds (clipping with --use_remotion).")
     parser.add_argument("--auto_zoom", action="store_true", help="Subtle punch-in / slow push-in on the picture at emphasised words and sentence starts (clipping with --use_remotion; not with --layout split_filler).")
     parser.add_argument("--brand", help="brand.json preset (logo, handle, end card) burned into finished clips.")
@@ -231,6 +234,19 @@ def parse_args():
               + (f"; note: {'; '.join(args.auto_edit_plan['notes'])}" if args.auto_edit_plan["notes"] else ""))
     elif args.auto_edit and str(getattr(args, "mode", "") or "").upper() != "TRIP":      # the recap (TRIP) applies the style itself
         print("[Warning] --auto_edit edits video clips (--source_video); it is ignored here.")
+    from engine import visual_template as _vt
+    try:
+        template_text = _vt.parse_text(args.template_text)
+        _vt.set_env(args.visual_template, template_text, args.template_accent)
+    except ValueError as e:
+        parser.error(str(e))
+    if args.visual_template:
+        if not args.use_remotion:
+            args.use_remotion = True
+            print("[Log] Visual template: animated captions turned on (the template is drawn by the animated renderer).")
+        print(f"[Log] 🎨 Visual template '{args.visual_template}'" + (f" with text: {', '.join(template_text)}" if template_text else " (no text given: only the design is drawn)"))
+    elif args.template_text or args.template_accent:
+        print("[Warning] --template_text / --template_accent need --visual_template; they are ignored.")
     if args.stat_pops:
         os.environ["SHORTSFLOW_STAT_POPS"] = "1"
         if not args.use_remotion:

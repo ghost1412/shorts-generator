@@ -80,6 +80,15 @@ PRESETS.update({
 })
 BUILTIN_NAMES = tuple(PRESETS)
 
+# Visual templates: a designed skin drawn over the picture (remotion-video/src/visualTemplates.tsx). Keep these names in step with VISUAL_TEMPLATES there.
+VISUAL_TEMPLATES = {
+    "podcast-card": {"label": "Podcast card", "about": "Speaker name tag that slides in, show chip, soft top and bottom shading, thin progress bar."},
+    "neon-frame": {"label": "Neon frame", "about": "Glowing neon border around the picture, progress line along the top, handle chip."},
+    "news-banner": {"label": "News banner", "about": "Label and headline bar at the top, scrolling ticker at the bottom, progress bar."},
+    "minimal-line": {"label": "Minimal line", "about": "A hairline progress bar and a small handle; nothing else on the picture."},
+}
+VISUAL_TEMPLATE_NAMES = tuple(VISUAL_TEMPLATES)
+
 # ---- your own templates: a JSON file per template in ./templates/ (next to the program) or ~/.shortsflow/templates/
 # (or the folder in $SHORTSFLOW_TEMPLATES). The file name is the template's name. See docs/TEMPLATES.md.
 CAPTION_STYLES = ("HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR")
@@ -104,7 +113,7 @@ def _check_template(raw, base):
     """The template `raw` (parsed JSON) on top of `base` (a preset dict), or raises ValueError saying what is wrong."""
     if not isinstance(raw, dict):
         raise ValueError("the file must hold one JSON object")
-    known = set(NEUTRAL) | {"layout", "based_on"}
+    known = set(NEUTRAL) | {"layout", "based_on", "visual"}
     extra = sorted(set(raw) - known)
     if extra:
         raise ValueError(f"unknown setting(s): {', '.join(extra)}")
@@ -121,6 +130,9 @@ def _check_template(raw, base):
         elif key == "video_filter":
             if value is not None and value not in GRADES:
                 raise ValueError(f"video_filter must be null or one of: {', '.join(GRADES)}")
+        elif key == "visual":
+            if value is not None and value not in VISUAL_TEMPLATE_NAMES:
+                raise ValueError(f"visual must be null or one of: {', '.join(VISUAL_TEMPLATE_NAMES)}")
         elif key == "layout":
             if value not in LAYOUTS:
                 raise ValueError(f"layout must be one of: {', '.join(LAYOUTS)}")
@@ -254,6 +266,9 @@ def apply_preset(args, preset, strength="medium", argv=None):
     if p.get("layout") and not _given(argv, "--layout") and getattr(args, "layout", "single") == "single":
         args.layout = p["layout"]
         flags["layout"] = p["layout"]
+    if p.get("visual") and not _given(argv, "--visual_template") and not getattr(args, "visual_template", None):
+        args.visual_template = p["visual"]
+        flags["visual_template"] = p["visual"]
     if not _given(argv, "--caption_style"):
         args.caption_style = p["caption_style"]
     flags["caption_style"] = args.caption_style

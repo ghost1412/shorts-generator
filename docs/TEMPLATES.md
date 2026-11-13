@@ -43,6 +43,23 @@ Put a JSON file in `templates/` (next to the program) or in `~/.shortsflow/templ
 
 Settings: `label`, `about`, `based_on`; true/false switches `tighten`, `remove_fillers`, `clean_audio`, `caption_emoji`, `hook_overlay`, `cold_open`, `auto_zoom`, `broll`, `stat_pops`; `caption_style` (HORMOZI, GLOW_BOX, BOUNCE, MINIMAL, KARAOKE, NEON, BAR); `video_filter` (null or a named look such as `moody_dark`, `teal_orange`, `cinematic_warm`); `layout` (single, split, active, fit, split_filler); `sfx` with `zoom`, `broll`, `cut`, `stat` each null, `whoosh`, `pop` or `hit`. A wrong value skips that file with a warning that says what to fix; the others still load. A template with a built-in's name replaces it.
 
+## Visual templates (`--visual_template NAME`)
+
+A designed skin drawn over the picture, under the hook title and the captions. Needs the animated renderer (`--use_remotion` is turned on for you). Text slots are optional: only the text you give is drawn, nothing is made up.
+
+| Template | Look |
+| :-- | :-- |
+| `podcast-card` | ![podcast-card](templates/podcast-card.jpg) Speaker name tag that slides in, show chip, soft shading, progress bar |
+| `neon-frame` | ![neon-frame](templates/neon-frame.jpg) Glowing neon border, progress line along the top, handle chip |
+| `news-banner` | ![news-banner](templates/news-banner.jpg) Label and headline bar, scrolling ticker, progress bar |
+| `minimal-line` | ![minimal-line](templates/minimal-line.jpg) A hairline progress bar and a small handle |
+
+```bash
+shortsflow clip interview.mp4 --captions --visual_template podcast-card   --template_text speaker="Alex Morgan" --template_text role=Host --template_text show="My Show"   --template_text cta="Follow @myshow for more" --template_accent "#FFB703"
+```
+
+Slots: `speaker`, `role`, `show`, `handle`, `headline`, `label`, `cta` (a closing line over the last 2 seconds). A clip template of your own can pick a visual template with `"visual": "podcast-card"`. The previews above are made by `python scripts/render_template_previews.py` on a public-domain NASA photo with made-up sample text.
+
 ## Photo reel types (`--mode PHOTO_REEL --reel_type ...`)
 
 `memories`, `travel`, `product`, `then_now`, `countdown`, `tribute`: each sets order, timing, captions, title and look. Blurry and duplicate photos are skipped.

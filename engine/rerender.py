@@ -145,6 +145,10 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     prev_hook_env = os.environ.get("SHORTSFLOW_HOOK_OVERLAY")
     if hook_on:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
+    from engine import visual_template as _vt
+    prev_tpl_env = {k: os.environ.get(k) for k in (_vt.ENV_NAME, _vt.ENV_TEXT, _vt.ENV_ACCENT)}
+    if settings.get("visual_template") in _vt.VISUAL_TEMPLATES and settings.get("use_remotion"):
+        _vt.set_env(settings["visual_template"], settings.get("template_text") or {}, settings.get("template_accent"))     # the same skin again
     prev_size_env = os.environ.get("SHORTSFLOW_CAPTION_SIZE")
     prev_off_env = os.environ.get("SHORTSFLOW_NO_CAPTIONS")
     if float(settings.get("caption_size") or 1.0) != 1.0:
@@ -253,6 +257,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
         shutil.move(new_clip, target)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+        for k, v in prev_tpl_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
         if hook_on:
             if prev_hook_env is None:
                 os.environ.pop("SHORTSFLOW_HOOK_OVERLAY", None)

@@ -122,6 +122,8 @@ def overlay_props(hook_text=None, hook_seconds=2.8):
     if hook:
         props["hookText"] = hook
         props["hookSeconds"] = float(hook_seconds)
+    from engine.visual_template import props_from_env      # --visual_template: a designed skin over the picture
+    props.update(props_from_env())
     return props
 
 

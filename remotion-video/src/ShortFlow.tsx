@@ -1,5 +1,6 @@
 import { emojiForWord, emojiFileName } from "./captionEmoji";
 import { zoomScaleAt } from "./autoZoom";
+import { TemplateLayer, templateTextSchema, VISUAL_TEMPLATES } from "./visualTemplates";
 import {
   Audio,
   OffthreadVideo,
@@ -158,6 +159,9 @@ export const shortFlowSchema = z.object({
   hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
   statPops: z.array(z.object({ start: z.number(), end: z.number(), text: z.string() })).optional(), // --stat_pops: numbers shown big when spoken
   hookSeconds: z.number().default(2.8),
+  visualTemplate: z.enum(VISUAL_TEMPLATES).optional(), // --visual_template: a designed skin over the picture (src/visualTemplates.tsx)
+  templateText: templateTextSchema.optional(), // the text slots of that skin (speaker, show, handle, headline, cta)
+  templateAccent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // its accent colour
   reelStyle: reelStyleSchema.optional(), // PHOTO_REEL type look (flash / motion / colour grade / accent)
   zoomMoments: z.array(z.object({ start: z.number(), end: z.number(), scale: z.number(), rise: z.number() })).optional(), // --auto_zoom: picture-layer punch-ins (captions never zoom)
   extraFont: z.object({ family: z.string(), url: z.string() }).optional(), // per-render CJK subset font (static file path)
@@ -1257,6 +1261,9 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   hookText,
   statPops,
   hookSeconds = 2.8,
+  visualTemplate,
+  templateText,
+  templateAccent,
   zoomMoments,
   reelStyle,
   extraFont,
@@ -1647,6 +1654,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         </div>
       )}
 
+      {visualTemplate && <TemplateLayer template={visualTemplate} text={templateText} accent={templateAccent} hookSeconds={hookSeconds} />}
       {hookText && <HookOverlay text={hookText} seconds={hookSeconds} fps={fps} frame={frame} />}
       {statPops && statPops.length > 0 && <StatPopOverlay pops={statPops} fps={fps} frame={frame} />}
 
@@ -1711,8 +1719,8 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
         <TeachCardComponent card={teachCard} frame={frame} fps={fps} />
       )}
 
-      {/* 7. PROGRESS BAR (Snappy sliding bottom bar) */}
-      <div
+      {/* 7. PROGRESS BAR (Snappy sliding bottom bar); a visual template draws its own */}
+      {!visualTemplate && <div
         style={{
           position: "absolute",
           bottom: "0px",
@@ -1732,7 +1740,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
             transition: "width 0.05s linear",
           }}
         />
-      </div>
+      </div>}
     </AbsoluteFill>
   );
 };
