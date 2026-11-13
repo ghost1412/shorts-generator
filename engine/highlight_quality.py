@@ -12,7 +12,7 @@ import re
 
 SENTENCE_END = re.compile(r"[.!?…。！？।]+[\"')\]」』]*$")
 # a trailing dot that does NOT end a sentence
-NOT_END = {"mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "st.", "vs.", "etc.", "e.g.", "i.e.", "u.s.", "no."}
+NOT_END = {"mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "st.", "vs.", "etc.", "e.g.", "i.e.", "u.s."}
 FILLER_WORDS = {"so", "um", "uh", "er", "erm", "hmm", "well", "okay", "ok", "like", "and", "but", "yeah", "right", "alright",
                 "now", "then", "anyway", "you", "know", "basically", "actually", "i", "mean"}
 PAUSE_SPLIT = 0.9          # a silence this long between two words also separates sentences (Whisper often omits punctuation)
@@ -118,10 +118,12 @@ def has_hook_cue(text, words=25):
     """True when the FIRST SENTENCE (at most `words` words) holds a reason to keep watching: a question, a number, or a word that
     promises something (never, why, how, mistake, secret ...). A cheap text cue, not a judgement of how catchy the line is."""
     parts = str(text or "").strip().split()
-    cut = next((i + 1 for i, w in enumerate(parts) if SENTENCE_END.search(w) and w.lower() not in NOT_END), len(parts))
+    cut = next((i + 1 for i, w in enumerate(parts)
+                if SENTENCE_END.search(w) and w.lower() not in NOT_END
+                and not (w.lower() == "no." and i + 1 < len(parts) and parts[i + 1][:1].isdigit())), len(parts))     # "No. 5" is a number
     first_sentence = " ".join(parts[:cut])
     head = " ".join(first_sentence.split()[:words])
-    if "?" in head or any(ch.isdigit() for ch in head):
+    if "?" in head or any(re.fullmatch(r"\d{1,3}%?|[$€£]\d[\d,.]*|\d[\d,.]*%", w.strip(",.!?\"'()")) for w in head.split()):
         return True
     return any(w.strip(",.!?\"'").lower() in OPENING_CUES for w in head.split())
 
@@ -140,7 +142,7 @@ def trails_off_end(sentence):
     last = words[-1].lower()
     if words[-1] == "A":                    # a letter ("Plan A.", "vitamin A."), not the article
         return False
-    if text.rstrip("\"')]").endswith(("...", "\u2026")):
+    if text.rstrip("\"')]\u201d\u2019").endswith(("...", "\u2026")):
         return last in DANGLING_ENDINGS
     return last in NARROW_DANGLING
 
@@ -301,7 +303,7 @@ def _resolve_overlaps(clips, spans, o):
             if nxt:
                 B["start"] = round(nxt[0], 2)
             else:
-                clips.pop(pair[1])
+                clips.pop(pair[1])                     # trimming the better clip is worse than losing the weaker one
         elif not a_fixed and done:
             A["end"] = round(min(done[-1] + o["tail"], b_start - 0.01), 2)
         elif not b_fixed and nxt:

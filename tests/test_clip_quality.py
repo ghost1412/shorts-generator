@@ -214,3 +214,12 @@ def test_you_know_is_not_a_hook_but_a_promise_word_in_the_first_sentence_is():
     assert not has_hook_cue("I mean you know it was kind of a normal day. Never mind.")      # "Never" is in the second sentence
     assert has_hook_cue("Never trust a rule you cannot test. It was a normal day.")
     assert has_hook_cue("Why does it float? Nobody knows.")
+
+
+def test_review_fixes_v078():
+    from engine.highlight_quality import has_hook_cue, trails_off_end
+    assert not has_hook_cue("In 2019 I sold it and left.")
+    assert has_hook_cue("Seven out of 10 people quit.") and has_hook_cue("It costs $5,000 a month.")
+    assert has_hook_cue("I said no. Why would anyone ask?") is False      # the first sentence is "I said no."
+    assert has_hook_cue("No. 5 on the list is why we left.")      # "No. 5" is a number, not a sentence end
+    assert trails_off_end("It was because…”")

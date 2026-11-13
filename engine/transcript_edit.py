@@ -355,9 +355,13 @@ def drop_loud_pauses(pauses, transcript_data, audio_path, ratio=LOUD_PAUSE_RATIO
         out = []
         for a, b in pauses:
             quiet_from = None
-            for k in range(int(math.ceil((b - a) / win - 1e-9))):
+            n = int(math.ceil((b - a) / win - 1e-9))
+            if n > 1 and (b - a) - (n - 1) * win < win / 2:
+                n -= 1                                                              # a sliver at the end joins the last full window
+            for k in range(n):
                 ws = a + k * win
-                if level(ws, min(ws + win, b)) >= limit:                        # a loud window ends any quiet stretch
+                we = b if k == n - 1 else ws + win
+                if level(ws, we) >= limit:                        # a loud window ends any quiet stretch
                     if quiet_from is not None and ws - quiet_from >= min_len:
                         out.append((round(quiet_from, 3), round(ws, 3)))
                     quiet_from = None
