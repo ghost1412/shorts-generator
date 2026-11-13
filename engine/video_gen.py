@@ -2690,18 +2690,52 @@ def apply_progress_bar(clip, duration, color=(0, 255, 0), height=40):
     fill_bar = fill_bar.with_position(lambda t: (int((t/duration)*clip.w*0.8) - int(clip.w*0.8) + (clip.w - int(clip.w*0.8))//2, clip.h - 250))
     return [bg_bar, fill_bar]
 
+def cpu_retry_command(cmd):
+    """The same FFmpeg command with the GPU encoder swapped for libx264, or None when it does not use one (so there is nothing to retry)."""
+    cmd = list(cmd)
+    if "-c:v" not in cmd or cmd[cmd.index("-c:v") + 1] != "h264_nvenc":
+        return None
+    cmd[cmd.index("-c:v") + 1] = "libx264"
+    if "-preset" in cmd:
+        cmd[cmd.index("-preset") + 1] = "veryfast"
+    for flag in ("-rc", "-cq", "-b:v"):
+        while flag in cmd:
+            i = cmd.index(flag)
+            del cmd[i:i + 2]
+    cmd[cmd.index("libx264") + 1:cmd.index("libx264") + 1] = ["-crf", "18"]
+    return cmd
+
+
 def finish_segment_processes(procs):
-    """Wait for the FFmpeg cut processes [(process, part_path, final_path)] and move every finished file to its final name.
+    """Wait for the FFmpeg cut processes [(process, part_path, final_path[, command])] and move every finished file to its final name.
     A segment is written as `seg_N.part.mp4` and only renamed when FFmpeg exited cleanly, so a run that was stopped half way
-    never leaves a truncated `seg_N.mp4` that a later `--use_cache` run would trust."""
+    never leaves a truncated `seg_N.mp4` that a later `--use_cache` run would trust. A cut that failed on the GPU encoder (another program
+    holding the encoder sessions, for instance) is run again once on the CPU; a failure is reported, never silent."""
     from engine.fsutil import replace_file
-    for proc, part, final in procs:
+    for item in procs:
+        proc, part, final = item[:3]
+        cmd = item[3] if len(item) > 3 else None
         proc.wait()
         try:
-            if proc.returncode == 0 and os.path.exists(part) and os.path.getsize(part) > 1000:
+            ok = proc.returncode == 0 and os.path.exists(part) and os.path.getsize(part) > 1000
+            if not ok:
+                if os.path.exists(part):
+                    os.remove(part)
+                retry = cpu_retry_command(cmd) if cmd else None
+                name = os.path.basename(final)
+                if retry:
+                    print(f"[Warning] Segment {name}: FFmpeg stopped with code {proc.returncode} on the GPU encoder; trying again on the CPU.")
+                    r = subprocess.run(retry, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+                    ok = r.returncode == 0 and os.path.exists(part) and os.path.getsize(part) > 1000
+                    if not ok:
+                        tail = (r.stderr or b"").decode("utf-8", "replace").strip().splitlines()[-2:]
+                        print(f"[Error] Segment {name} failed on the CPU as well: {' | '.join(tail)[:300]}")
+                        if os.path.exists(part):
+                            os.remove(part)
+                else:
+                    print(f"[Error] Segment {name}: FFmpeg stopped with code {proc.returncode}; the clip is skipped.")
+            if ok:
                 replace_file(part, final)
-            elif os.path.exists(part):
-                os.remove(part)
         except OSError as e:
             print(f"[Warning] Could not finish segment {os.path.basename(final)}: {e}")
 
@@ -2906,7 +2940,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
         
         # 🟢 FIXED: Added stdin=DEVNULL to prevent hangs on interactive prompts (e.g. overwriting)
         p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
-        processes.append((p, cmd[-1], target))
+        processes.append((p, cmd[-1], target, cmd))
         
         if len(processes) >= local_pool_size:
             finish_segment_processes(processes)
