@@ -24,6 +24,12 @@ on:
         description: 'Target length of the highlights video in seconds (long mode)'
         required: false
         default: '180'
+      ai:
+        description: 'none = no AI key (the default, what docs/BENCHMARKS.md reports); groq = the AI picks and scores the moments with the repo GROQ_API_KEY (the public transcript text goes to Groq)'
+        required: false
+        default: 'none'
+        type: choice
+        options: ['none', 'groq']
       gold:
         description: 'Optional gold file in the repo (json {"video.webm": [[start, end], ...]}) to add recall and precision'
         required: false
@@ -73,14 +79,22 @@ jobs:
           CLIP_COUNT: ${{ github.event.inputs.clip_count || '5' }}
           MODE: ${{ github.event.inputs.mode || 'shorts' }}
           REEL_SECONDS: ${{ github.event.inputs.reel_seconds || '180' }}
+          AI: ${{ github.event.inputs.ai || 'none' }}
+          GROQ_API_KEY: ${{ github.event.inputs.ai == 'groq' && secrets.GROQ_API_KEY || '' }}
         run: |
+          AI_ARGS=()
+          if [ "$AI" = "groq" ]; then
+            if [ -z "$GROQ_API_KEY" ]; then echo "::error::ai=groq needs the GROQ_API_KEY repository secret"; exit 1; fi
+            AI_ARGS=(--llm_provider groq)
+            echo "AI picking: groq"
+          fi
           if [ "$MODE" = "long" ]; then
             python main.py --source_video video.webm --extract_mode long --target_duration "$REEL_SECONDS" \
-              --skip-upload --session_dir bench --output_json bench/results.json
+              --skip-upload --session_dir bench --output_json bench/results.json "${AI_ARGS[@]}"
           else
             python main.py --source_video video.webm --extract_mode shorts --clip_count "$CLIP_COUNT" \
               --target_duration 30 --min_duration 18 --smart_crop --tighten --layout auto \
-              --skip-upload --session_dir bench --output_json bench/results.json
+              --skip-upload --session_dir bench --output_json bench/results.json "${AI_ARGS[@]}"
           fi
 
       - name: Benchmark report
