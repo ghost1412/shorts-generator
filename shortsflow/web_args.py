@@ -35,6 +35,31 @@ def extras_args(clean_audio=False, hook_overlay=False, caption_emoji=False, use_
 from engine import auto_edit as _auto_edit  # noqa: E402
 EDIT_STYLE_CHOICES = [("No auto-edit (pick my own options)", "none")] + _auto_edit.preset_choices()      # built-in and your own templates
 EDIT_STRENGTH_CHOICES = [("Subtle", "subtle"), ("Medium", "medium"), ("Hyped", "hyped")]
+VISUAL_TEMPLATE_CHOICES = [("No template", "none")] + [(v["label"], k) for k, v in _auto_edit.VISUAL_TEMPLATES.items()]
+COVER_CHOICES = [("None", "none")] + [(v["label"], k) for k, v in _auto_edit.ANIMATIONS.items()]
+TEMPLATE_TEXT_SLOTS = ("speaker", "role", "show", "handle", "headline", "cta")
+
+
+def template_args(template="none", intro="none", outro="none", speaker="", role="", show="", handle="", headline="", cta=""):
+    """`--visual_template`, `--intro_animation`, `--outro_animation` and the `--template_text` slots for the chosen look (nothing when none is chosen)."""
+    args = []
+    if template and template != "none":
+        args += ["--visual_template", template]
+        for key, value in zip(TEMPLATE_TEXT_SLOTS, (speaker, role, show, handle, headline, cta)):
+            value = " ".join(str(value or "").split())
+            if value:
+                args += ["--template_text", f"{key}={value}"]
+    if intro and intro != "none":
+        args += ["--intro_animation", intro]
+    if outro and outro != "none":
+        args += ["--outro_animation", outro]
+    return args
+
+
+def template_preview(name):
+    """Path of the preview picture of a visual template, or None."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "templates", f"{name}.jpg")
+    return path if name and name != "none" and os.path.exists(path) else None
 from engine import transitions as _transitions  # noqa: E402
 TRANSITION_CHOICES = _transitions.LABELS
 from engine import subject_cut as _subject_cut  # noqa: E402

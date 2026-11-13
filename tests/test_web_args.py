@@ -252,3 +252,37 @@ def test_find_trip_videos_lists_both_versions_and_the_itinerary_of_either(tmp_pa
     single.mkdir()
     (single / "recap.mp4").write_bytes(b"x")
     assert web_args.find_trip_outputs(str(single))[0].endswith("recap.mp4")
+
+
+def test_template_args_only_what_was_chosen():
+    assert web_args.template_args() == [] and web_args.template_args("none", "none", "none", speaker="Ignored") == []
+    assert web_args.template_args("podcast-card", "tiles", "iris", "  Alex   Morgan ", "Host", "", "@me", "", "Follow me") == [
+        "--visual_template", "podcast-card", "--template_text", "speaker=Alex Morgan", "--template_text", "role=Host",
+        "--template_text", "handle=@me", "--template_text", "cta=Follow me", "--intro_animation", "tiles", "--outro_animation", "iris"]
+    assert web_args.template_args("none", "fade", "none") == ["--intro_animation", "fade"]       # the covers work without a template
+    assert [v for _, v in web_args.VISUAL_TEMPLATE_CHOICES][0] == "none" and len(web_args.VISUAL_TEMPLATE_CHOICES) == 11
+    assert [v for _, v in web_args.COVER_CHOICES][0] == "none" and len(web_args.COVER_CHOICES) == 6
+
+
+def test_template_previews_exist_for_every_template():
+    from engine import auto_edit
+    for name in auto_edit.VISUAL_TEMPLATE_NAMES:
+        assert web_args.template_preview(name)
+    assert web_args.template_preview("none") is None and web_args.template_preview("nope") is None
+
+
+def test_web_forms_pass_every_option_to_their_functions():
+    """A button wired to too few or too many components fails only when clicked, so check the wiring when the page is built."""
+    gr = pytest.importorskip("gradio")
+    import inspect
+    import webui
+    demo = webui.build_ui()
+    seen = set()
+    for fn in demo.fns.values():
+        f = getattr(fn, "fn", None)
+        if f in (webui.quick_clip, webui.clip_video):
+            params = list(inspect.signature(f).parameters.values())
+            required = sum(1 for p in params if p.default is inspect._empty)
+            assert required <= len(fn.inputs) <= len(params), (f.__name__, len(fn.inputs), len(params))
+            seen.add(f.__name__)
+    assert seen == {"quick_clip", "clip_video"}

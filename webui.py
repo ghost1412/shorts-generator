@@ -184,11 +184,32 @@ def _count(value):
         return 3
 
 
+def template_controls(prefix_info=""):
+    """The look controls (visual template with preview, intro and outro covers, template text). Returns the components in the order that
+    `clip_video` / `quick_clip` take them after their other options."""
+    with gr.Accordion("Look: template and covers (optional)", open=False):
+        tpl = gr.Dropdown(web_args.VISUAL_TEMPLATE_CHOICES, value="none", label="Visual template",
+                          info="A designed look drawn over the picture. Turns on animated captions." + prefix_info)
+        tpl_img = gr.Image(value=None, show_label=False, interactive=False, height=300, visible=False)
+        with gr.Row():
+            intro = gr.Dropdown(web_args.COVER_CHOICES, value="none", label="Intro cover",
+                                info="Opens over the first second (tiles break apart, doors, iris, blinds, fade).")
+            outro = gr.Dropdown(web_args.COVER_CHOICES, value="none", label="Outro cover", info="Closes over the last second.")
+        with gr.Accordion("Text for the template (only what you type is drawn)", open=False):
+            texts = [gr.Textbox(label=label, placeholder=ph, max_lines=1) for label, ph in (
+                ("Speaker name", "Alex Morgan"), ("Role", "Host"), ("Show or channel", "My Show"), ("Handle", "@myshow"),
+                ("Headline", "A line for the top bar"), ("Closing line", "Follow @myshow for more"))]
+        tpl.change(lambda name: gr.update(value=web_args.template_preview(name), visible=bool(web_args.template_preview(name))), tpl, tpl_img)
+    return [tpl, intro, outro, *texts]
+
+
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
                caption_style, aspect_ratio, use_remotion, llm_provider, tts_provider,
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler_video=None, auto_zoom=False, cold_open=False,
                spoken="en", auto_edit="none", edit_strength="medium", stat_pops=False,
-               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto"):
+               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto",
+               visual_template="none", intro_animation="none", outro_animation="none",
+               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta=""):
     source = upload or (url or "").strip()
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
@@ -207,6 +228,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
     if use_remotion:
         cmd += web_args.caption_look_args(caption_position, caption_size)
     cmd += web_args.game_args(game, game_mix, game_framing)
+    cmd += web_args.template_args(visual_template, intro_animation, outro_animation, tpl_speaker, tpl_role, tpl_show, tpl_handle, tpl_headline, tpl_cta)
     yield from _run(cmd)
 
 
@@ -429,7 +451,9 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
                auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default",
-               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto", llm_provider="auto"):
+               game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto", llm_provider="auto",
+               visual_template="none", intro_animation="none", outro_animation="none",
+               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta=""):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -453,6 +477,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                "--session_dir", session, "--output_json", results]
         if captions:
             cmd += ["--reel_captions"]
+        cmd += web_args.template_args(visual_template, intro_animation, outro_animation, tpl_speaker, tpl_role, tpl_show, tpl_handle, tpl_headline, tpl_cta)
     else:
         cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
                "--clip_count", str(_count(clip_count)), "--target_duration", str(_length(length)),
@@ -467,6 +492,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += ["--use_remotion", "--caption_style", caption_style or "HORMOZI"]
             cmd += web_args.caption_look_args(caption_position, caption_size)
         cmd += web_args.game_args(game, game_mix, game_framing)
+        cmd += web_args.template_args(visual_template, intro_animation, outro_animation, tpl_speaker, tpl_role, tpl_show, tpl_handle, tpl_headline, tpl_cta)
         cmd += web_args.llm_args(llm_provider)
         if (find or "").strip():
             cmd += ["--find", find.strip()]
@@ -818,6 +844,7 @@ def build_ui():
                                                   "chosen for this kind of video. Turns on animated captions.")
                         q_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
                                                    info="Subtle keeps it quiet; Hyped uses everything.")
+                        q_look = template_controls(" For a highlights video the template shows at the start and end, and the covers on the first and last second.")
                         q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
                                                  info="Needs Node.js (nodejs.org). Untick if it is not installed.")
                         q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
@@ -1002,7 +1029,7 @@ def build_ui():
                 q_sample.click(_sample.use_sample, None, [q_url, q_upload, q_sample_note])
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
-                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm],
+                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm, *q_look],
                             [q_status, q_log, q_cards])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
@@ -1050,6 +1077,7 @@ def build_ui():
                             with gr.Row():
                                 clip_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style")
                                 clip_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing")
+                            clip_look = template_controls()
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                         clip_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
@@ -1060,7 +1088,7 @@ def build_ui():
                     [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
                      clip_clean, clip_hook, clip_emoji, clip_filler, clip_zoom, clip_cold,
                      clip_spoken, clip_edit, clip_edit_strength, clip_stats,
-                     clip_game, clip_game_mix, clip_cap_pos, clip_cap_size, clip_game_frame],
+                     clip_game, clip_game_mix, clip_cap_pos, clip_cap_size, clip_game_frame, *clip_look],
                     [clip_log, clip_videos],
                 )
                 clip_stop.click(stop_jobs, None, clip_log, cancels=[clip_run])
