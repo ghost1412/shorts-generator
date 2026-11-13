@@ -48,7 +48,7 @@ def test_python_and_remotion_agree_on_the_template_names():
     assert tuple(re.findall(r'"([a-z-]+)"', listed)) == auto_edit.VISUAL_TEMPLATE_NAMES
     for name in auto_edit.VISUAL_TEMPLATE_NAMES:
         assert f'case "{name}"' in tsx and auto_edit.VISUAL_TEMPLATES[name]["about"]
-    assert os.path.exists(os.path.join(os.path.dirname(auto_edit.__file__), "..", "docs", "templates", name + ".jpg"))
+        assert os.path.exists(os.path.join(os.path.dirname(auto_edit.__file__), "..", "docs", "templates", name + ".jpg")), name
 
 
 def test_a_clip_template_can_choose_a_visual_template(tmp_path):

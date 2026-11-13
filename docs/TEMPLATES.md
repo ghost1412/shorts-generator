@@ -53,12 +53,18 @@ A designed skin drawn over the picture, under the hook title and the captions. N
 | `neon-frame` | ![neon-frame](templates/neon-frame.jpg) Glowing neon border, progress line along the top, handle chip |
 | `news-banner` | ![news-banner](templates/news-banner.jpg) Label and headline bar, scrolling ticker, progress bar |
 | `minimal-line` | ![minimal-line](templates/minimal-line.jpg) A hairline progress bar and a small handle |
+| `title-bars` | ![title-bars](templates/title-bars.jpg) Solid headline band on top, handle band at the bottom (the classic title-over-video format) |
+| `retro-vhs` | ![retro-vhs](templates/retro-vhs.jpg) Scanlines, blinking REC light, running timecode, PLAY label |
+| `film-bars` | ![film-bars](templates/film-bars.jpg) Letterbox bars with a small serif title card that fades in and out |
+| `polaroid` | ![polaroid](templates/polaroid.jpg) Cream mat around a rounded picture, handwritten line and handle |
+| `episode-badge` | ![episode-badge](templates/episode-badge.jpg) Round number badge (`--template_text label="EP 12"`) with the show name, for series |
+| `story-progress` | ![story-progress](templates/story-progress.jpg) Thin story-style progress bar with a round initial and the handle |
 
 ```bash
 shortsflow clip interview.mp4 --captions --visual_template podcast-card   --template_text speaker="Alex Morgan" --template_text role=Host --template_text show="My Show"   --template_text cta="Follow @myshow for more" --template_accent "#FFB703"
 ```
 
-Slots: `speaker`, `role`, `show`, `handle`, `headline`, `label`, `cta` (a closing line over the last 2 seconds). A clip template of your own can pick a visual template with `"visual": "podcast-card"`. The previews above are made by `python scripts/render_template_previews.py` on a public-domain NASA photo with made-up sample text.
+Slots: `speaker`, `role`, `show`, `handle`, `headline`, `label` (the badge text on `episode-badge`, the small tag on `news-banner`), `cta` (a closing line over the last 2 seconds). Each design uses the slots that suit it and ignores the rest. A clip template of your own can pick a visual template with `"visual": "podcast-card"`. The previews above are made by `python scripts/render_template_previews.py` on a public-domain NASA photo with made-up sample text.
 
 ## Photo reel types (`--mode PHOTO_REEL --reel_type ...`)
 

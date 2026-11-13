@@ -20,6 +20,7 @@ SAMPLE_TEXT = {
     "show": "The Sample Show", "speaker": "Alex Morgan", "role": "Host", "handle": "@sampleshow",
     "headline": "A sample headline goes here", "label": "LATEST", "cta": "Follow @sampleshow for more",
 }
+TEXT_OVERRIDE = {"episode-badge": {"label": "EP 12"}}      # the label slot means "EP 12" here, "LATEST" on the news banner
 WORDS = [("Here", 0.2), ("is", 0.5), ("how", 0.8), ("a", 1.1), ("template", 1.4), ("looks", 1.9), ("on", 2.3), ("your", 2.6), ("clip", 3.0),
          ("with", 3.6), ("captions", 4.0), ("on", 4.6), ("top", 4.9), ("of", 5.3), ("it", 5.5), ("all", 6.0), ("the", 6.3), ("way", 6.6)]
 
@@ -48,7 +49,7 @@ def main(names):
             "hookText": "This is the hook line", "hookSeconds": 2.8,
             "words": [{"word": w, "start": s, "end": s + 0.28} for w, s in WORDS],
             "backgrounds": [{"path": "temp_assets/template_preview.jpg", "start": 0, "end": 9, "type": "image", "orientation": "landscape"}],
-            "visualTemplate": name, "templateText": SAMPLE_TEXT,
+            "visualTemplate": name, "templateText": {**SAMPLE_TEXT, **TEXT_OVERRIDE.get(name, {})},
         }
         pfile = os.path.join(assets, f"preview_props_{name}.json")
         with open(pfile, "w", encoding="utf-8") as f:

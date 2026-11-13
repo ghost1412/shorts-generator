@@ -86,6 +86,12 @@ VISUAL_TEMPLATES = {
     "neon-frame": {"label": "Neon frame", "about": "Glowing neon border around the picture, progress line along the top, handle chip."},
     "news-banner": {"label": "News banner", "about": "Label and headline bar at the top, scrolling ticker at the bottom, progress bar."},
     "minimal-line": {"label": "Minimal line", "about": "A hairline progress bar and a small handle; nothing else on the picture."},
+    "title-bars": {"label": "Title bars", "about": "A solid band with the headline on top and a handle band at the bottom (the classic title-over-video format)."},
+    "retro-vhs": {"label": "Retro VHS", "about": "Scanlines, a blinking REC light, a running timecode and a PLAY label."},
+    "film-bars": {"label": "Film bars", "about": "Letterbox bars with a small serif title card for the speaker that fades in and out."},
+    "polaroid": {"label": "Polaroid", "about": "A cream mat around a rounded picture with a handwritten line and the handle on the mat."},
+    "episode-badge": {"label": "Episode badge", "about": "A round number badge (EP 12, TIP 3) with the show name beside it, for series."},
+    "story-progress": {"label": "Story progress", "about": "A thin story-style progress bar on top with a round initial and the handle."},
 }
 VISUAL_TEMPLATE_NAMES = tuple(VISUAL_TEMPLATES)
 

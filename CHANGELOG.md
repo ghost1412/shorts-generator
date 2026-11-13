@@ -4,7 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
-- Visual templates: `--visual_template` (podcast-card, neon-frame, news-banner, minimal-line) draws a designed skin over the picture, with optional text slots (`--template_text KEY=VALUE`) and an accent colour. Re-renders keep it. Previews in docs/templates/.
+- Visual templates: `--visual_template` (10 designs: podcast-card, neon-frame, news-banner, minimal-line, title-bars, retro-vhs, film-bars, polaroid, episode-badge, story-progress) draws a designed skin over the picture, with optional text slots (`--template_text KEY=VALUE`) and an accent colour. Re-renders keep it. Previews in docs/templates/.
 - Clip templates: six new built-in `--auto_edit` styles (minimal, news, storytime, motivation, tutorial, cinematic) and your own as JSON files in `templates/` or `~/.shortsflow/templates/` (a template can start from another with `based_on`; a bad file is skipped with a warning). They show up in the command line and in the browser app's Auto-edit list. See docs/TEMPLATES.md.
 - Removed the hosted-dashboard job reporting (Supabase job status, per-user YouTube credentials, `--user_id`, `decrypt_secret`, the `cryptography` dependency). `--video_id` stays as an optional session-folder name. Supabase storage is still used only for Instagram Reel hosting (falls back to file.io).
 - The hook-cue bonus needs a short number, price or percent (a year no longer counts); "No. 5" is not a sentence end; a closing curly quote after "..." is recognised; a sliver at the end of a pause no longer cuts a quiet stretch short.

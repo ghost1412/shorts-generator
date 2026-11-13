@@ -5,7 +5,7 @@ import React from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { z } from "zod";
 
-export const VISUAL_TEMPLATES = ["podcast-card", "neon-frame", "news-banner", "minimal-line"] as const;
+export const VISUAL_TEMPLATES = ["podcast-card", "neon-frame", "news-banner", "minimal-line", "title-bars", "retro-vhs", "film-bars", "polaroid", "episode-badge", "story-progress"] as const;
 
 export const templateTextSchema = z.object({
   show: z.string().optional(), // show / channel title
@@ -152,6 +152,139 @@ const MinimalLine: React.FC<LayerProps> = ({ text, accent = "#FFFFFF" }) => {
   );
 };
 
+// 5. TITLE BARS: a solid band with the headline on top and a handle band at the bottom (the classic "title over the video" format).
+const TitleBars: React.FC<LayerProps> = ({ text, accent = "#6D28D9" }) => {
+  const { frame, fps, progress } = useProgress();
+  const headline = clean(text.headline || text.show, 70);
+  const handle = clean(text.handle, 26);
+  const slide = spring({ frame, fps, config: { damping: 18, stiffness: 120 } });
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", zIndex: 30 }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 290, background: accent, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 56px 0", transform: `translateY(${(1 - slide) * -290}px)`, boxShadow: "0 10px 30px rgba(0,0,0,0.35)" }}>
+        {headline && <div style={{ fontFamily: FONT, color: "#fff", fontSize: headline.length > 44 ? 58 : 72, textTransform: "uppercase", textAlign: "center", lineHeight: 1.08, letterSpacing: 1 }}>{headline}</div>}
+      </div>
+      <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 210, background: "#0d0d12", borderTop: `6px solid ${accent}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {handle && <div style={{ fontFamily: BODY, fontWeight: 800, color: "#fff", fontSize: 44 }}>{handle}</div>}
+      </div>
+      <div style={{ position: "absolute", left: 0, bottom: 204, height: 6, width: `${progress * 100}%`, background: "#fff" }} />
+      <EndCta text={text.cta} accent="#fff" bottom={250} />
+    </AbsoluteFill>
+  );
+};
+
+// 6. RETRO VHS: scanlines, a blinking REC light, a running timecode, PLAY label.
+const RetroVhs: React.FC<LayerProps> = ({ text, accent = "#FF3B30" }) => {
+  const { t, fps } = useProgress();
+  const pad = (n: number, w = 2) => String(Math.floor(n)).padStart(w, "0");
+  const code = `${pad(t / 3600)}:${pad((t / 60) % 60)}:${pad(t % 60)}:${pad((t % 1) * fps)}`;
+  const blink = Math.floor(t * 1.6) % 2 === 0;
+  const label = clean(text.show || text.handle, 22);
+  const mono = "'Courier New', Consolas, monospace";
+  const shadow = "2px 2px 0 rgba(0,0,0,0.8), -1px 0 rgba(255,0,80,0.6), 1px 0 rgba(0,200,255,0.6)";
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", zIndex: 30 }}>
+      <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(0deg, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.22) 2px, rgba(0,0,0,0) 3px, rgba(0,0,0,0) 6px)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%)" }} />
+      <div style={{ position: "absolute", top: 90, left: 70, display: "flex", alignItems: "center", gap: 18, fontFamily: mono, fontWeight: 700, fontSize: 52, color: "#fff", textShadow: shadow }}>
+        <div style={{ width: 34, height: 34, borderRadius: 17, background: accent, opacity: blink ? 1 : 0.15, boxShadow: blink ? `0 0 18px ${accent}` : "none" }} />
+        REC
+      </div>
+      <div style={{ position: "absolute", top: 98, right: 70, fontFamily: mono, fontWeight: 700, fontSize: 42, color: "#fff", textShadow: shadow }}>{code}</div>
+      <div style={{ position: "absolute", bottom: 150, left: 70, fontFamily: mono, fontWeight: 700, fontSize: 46, color: "#fff", textShadow: shadow }}>{"▶"} PLAY</div>
+      {label && <div style={{ position: "absolute", bottom: 150, right: 70, fontFamily: mono, fontWeight: 700, fontSize: 40, color: "#fff", textShadow: shadow }}>{label}</div>}
+      <EndCta text={text.cta} accent="#fff" bottom={260} />
+    </AbsoluteFill>
+  );
+};
+
+// 7. FILM BARS: letterbox bars with a small title card that fades in and out.
+const FilmBars: React.FC<LayerProps> = ({ text, accent = "#E6C068" }) => {
+  const { t, progress } = useProgress();
+  const name = clean(text.speaker || text.show, 30);
+  const sub = clean(text.role || text.handle, 40);
+  const k = interpolate(t, [0.4, 1.0, 5.2, 5.8], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", zIndex: 30 }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 250, background: "#000" }} />
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 300, background: "#000" }} />
+      <div style={{ position: "absolute", bottom: 296, left: 0, height: 4, width: `${progress * 100}%`, background: accent }} />
+      {name && (
+        <div style={{ position: "absolute", bottom: 110, left: 70, right: 70, opacity: k, transform: `translateY(${(1 - k) * 18}px)` }}>
+          <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 58, color: "#fff", letterSpacing: 4, textTransform: "uppercase" }}>{name}</div>
+          {sub && <div style={{ fontFamily: BODY, fontSize: 30, color: accent, letterSpacing: 6, textTransform: "uppercase", marginTop: 8 }}>{sub}</div>}
+        </div>
+      )}
+      <EndCta text={text.cta} accent={accent} bottom={320} />
+    </AbsoluteFill>
+  );
+};
+
+// 8. POLAROID: a coloured mat around a rounded picture, with the handle written on the mat.
+const Polaroid: React.FC<LayerProps> = ({ text, accent = "#F5EFE6" }) => {
+  const { progress } = useProgress();
+  const line = clean(text.show || text.headline, 34);
+  const handle = clean(text.handle, 26);
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", zIndex: 30 }}>
+      <div style={{ position: "absolute", top: 70, left: 52, right: 52, bottom: 330, borderRadius: 26, boxShadow: `0 0 0 3000px ${accent}, inset 0 0 0 3px rgba(0,0,0,0.12)` }} />
+      <div style={{ position: "absolute", left: 52, right: 52, bottom: 130, textAlign: "center", color: "#2a2622" }}>
+        {line && <div style={{ fontFamily: "'Segoe Script', 'Brush Script MT', cursive, " + BODY, fontSize: 64, lineHeight: 1.1 }}>{line}</div>}
+        {handle && <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 34, marginTop: 10, opacity: 0.7 }}>{handle}</div>}
+      </div>
+      <div style={{ position: "absolute", left: 52, right: 52, bottom: 60, height: 6, borderRadius: 3, background: "rgba(0,0,0,0.12)" }}>
+        <div style={{ width: `${progress * 100}%`, height: "100%", borderRadius: 3, background: "#2a2622" }} />
+      </div>
+      <EndCta text={text.cta} accent="#2a2622" bottom={345} />
+    </AbsoluteFill>
+  );
+};
+
+// 9. EPISODE BADGE: a round badge with the episode or tip number, the show name beside it. For series.
+const EpisodeBadge: React.FC<LayerProps> = ({ text, accent = "#FF5A1F" }) => {
+  const { frame, fps, progress } = useProgress();
+  const label = clean(text.label, 7).toUpperCase();
+  const show = clean(text.show, 26);
+  const pop = spring({ frame: frame - 3, fps, config: { damping: 11, stiffness: 150 } });
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", zIndex: 30 }}>
+      {(label || show) && (
+        <div style={{ position: "absolute", top: 110, left: 60, display: "flex", alignItems: "center", gap: 22, transform: `scale(${pop})`, transformOrigin: "left center" }}>
+          {label && (
+            <div style={{ width: 170, height: 170, borderRadius: 85, background: accent, border: "8px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 28px rgba(0,0,0,0.45)" }}>
+              <div style={{ fontFamily: FONT, fontSize: label.length > 4 ? 54 : 74, color: "#fff", letterSpacing: 1 }}>{label}</div>
+            </div>
+          )}
+          {show && <div style={{ fontFamily: BODY, fontWeight: 800, fontSize: 40, color: "#fff", background: "rgba(10,10,14,0.78)", padding: "12px 26px", borderRadius: 14, textShadow: "0 2px 6px rgba(0,0,0,0.5)" }}>{show}</div>}
+        </div>
+      )}
+      <div style={{ position: "absolute", left: 0, bottom: 0, height: 12, width: `${progress * 100}%`, background: accent }} />
+      <EndCta text={text.cta} accent={accent} bottom={300} />
+    </AbsoluteFill>
+  );
+};
+
+// 10. STORY PROGRESS: a thin story-style bar on top with a round initial and the handle.
+const StoryProgress: React.FC<LayerProps> = ({ text, accent = "#FFFFFF" }) => {
+  const { progress } = useProgress();
+  const handle = clean(text.handle || text.show, 24);
+  const initial = (Array.from(handle.replace(/^@/, ""))[0] || "").toUpperCase();
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", zIndex: 30 }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, background: "linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0))" }} />
+      <div style={{ position: "absolute", top: 56, left: 40, right: 40, height: 8, borderRadius: 4, background: "rgba(255,255,255,0.35)" }}>
+        <div style={{ width: `${progress * 100}%`, height: "100%", borderRadius: 4, background: accent }} />
+      </div>
+      {handle && (
+        <div style={{ position: "absolute", top: 100, left: 40, display: "flex", alignItems: "center", gap: 18 }}>
+          <div style={{ width: 84, height: 84, borderRadius: 42, background: "linear-gradient(135deg, #F9CE34, #EE2A7B, #6228D7)", border: "4px solid #fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: BODY, fontWeight: 800, fontSize: 40, color: "#fff" }}>{initial}</div>
+          <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 38, color: "#fff", textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>{handle}</div>
+        </div>
+      )}
+      <EndCta text={text.cta} accent="#fff" bottom={300} />
+    </AbsoluteFill>
+  );
+};
+
 export const TemplateLayer: React.FC<{ template?: string; text?: TemplateText; accent?: string; hookSeconds: number }> = ({ template, text, accent, hookSeconds }) => {
   const props = { text: text || {}, accent, hookSeconds };
   switch (template) {
@@ -159,6 +292,12 @@ export const TemplateLayer: React.FC<{ template?: string; text?: TemplateText; a
     case "neon-frame": return <NeonFrame {...props} />;
     case "news-banner": return <NewsBanner {...props} />;
     case "minimal-line": return <MinimalLine {...props} />;
+    case "title-bars": return <TitleBars {...props} />;
+    case "retro-vhs": return <RetroVhs {...props} />;
+    case "film-bars": return <FilmBars {...props} />;
+    case "polaroid": return <Polaroid {...props} />;
+    case "episode-badge": return <EpisodeBadge {...props} />;
+    case "story-progress": return <StoryProgress {...props} />;
     default: return null;
   }
 };
