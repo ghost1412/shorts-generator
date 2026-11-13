@@ -11,8 +11,6 @@ import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 export const TRANSITIONS = ["tiles", "panels", "iris", "blinds", "fade"] as const;
 export type TransitionName = (typeof TRANSITIONS)[number];
 
-const W = 1080;
-const H = 1920;
 const ease = Easing.bezier(0.65, 0, 0.35, 1);
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const rand = (i: number, salt: number) => {
@@ -22,8 +20,10 @@ const rand = (i: number, salt: number) => {
 
 // cover: 1 = the screen is fully covered, 0 = fully open.
 const Tiles: React.FC<{ cover: number; color: string; join: boolean; p: number }> = ({ color, join, p }) => {
-  const cols = 6;
-  const rows = 10;
+  const { width: W, height: H } = useVideoConfig();
+  const wide = W > H;
+  const cols = wide ? 10 : 6;
+  const rows = wide ? 6 : 10;
   const tw = W / cols;
   const th = H / rows;
   const tiles = [];
@@ -63,19 +63,24 @@ const Tiles: React.FC<{ cover: number; color: string; join: boolean; p: number }
   return <>{tiles}</>;
 };
 
-const Panels: React.FC<{ cover: number; color: string }> = ({ cover, color }) => (
+const Panels: React.FC<{ cover: number; color: string }> = ({ cover, color }) => {
+  const { width: W, height: H } = useVideoConfig();
+  return (
   <>
     <div style={{ position: "absolute", left: 0, top: 0, width: W / 2 + 1, height: H, background: color, transform: `translateX(${-(1 - cover) * 100}%)` }} />
     <div style={{ position: "absolute", right: 0, top: 0, width: W / 2 + 1, height: H, background: color, transform: `translateX(${(1 - cover) * 100}%)` }} />
   </>
-);
+  );
+};
 
 const Iris: React.FC<{ cover: number; color: string }> = ({ cover, color }) => {
-  const r = (1 - cover) * 1250;
+  const { width: W, height: H } = useVideoConfig();
+  const r = (1 - cover) * (Math.hypot(W, H) / 2 + 20);
   return <div style={{ position: "absolute", inset: 0, background: `radial-gradient(circle at 50% 50%, transparent ${r}px, ${color} ${r + 2}px)` }} />;
 };
 
 const Blinds: React.FC<{ cover: number; color: string }> = ({ cover, color }) => {
+  const { width: W, height: H } = useVideoConfig();
   const n = 8;
   const h = H / n;
   return (

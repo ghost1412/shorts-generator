@@ -64,7 +64,7 @@ A designed skin drawn over the picture, under the hook title and the captions. N
 shortsflow clip interview.mp4 --captions --visual_template podcast-card   --template_text speaker="Alex Morgan" --template_text role=Host --template_text show="My Show"   --template_text cta="Follow @myshow for more" --template_accent "#FFB703"
 ```
 
-Slots: `speaker`, `role`, `show`, `handle`, `headline`, `label` (the badge text on `episode-badge`, the small tag on `news-banner`), `cta` (a closing line over the last 2 seconds). Each design uses the slots that suit it and ignores the rest. A clip template of your own can pick a visual template with `"visual": "podcast-card"`. The previews above are made by `python scripts/render_template_previews.py` on a public-domain NASA photo with made-up sample text.
+Slots: `speaker`, `role`, `show`, `handle`, `headline`, `label` (the badge text on `episode-badge`, the small tag on `news-banner`), `cta` (a closing line over the last 2 seconds). Each design uses the slots that suit it and ignores the rest. The designs and covers follow the frame shape: they are made for 9:16 and adapt to 16:9, square and 4:5 (landscape previews: `docs/templates/<name>-wide.jpg`, made with `PREVIEW_SIZE=1920x1080 python scripts/render_template_previews.py`). A clip template of your own can pick a visual template with `"visual": "podcast-card"`. The previews above are made by `python scripts/render_template_previews.py` on a public-domain NASA photo with made-up sample text.
 
 ## Intro and outro transitions (`--intro_animation`, `--outro_animation`)
 

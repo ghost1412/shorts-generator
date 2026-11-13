@@ -34,6 +34,11 @@ def silent_wav(path, seconds=9):
         w.writeframes(b"\x00\x00" * 16000 * seconds)
 
 
+SIZE = os.environ.get("PREVIEW_SIZE", "")        # e.g. 1920x1080: render the previews for another frame shape (files get a -wide / -WxH suffix)
+SUFFIX = ("-wide" if SIZE == "1920x1080" else "-" + SIZE) if SIZE else ""
+SIZE_ARGS = [f"--width={SIZE.split('x')[0]}", f"--height={SIZE.split('x')[1]}"] if SIZE else []
+
+
 def _props(**extra):
     props = {
         "audioUrl": "temp_assets/template_preview.wav", "mode": "FACTS", "titleText": None, "subtitleYPos": 1250, "captionStyle": "HORMOZI",
@@ -78,13 +83,13 @@ def animations(names):
             part = os.path.join(assets, f"anim_{name}_{tag}.mp4")
             print(f"[Log] Rendering {name} {tag}")
             _run(["npx", "remotion", "render", "src/index.ts", "ShortFlow", part, f"--props={pfile}", f"--frames={frames}", "--scale=0.4",
-                  "--crf=30", "--muted"], f"{name} {tag}")
+                  "--crf=30", "--muted", *SIZE_ARGS], f"{name} {tag}")
             os.remove(pfile)
             parts.append(part)
         listing = os.path.join(assets, f"anim_{name}.txt")
         with open(listing, "w", encoding="utf-8") as f:
             f.write("".join("file '" + os.path.basename(p_) + "'" + chr(10) for p_ in parts))
-        out = os.path.join(OUT, f"anim-{name}.mp4")
+        out = os.path.join(OUT, f"anim-{name}{SUFFIX}.mp4")
         r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", listing, "-an", "-c:v", "libx264", "-crf", "30",
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], capture_output=True, text=True)
         for p_ in parts + [listing]:
@@ -104,10 +109,10 @@ def main(names):
         pfile = os.path.join(assets, f"preview_props_{name}.json")
         with open(pfile, "w", encoding="utf-8") as f:
             json.dump(props, f)
-        out = os.path.join(OUT, f"{name}.jpg")
+        out = os.path.join(OUT, f"{name}{SUFFIX}.jpg")
         print("[Log] Rendering preview:", name)
         _run(["npx", "remotion", "still", "src/index.ts", "ShortFlow", out, f"--props={pfile}", "--frame=75", "--scale=0.5",
-              "--image-format=jpeg", "--jpeg-quality=82"], f"preview for {name}")
+              "--image-format=jpeg", "--jpeg-quality=82", *SIZE_ARGS], f"preview for {name}")
         os.remove(pfile)
     print("[Log] Done:", OUT)
 
