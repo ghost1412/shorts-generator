@@ -118,7 +118,7 @@ SEGMENT_TRANSITION_NAMES = tuple(SEGMENT_TRANSITIONS)
 
 # ---- your own templates: a JSON file per template in ./templates/ (next to the program) or ~/.shortsflow/templates/
 # (or the folder in $SHORTSFLOW_TEMPLATES). The file name is the template's name. See docs/TEMPLATES.md.
-CAPTION_STYLES = ("HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR")
+CAPTION_STYLES = ("HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "MARKER", "SOFT", "WORDCUT", "NEGATIVE", "HANDWRITTEN", "SIMPLE", "TYPEWRITER")
 GRADES = ("kurosawa", "teal_orange", "cyberpunk", "cinematic_warm", "vibrant_action", "vintage_vhs", "moody_dark", "anime_vivid",
           "matrix_green", "sepia_western", "cold_thriller", "hdr_pop")
 LAYOUTS = ("single", "split", "active", "fit", "split_filler")

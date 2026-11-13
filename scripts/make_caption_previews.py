@@ -14,7 +14,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REMOTION = os.path.join(ROOT, "remotion-video")
 OUT = os.path.join(ROOT, "assets", "caption_previews")
-STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"]
+STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "MARKER", "SOFT", "WORDCUT", "NEGATIVE", "HANDWRITTEN", "SIMPLE", "TYPEWRITER"]
 BG_NAME = "_preview_bg.jpg"
 WORDS = [("Nobody", 0.1, 0.6), ("tells", 0.6, 1.0), ("you", 1.0, 1.3), ("this", 1.3, 1.8), ("about", 1.8, 2.3), ("light", 2.3, 3.0)]
 

@@ -234,7 +234,7 @@ _Honest take: the paid tools have a nicer editor, hosted convenience and tested 
 </div>
 
 - **3-Column Single-Window Studio Layout**: Live 9:16 vertical canvas preview, mode picker, preset cards, and 1-click render launcher.
-- **Interactive Remotion Presets**: 1-click selection between `HORMOZI`, `GLOW_BOX`, `BOUNCE`, and `MINIMAL` spring captions.
+- **Interactive Remotion Presets**: 1-click selection between 14 caption styles (see docs/TEMPLATES.md): `HORMOZI`, `GLOW_BOX`, `BOUNCE`, `MINIMAL`, `KARAOKE`, `NEON`, `BAR` and the newer `MARKER`, `SOFT`, `WORDCUT`, `NEGATIVE`, `HANDWRITTEN`, `SIMPLE`, `TYPEWRITER`.
 
 ---
 

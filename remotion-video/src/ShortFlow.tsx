@@ -155,7 +155,7 @@ export const shortFlowSchema = z.object({
   subtitleYPos: z.number().default(1150), // in pixels (out of 1920)
   captionsOff: z.boolean().default(false), // --caption_position off: draw no captions at all
   captionSize: z.number().default(1), // scales the whole caption block from its top edge (0.8 small, 1.3 large)
-  captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"]).default("HORMOZI"),
+  captionStyle: z.enum(["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "MARKER", "SOFT", "WORDCUT", "NEGATIVE", "HANDWRITTEN", "SIMPLE", "TYPEWRITER"]).default("HORMOZI"),
   captionColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // --caption_color: accent colour of the active word (any style)
   captionEmoji: z.boolean().default(false), // keyword emoji, drawn from bundled Twemoji PNGs (public/emoji): no system font needed
   hookText: z.string().optional(), // --hook_overlay: big title shown at the start of the clip
@@ -294,12 +294,24 @@ const HookOverlay: React.FC<{ text: string; seconds: number; fps: number; frame:
 
 // --- LINE-BASED CAPTION STYLES: KARAOKE (colour sweep), NEON (glow), BAR (subtitle bar) ---
 // The line (a chunk of a few words) stays put while the highlight moves along it, unlike the one-word styles.
-type LineStyle = "KARAOKE" | "NEON" | "BAR";
+type LineStyle = "KARAOKE" | "NEON" | "BAR" | "MARKER" | "SOFT" | "WORDCUT" | "NEGATIVE" | "HANDWRITTEN" | "SIMPLE" | "TYPEWRITER";
 const LINE_CFG: Record<LineStyle, { maxWords: number; maxChars: number; accent: string }> = {
   KARAOKE: { maxWords: 4, maxChars: 24, accent: "#FFE600" },
   NEON: { maxWords: 3, maxChars: 20, accent: "#00F0FF" },
   BAR: { maxWords: 6, maxChars: 34, accent: "#FFD60A" },
+  MARKER: { maxWords: 4, maxChars: 26, accent: "#C4B5FD" }, // highlighter box sweeping behind the spoken word
+  SOFT: { maxWords: 6, maxChars: 34, accent: "#FFFFFF" }, // clean sentence case, each word fades in as it is said
+  WORDCUT: { maxWords: 3, maxChars: 20, accent: "#FFFFFF" }, // each word cuts in on its beat
+  NEGATIVE: { maxWords: 3, maxChars: 20, accent: "#D4A484" }, // white words, the keyword in a muted metallic tone
+  HANDWRITTEN: { maxWords: 4, maxChars: 24, accent: "#FFD60A" }, // script lettering, an underline drawn under the spoken word
+  SIMPLE: { maxWords: 2, maxChars: 16, accent: "#FFFFFF" }, // tall plain capitals, one or two words
+  TYPEWRITER: { maxWords: 6, maxChars: 34, accent: "#FFC400" }, // typed out letter by letter, with a blinking cursor
 };
+const LINE_STYLES = Object.keys(LINE_CFG) as LineStyle[];
+const isLineStyle = (s: string): s is LineStyle => (LINE_STYLES as string[]).includes(s);
+const SANS = "NotoCyrillic, NotoDevanagari, NotoArabic, NotoCJK, 'Segoe UI', Arial, sans-serif";
+const MONO = "JetBrainsMono, NotoCyrillic, 'Courier New', monospace";
+const SCRIPT = "Caveat, NotoCyrillic, NotoDevanagari, cursive";
 
 // Split the transcript into lines: at most maxWords / maxChars per line, and a new line after a pause.
 const chunkRanges = (words: z.infer<typeof wordSchema>[], maxWords: number, maxChars: number) => {
@@ -416,6 +428,169 @@ const LineCaptions: React.FC<{
       );
     }
 
+    const said = currentTime >= w.start - 0.02;           // the word has started: shown by the styles that build up
+    const appear = interpolate(currentTime - w.start, [0, 0.16], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+
+    if (captionStyle === "MARKER") {
+      const pct = Math.round(progress * 1000) / 10;
+      const base: React.CSSProperties = { fontFamily: CAPTION_FONT, fontSize: "82px", textTransform: "uppercase", letterSpacing: spacing, whiteSpace: "pre", padding: "0 12px" };
+      return (
+        <React.Fragment key={idx}>
+          <span style={{ position: "relative", display: "inline-block" }}>
+            {isActive && <span aria-hidden style={{ position: "absolute", left: 0, top: "8%", bottom: "4%", width: `${pct}%`, background: color, borderRadius: "6px" }} />}
+            <span style={{ ...base, position: "relative", color: "#FFFFFF", textShadow: "0 6px 18px rgba(0,0,0,0.8), 3px 3px 0 #000000" }}>{w.word}</span>
+            {isActive && (
+              <span aria-hidden style={{ ...base, color: "#1A1033", position: "absolute", left: 0, top: 0, clipPath: `inset(0 ${100 - pct}% 0 0)` }}>
+                {w.word}
+              </span>
+            )}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    if (captionStyle === "SOFT") {
+      return (
+        <React.Fragment key={idx}>
+          <span
+            style={{
+              display: "inline-block",
+              fontFamily: SANS,
+              fontWeight: 600,
+              fontSize: "68px",
+              color: "#FFFFFF",
+              whiteSpace: "pre",
+              opacity: said ? appear : 0,
+              transform: `translateY(${(1 - appear) * 12}px)`,
+              textShadow: "0 4px 20px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.8)",
+            }}
+          >
+            {w.word}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    if (captionStyle === "WORDCUT") {
+      return (
+        <React.Fragment key={idx}>
+          <span
+            style={{
+              display: "inline-block",
+              fontFamily: SANS,
+              fontWeight: 800,
+              fontSize: "88px",
+              color: "#FFFFFF",
+              whiteSpace: "pre",
+              visibility: said ? "visible" : "hidden",
+              transform: `scale(${isActive ? 1.06 : 1})`,
+              textShadow: "0 6px 22px rgba(0,0,0,0.75), 0 2px 4px rgba(0,0,0,0.9)",
+            }}
+          >
+            {w.word}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    if (captionStyle === "NEGATIVE") {
+      const letters = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "").length;
+      const longest = line.reduce((best, b, j) => (letters(b.word) > letters(line[best].word) ? j : best), 0);
+      const keyword = i === longest && letters(w.word) >= 5;
+      return (
+        <React.Fragment key={idx}>
+          <span
+            style={{
+              display: "inline-block",
+              fontFamily: CAPTION_FONT,
+              fontSize: "84px",
+              textTransform: "uppercase",
+              letterSpacing: spacing,
+              whiteSpace: "pre",
+              transform: `scale(${isActive ? 1.05 : 1})`,
+              color: keyword ? color : "#FFFFFF",
+              WebkitTextStroke: "8px #000000",
+              paintOrder: "stroke fill",
+              textShadow: "0 8px 22px rgba(0,0,0,0.75)",
+            }}
+          >
+            {w.word}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    if (captionStyle === "HANDWRITTEN") {
+      return (
+        <React.Fragment key={idx}>
+          <span style={{ position: "relative", display: "inline-block", paddingBottom: "10px" }}>
+            <span
+              style={{
+                fontFamily: SCRIPT,
+                fontWeight: 700,
+                fontSize: "88px",
+                lineHeight: 1,
+                color: "#FFFFFF",
+                whiteSpace: "pre",
+                opacity: progress >= 1 || isActive ? 1 : 0.72,
+                textShadow: "0 5px 20px rgba(0,0,0,0.75), 2px 2px 0 rgba(0,0,0,0.6)",
+              }}
+            >
+              {w.word}
+            </span>
+            {isActive && (
+              <span aria-hidden style={{ position: "absolute", left: 0, bottom: 0, height: "9px", width: `${Math.round(progress * 1000) / 10}%`, background: color, borderRadius: "5px", boxShadow: "0 3px 10px rgba(0,0,0,0.5)" }} />
+            )}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    if (captionStyle === "SIMPLE") {
+      return (
+        <React.Fragment key={idx}>
+          <span
+            style={{
+              display: "inline-block",
+              fontFamily: CAPTION_FONT,
+              fontSize: "122px",
+              textTransform: "uppercase",
+              letterSpacing: spacing,
+              color: "#FFFFFF",
+              whiteSpace: "pre",
+              visibility: said ? "visible" : "hidden",
+              textShadow: "0 8px 26px rgba(0,0,0,0.75), 0 2px 5px rgba(0,0,0,0.9)",
+            }}
+          >
+            {w.word}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
+    if (captionStyle === "TYPEWRITER") {
+      const chars = Array.from(w.word);
+      const typed = !said ? 0 : progress >= 1 ? chars.length : Math.max(1, Math.ceil(progress * chars.length));
+      const blink = Math.floor(currentTime * 2.6) % 2 === 0;
+      return (
+        <React.Fragment key={idx}>
+          <span style={{ display: "inline-block", whiteSpace: "pre", fontFamily: MONO, fontWeight: 700, fontSize: "58px", color: "#FFFFFF", textShadow: "0 4px 16px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.9)" }}>
+            {chars.slice(0, typed).join("")}
+            {idx === displayWordIdx && (
+              <span aria-hidden style={{ display: "inline-block", width: "0.55em", height: "0.95em", marginLeft: "0.08em", verticalAlign: "-0.1em", background: color, opacity: blink ? 1 : 0 }} />
+            )}
+          </span>
+          {emoji}
+        </React.Fragment>
+      );
+    }
+
     // BAR
     return (
       <React.Fragment key={idx}>
@@ -455,7 +630,7 @@ const LineCaptions: React.FC<{
           justifyContent: "center",
           alignItems: "center",
           direction: rtl ? "rtl" : "ltr",
-          gap: cjk ? "6px" : captionStyle === "BAR" ? "0.3em" : "16px",
+          gap: cjk ? "6px" : captionStyle === "BAR" ? "0.3em" : ({ SOFT: "18px", WORDCUT: "22px", HANDWRITTEN: "24px", SIMPLE: "26px", TYPEWRITER: "26px", MARKER: "10px" } as Record<string, string>)[captionStyle] ?? "16px",
           ...(captionStyle === "BAR"
             ? {
                 maxWidth: "940px",
@@ -512,7 +687,7 @@ const Subtitles: React.FC<{
 
   if (displayWordIdx === -1) return null;
 
-  if (captionStyle === "KARAOKE" || captionStyle === "NEON" || captionStyle === "BAR") {
+  if (isLineStyle(captionStyle)) {
     return (
       <LineCaptions
         words={words}

@@ -113,3 +113,41 @@ def test_rerender_keeps_the_caption_colour_of_the_original_run(tmp_path, monkeyp
     rerender.rerender_clip(str(session), 1, start=6.0, end=12.0)
     assert calls["color_env"] == "#FF3366" and calls["style"] == "NEON"
     assert "SHORTSFLOW_CAPTION_COLOR" not in os.environ               # does not leak into later in-process renders
+
+
+def test_every_list_of_caption_styles_agrees_and_each_style_has_a_preview():
+    import json
+    import os
+    import re
+    import webui
+    from engine import auto_edit
+    root = os.path.join(os.path.dirname(__file__), "..")
+    names = list(rr.CAPTION_STYLES)
+    assert len(names) == 14 and {"MARKER", "SOFT", "WORDCUT", "NEGATIVE", "HANDWRITTEN", "SIMPLE", "TYPEWRITER"} <= set(names)
+    assert list(auto_edit.CAPTION_STYLES) == names
+    assert [s for s in webui.CAPTION_STYLES if s not in ("AUTO", "RANDOM")] == names
+    assert [v for _, v in webui.CAPTION_CHOICES] == names
+    tsx = open(os.path.join(root, "remotion-video", "src", "ShortFlow.tsx"), encoding="utf-8").read()
+    enum = re.search(r"captionStyle: z\.enum\(\[(.*?)\]\)", tsx, re.S).group(1)
+    assert re.findall(r'"([A-Z_]+)"', enum) == names
+    main = open(os.path.join(root, "shortsflow", "_main.py"), encoding="utf-8").read()
+    assert all(f'"{n}"' in re.search(r'"--caption_style".*?\n', main).group(0) for n in names)
+    for n in names:
+        assert os.path.exists(os.path.join(root, "assets", "caption_previews", f"{n}.jpg")), n
+    assert rr.AUTO_CAPTION_STYLES == names[:4]                  # AUTO / RANDOM keep choosing among the original four
+    assert json.dumps(names)
+
+
+def test_bundled_fonts_are_really_loaded_by_the_bundler():
+    """remotion-video/package.json once said sideEffects: ["*.css"], so the bundler dropped `import "./fonts"` and no bundled font ever loaded."""
+    import json
+    import os
+    root = os.path.join(os.path.dirname(__file__), "..", "remotion-video")
+    pkg = json.load(open(os.path.join(root, "package.json"), encoding="utf-8"))
+    assert "./src/fonts.ts" in pkg.get("sideEffects", []), "fonts.ts must be listed in sideEffects or it is tree-shaken away"
+    fonts = open(os.path.join(root, "src", "fonts.ts"), encoding="utf-8").read()
+    for family, file in (("Anton", "Anton-Regular.ttf"), ("Caveat", "Caveat.ttf"), ("JetBrainsMono", "JetBrainsMono.ttf")):
+        assert f'load("{family}", "fonts/{file}"' in fonts
+        assert os.path.getsize(os.path.join(root, "public", "fonts", file)) > 50_000
+    for lic in ("LICENSE-Caveat.txt", "LICENSE-JetBrainsMono.txt"):
+        assert "SIL Open Font License" in open(os.path.join(root, "public", "fonts", lic), encoding="utf-8").read()

@@ -96,7 +96,7 @@ def clean_hook_text(text, max_words=9, max_chars=60):
     return text
 
 
-CAPTION_STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"]
+CAPTION_STYLES = ["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "MARKER", "SOFT", "WORDCUT", "NEGATIVE", "HANDWRITTEN", "SIMPLE", "TYPEWRITER"]
 AUTO_CAPTION_STYLES = CAPTION_STYLES[:4]   # what AUTO / RANDOM pick from (the newer styles are opt-in)
 
 

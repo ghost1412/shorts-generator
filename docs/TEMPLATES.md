@@ -140,4 +140,23 @@ Each beat has a sentence and one ready-made Manim visual: `title`, `counter`, `s
 
 ## Caption styles (`--caption_style`)
 
-`HORMOZI`, `GLOW_BOX`, `BOUNCE`, `MINIMAL`, `KARAOKE`, `BAR` (Remotion, see `remotion-video/src/`).
+Fourteen animated styles (Remotion, see `remotion-video/src/`). Previews: `assets/caption_previews/<STYLE>.jpg`, shown in the browser app's picker.
+
+| Style | Look |
+| :-- | :-- |
+| `HORMOZI` | Bold yellow capitals with a heavy outline, one word at a time |
+| `GLOW_BOX` | One word in a glowing pink box |
+| `BOUNCE` | Bouncy gold capitals |
+| `MINIMAL` | Clean dark boxes, the spoken word lit |
+| `KARAOKE` | A colour sweeps along each word |
+| `NEON` | Neon glow on the spoken word |
+| `BAR` | A subtitle bar with the spoken word coloured |
+| `MARKER` | A highlighter box sweeps behind the spoken word |
+| `SOFT` | Clean sentence case, each word fades in as it is said |
+| `WORDCUT` | Bold sentence case, each word cuts in on its beat |
+| `NEGATIVE` | White capitals with the longest word (the keyword) in a muted tan |
+| `HANDWRITTEN` | Script lettering (Caveat) with an underline drawn under the spoken word |
+| `SIMPLE` | Tall plain capitals, one or two words |
+| `TYPEWRITER` | Typed out letter by letter in a monospace face (JetBrains Mono), with a blinking cursor |
+
+`AUTO` and `RANDOM` choose among the first four. Fonts are bundled (Anton, Noto Sans, Caveat, JetBrains Mono; all SIL Open Font Licence) and `--caption_color` sets the accent of every style.

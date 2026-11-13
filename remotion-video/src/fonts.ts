@@ -22,4 +22,6 @@ const load = (family: string, file: string, weight?: string) => {
 load("Anton", "fonts/Anton-Regular.ttf");
 load("NotoDevanagari", "fonts/NotoSansDevanagari.ttf", "100 900");
 load("NotoCyrillic", "fonts/NotoSansCyrillic.ttf");
+load("Caveat", "fonts/Caveat.ttf", "400 700"); // HANDWRITTEN caption style (OFL)
+load("JetBrainsMono", "fonts/JetBrainsMono.ttf", "100 800"); // TYPEWRITER caption style (OFL)
 load("NotoArabic", "fonts/NotoSansArabic.ttf"); // bold, Arabic script only (Arabic/Persian/Urdu); needs RTL handling in ShortFlow.tsx

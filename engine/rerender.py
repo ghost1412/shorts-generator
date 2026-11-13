@@ -381,7 +381,7 @@ def main(argv=None):
     p.add_argument("clip_index", type=int)
     p.add_argument("--start", type=float)
     p.add_argument("--end", type=float)
-    p.add_argument("--style", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR"])
+    p.add_argument("--style", choices=["HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR", "MARKER", "SOFT", "WORDCUT", "NEGATIVE", "HANDWRITTEN", "SIMPLE", "TYPEWRITER"])
     p.add_argument("--no-brand", action="store_true")
     p.add_argument("--caption_y", type=int, help="caption top edge in pixels of a 1080x1920 short (300-1700; default 1150)")
     p.add_argument("--cuts", help="spans of the original video to cut out, '1.2:1.8,3:3.5' (seconds); '' clears the cuts")
