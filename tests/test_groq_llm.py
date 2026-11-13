@@ -76,3 +76,57 @@ def test_empty_answer_moves_on_to_the_next_model(monkeypatch):
     seq = iter([answer(""), answer("ok")])
     monkeypatch.setattr(requests, "post", lambda url, headers, json, timeout: next(seq))
     assert groq_llm.call_groq("k", "hi") == "ok"
+
+
+def test_a_per_minute_limit_waits_and_asks_again(monkeypatch):
+    import requests
+    waits, calls = [], []
+    monkeypatch.setattr(groq_llm, "_sleep", lambda s: waits.append(s))
+
+    def post(url, headers, json, timeout):
+        calls.append(json["model"])
+        if len(calls) < 3:
+            r = Resp(429, text='{"error":{"message":"Rate limit reached ... on tokens per minute (TPM): Limit 8000, Used 7000, Requested 2000. Please try again in 5.2s."}}')
+            r.headers = {"retry-after": "3"} if len(calls) == 1 else {}
+            return r
+        return answer("done")
+
+    monkeypatch.setattr(requests, "post", post)
+    assert groq_llm.call_groq("k", "hi") == "done"
+    assert calls == ["openai/gpt-oss-120b"] * 3                 # the same model, asked again, not given up on
+    assert waits == [4.0, 6.2]                                  # the header (3 s + 1), then "try again in 5.2s" (+ 1)
+
+
+def test_rate_limit_retries_are_bounded_and_then_raised(monkeypatch):
+    import requests
+    monkeypatch.setattr(groq_llm, "_sleep", lambda s: None)
+    calls = []
+    monkeypatch.setattr(requests, "post", lambda url, headers, json, timeout: calls.append(1) or Resp(429, text="slow down"))
+    with pytest.raises(requests.HTTPError):
+        groq_llm.call_groq("k", "hi")
+    assert len(calls) == groq_llm.RATE_RETRIES + 1
+
+
+def test_a_request_above_the_models_limit_moves_to_the_next_model_without_waiting(monkeypatch):
+    import requests
+    slept, used = [], []
+    monkeypatch.setattr(groq_llm, "_sleep", lambda s: slept.append(s))
+
+    def post(url, headers, json, timeout):
+        used.append(json["model"])
+        if json["model"] == "openai/gpt-oss-120b":
+            return Resp(413, text='{"error":{"message":"Request too large for model on tokens per minute (TPM): Limit 8000, Requested 12000"}}')
+        return answer("ok")
+
+    monkeypatch.setattr(requests, "post", post)
+    assert groq_llm.call_groq("k", "hi") == "ok"
+    assert used == ["openai/gpt-oss-120b", "llama-3.3-70b-versatile"] and slept == []
+
+
+def test_wait_time_is_capped_and_has_a_default():
+    class E(Exception):
+        response = None
+    assert groq_llm.wait_seconds(E(), 0) == 9.0 and groq_llm.wait_seconds(E(), 2) == 33.0
+    e = E()
+    e.response = Resp(429, text="try again in 4m10s")
+    assert groq_llm.wait_seconds(e, 0) == groq_llm.MAX_WAIT

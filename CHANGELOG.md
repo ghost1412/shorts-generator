@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Groq: a "429 Too Many Requests" (the per-minute token allowance of a free key) no longer switches the AI picking off for the whole run. The call now waits for the allowance (Retry-After, at most 65 s, four tries) and asks again; a request above a model's limit moves to the next model instead of waiting.
 - Clips can now be 1:1, 4:5 or 16:9 as well as 9:16 (`--aspect_ratio`, the Output shape in the browser app): the crop, layouts, captions, templates and covers follow the frame. It used to print "not implemented" and make 9:16.
 - Browser app: a "Look: template and covers" section on Start here and on the Clip tab (visual template with a preview picture, intro and outro covers, text for the template). It works for shorts and for the highlights video.
 - Highlights video (long, landscape): `--visual_template`, `--intro_animation` and `--outro_animation` now work on it. Short transparent pieces for the start and end are rendered with the animated renderer and laid over the video with FFmpeg, so a long video is never rendered frame by frame in the browser.
