@@ -58,6 +58,7 @@ def load_results(json_path):
             "hook": (c.get("hook") or "").strip(),
             "reason": (c.get("reason") or "").strip(),
             "edit_summary": (c.get("edit_summary") or "").strip(),
+            "fallback": bool(c.get("fallback")),
             "score": score,
             "label": score_label(score),
             "start": c.get("start"),

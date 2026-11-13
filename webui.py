@@ -886,7 +886,8 @@ def build_ui():
                                 score = f"{c['label'].title()} ({int(c['score'])}/100)" if c.get("score") is not None else "Not rated"
                                 dur = f" · {c['duration']:.0f}s" if c.get("duration") else ""
                                 gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else "")
-                                            + (f"  \n🎬 Edited: {c['edit_summary']}" if c.get("edit_summary") else ""))
+                                            + (f"  \n🎬 Edited: {c['edit_summary']}" if c.get("edit_summary") else "")
+                                            + ("  \n⚠️ Fallback pick: the analysis failed, so this is a fixed window, not a chosen moment." if c.get("fallback") else ""))
                                 gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
                                            placeholder="No title or description was written (it needs an AI key or Ollama).")
                                 if c.get("title_variants"):

@@ -719,6 +719,7 @@ def run(args, target_bitrate, target_preset):
                 "duration": round(h.get("end", 0) - h.get("start", 0) + (cold_infos.get(clip_path) or {}).get("duration", 0), 2),
                 **({"cold_open": cold_infos[clip_path]} if clip_path in cold_infos else {}),
                 **({"edit": edit_logs[clip_path], "edit_summary": edit_logs[clip_path]["summary"]} if clip_path in edit_logs else {}),
+                **({"fallback": True} if h.get("fallback") else {}),       # a fixed window, not a picked moment (analysis failed)
                 "viral_score": h.get("viral_score", 85),
                 "hook": h.get("hook_text", meta_item.get("title", "")),
                 "reason": h.get("reason", "High-engagement segment"),

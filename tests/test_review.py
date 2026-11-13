@@ -94,3 +94,14 @@ def test_recent_runs_lists_newest_first_with_readable_labels(tmp_path):
     assert labels == ["3 Nov 2026, 12:00 - 2 shorts", "1 Nov 2026, 08:30 - 1 short"]
     assert review.recent_runs(str(tmp_path / "missing")) == []
     assert review.run_label("custom_name", str(tmp_path / "nope.json")) == "custom_name"
+
+
+def test_fallback_flag_reaches_the_card(tmp_path):
+    import json
+    from shortsflow import review
+    vid = tmp_path / "c1.mp4"
+    vid.write_bytes(b"x")
+    res = tmp_path / "results.json"
+    res.write_text(json.dumps({"clips": [{"clip_index": 1, "video_path": str(vid), "fallback": True}, {"clip_index": 2, "video_path": str(vid)}]}), encoding="utf-8")
+    cards = review.load_results(str(res))
+    assert [c["fallback"] for c in cards] == [True, False]
