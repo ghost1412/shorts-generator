@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Highlights video: eight more FFmpeg transitions between moments (`--transitions iris|blinds|panels|wipe|radial|slice|pixelize|squeeze`); docs/TEMPLATES.md now lists what the highlights video supports.
 - Intro and outro transitions: `--intro_animation` / `--outro_animation` (tiles that break apart and join, panels, iris, blinds, fade) with `--animation_color`; also settable per clip template. Previews in docs/templates/.
 - Visual templates: `--visual_template` (10 designs: podcast-card, neon-frame, news-banner, minimal-line, title-bars, retro-vhs, film-bars, polaroid, episode-badge, story-progress) draws a designed skin over the picture, with optional text slots (`--template_text KEY=VALUE`) and an accent colour. Re-renders keep it. Previews in docs/templates/.
 - Clip templates: six new built-in `--auto_edit` styles (minimal, news, storytime, motivation, tutorial, cinematic) and your own as JSON files in `templates/` or `~/.shortsflow/templates/` (a template can start from another with `based_on`; a bad file is skipped with a warning). They show up in the command line and in the browser app's Auto-edit list. See docs/TEMPLATES.md.

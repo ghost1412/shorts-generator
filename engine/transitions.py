@@ -15,6 +15,10 @@ STYLE_DEFAULTS = {"hype": "mix", "vlog": "punch"}              # podcast, educat
 LABELS = [("Auto (follows the edit style)", "auto"), ("None (plain cuts)", "none"), ("Dissolve (smooth crossfade, no zoom)", "dissolve"), ("Mix (a different one on every cut)", "mix"), ("Zoom punch", "punch"), ("Whip pan", "whip"),
           ("White flash", "flash"), ("Glitch", "glitch"),
           ("Subject cut-out (the person stays, the background changes)", "subject")]
+# Reel-only looks: FFmpeg's own xfade effects, used when the moments of a highlights video are joined (--extract_mode long). The recap and
+# the clip pieces do not build these (they get plain cuts), so they are not in the shared dropdown.
+REEL_ONLY = {"iris": "circleopen", "blinds": "hlslice", "panels": "horzopen", "wipe": "wipeleft", "radial": "radial", "slice": "vuslice",
+             "pixelize": "pixelize", "squeeze": "squeezeh"}
 MIX_ORDER = ("punch", "whip", "glitch", "punch", "flash", "whip")
 SECONDS = {"subtle": 0.14, "medium": 0.2, "hyped": 0.26}       # length of the head and of the tail
 PUNCH_AMOUNT = 0.30                                            # how much bigger the picture gets at the cut
@@ -22,8 +26,8 @@ PUNCH_AMOUNT = 0.30                                            # how much bigger
 
 def validate(name):
     name = (name or AUTO).strip().lower()
-    if name != AUTO and name not in NAMES:
-        raise ValueError(f"Unknown transition {name!r}. Choose one of: {AUTO}, {', '.join(NAMES)}")
+    if name != AUTO and name not in NAMES and name not in REEL_ONLY:
+        raise ValueError(f"Unknown transition {name!r}. Choose one of: {AUTO}, {', '.join(NAMES)}, {', '.join(REEL_ONLY)} (the last group: highlights video only)")
     return name
 
 
@@ -42,7 +46,7 @@ def seconds_for(strength):
 def cut_types(name, count):
     """The transition of each of `count` cuts, in order: the one chosen, or the mix cycling."""
     name = validate(name)
-    if name in ("none", AUTO, "dissolve"):       # dissolve is a crossfade made when the shots are joined, not an effect on each shot
+    if name in ("none", AUTO, "dissolve") or name in REEL_ONLY:       # reel-only looks are made by the reel join, not as an effect on each shot; dissolve is a crossfade made when the shots are joined, not an effect on each shot
         return [None] * count
     if name == "subject":
         return ["subject"] * count
@@ -61,6 +65,8 @@ def fallback_type(index):
 
 def xfade_names(name, count):
     """FFmpeg xfade transition names for `count` joins in a compiled reel (several moments of one video); plain 'fade' when no type is set."""
+    if validate(name) in REEL_ONLY:
+        return [REEL_ONLY[validate(name)]] * count
     return [XFADE.get(fallback_type(i) if k == "subject" else k, "fade") for i, k in enumerate(cut_types(name, count))]
 
 

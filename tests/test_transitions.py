@@ -127,3 +127,26 @@ def test_recap_lines_and_open_result_args():
     a = web_args.trip_args(["a.mp4"], "s", lines="Fry nuts\n\n Roast khoya ", open_result=True)
     assert a[a.index("--recap_lines") + 1] == "Fry nuts|Roast khoya"
     assert "--recap_open_result" in a
+
+
+def test_reel_only_looks_are_xfade_names_and_plain_cuts_elsewhere():
+    for name, xf in tx.REEL_ONLY.items():
+        assert tx.validate(name) == name and tx.resolve(name, "podcast") == name
+        assert tx.xfade_names(name, 3) == [xf] * 3                       # the highlights video joins its moments with them
+        assert tx.cut_types(name, 3) == [None] * 3                       # the recap and the clip pieces get plain cuts
+    assert tx.xfade_names("punch", 2) == ["zoomin", "zoomin"]            # the existing mapping is unchanged
+    with pytest.raises(ValueError, match="highlights video only"):
+        tx.validate("explode")
+
+
+def test_reel_only_looks_are_real_ffmpeg_effects():
+    import shutil
+    import subprocess
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        pytest.skip("ffmpeg not installed")
+    for xf in sorted(set(tx.REEL_ONLY.values())):
+        r = subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=1:r=30", "-f", "lavfi", "-i",
+                            "color=c=blue:s=64x64:d=1:r=30", "-filter_complex", f"[0][1]xfade=transition={xf}:duration=0.4:offset=0.6",
+                            "-t", "1.2", "-f", "null", "-"], capture_output=True, text=True)
+        assert r.returncode == 0, (xf, r.stderr[-200:])

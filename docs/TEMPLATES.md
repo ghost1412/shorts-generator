@@ -84,6 +84,19 @@ shortsflow clip interview.mp4 --captions --visual_template neon-frame --intro_an
 
 A clip template of your own can set `"intro_animation"` and `"outro_animation"`. These are the start and end of each clip; effects between cuts inside a clip are not built yet. Previews: `python scripts/render_template_previews.py --animations`.
 
+## The highlights video (`--extract_mode long`)
+
+The compiled highlights video is 16:9 and is joined by FFmpeg, so it supports less than the vertical clips:
+
+| | Highlights video | Vertical clips |
+| :-- | :-- | :-- |
+| Transitions between moments | Yes: `--transitions` with `dissolve`, `punch`, `whip`, `flash`, `glitch`, `mix` and the FFmpeg looks `iris`, `blinds`, `panels`, `wipe`, `radial`, `slice`, `pixelize`, `squeeze` | Pieces of one clip only |
+| Captions | Plain burned-in words with `--reel_captions` | Animated styles |
+| Clip templates (`--auto_edit`) | Only the default transition of the style | Yes |
+| Visual templates, intro and outro covers, B-roll | Not yet | Yes |
+
+The FFmpeg looks are for the highlights video only; a recap or a clip gets plain cuts. FFmpeg cannot do the flying-tiles effect (`pixelize` is the closest).
+
 ## Photo reel types (`--mode PHOTO_REEL --reel_type ...`)
 
 `memories`, `travel`, `product`, `then_now`, `countdown`, `tribute`: each sets order, timing, captions, title and look. Blurry and duplicate photos are skipped.
