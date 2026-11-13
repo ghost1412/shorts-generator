@@ -7,13 +7,12 @@ import sys
 import random
 import json
 import subprocess
-from engine.utils import decrypt_secret, find_fact_start_times
-from engine.pipeline import VIBE_VOICE_MAP, CARTOON_VOICE_MAP, CARTOON_AUDIO_CONFIG, report_status
+from engine.utils import find_fact_start_times
+from engine.pipeline import VIBE_VOICE_MAP, CARTOON_VOICE_MAP, CARTOON_AUDIO_CONFIG
 from engine.script_gen import generate_mixed_facts, generate_story, generate_wyr, generate_reddit_story, generate_trivia, generate_quote, generate_funny_news, generate_sound_challenge, generate_riddle, generate_jwst_script
 from engine.voice_gen import generate_voice
 from engine.media_gen import download_image, download_sfx, fetch_jwst_images, is_url, download_source_video_from_url
 from engine.video_gen import create_shorts_video
-from engine.storage import upload_to_storage
 
 
 def ensure_dict(data):
@@ -54,45 +53,7 @@ def resolve_avatar(args, mode):
 
 
 def persist_and_export(args, mode, category, metadata, final_video, output_filename, session_id, youtube_video_id):
-    """Upload the finished video + thumbnail to storage and report to the dashboard (job runs), then write the .txt / .meta.json sidecars."""
-    # 7. Permanent Storage Persistence (New Step)
-    if args.video_id and args.user_id:
-        os.environ["USER_ID"] = args.user_id
-        print(f"[Log] Persisting video and thumbnail to cloud storage for user {args.user_id}...")
-
-        # 7a. Extract thumbnail first
-        thumbnail_file = f"thumb_{session_id}.jpg"
-        thumbnail_path = None
-        try:
-            print(f"[Log] Extracting thumbnail from {final_video}...")
-            subprocess.run([
-                'ffmpeg', '-y', '-i', final_video, 
-                '-ss', '00:00:01', '-vframes', '1', 
-                thumbnail_file
-            ], check=True, capture_output=True)
-            thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
-            try: os.remove(thumbnail_file)
-            except Exception: pass
-        except Exception as te:
-            print(f"[Warning] Thumbnail extraction/upload failed: {te}")
-
-        # 7b. Upload video
-        storage_path = upload_to_storage(final_video, args.video_id, is_video=True)
-
-        # 8. Report Success to Dashboard
-        print(f"[Log] Reporting success to dashboard for Job {args.video_id}...")
-        report_status(
-            args.video_id, 
-            args.user_id, 
-            metadata['title'], 
-            "Published", 
-            None, 
-            args.mode or mode,
-            youtube_video_id,
-            storage_path,
-            thumbnail_path
-        )
-
+    """Write the .txt / .meta.json sidecars next to the finished video."""
     with open(f"{output_filename}.txt", "w", encoding="utf-8") as f:
         f.write(f"Title: {metadata.get('title', 'Viral Short')}\n")
         f.write(f"Description: {metadata.get('description', '')}\n")
@@ -647,9 +608,6 @@ def run(args, target_bitrate, target_preset):
         clone_voice=getattr(args, "clone_voice", None)
     )
 
-    if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, "In-Progress Video", "Processing", None, mode)
-
     if not audio_path or not subs_path:
         print("[Error] Voice generation failed.")
         sys.exit(1)
@@ -991,9 +949,6 @@ def run(args, target_bitrate, target_preset):
         print("[Error] Failed to download any background videos.")
         sys.exit(1)
 
-    if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, "In-Progress Video", "Processing", None, mode)
-
     # 4. Compose Video
     print(f"[Log] Composing final interactive video with {args.vibe} mood (Job ID: {session_id})...", flush=True)
     if args.session_dir:
@@ -1307,55 +1262,14 @@ def run(args, target_bitrate, target_preset):
 
     print(f"[Log] Viral Title: {metadata['title']}")
 
-    if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, metadata['title'], "Processing", None, mode)
-
     # 6. Social Media Automation
     actually_skip_upload = args.skip_upload
 
     if not actually_skip_upload:
-        print("[Log] Checking for user-specific upload credentials...")
+        print("[Log] Checking upload credentials...")
         from engine.social_gen import YouTubeUploader, InstagramUploader
 
         youtube_creds = None
-        if args.user_id:
-            from supabase import create_client, Client
-            supabase_url = os.getenv("SUPABASE_URL")
-            supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") # Use Service Role for backend
-
-            if supabase_url and supabase_key:
-                supabase: Client = create_client(supabase_url, supabase_key)
-                user_res = supabase.from_("user_configs").select("*").eq("user_id", args.user_id).execute()
-
-                if user_res.data:
-                    config = user_res.data[0]
-                    # Logic: If user has a refresh token, we need a client_id/secret to use it.
-                    # We check for User-Specific (BYOK) first, then fallback to Global (Platform) env vars.
-                    refresh_token = decrypt_secret(config.get("youtube_refresh_token"))
-
-                    if refresh_token:
-                        client_id = decrypt_secret(config.get("youtube_client_id")) or os.getenv("GOOGLE_CLIENT_ID")
-                        client_secret = decrypt_secret(config.get("youtube_client_secret")) or os.getenv("GOOGLE_CLIENT_SECRET")
-
-                        if client_id and client_secret:
-                            youtube_creds = {
-                                "client_id": client_id,
-                                "client_secret": client_secret,
-                                "refresh_token": refresh_token
-                            }
-                            print(f"[Log] YouTube credentials initialized for user: {args.user_id}")
-                        else:
-                            print(f"[Warning] Refresh token present but GOOGLE_CLIENT_ID/SECRET missing for user {args.user_id}. Skipping upload to protect admin channel.")
-                            actually_skip_upload = True
-                    else:
-                        print(f"[Log] No YouTube refresh token found for user {args.user_id}. Skipping upload (Manual triggers do not fallback to admin).")
-                        actually_skip_upload = True
-                else:
-                    print(f"[Log] No configuration found for user {args.user_id} in Supabase. Skipping upload.")
-                    actually_skip_upload = True
-            else:
-                print("[Warning] SUPABASE_URL or SERVICE_ROLE_KEY missing. Skipping user-specific upload check.")
-                actually_skip_upload = True
 
         if not actually_skip_upload:
             print("[Log] Initializing YouTube Uploader...")

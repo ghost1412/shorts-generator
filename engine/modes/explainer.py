@@ -1,7 +1,6 @@
 """explainer pipeline, moved verbatim from main.py (runs when: getattr(args, "mode", None) == "EXPLAINER")."""
 import os
 import sys
-from engine.pipeline import report_status
 
 
 def run(args, target_bitrate, target_preset):
@@ -14,9 +13,6 @@ def run(args, target_bitrate, target_preset):
     topic = args.prompt if args.prompt else (args.category if args.category else "Pythagorean Theorem")
     print(f"[Log] Explaining topic: '{topic}'")
     
-    if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, f"Explainer: {topic}", "Processing", None, "EXPLAINER")
-        
     session_id = args.video_id if args.video_id else str(int(time.time()))
     session_dir = args.session_dir if args.session_dir else os.path.join("sessions", f"explainer_{session_id}")
     os.makedirs(session_dir, exist_ok=True)
@@ -85,13 +81,7 @@ def run(args, target_bitrate, target_preset):
                 print(f"[Warning] Failed to merge audio: {res.stderr}")
 
         print(f"[Log] SUCCESS! Explainer video created: {output_path}")
-        if args.video_id and args.user_id:
-            from engine.storage import upload_to_storage
-            storage_path = upload_to_storage(output_path, args.video_id, is_video=True)
-            report_status(args.video_id, args.user_id, title, "Published", None, "EXPLAINER", None, storage_path)
         sys.exit(0)
     else:
         print("[Error] Manim rendering failed.")
-        if args.video_id and args.user_id:
-            report_status(args.video_id, args.user_id, title, "Failed", None, "EXPLAINER")
         sys.exit(1)

@@ -1,6 +1,4 @@
 """music pipeline, moved verbatim from main.py (runs when: getattr(args, "mode", None) == "MUSIC")."""
-from engine.pipeline import report_status
-
 
 def run(args, target_bitrate, target_preset):
     import os
@@ -12,8 +10,6 @@ def run(args, target_bitrate, target_preset):
     # Check ComfyUI Availability
     if not is_comfy_available():
         print("[Error] ComfyUI server is not running or unreachable at the configured URL.")
-        if args.video_id and args.user_id:
-            report_status(args.video_id, args.user_id, "ComfyUI Unreachable", "Failed", None, "MUSIC")
         sys.exit(1)
         
     prompt = args.prompt if args.prompt else (args.script if args.script else (args.user_context if args.user_context else "cinematic synthwave track, high quality"))
@@ -27,9 +23,6 @@ def run(args, target_bitrate, target_preset):
     expanded_prompt = generate_expanded_music_prompt(prompt)
     print(f"[Log] Expanded Prompt: '{expanded_prompt}'")
     
-    if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, f"AI Music: {prompt}", "Processing", None, "MUSIC")
-        
     # Generate metadata for the AI music video
     meta = generate_viral_metadata(f"AI Music Track: {expanded_prompt}", mode="MUSIC", category="music")
     if not meta.get("title"):
@@ -50,17 +43,12 @@ def run(args, target_bitrate, target_preset):
     audio_path = generate_ai_audio(expanded_prompt, duration=duration, output_dir=session_dir, ckpt_name=ckpt_name)
     if not audio_path:
         print("[Error] AI Music generation failed.")
-        if args.video_id and args.user_id:
-            report_status(args.video_id, args.user_id, meta["title"], "Failed", None, "MUSIC")
         sys.exit(1)
         
     print(f"[Log] AI Audio generated successfully at: {audio_path}")
     
     # Generate visual background & compile video
     print("[Log] Creating visual video container for the generated music...")
-    if args.video_id and args.user_id:
-        report_status(args.video_id, args.user_id, meta["title"], "Processing", None, "MUSIC")
-        
     # Generate matching background image
     bg_images = generate_cinematic_backgrounds(expanded_prompt, count=1, output_dir=session_dir, width=768, height=1344)
     if bg_images and len(bg_images) > 0:
@@ -124,43 +112,8 @@ def run(args, target_bitrate, target_preset):
     if result.returncode == 0 and os.path.exists(output_path):
         print(f"[Log] SUCCESS! Combined video created: {output_path}")
         
-        # Post-processing / upload if tracked in Supabase
-        if args.video_id and args.user_id:
-            os.environ["USER_ID"] = args.user_id
-            from engine.storage import upload_to_storage
-            
-            # Extract thumbnail
-            thumbnail_file = os.path.join(session_dir, f"thumb_music_{session_id}.jpg")
-            thumbnail_path = None
-            try:
-                subprocess.run([
-                    'ffmpeg', '-y', '-i', output_path, 
-                    '-ss', '00:00:01', '-vframes', '1', 
-                    thumbnail_file
-                ], check=True, capture_output=True)
-                thumbnail_path = upload_to_storage(thumbnail_file, args.video_id, is_video=False)
-                try: os.remove(thumbnail_file)
-                except Exception: pass
-            except Exception as te:
-                print(f"[Warning] Thumbnail extraction failed: {te}")
-                
-            storage_path = upload_to_storage(output_path, args.video_id, is_video=True)
-            
-            report_status(
-                args.video_id,
-                args.user_id,
-                meta["title"],
-                "Published",
-                None,
-                "MUSIC",
-                None,
-                storage_path,
-                thumbnail_path
-            )
         print(f"[Log] Standalone AI music job complete: {output_path}")
         sys.exit(0)
     else:
         print(f"[Error] FFmpeg compilation failed: {result.stderr}")
-        if args.video_id and args.user_id:
-            report_status(args.video_id, args.user_id, meta["title"], "Failed", None, "MUSIC")
         sys.exit(1)

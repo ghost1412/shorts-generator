@@ -2,6 +2,11 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- Removed the hosted-dashboard job reporting (Supabase job status, per-user YouTube credentials, `--user_id`, `decrypt_secret`, the `cryptography` dependency). `--video_id` stays as an optional session-folder name. Supabase storage is still used only for Instagram Reel hosting (falls back to file.io).
+- The hook-cue bonus needs a short number, price or percent (a year no longer counts); "No. 5" is not a sentence end; a closing curly quote after "..." is recognised; a sliver at the end of a pause no longer cuts a quiet stretch short.
+
 ## 0.7.7 (2026-11-13)
 
 - Without an AI key, windows full of greetings, thanks and sign-offs ("welcome to", "thanks for joining", "subscribe", "voice check") rank lower, so intro and outro talk is picked less often as a clip.

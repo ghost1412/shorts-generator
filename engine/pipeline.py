@@ -1,5 +1,4 @@
 """Shared helpers for main.py and the standalone mode pipelines in engine/modes/."""
-import os
 
 POOL_SIZE = 4
 
@@ -33,43 +32,6 @@ CARTOON_AUDIO_CONFIG = {
     "orange_cat": {"pitch": "+15Hz", "rate": "+10%"},
     "default": {"pitch": "+0Hz", "rate": "+15%"}
 }
-
-def report_status(video_id, user_id, title="Shorts Video", status="Processing", download_url=None, mode="AUTO", youtube_video_id=None, storage_path=None, thumbnail_path=None):
-    """Updates video generation status directly in Supabase (no webhook needed)."""
-    supabase_url = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-    if not supabase_url or not supabase_key:
-        print("[Error] Supabase credentials missing - cannot update status.")
-        return
-
-    try:
-        from supabase import create_client
-        db = create_client(supabase_url, supabase_key)
-
-        update_data = {"status": status}
-        if title: update_data["title"] = title
-        if mode: update_data["mode"] = mode
-        if download_url: update_data["download_url"] = download_url
-        if storage_path: update_data["storage_path"] = storage_path
-        if thumbnail_path: update_data["thumbnail_path"] = thumbnail_path
-        if youtube_video_id: update_data["youtube_video_id"] = youtube_video_id
-
-        result = db.table("video_logs").update(update_data).eq("id", video_id).execute()
-        print(f"[Log] DB updated: video_id={video_id}, status={status}, rows={len(result.data)}")
-
-        # On success, increment the generations_used counter
-        if status == "Published" and user_id:
-            config_res = db.table("user_configs").select("generations_used").eq("user_id", user_id).single().execute()
-            if config_res.data:
-                current = config_res.data.get("generations_used", 0) or 0
-                db.table("user_configs").update({"generations_used": current + 1}).eq("user_id", user_id).execute()
-                print(f"[Log] generations_used incremented to {current + 1}")
-
-    except Exception as e:
-        print(f"[Error] Failed to update Supabase directly: {e}")
-        import traceback
-        traceback.print_exc()
 
 def star_hint(stream=None):
     """One line after a finished run in a terminal, asking for a GitHub star. Not printed into pipes or logs (the web app, CI), and

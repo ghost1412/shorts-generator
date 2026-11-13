@@ -21,10 +21,6 @@ on:
         description: 'Music Vibe (suspense, spooky, cinematic, upbeat)'
         required: false
         default: 'suspense'
-      user_id:
-        description: 'Supabase User ID'
-        required: false
-        default: ''
       video_id:
         description: 'Unique Video/Job ID'
         required: false
@@ -203,8 +199,6 @@ jobs:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        USER_ID: ${{ github.event.inputs.user_id }}
-        ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       run: |
           $skip_upload = if (-not (Test-Path "token.json") -or (Get-Item "token.json").Length -eq 0) { "--skip-upload" } else { "" }
           $use_remotion = if ("${{ github.event.inputs.use_remotion }}" -ne "false") { "--use_remotion" } else { "" }
@@ -218,12 +212,10 @@ jobs:
           $s_val = if ("${{ github.event.inputs.custom_script }}" -ne "") { "${{ github.event.inputs.custom_script }}" } else { "" }
           $v_flag = if ("${{ github.event.inputs.source_video }}" -ne "") { "--source_video" } else { "" }
           $v_val = if ("${{ github.event.inputs.source_video }}" -ne "") { "${{ github.event.inputs.source_video }}" } else { "" }
-          $u_flag = if ("${{ github.event.inputs.user_id }}" -ne "") { "--user_id" } else { "" }
-          $u_val = if ("${{ github.event.inputs.user_id }}" -ne "") { "${{ github.event.inputs.user_id }}" } else { "" }
           $id_flag = if ("${{ github.event.inputs.video_id }}" -ne "") { "--video_id" } else { "" }
           $id_val = if ("${{ github.event.inputs.video_id }}" -ne "") { "${{ github.event.inputs.video_id }}" } else { "" }
           $yt_acc = if ("${{ github.event.inputs.youtube_account }}" -ne "") { "--youtube_account ${{ github.event.inputs.youtube_account }}" } else { "" }
-          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" --caption_style $cap_style $use_remotion $skip_upload $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val $v_flag $v_val $u_flag $u_val $id_flag $id_val $yt_acc
+          python main.py --mode "${{ github.event.inputs.mode || 'AUTO' }}" --category "${{ github.event.inputs.category || 'history' }}" --vibe "${{ github.event.inputs.vibe || 'suspense' }}" --bitrate "${{ github.event.inputs.bitrate || '12000k' }}" --preset "${{ github.event.inputs.preset || 'medium' }}" --caption_style $cap_style $use_remotion $skip_upload $use_comfy $use_ai_audio $c_flag $p_flag $p_val $s_flag $s_val $v_flag $v_val $id_flag $id_val $yt_acc
 
     - name: Run Video Generator (Linux)
       if: runner.os == 'Linux'
@@ -232,8 +224,6 @@ jobs:
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        USER_ID: ${{ github.event.inputs.user_id }}
-        ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         SHORTSFLOW_DESCRIPTION_FOOTER: "Made with ShortsFlow, a free open-source short-video maker: https://github.com/ghost1412/shortsflow"
       run: |
         ARG_SKIP_UPLOAD=""
@@ -249,7 +239,6 @@ jobs:
         fi
         ARG_CAT="${{ github.event.inputs.category && github.event.inputs.category != 'random' && format('--category {0}', github.event.inputs.category) || '' }}"
         ARG_VIBE="${{ github.event.inputs.vibe && github.event.inputs.vibe != 'suspense' && format('--vibe {0}', github.event.inputs.vibe) || '' }}"
-        ARG_USER_ID="${{ github.event.inputs.user_id && format('--user_id {0}', github.event.inputs.user_id) || '' }}"
         ARG_VIDEO_ID="${{ github.event.inputs.video_id && format('--video_id {0}', github.event.inputs.video_id) || '' }}"
         ARG_SCRIPT="${{ github.event.inputs.custom_script && format('--script \"{0}\"', github.event.inputs.custom_script) || '' }}"
         ARG_REMOTION="${{ github.event.inputs.use_remotion != 'false' && '--use_remotion' || '' }}"
@@ -264,4 +253,4 @@ jobs:
         ARG_SOURCE_VIDEO="${{ github.event.inputs.source_video && format('--source_video {0}', github.event.inputs.source_video) || '' }}"
         ARG_YT_ACC="${{ github.event.inputs.youtube_account && format('--youtube_account {0}', github.event.inputs.youtube_account) || '' }}"
         
-        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_USER_ID $ARG_VIDEO_ID $ARG_SCRIPT $ARG_REMOTION $ARG_CAPSTYLE $ARG_SKIP_UPLOAD $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET $ARG_SOURCE_VIDEO $ARG_YT_ACC
+        python main.py $ARG_MODE $ARG_CAT $ARG_VIBE $ARG_VIDEO_ID $ARG_SCRIPT $ARG_REMOTION $ARG_CAPSTYLE $ARG_SKIP_UPLOAD $ARG_COMFY $ARG_AUDIO $ARG_CARTOON $ARG_PERSONA $ARG_BITRATE $ARG_PRESET $ARG_SOURCE_VIDEO $ARG_YT_ACC

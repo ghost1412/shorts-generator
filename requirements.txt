@@ -14,7 +14,6 @@ google-api-python-client>=2.150,<3
 google-auth-oauthlib>=1.2,<2
 google-auth-httplib2>=0.2,<1
 nest_asyncio>=1.6,<2
-cryptography>=43,<47
 supabase>=2.10,<3
 # yt-dlp must stay current - YouTube breaks old releases
 yt-dlp>=2026.8.19

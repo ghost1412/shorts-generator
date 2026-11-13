@@ -28,7 +28,6 @@ dependencies = [
   "google-auth-oauthlib>=1.2,<2",
   "google-auth-httplib2>=0.2,<1",
   "nest_asyncio>=1.6,<2",
-  "cryptography>=43,<47",
   "supabase>=2.10,<3",
   "yt-dlp>=2026.8.19",
   "imageio-ffmpeg>=0.5",
