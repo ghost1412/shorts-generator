@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Clip benchmark: recall and precision against a gold set now match a clip and a moment when they overlap by half of the shorter of the two. The old rule asked a 30 s clip to cover half of a moment that can be 60 s long, so the numbers were capped by the moment lengths (a pick starting at the same second as a moment scored 0).
 - Groq: a "429 Too Many Requests" (the per-minute token allowance of a free key) no longer switches the AI picking off for the whole run. The call now waits for the allowance (Retry-After, at most 65 s, four tries) and asks again; a request above a model's limit moves to the next model instead of waiting.
 - Clips can now be 1:1, 4:5 or 16:9 as well as 9:16 (`--aspect_ratio`, the Output shape in the browser app): the crop, layouts, captions, templates and covers follow the frame. It used to print "not implemented" and make 9:16.
 - Browser app: a "Look: template and covers" section on Start here and on the Clip tab (visual template with a preview picture, intro and outro covers, text for the template). It works for shorts and for the highlights video.

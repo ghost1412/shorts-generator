@@ -223,3 +223,14 @@ def test_review_fixes_v078():
     assert has_hook_cue("I said no. Why would anyone ask?") is False      # the first sentence is "I said no."
     assert has_hook_cue("No. 5 on the list is why we left.")      # "No. 5" is a number, not a sentence end
     assert trails_off_end("It was because…”")
+
+
+def test_gold_scores_a_short_clip_inside_a_long_moment_counts():
+    clips = [{"start": 716, "end": 739}]                       # 23 s, starting exactly where a 63 s labelled moment starts
+    gold = [[716, 779], [1000, 1060]]
+    assert q.gold_scores(clips, gold) == {"recall": 0.5, "precision": 1.0}
+    assert q.gold_scores(clips, gold, rule="gold") == {"recall": 0.0, "precision": 0.0}      # the old rule: capped by the moment length
+    # touching is not matching: 7 s of a 30 s clip is under half of the shorter one
+    assert q.gold_scores([{"start": 929, "end": 961}], [[905, 936]]) == {"recall": 0.0, "precision": 0.0}
+    # a long clip around a short moment counts when it holds at least half of that moment
+    assert q.gold_scores([{"start": 0, "end": 90}], [[10, 40]]) == {"recall": 1.0, "precision": 1.0}

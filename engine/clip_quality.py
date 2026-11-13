@@ -270,15 +270,24 @@ def overlap_with(a, b):
     return max(0.0, min(a[1], b[1]) - max(a[0], b[0]))
 
 
-def gold_scores(clips, gold, min_cover=0.5):
-    """Recall and precision against moments a person chose. A gold moment is found when one clip covers at least `min_cover` of it; a clip
-    is right when it covers at least `min_cover` of one gold moment. Returns {"recall", "precision"} (None without clips or gold)."""
+def gold_scores(clips, gold, min_cover=0.5, rule="shorter"):
+    """Recall and precision against moments a person chose. Returns {"recall", "precision"} (None without clips or gold).
+
+    rule "shorter" (default): a clip and a gold moment match when they overlap by at least `min_cover` of the SHORTER of the two, so a 30 s
+    clip that sits inside a 60 s moment counts, and a short clip is not asked to cover a long moment. rule "gold" (used until 2026-11-13):
+    the clip must cover `min_cover` of the gold moment itself, which a 30 s clip can never do for a moment longer than 60 s, so recall and
+    precision were capped by the moment lengths, not by the picks. Recall = share of gold moments matched by a clip; precision = share of
+    clips that match a gold moment."""
     cs = [(float(c["start"]), float(c["end"])) for c in clips]
     gs = [(float(g[0]), float(g[1])) for g in gold or []]
     if not cs or not gs:
         return {"recall": None, "precision": None}
-    found = sum(any(overlap_with(c, g) / max(0.1, g[1] - g[0]) >= min_cover for c in cs) for g in gs)
-    right = sum(any(overlap_with(c, g) / max(0.1, g[1] - g[0]) >= min_cover for g in gs) for c in cs)
+
+    def match(c, g):
+        denom = (g[1] - g[0]) if rule == "gold" else min(c[1] - c[0], g[1] - g[0])
+        return overlap_with(c, g) / max(0.1, denom) >= min_cover
+    found = sum(any(match(c, g) for c in cs) for g in gs)
+    right = sum(any(match(c, g) for g in gs) for c in cs)
     return {"recall": round(found / len(gs), 2), "precision": round(right / len(cs), 2)}
 
 
