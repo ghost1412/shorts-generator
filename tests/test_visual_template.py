@@ -71,3 +71,52 @@ def test_a_clip_template_can_choose_a_visual_template(tmp_path):
     finally:
         auto_edit.PRESETS.clear()
         auto_edit.PRESETS.update(saved)
+
+
+def test_transition_env_roundtrip_and_validation():
+    env = {}
+    visual_template.set_animation_env("tiles", "panels", "#6d28d9", env)
+    assert visual_template.props_from_env(env) == {"introAnimation": "tiles", "outroAnimation": "panels", "animationColor": "#6D28D9"}
+    visual_template.set_animation_env("iris", None, None, env)
+    assert visual_template.props_from_env(env) == {"introAnimation": "iris"}
+    visual_template.set_env("neon-frame", {}, None, env)
+    assert visual_template.props_from_env(env) == {"introAnimation": "iris", "visualTemplate": "neon-frame"}      # a template and a transition together
+    visual_template.set_animation_env(environ=env)
+    assert "introAnimation" not in visual_template.props_from_env(env)
+    with pytest.raises(ValueError, match="Unknown transition"):
+        visual_template.set_animation_env("explode", environ={})
+    assert visual_template.props_from_env({visual_template.ENV_ANIM_COLOR: "#112233"}) == {}
+
+
+def test_python_and_remotion_agree_on_the_transition_names():
+    root = os.path.join(os.path.dirname(auto_edit.__file__), "..", "remotion-video", "src")
+    tsx = open(os.path.join(root, "transitions.tsx"), encoding="utf-8").read()
+    listed = re.search(r"TRANSITIONS = \[(.*?)\] as const", tsx, re.S).group(1)
+    assert tuple(re.findall(r'"([a-z]+)"', listed)) == auto_edit.ANIMATION_NAMES
+    for name in auto_edit.ANIMATION_NAMES:
+        assert auto_edit.ANIMATIONS[name]["about"]
+        assert os.path.exists(os.path.join(os.path.dirname(auto_edit.__file__), "..", "docs", "templates", f"anim-{name}.mp4")), name
+
+
+def test_a_clip_template_can_choose_transitions(tmp_path):
+    d = tmp_path / "t"
+    d.mkdir()
+    (d / "snappy.json").write_text(json.dumps({"based_on": "hype", "intro_animation": "tiles", "outro_animation": "iris"}), encoding="utf-8")
+    (d / "bad.json").write_text(json.dumps({"intro_animation": "explode"}), encoding="utf-8")
+    found, problems = auto_edit.load_templates([str(d)])
+    assert found["snappy"]["intro_animation"] == "tiles" and len(problems) == 1 and "intro_animation must be" in problems[0]
+    base = dict(tighten=False, remove_fillers=False, clean_audio=False, hook_overlay=False, auto_zoom=False, cold_open=False, broll=False,
+                caption_emoji=False, use_remotion=False, tighten_mode="cut", caption_style="HORMOZI", video_filter="none",
+                intro_animation=None, outro_animation=None)
+    saved = dict(auto_edit.PRESETS)
+    try:
+        auto_edit.PRESETS.update(found)
+        a = argparse.Namespace(**base)
+        plan = auto_edit.apply_preset(a, "snappy", "medium", [])
+        assert (a.intro_animation, a.outro_animation) == ("tiles", "iris") and plan["flags"]["intro_animation"] == "tiles"
+        b = argparse.Namespace(**dict(base, intro_animation="fade"))
+        auto_edit.apply_preset(b, "snappy", "medium", ["--intro_animation", "fade"])
+        assert (b.intro_animation, b.outro_animation) == ("fade", "iris")             # the user's choice wins
+    finally:
+        auto_edit.PRESETS.clear()
+        auto_edit.PRESETS.update(saved)

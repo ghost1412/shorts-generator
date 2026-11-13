@@ -66,6 +66,24 @@ shortsflow clip interview.mp4 --captions --visual_template podcast-card   --temp
 
 Slots: `speaker`, `role`, `show`, `handle`, `headline`, `label` (the badge text on `episode-badge`, the small tag on `news-banner`), `cta` (a closing line over the last 2 seconds). Each design uses the slots that suit it and ignores the rest. A clip template of your own can pick a visual template with `"visual": "podcast-card"`. The previews above are made by `python scripts/render_template_previews.py` on a public-domain NASA photo with made-up sample text.
 
+## Intro and outro transitions (`--intro_animation`, `--outro_animation`)
+
+A cover that opens over the first second of each clip and closes over the last one. Pick one effect for the start and one for the end (they can differ), and a colour with `--animation_color "#6D28D9"` (default dark). They work with or without a visual template, and need the animated renderer (turned on for you). The captions start under the cover, so the first words appear as it opens.
+
+| Effect | Start of the clip | End of the clip | Preview |
+| :-- | :-- | :-- | :-- |
+| `tiles` | A grid of tiles breaks apart from the centre and flies away | Tiles fly back in and join | [anim-tiles.mp4](templates/anim-tiles.mp4) |
+| `panels` | Two doors slide apart | The doors close | [anim-panels.mp4](templates/anim-panels.mp4) |
+| `iris` | A circle opens | The circle closes | [anim-iris.mp4](templates/anim-iris.mp4) |
+| `blinds` | Horizontal slats open one after another | The slats close | [anim-blinds.mp4](templates/anim-blinds.mp4) |
+| `fade` | Fades in from the colour | Fades out to the colour | [anim-fade.mp4](templates/anim-fade.mp4) |
+
+```bash
+shortsflow clip interview.mp4 --captions --visual_template neon-frame --intro_animation tiles --outro_animation tiles --animation_color "#0B0C10"
+```
+
+A clip template of your own can set `"intro_animation"` and `"outro_animation"`. These are the start and end of each clip; effects between cuts inside a clip are not built yet. Previews: `python scripts/render_template_previews.py --animations`.
+
 ## Photo reel types (`--mode PHOTO_REEL --reel_type ...`)
 
 `memories`, `travel`, `product`, `then_now`, `countdown`, `tribute`: each sets order, timing, captions, title and look. Blurry and duplicate photos are skipped.

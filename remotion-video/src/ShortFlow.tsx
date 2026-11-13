@@ -1,6 +1,7 @@
 import { emojiForWord, emojiFileName } from "./captionEmoji";
 import { zoomScaleAt } from "./autoZoom";
 import { TemplateLayer, templateTextSchema, VISUAL_TEMPLATES } from "./visualTemplates";
+import { TransitionLayer, TRANSITIONS } from "./transitions";
 import {
   Audio,
   OffthreadVideo,
@@ -162,6 +163,9 @@ export const shortFlowSchema = z.object({
   visualTemplate: z.enum(VISUAL_TEMPLATES).optional(), // --visual_template: a designed skin over the picture (src/visualTemplates.tsx)
   templateText: templateTextSchema.optional(), // the text slots of that skin (speaker, show, handle, headline, cta)
   templateAccent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // its accent colour
+  introAnimation: z.enum(TRANSITIONS).optional(), // --intro_animation: a cover that opens over the first second (src/transitions.tsx)
+  outroAnimation: z.enum(TRANSITIONS).optional(), // --outro_animation: a cover that closes over the last second
+  animationColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // colour of that cover
   reelStyle: reelStyleSchema.optional(), // PHOTO_REEL type look (flash / motion / colour grade / accent)
   zoomMoments: z.array(z.object({ start: z.number(), end: z.number(), scale: z.number(), rise: z.number() })).optional(), // --auto_zoom: picture-layer punch-ins (captions never zoom)
   extraFont: z.object({ family: z.string(), url: z.string() }).optional(), // per-render CJK subset font (static file path)
@@ -1264,6 +1268,9 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   visualTemplate,
   templateText,
   templateAccent,
+  introAnimation,
+  outroAnimation,
+  animationColor,
   zoomMoments,
   reelStyle,
   extraFont,
@@ -1718,6 +1725,8 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
       {teachCard && (
         <TeachCardComponent card={teachCard} frame={frame} fps={fps} />
       )}
+
+      {(introAnimation || outroAnimation) && <TransitionLayer intro={introAnimation} outro={outroAnimation} color={animationColor} />}
 
       {/* 7. PROGRESS BAR (Snappy sliding bottom bar); a visual template draws its own */}
       {!visualTemplate && <div

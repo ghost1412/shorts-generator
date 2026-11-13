@@ -7,11 +7,13 @@ import json
 import os
 import re
 
-from engine.auto_edit import VISUAL_TEMPLATE_NAMES, VISUAL_TEMPLATES
+from engine.auto_edit import ANIMATIONS, ANIMATION_NAMES, VISUAL_TEMPLATE_NAMES, VISUAL_TEMPLATES
 
 TEXT_KEYS = ("show", "speaker", "role", "handle", "headline", "label", "cta")
 MAX_TEXT = 80
 ENV_NAME, ENV_TEXT, ENV_ACCENT = "SHORTSFLOW_VISUAL_TEMPLATE", "SHORTSFLOW_TEMPLATE_TEXT", "SHORTSFLOW_TEMPLATE_ACCENT"
+ENV_INTRO, ENV_OUTRO, ENV_ANIM_COLOR = "SHORTSFLOW_INTRO_ANIM", "SHORTSFLOW_OUTRO_ANIM", "SHORTSFLOW_ANIM_COLOR"
+ALL_ENV = (ENV_NAME, ENV_TEXT, ENV_ACCENT, ENV_INTRO, ENV_OUTRO, ENV_ANIM_COLOR)
 
 
 def parse_text(items):
@@ -52,13 +54,36 @@ def set_env(name, text=None, accent=None, environ=None):
         environ.pop(ENV_ACCENT, None)
 
 
-def props_from_env(environ=None):
-    """The Remotion props for the chosen template ({} when none is chosen)."""
+def set_animation_env(intro=None, outro=None, color=None, environ=None):
+    """Export the intro / outro transitions (independent of the visual template). Empty values clear them."""
     environ = os.environ if environ is None else environ
+    for key, value in ((ENV_INTRO, intro), (ENV_OUTRO, outro)):
+        if value and value not in ANIMATIONS:
+            raise ValueError(f"Unknown transition {value!r}. Choose one of: {', '.join(ANIMATION_NAMES)}")
+        if value:
+            environ[key] = value
+        else:
+            environ.pop(key, None)
+    colour = normalize_accent(color)
+    if colour and (intro or outro):
+        environ[ENV_ANIM_COLOR] = colour
+    else:
+        environ.pop(ENV_ANIM_COLOR, None)
+
+
+def props_from_env(environ=None):
+    """The Remotion props for the chosen template and transitions ({} when none is chosen)."""
+    environ = os.environ if environ is None else environ
+    props = {}
+    for env_key, prop in ((ENV_INTRO, "introAnimation"), (ENV_OUTRO, "outroAnimation")):
+        if environ.get(env_key) in ANIMATIONS:
+            props[prop] = environ[env_key]
+    if props and normalize_accent(environ.get(ENV_ANIM_COLOR)):
+        props["animationColor"] = normalize_accent(environ.get(ENV_ANIM_COLOR))
     name = environ.get(ENV_NAME, "")
     if name not in VISUAL_TEMPLATES:
-        return {}
-    props = {"visualTemplate": name}
+        return props
+    props["visualTemplate"] = name
     try:
         text = json.loads(environ.get(ENV_TEXT) or "{}")
     except ValueError:

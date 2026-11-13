@@ -111,6 +111,9 @@ def parse_args():
     parser.add_argument("--visual_template", choices=list(_auto_edit.VISUAL_TEMPLATE_NAMES), help="Draw a designed skin over the picture (animated renderer): podcast-card (speaker name tag, show chip, progress bar), neon-frame, news-banner (headline bar and ticker), minimal-line. Needs --use_remotion (turned on for you). Previews: docs/templates/.")
     parser.add_argument("--template_text", action="append", metavar="KEY=VALUE", help="Text for a visual template, repeatable: speaker, role, show, handle, headline, label, cta. Example: --template_text speaker=\"Alex Morgan\" --template_text role=Host. Only what you give is drawn.")
     parser.add_argument("--template_accent", help="Accent colour of the visual template as a hex code, e.g. #FFB703.")
+    parser.add_argument("--intro_animation", choices=list(_auto_edit.ANIMATION_NAMES), help="A cover that opens over the first second of each clip: tiles (a grid of tiles breaks apart and flies away), panels (two doors), iris (a circle), blinds (slats), fade. Needs --use_remotion (turned on for you). Previews: docs/templates/.")
+    parser.add_argument("--outro_animation", choices=list(_auto_edit.ANIMATION_NAMES), help="A cover that closes over the last second of each clip (tiles fly in and join, doors close, ...). Same choices as --intro_animation.")
+    parser.add_argument("--animation_color", help="Colour of the intro / outro cover as a hex code, e.g. #0B0C10 (default dark).")
     parser.add_argument("--hook_overlay", action="store_true", help="Show the clip's hook as a big title for the first ~3 seconds (clipping with --use_remotion).")
     parser.add_argument("--auto_zoom", action="store_true", help="Subtle punch-in / slow push-in on the picture at emphasised words and sentence starts (clipping with --use_remotion; not with --layout split_filler).")
     parser.add_argument("--brand", help="brand.json preset (logo, handle, end card) burned into finished clips.")
@@ -247,6 +250,17 @@ def parse_args():
         print(f"[Log] 🎨 Visual template '{args.visual_template}'" + (f" with text: {', '.join(template_text)}" if template_text else " (no text given: only the design is drawn)"))
     elif args.template_text or args.template_accent:
         print("[Warning] --template_text / --template_accent need --visual_template; they are ignored.")
+    try:
+        _vt.set_animation_env(args.intro_animation, args.outro_animation, args.animation_color)
+    except ValueError as e:
+        parser.error(str(e))
+    if args.intro_animation or args.outro_animation:
+        if not args.use_remotion:
+            args.use_remotion = True
+            print("[Log] Transitions: animated captions turned on (the transitions are drawn by the animated renderer).")
+        print(f"[Log] 🎞️ Transitions: intro {args.intro_animation or 'none'}, outro {args.outro_animation or 'none'}")
+    elif args.animation_color:
+        print("[Warning] --animation_color needs --intro_animation or --outro_animation; it is ignored.")
     if args.stat_pops:
         os.environ["SHORTSFLOW_STAT_POPS"] = "1"
         if not args.use_remotion:

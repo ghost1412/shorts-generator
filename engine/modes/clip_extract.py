@@ -695,6 +695,8 @@ def run(args, target_bitrate, target_preset):
                 "visual_template": getattr(args, "visual_template", None),
                 "template_text": json.loads(os.getenv("SHORTSFLOW_TEMPLATE_TEXT") or "{}") if getattr(args, "visual_template", None) else {},
                 "template_accent": os.getenv("SHORTSFLOW_TEMPLATE_ACCENT") or None,
+                "intro_animation": getattr(args, "intro_animation", None), "outro_animation": getattr(args, "outro_animation", None),
+                "animation_color": getattr(args, "animation_color", None),
                 "broll": bool(getattr(args, "broll", False)),
                 "auto_zoom": bool(getattr(args, "auto_zoom", False)),
                 "caption_color": getattr(args, "caption_color", None),

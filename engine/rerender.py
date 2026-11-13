@@ -146,9 +146,11 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
     if hook_on:
         os.environ["SHORTSFLOW_HOOK_OVERLAY"] = "1"
     from engine import visual_template as _vt
-    prev_tpl_env = {k: os.environ.get(k) for k in (_vt.ENV_NAME, _vt.ENV_TEXT, _vt.ENV_ACCENT)}
+    prev_tpl_env = {k: os.environ.get(k) for k in _vt.ALL_ENV}
     if settings.get("visual_template") in _vt.VISUAL_TEMPLATES and settings.get("use_remotion"):
         _vt.set_env(settings["visual_template"], settings.get("template_text") or {}, settings.get("template_accent"))     # the same skin again
+    if settings.get("use_remotion") and (settings.get("intro_animation") or settings.get("outro_animation")):
+        _vt.set_animation_env(settings.get("intro_animation"), settings.get("outro_animation"), settings.get("animation_color"))      # the same transitions again
     prev_size_env = os.environ.get("SHORTSFLOW_CAPTION_SIZE")
     prev_off_env = os.environ.get("SHORTSFLOW_NO_CAPTIONS")
     if float(settings.get("caption_size") or 1.0) != 1.0:
