@@ -200,7 +200,7 @@ def parse_args():
     # Voice, Production & Aspect Ratio Flags
     parser.add_argument("--tts_provider", choices=["auto", "elevenlabs", "voicestudio", "edgetts", "local", "kokoro"], default="auto", help="Specify Text-to-Speech synthesis provider.")
     parser.add_argument("--clone_voice", help="Path to custom audio sample file (.wav, .mp3) for zero-shot voice cloning.")
-    parser.add_argument("--aspect_ratio", choices=["9:16", "16:9", "1:1", "4:5"], default="9:16", help="Select output video aspect ratio (default 9:16 vertical).")
+    parser.add_argument("--aspect_ratio", choices=["9:16", "16:9", "1:1", "4:5"], default="9:16", help="Frame shape of clips cut from a video (--source_video): 9:16 vertical (default, 1080x1920), 1:1 square (1080x1080), 4:5 (1080x1350) or 16:9 landscape (1920x1080). The face-tracked crop, the layouts, the captions, templates and covers follow it. The highlights video (--extract_mode long) is always 16:9. Other modes make 9:16.")
     parser.add_argument("--target_lang", help="Target language for --mode DUB (translate and re-voice the video): es, hi, de, fr, ja, pt, zh, it, ru, ko, ar, en, tr, nl, pl, uk, id.")
     parser.add_argument("--dub_captions", action="store_true", help="--mode DUB: burn the translated subtitles into the dubbed video (re-encodes; the .srt is always written). Uses a font with the glyphs for the target script (Hindi, Arabic, Cyrillic, Chinese, Japanese, Korean).")
     parser.add_argument("--dub_original", choices=["music", "quiet", "duck", "mute"], default="music", help="--mode DUB: what happens to the video's own sound: music (default: the original voice is removed and the music and effects stay; needs `pip install demucs`, else it falls back to quiet), quiet (a faint bed under the new voice), duck (lowered only while the new voice speaks), mute (removed).")
@@ -227,7 +227,10 @@ def parse_args():
         if value != default:
             print(f"[Warning] {flag} is not implemented yet and is ignored.")
     if args.aspect_ratio != "9:16":
-        print(f"[Warning] --aspect_ratio {args.aspect_ratio} is not implemented: output is 9:16 vertical (the highlights video is 16:9).")
+        if getattr(args, "source_video", None) and args.extract_mode == "long":
+            print(f"[Warning] --aspect_ratio {args.aspect_ratio} is ignored: the highlights video is 16:9 like its source.")
+        elif not getattr(args, "source_video", None):
+            print(f"[Warning] --aspect_ratio {args.aspect_ratio} applies to clips cut from a video (--source_video); the other modes make 9:16 vertical.")
     if getattr(args, "llm_model", None):
         os.environ["LLM_MODEL"] = args.llm_model      # was never read: only the LLM_MODEL env var worked
     args.auto_edit_plan = None

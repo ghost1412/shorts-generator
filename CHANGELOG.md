@@ -4,6 +4,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 
 ## Unreleased
 
+- Clips can now be 1:1, 4:5 or 16:9 as well as 9:16 (`--aspect_ratio`, the Output shape in the browser app): the crop, layouts, captions, templates and covers follow the frame. It used to print "not implemented" and make 9:16.
 - Browser app: a "Look: template and covers" section on Start here and on the Clip tab (visual template with a preview picture, intro and outro covers, text for the template). It works for shorts and for the highlights video.
 - Highlights video (long, landscape): `--visual_template`, `--intro_animation` and `--outro_animation` now work on it. Short transparent pieces for the start and end are rendered with the animated renderer and laid over the video with FFmpeg, so a long video is never rendered frame by frame in the browser.
 - `--segment_transition fade|slide|wipe|flip|clock-wipe|iris` joins the background clips or photos of photo reels and idea-to-video modes with Remotion's `@remotion/transitions` (pinned 4.0.509, like the other Remotion packages); the default stays the crossfade.

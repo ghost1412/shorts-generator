@@ -53,13 +53,14 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
     if letterbox_crop:
         base_filter = f"{letterbox_crop},"
 
+    from engine import aspect as _aspect
     if not interest_points:
-        return f"{base_filter}{CENTER_CROP_9X16}"
+        return f"{base_filter}{_aspect.center_crop(target_w, target_h)}"
     
     # Filter and sort interest points for this segment
     raw_pts = sorted([(t, x) for t, x in interest_points.items() if start_time <= t <= end_time])
     if not raw_pts:
-        return f"{base_filter}{CENTER_CROP_9X16}"
+        return f"{base_filter}{_aspect.center_crop(target_w, target_h)}"
         
     pts = smooth_focal_points(raw_pts)
 
@@ -84,8 +85,7 @@ def generate_ffmpeg_crop_filter(interest_points, start_time, end_time, target_w=
         return expr
 
     focal_x_pct = get_focal_x_expr()
-    crop_w = "min(iw,ih*9/16)"
-    crop_h = "min(ih,iw*16/9)"
+    crop_w, crop_h = _aspect.crop_exprs(target_w, target_h)
     x_expr = f"min(max(0,({focal_x_pct}*iw)-({crop_w}/2)),iw-{crop_w})"
 
     return f"{base_filter}crop='{crop_w}':'{crop_h}':'{x_expr}':'(ih-oh)/2'"
@@ -147,10 +147,11 @@ def generate_ffmpeg_split_screen_filter(target_w=1080, target_h=1920):
     Generates an FFmpeg complex filter string for dual-speaker podcast split screen layout.
     Crops left and right speakers from a horizontal 16:9 video and stacks top and bottom in 9:16 vertical video.
     """
-    half_h = target_h // 2
+    top_h = (target_h // 2 + 1) // 2 * 2          # both halves even (yuv420p), together exactly the frame height (1350 -> 676 + 674)
+    half_h = target_h - top_h
     return (
         f"split=2[v1][v2];"
-        f"[v1]crop=iw/2:ih:0:0,scale={target_w}:{half_h}:force_original_aspect_ratio=increase,crop={target_w}:{half_h}[top];"
+        f"[v1]crop=iw/2:ih:0:0,scale={target_w}:{top_h}:force_original_aspect_ratio=increase,crop={target_w}:{top_h}[top];"
         f"[v2]crop=iw/2:ih:iw/2:0,scale={target_w}:{half_h}:force_original_aspect_ratio=increase,crop={target_w}:{half_h}[bottom];"
         f"[top][bottom]vstack=inputs=2,format=yuv420p"
     )
@@ -2715,7 +2716,7 @@ def _overlay_on_long_video(video, codec, quality_params):
         print(f"[Warning] Template / covers skipped for the highlights video: {e}")
 
 
-def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None, enhance="off", enhance_strength="medium", transitions="none"):
+def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None, enhance="off", enhance_strength="medium", transitions="none", aspect_ratio="9:16"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
         print(f"[Warning] Transcript not found at {transcript_path}. Subtitles will be skipped.")
@@ -2728,7 +2729,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     valid_highlights = [h for h in highlights if (h['end'] - h['start']) >= 0.5]
     highlights = valid_highlights
 
-    target_res = (1920, 1080) if mode == "long" else (1080, 1920)
+    from engine import aspect as _aspect
+    target_res = (1920, 1080) if mode == "long" else _aspect.size(aspect_ratio)
+    if mode != "long" and aspect_ratio != "9:16":
+        print(f"[Log] Output shape {aspect_ratio} ({target_res[0]}x{target_res[1]}).")
     w, h = target_res
     
     scaling_alg = "lanczos+accurate_rnd+full_chroma_int" if use_superres else "lanczos"
@@ -2823,7 +2827,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             else:
                 single_crop_clips.add(i)
                 base_filter = f"{letterbox_crop}," if letterbox_crop else ""
-                crop_filter = f"{base_filter}{CENTER_CROP_9X16}"
+                crop_filter = f"{base_filter}{_aspect.center_crop(w, h)}"
                 vf_filter = f"{crop_filter + ',' if crop_filter else ''}scale={w}:{h}:flags={scaling_alg},format=yuv420p"
         else:
             vf_filter = f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags={scaling_alg},pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
@@ -3062,7 +3066,8 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                         duration=r_dur,
                         start_offset=r_offset,
                         caption_style=caption_style,
-                        subtitle_y_pos=clip_caption_y,
+                        aspect_ratio=aspect_ratio,
+                        subtitle_y_pos=_aspect.scale_y(clip_caption_y, h),
                         hook_text=hi.get('hook_text') if os.getenv("SHORTSFLOW_HOOK_OVERLAY") == "1" else None,
                         # split_filler bakes clip + filler into one picture, so zooming it would move the seam: skip there
                         auto_zoom=os.getenv("SHORTSFLOW_AUTO_ZOOM") == "1" and layout != "split_filler"
@@ -3128,10 +3133,10 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             # Caption selection based on style
             if "stylish" in styles:
                 print(f"[Log] Applying STYLISH Captions (Word-level highlights + Pop)")
-                subs = apply_stylish_captions(cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=plain_caption_y(subtitle_y_pos))
+                subs = apply_stylish_captions(cap_data, cap_start, cap_end, size=(w, h), y_pos=_aspect.scale_y(plain_caption_y(subtitle_y_pos), h))
             else:
                 # Simple word overlays (Default)
-                subs = apply_influencer_subtitles(sub, cap_data, cap_start, cap_end, size=(1080, 1920), y_pos=plain_caption_y(subtitle_y_pos))
+                subs = apply_influencer_subtitles(sub, cap_data, cap_start, cap_end, size=(w, h), y_pos=_aspect.scale_y(plain_caption_y(subtitle_y_pos), h))
             
             overlays = subs
             

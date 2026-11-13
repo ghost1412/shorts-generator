@@ -70,10 +70,10 @@ def test_web_quick_clip_inputs_match_its_parameters():
     src = _webui_source()
     inputs = _click_inputs(src, r"q_btn\.click\(quick_clip, \[(.*?)\],\s*\[q_status")
     params = _params(src, "quick_clip")
-    # the last group, *q_look, stands for the nine look inputs (visual template, covers, template text)
+    # the last group, *q_look, stands for the ten look inputs (visual template, covers, template text, frame shape)
     assert inputs[-7:] == ["q_game", "q_game_mix", "q_cap_pos", "q_cap_size", "q_game_frame", "q_llm", "*q_look"]
-    assert len(inputs) - 1 + 9 == len(params)
-    assert params[-15:] == ["game", "game_mix", "caption_position", "caption_size", "game_framing", "llm_provider", 'visual_template', 'intro_animation', 'outro_animation', 'tpl_speaker', 'tpl_role', 'tpl_show', 'tpl_handle', 'tpl_headline', 'tpl_cta']
+    assert len(inputs) - 1 + 10 == len(params)
+    assert params[-16:] == ["game", "game_mix", "caption_position", "caption_size", "game_framing", "llm_provider", 'visual_template', 'intro_animation', 'outro_animation', 'tpl_speaker', 'tpl_role', 'tpl_show', 'tpl_handle', 'tpl_headline', 'tpl_cta', 'shape']
 
 
 def test_clip_tab_inputs_match_clip_video_parameters():

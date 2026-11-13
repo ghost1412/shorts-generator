@@ -43,6 +43,23 @@ Put a JSON file in `templates/` (next to the program) or in `~/.shortsflow/templ
 
 Settings: `label`, `about`, `based_on`; true/false switches `tighten`, `remove_fillers`, `clean_audio`, `caption_emoji`, `hook_overlay`, `cold_open`, `auto_zoom`, `broll`, `stat_pops`; `caption_style` (HORMOZI, GLOW_BOX, BOUNCE, MINIMAL, KARAOKE, NEON, BAR); `video_filter` (null or a named look such as `moody_dark`, `teal_orange`, `cinematic_warm`); `layout` (single, split, active, fit, split_filler); `sfx` with `zoom`, `broll`, `cut`, `stat` each null, `whoosh`, `pop` or `hit`. A wrong value skips that file with a warning that says what to fix; the others still load. A template with a built-in's name replaces it.
 
+## Frame shapes (`--aspect_ratio`)
+
+Clips cut from a video (`--source_video`) can be 9:16 vertical (default), 1:1 square, 4:5 or 16:9 landscape. The face-tracked crop takes the largest window of that shape, the layouts (`single`, `fit`, `split`, `active`, `split_filler`) fill that frame, and the captions, hook title, visual templates and covers follow it.
+
+| Shape | Size | Good for |
+| :-- | :-- | :-- |
+| `9:16` | 1080x1920 | Shorts, Reels, TikTok |
+| `4:5` | 1080x1350 | Instagram and Facebook feed |
+| `1:1` | 1080x1080 | Square feed posts |
+| `16:9` | 1920x1080 | YouTube, LinkedIn, the web |
+
+```bash
+shortsflow clip interview.mp4 --captions --aspect_ratio 1:1 --visual_template neon-frame
+```
+
+The layouts were designed for vertical frames, so `split` and `active` (two speakers stacked) look best in 9:16 and 4:5. In 16:9 a landscape source is simply not cropped. Photo reels and the idea-to-video modes still make 9:16.
+
 ## Visual templates (`--visual_template NAME`)
 
 A designed skin drawn over the picture, under the hook title and the captions. Needs the animated renderer (`--use_remotion` is turned on for you). Text slots are optional: only the text you give is drawn, nothing is made up.

@@ -136,6 +136,8 @@ def rerender_clip(session_dir, clip_index, start=None, end=None, caption_style=N
             print(f"[Warning] Filler removal skipped on re-render: {e}")
     if settings.get("video_filter"):
         extra["video_filter"] = settings["video_filter"]       # the colour grade stays
+    if settings.get("aspect_ratio"):
+        extra["aspect_ratio"] = settings["aspect_ratio"]       # the same frame shape again
     from engine.video_gen import extract_segments
     window = {"start": start, "end": end}
     hook_on = bool(settings.get("hook_overlay") and clip.get("hook"))

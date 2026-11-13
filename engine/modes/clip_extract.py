@@ -274,7 +274,8 @@ def run(args, target_bitrate, target_preset):
         filler_video=getattr(args, 'filler_video', None),
         remove_fillers=getattr(args, 'remove_fillers', False),
         reel_captions=getattr(args, 'reel_captions', False),
-        transitions=reel_transition
+        transitions=reel_transition,
+        aspect_ratio=getattr(args, 'aspect_ratio', '9:16') or '9:16'
     )
     
     timing.mark("rendering the clips (FFmpeg / Remotion)")
@@ -692,6 +693,7 @@ def run(args, target_bitrate, target_preset):
                 "subtitle_y_pos": args.subtitle_y_pos, "caption_size": float(os.getenv("SHORTSFLOW_CAPTION_SIZE") or 1.0), "captions_off": os.getenv("SHORTSFLOW_NO_CAPTIONS") == "1", "brand": getattr(args, "brand", None),
                 "caption_lang": getattr(args, "caption_lang", None), "zh_script": getattr(args, "zh_script", "auto"),
                 "clean_audio": bool(getattr(args, "clean_audio", False)), "hook_overlay": bool(getattr(args, "hook_overlay", False)),
+                "aspect_ratio": getattr(args, "aspect_ratio", "9:16") or "9:16",
                 "visual_template": getattr(args, "visual_template", None),
                 "template_text": json.loads(os.getenv("SHORTSFLOW_TEMPLATE_TEXT") or "{}") if getattr(args, "visual_template", None) else {},
                 "template_accent": os.getenv("SHORTSFLOW_TEMPLATE_ACCENT") or None,

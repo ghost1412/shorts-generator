@@ -37,6 +37,7 @@ EDIT_STYLE_CHOICES = [("No auto-edit (pick my own options)", "none")] + _auto_ed
 EDIT_STRENGTH_CHOICES = [("Subtle", "subtle"), ("Medium", "medium"), ("Hyped", "hyped")]
 VISUAL_TEMPLATE_CHOICES = [("No template", "none")] + [(v["label"], k) for k, v in _auto_edit.VISUAL_TEMPLATES.items()]
 COVER_CHOICES = [("None", "none")] + [(v["label"], k) for k, v in _auto_edit.ANIMATIONS.items()]
+SHAPE_CHOICES = [("Vertical 9:16 (Shorts, Reels, TikTok)", "9:16"), ("Square 1:1", "1:1"), ("Portrait 4:5 (feed)", "4:5"), ("Landscape 16:9", "16:9")]
 TEMPLATE_TEXT_SLOTS = ("speaker", "role", "show", "handle", "headline", "cta")
 
 

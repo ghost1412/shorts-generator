@@ -184,10 +184,10 @@ def _count(value):
         return 3
 
 
-def template_controls(prefix_info=""):
+def template_controls(prefix_info="", with_shape=True):
     """The look controls (visual template with preview, intro and outro covers, template text). Returns the components in the order that
     `clip_video` / `quick_clip` take them after their other options."""
-    with gr.Accordion("Look: template and covers (optional)", open=False):
+    with gr.Accordion("Look: template, covers and frame shape (optional)", open=False):
         tpl = gr.Dropdown(web_args.VISUAL_TEMPLATE_CHOICES, value="none", label="Visual template",
                           info="A designed look drawn over the picture. Turns on animated captions." + prefix_info)
         tpl_img = gr.Image(value=None, show_label=False, interactive=False, height=300, visible=False)
@@ -199,8 +199,10 @@ def template_controls(prefix_info=""):
             texts = [gr.Textbox(label=label, placeholder=ph, max_lines=1) for label, ph in (
                 ("Speaker name", "Alex Morgan"), ("Role", "Host"), ("Show or channel", "My Show"), ("Handle", "@myshow"),
                 ("Headline", "A line for the top bar"), ("Closing line", "Follow @myshow for more"))]
+        shape = gr.Dropdown(web_args.SHAPE_CHOICES, value="9:16", label="Frame shape",
+                            info="For shorts cut from a video. The highlights video is always 16:9.") if with_shape else None
         tpl.change(lambda name: gr.update(value=web_args.template_preview(name), visible=bool(web_args.template_preview(name))), tpl, tpl_img)
-    return [tpl, intro, outro, *texts]
+    return [tpl, intro, outro, *texts] + ([shape] if shape is not None else [])
 
 
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
@@ -453,7 +455,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default",
                game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto", llm_provider="auto",
                visual_template="none", intro_animation="none", outro_animation="none",
-               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta=""):
+               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta="", shape="9:16"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -493,6 +495,8 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             cmd += web_args.caption_look_args(caption_position, caption_size)
         cmd += web_args.game_args(game, game_mix, game_framing)
         cmd += web_args.template_args(visual_template, intro_animation, outro_animation, tpl_speaker, tpl_role, tpl_show, tpl_handle, tpl_headline, tpl_cta)
+        if shape and shape != "9:16":
+            cmd += ["--aspect_ratio", shape]
         cmd += web_args.llm_args(llm_provider)
         if (find or "").strip():
             cmd += ["--find", find.strip()]
@@ -779,7 +783,7 @@ def _render_settings(with_aspect=True):
     with gr.Accordion("Render settings", open=False):
         with gr.Row():
             caption_style = gr.Dropdown(CAPTION_STYLES, value="HORMOZI", label="Caption style")
-            # Clipping always produces 9:16, so the choice is only offered where it changes the result.
+            # The choice is offered where it changes the result (clips can be 9:16, 1:1, 4:5 or 16:9).
             aspect_ratio = gr.Dropdown(ASPECTS, value="9:16", label="Aspect ratio") if with_aspect else gr.State("9:16")
         with gr.Row():
             llm_provider = gr.Dropdown(LLM_PROVIDERS, value="auto", label="LLM provider")
@@ -1054,7 +1058,7 @@ def build_ui():
                             tighten = gr.Checkbox(value=True, label="Remove silences")
                             broll = gr.Checkbox(label="Auto B-roll")
                             srt = gr.Checkbox(label="Export .srt")
-                        clip_settings = _render_settings(with_aspect=False)
+                        clip_settings = _render_settings(with_aspect=True)
                         with gr.Accordion("Game footage and caption position (optional)", open=False):
                             clip_game = gr.Checkbox(label="This is game footage", value=False,
                                                     info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay), and keeps the whole screen in frame (Framing \"single\" becomes \"fit\").")
@@ -1077,7 +1081,7 @@ def build_ui():
                             with gr.Row():
                                 clip_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style")
                                 clip_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing")
-                            clip_look = template_controls()
+                            clip_look = template_controls(with_shape=False)      # the Clip tab has the aspect ratio in its render settings
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                         clip_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
