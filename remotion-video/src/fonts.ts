@@ -8,20 +8,32 @@
 //    that have no Devanagari system font. The browser falls back to it per character, right after Anton.
 import { continueRender, delayRender, staticFile } from "remotion";
 
-const load = (family: string, file: string, weight?: string) => {
-  const handle = delayRender(`Loading ${family} caption font`);
+const SOFT_TIMEOUT_MS = 8000;
+
+// Never lets a font hold a render: a font that fails or is slower than SOFT_TIMEOUT_MS is given up on and the browser falls back to
+// Impact / Arial Black / system fonts (a GitHub runner once waited 178 s for one font and failed the render).
+export const loadFont = (family: string, file: string, weight?: string) => {
+  const handle = delayRender(`Loading ${family} caption font`, { timeoutInMilliseconds: 60000 });
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    continueRender(handle);
+  };
+  const timer = setTimeout(finish, SOFT_TIMEOUT_MS);
   new FontFace(family, `url(${staticFile(file)})`, weight ? { weight } : undefined)
     .load()
     .then((font) => {
       document.fonts.add(font);
-      continueRender(handle);
+      finish();
     })
-    .catch(() => continueRender(handle)); // fall back to Impact / Arial Black / system fonts
+    .catch(finish);
 };
+const load = loadFont;
 
 load("Anton", "fonts/Anton-Regular.ttf");
 load("NotoDevanagari", "fonts/NotoSansDevanagari.ttf", "100 900");
 load("NotoCyrillic", "fonts/NotoSansCyrillic.ttf");
-load("Caveat", "fonts/Caveat.ttf", "400 700"); // HANDWRITTEN caption style (OFL)
-load("JetBrainsMono", "fonts/JetBrainsMono.ttf", "100 800"); // TYPEWRITER caption style (OFL)
+// Caveat (HANDWRITTEN style) and JetBrains Mono (TYPEWRITER style) are loaded only when that style is used, see useStyleFont in ShortFlow.tsx.
 load("NotoArabic", "fonts/NotoSansArabic.ttf"); // bold, Arabic script only (Arabic/Persian/Urdu); needs RTL handling in ShortFlow.tsx

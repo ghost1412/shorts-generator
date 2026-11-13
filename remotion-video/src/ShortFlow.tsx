@@ -3,6 +3,7 @@ import { zoomScaleAt } from "./autoZoom";
 import { TemplateLayer, templateTextSchema, VISUAL_TEMPLATES } from "./visualTemplates";
 import { TransitionLayer, TRANSITIONS } from "./transitions";
 import { SegmentTransitionSeries, SEGMENT_TRANSITIONS, canTransition } from "./segmentTransitions";
+import { loadFont } from "./fonts";
 import {
   Audio,
   OffthreadVideo,
@@ -1413,6 +1414,19 @@ const EmojiGuessOverlay: React.FC<{
 };
 
 // Loads the CJK subset font that the Python side wrote for this render (too big to bundle for all of zh/ja/ko).
+// Fonts that only one caption style needs are fetched only for a render that uses it (OFL, bundled in public/fonts).
+const STYLE_FONTS: Record<string, [string, string, string]> = {
+  HANDWRITTEN: ["Caveat", "fonts/Caveat.ttf", "400 700"],
+  TYPEWRITER: ["JetBrainsMono", "fonts/JetBrainsMono.ttf", "100 800"],
+};
+const useStyleFont = (style: string) => {
+  useState(() => {
+    const f = STYLE_FONTS[style];
+    if (f) loadFont(f[0], f[1], f[2]);
+    return null;
+  });
+};
+
 const useExtraFont = (extra?: { family: string; url: string }) => {
   const [handle] = useState(() => (extra ? delayRender("Loading CJK caption font") : null));
   useEffect(() => {
@@ -1466,6 +1480,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   teachCard,
 }) => {
   useExtraFont(extraFont);
+  useStyleFont(captionStyle);
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const currentTime = frame / fps;

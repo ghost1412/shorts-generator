@@ -119,14 +119,16 @@ def test_every_list_of_caption_styles_agrees_and_each_style_has_a_preview():
     import json
     import os
     import re
-    import webui
     from engine import auto_edit
     root = os.path.join(os.path.dirname(__file__), "..")
     names = list(rr.CAPTION_STYLES)
     assert len(names) == 14 and {"MARKER", "SOFT", "WORDCUT", "NEGATIVE", "HANDWRITTEN", "SIMPLE", "TYPEWRITER"} <= set(names)
     assert list(auto_edit.CAPTION_STYLES) == names
-    assert [s for s in webui.CAPTION_STYLES if s not in ("AUTO", "RANDOM")] == names
-    assert [v for _, v in webui.CAPTION_CHOICES] == names
+    web = open(os.path.join(root, "webui.py"), encoding="utf-8").read()          # read as text: the page needs gradio, CI has none
+    listed = re.search(r"^CAPTION_STYLES = \[(.*?)\]", web, re.S | re.M).group(1)
+    assert [s for s in re.findall(r'"([A-Z_]+)"', listed) if s not in ("AUTO", "RANDOM")] == names
+    choices = re.search(r"^CAPTION_CHOICES = \[(.*?)\]" + chr(10), web, re.S | re.M).group(1)
+    assert re.findall(r'", "([A-Z_]+)"\)', choices) == names
     tsx = open(os.path.join(root, "remotion-video", "src", "ShortFlow.tsx"), encoding="utf-8").read()
     enum = re.search(r"captionStyle: z\.enum\(\[(.*?)\]\)", tsx, re.S).group(1)
     assert re.findall(r'"([A-Z_]+)"', enum) == names
@@ -146,8 +148,12 @@ def test_bundled_fonts_are_really_loaded_by_the_bundler():
     pkg = json.load(open(os.path.join(root, "package.json"), encoding="utf-8"))
     assert "./src/fonts.ts" in pkg.get("sideEffects", []), "fonts.ts must be listed in sideEffects or it is tree-shaken away"
     fonts = open(os.path.join(root, "src", "fonts.ts"), encoding="utf-8").read()
-    for family, file in (("Anton", "Anton-Regular.ttf"), ("Caveat", "Caveat.ttf"), ("JetBrainsMono", "JetBrainsMono.ttf")):
-        assert f'load("{family}", "fonts/{file}"' in fonts
+    shortflow = open(os.path.join(root, "src", "ShortFlow.tsx"), encoding="utf-8").read()
+    assert 'load("Anton", "fonts/Anton-Regular.ttf"' in fonts and "SOFT_TIMEOUT_MS" in fonts          # a font can never hold a render for long
+    for style, family, file in (("HANDWRITTEN", "Caveat", "Caveat.ttf"), ("TYPEWRITER", "JetBrainsMono", "JetBrainsMono.ttf")):
+        assert f'{style}: ["{family}", "fonts/{file}"' in shortflow                                  # loaded only for the style that needs it
+        assert f'"{family}"' not in fonts
+    for file in ("Anton-Regular.ttf", "Caveat.ttf", "JetBrainsMono.ttf"):
         assert os.path.getsize(os.path.join(root, "public", "fonts", file)) > 50_000
     for lic in ("LICENSE-Caveat.txt", "LICENSE-JetBrainsMono.txt"):
         assert "SIL Open Font License" in open(os.path.join(root, "public", "fonts", lic), encoding="utf-8").read()
