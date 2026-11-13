@@ -98,14 +98,18 @@ Vertical clips cut from a long video are one continuous picture, so this does no
 
 ## The highlights video (`--extract_mode long`)
 
-The compiled highlights video is 16:9 and is joined by FFmpeg, so it supports less than the vertical clips:
+The compiled highlights video is a long landscape (16:9) video joined by FFmpeg, so it cannot be drawn frame by frame in the animated renderer (a 10 minute video is 18,000 frames). Instead, short transparent pieces are rendered for its start and end and laid over it in one FFmpeg pass.
 
 | | Highlights video | Vertical clips |
 | :-- | :-- | :-- |
 | Transitions between moments | Yes: `--transitions` with `dissolve`, `punch`, `whip`, `flash`, `glitch`, `mix` and the FFmpeg looks `iris`, `blinds`, `panels`, `wipe`, `radial`, `slice`, `pixelize`, `squeeze` | Pieces of one clip only |
+| Intro and outro covers (`--intro_animation`, `--outro_animation`) | Yes: first and last second | Yes |
+| Visual template (`--visual_template`) | Opening piece (first 7 s: name tag, headline) and closing piece (last 3 s: closing line). Always-on elements (progress bar, frame, bars) show in those two pieces only | Whole clip |
 | Captions | Plain burned-in words with `--reel_captions` | Animated styles |
 | Clip templates (`--auto_edit`) | Only the default transition of the style | Yes |
-| Visual templates, intro and outro covers, B-roll | Not yet | Yes |
+| B-roll | Not yet | Yes |
+
+The whole video is re-encoded once for the overlay (audio is copied); the time depends on the length and the PC. If the overlay cannot be made, the video is left as it was and a warning says why.
 
 The FFmpeg looks are for the highlights video only; a recap or a clip gets plain cuts. FFmpeg cannot do the flying-tiles effect (`pixelize` is the closest).
 

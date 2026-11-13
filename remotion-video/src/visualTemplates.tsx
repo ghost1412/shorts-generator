@@ -3,6 +3,7 @@
 // shows made-up names or handles. The picture itself (crop, captions, hook) is untouched.
 import React, { createContext, useContext } from "react";
 import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { ClockContext } from "./clock";
 import { z } from "zod";
 
 export const VISUAL_TEMPLATES = ["podcast-card", "neon-frame", "news-banner", "minimal-line", "title-bars", "retro-vhs", "film-bars", "polaroid", "episode-badge", "story-progress"] as const;
@@ -35,8 +36,9 @@ const clean = (s: string | undefined, max: number) => {
 const useProgress = () => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
-  const t = frame / fps;
-  const total = durationInFrames / fps;
+  const clock = useContext(ClockContext);
+  const t = (clock ? clock.offset : 0) + frame / fps;
+  const total = clock ? clock.total : durationInFrames / fps;
   return { frame, fps, t, total, progress: Math.min(1, Math.max(0, t / Math.max(0.1, total))) };
 };
 

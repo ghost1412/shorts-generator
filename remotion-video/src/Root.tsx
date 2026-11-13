@@ -1,6 +1,7 @@
 import "./index.css";
 import { Composition } from "remotion";
 import { ShortFlow, shortFlowSchema } from "./ShortFlow";
+import { OverlayOnly, overlaySchema } from "./overlay";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -51,6 +52,16 @@ export const RemotionRoot: React.FC = () => {
           ],
           backgrounds: [],
         }}
+      />
+      <Composition
+        id="Overlay"
+        component={OverlayOnly}
+        fps={30}
+        width={1080}
+        height={1920}
+        schema={overlaySchema}
+        calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, Math.ceil(props.seconds * 30)) })}
+        defaultProps={{ hookSeconds: 0, seconds: 3, clockOffset: 0, clockTotal: 10 }}
       />
     </>
   );

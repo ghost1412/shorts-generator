@@ -2705,6 +2705,16 @@ def finish_segment_processes(procs):
             print(f"[Warning] Could not finish segment {os.path.basename(final)}: {e}")
 
 
+def _overlay_on_long_video(video, codec, quality_params):
+    """--visual_template / --intro_animation / --outro_animation on the highlights video: short transparent pieces laid over it (engine/overlay.py)."""
+    try:
+        from engine import overlay
+        from engine.visual_template import props_from_env
+        overlay.apply_to_video(video, props_from_env(), codec=codec, quality_params=quality_params)
+    except Exception as e:
+        print(f"[Warning] Template / covers skipped for the highlights video: {e}")
+
+
 def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None, enhance="off", enhance_strength="medium", transitions="none"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
@@ -2953,6 +2963,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                            transitions=xfade_names(transitions, len(parts))):
                 for clip in clips: clip.close()
                 print(f"[Log] Highlight reel rendered with FFmpeg: {out}")
+                _overlay_on_long_video(out, ff_codec, ff_params)
                 extracted_files.append(out)
                 return extracted_files
             print("[Warning] FFmpeg reel render failed; falling back to MoviePy.")
@@ -2995,6 +3006,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
                 print(f"[Warning] Reel captions failed ({e}); keeping the reel without captions.")
                 if os.path.exists(plain_out) and plain_out != out:
                     os.replace(plain_out, out)
+        _overlay_on_long_video(out, encode_codec, quality_params)
         extracted_files.append(out)
         return extracted_files  # without this, a fresh long-form run returned None and the CLI reported "No videos were generated"
     else:

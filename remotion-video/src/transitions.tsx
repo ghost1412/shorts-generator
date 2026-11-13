@@ -5,8 +5,9 @@
 //   iris   - a circle opens / closes
 //   blinds - horizontal slats open / close
 //   fade   - a plain fade from / to the colour
-import React from "react";
+import React, { useContext } from "react";
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { ClockContext } from "./clock";
 
 export const TRANSITIONS = ["tiles", "panels", "iris", "blinds", "fade"] as const;
 export type TransitionName = (typeof TRANSITIONS)[number];
@@ -96,8 +97,9 @@ const Blinds: React.FC<{ cover: number; color: string }> = ({ cover, color }) =>
 export const TransitionLayer: React.FC<{ intro?: string; outro?: string; color?: string }> = ({ intro, outro, color = "#0b0c10" }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
-  const total = durationInFrames / fps;
-  const t = frame / fps;
+  const clock = useContext(ClockContext);
+  const total = clock ? clock.total : durationInFrames / fps;
+  const t = (clock ? clock.offset : 0) + frame / fps;
   const dur = Math.max(0.3, Math.min(0.9, total / 4));
   let name: string | undefined;
   let p = 0;

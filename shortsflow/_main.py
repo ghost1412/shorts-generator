@@ -246,7 +246,7 @@ def parse_args():
     except ValueError as e:
         parser.error(str(e))
     if args.visual_template:
-        if not args.use_remotion:
+        if not args.use_remotion and args.extract_mode != "long":
             args.use_remotion = True
             print("[Log] Visual template: animated captions turned on (the template is drawn by the animated renderer).")
         print(f"[Log] 🎨 Visual template '{args.visual_template}'" + (f" with text: {', '.join(template_text)}" if template_text else " (no text given: only the design is drawn)"))
@@ -257,7 +257,7 @@ def parse_args():
     except ValueError as e:
         parser.error(str(e))
     if args.intro_animation or args.outro_animation:
-        if not args.use_remotion:
+        if not args.use_remotion and args.extract_mode != "long":
             args.use_remotion = True
             print("[Log] Transitions: animated captions turned on (the transitions are drawn by the animated renderer).")
         print(f"[Log] 🎞️ Transitions: intro {args.intro_animation or 'none'}, outro {args.outro_animation or 'none'}")
