@@ -140,20 +140,20 @@ def test_every_list_of_caption_styles_agrees_and_each_style_has_a_preview():
     assert json.dumps(names)
 
 
-def test_bundled_fonts_are_really_loaded_by_the_bundler():
-    """remotion-video/package.json once said sideEffects: ["*.css"], so the bundler dropped `import "./fonts"` and no bundled font ever loaded."""
+def test_style_fonts_are_bundled_and_loaded_only_for_their_style():
+    """Caveat (HANDWRITTEN) and JetBrains Mono (TYPEWRITER) load only when their style is used, through src/loadFont.ts. fonts.ts (Anton, Noto)
+    is still dropped by the bundler (package.json sideEffects lists only *.css); enabling it stalled a browser tab in the CI render."""
     import json
     import os
     root = os.path.join(os.path.dirname(__file__), "..", "remotion-video")
     pkg = json.load(open(os.path.join(root, "package.json"), encoding="utf-8"))
-    assert "./src/fonts.ts" in pkg.get("sideEffects", []), "fonts.ts must be listed in sideEffects or it is tree-shaken away"
-    fonts = open(os.path.join(root, "src", "fonts.ts"), encoding="utf-8").read()
+    assert "./src/fonts.ts" not in pkg.get("sideEffects", []), "do not enable fonts.ts without a passing CI E2E render (see the note in fonts.ts)"
     shortflow = open(os.path.join(root, "src", "ShortFlow.tsx"), encoding="utf-8").read()
-    assert 'load("Anton", "fonts/Anton-Regular.ttf"' in fonts and "SOFT_TIMEOUT_MS" in fonts          # a font can never hold a render for long
+    loader = open(os.path.join(root, "src", "loadFont.ts"), encoding="utf-8").read()
+    assert 'from "./loadFont"' in shortflow and 'from "./fonts"' not in shortflow         # importing fonts.ts would run its loads
+    assert "SOFT_TIMEOUT_MS" in loader
     for style, family, file in (("HANDWRITTEN", "Caveat", "Caveat.ttf"), ("TYPEWRITER", "JetBrainsMono", "JetBrainsMono.ttf")):
-        assert f'{style}: ["{family}", "fonts/{file}"' in shortflow                                  # loaded only for the style that needs it
-        assert f'"{family}"' not in fonts
-    for file in ("Anton-Regular.ttf", "Caveat.ttf", "JetBrainsMono.ttf"):
+        assert f'{style}: ["{family}", "fonts/{file}"' in shortflow
         assert os.path.getsize(os.path.join(root, "public", "fonts", file)) > 50_000
     for lic in ("LICENSE-Caveat.txt", "LICENSE-JetBrainsMono.txt"):
         assert "SIL Open Font License" in open(os.path.join(root, "public", "fonts", lic), encoding="utf-8").read()

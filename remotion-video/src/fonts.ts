@@ -1,3 +1,6 @@
+// NOTE (2026-11-13): package.json lists only *.css under sideEffects, so the bundler drops `import "./fonts"` and NONE of these loads run:
+// captions use the machine's own fonts. Listing this file made every font load for the first time, and on GitHub's runner a browser
+// tab then stalled in the first font (E2E render failed after 58 s, soft timeout or not). Fix it only together with a CI run.
 // Bundled OFL caption fonts so captions look the same on every machine:
 //  - Anton (similar to Impact) for Latin text
 //  - Noto Sans (bold, Latin + Greek + Cyrillic subset) so Russian/Ukrainian/Bulgarian/Greek captions are not boxes (Anton has no Cyrillic)
@@ -6,30 +9,9 @@
 //    and passes it as the `extraFont` prop, loaded in ShortFlow.tsx as family "NotoCJK".
 //  - Noto Sans Devanagari, so Hindi/Marathi/Sanskrit captions do not render as empty boxes on machines (CI, Docker)
 //    that have no Devanagari system font. The browser falls back to it per character, right after Anton.
-import { continueRender, delayRender, staticFile } from "remotion";
 
-const SOFT_TIMEOUT_MS = 8000;
+import { loadFont } from "./loadFont";
 
-// Never lets a font hold a render: a font that fails or is slower than SOFT_TIMEOUT_MS is given up on and the browser falls back to
-// Impact / Arial Black / system fonts (a GitHub runner once waited 178 s for one font and failed the render).
-export const loadFont = (family: string, file: string, weight?: string) => {
-  const handle = delayRender(`Loading ${family} caption font`, { timeoutInMilliseconds: 60000 });
-  let done = false;
-  const finish = () => {
-    if (done) return;
-    done = true;
-    clearTimeout(timer);
-    continueRender(handle);
-  };
-  const timer = setTimeout(finish, SOFT_TIMEOUT_MS);
-  new FontFace(family, `url(${staticFile(file)})`, weight ? { weight } : undefined)
-    .load()
-    .then((font) => {
-      document.fonts.add(font);
-      finish();
-    })
-    .catch(finish);
-};
 const load = loadFont;
 
 load("Anton", "fonts/Anton-Regular.ttf");

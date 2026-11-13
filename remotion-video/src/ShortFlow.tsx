@@ -3,7 +3,7 @@ import { zoomScaleAt } from "./autoZoom";
 import { TemplateLayer, templateTextSchema, VISUAL_TEMPLATES } from "./visualTemplates";
 import { TransitionLayer, TRANSITIONS } from "./transitions";
 import { SegmentTransitionSeries, SEGMENT_TRANSITIONS, canTransition } from "./segmentTransitions";
-import { loadFont } from "./fonts";
+import { loadFont } from "./loadFont";
 import {
   Audio,
   OffthreadVideo,

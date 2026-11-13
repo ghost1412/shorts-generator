@@ -5,7 +5,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 - Seven new caption styles (`--caption_style`): MARKER (highlighter sweep), SOFT (clean words fading in), WORDCUT (words cut in), NEGATIVE (keyword in a muted tone), HANDWRITTEN (script with an underline), SIMPLE (tall plain capitals) and TYPEWRITER (typed letter by letter). Each has a preview picture in the browser app's picker. Fonts Caveat and JetBrains Mono (SIL OFL) are bundled.
-- Fixed: the bundled caption fonts (Anton, Noto Sans for Cyrillic, Devanagari and Arabic) were never loaded, because `remotion-video/package.json` told the bundler that only CSS files have side effects and it dropped `import "./fonts"`. Captions used whatever fonts the machine had. They are loaded now, so captions look the same everywhere.
+- Known issue, not fixed: the bundled caption fonts (Anton, Noto Sans for Cyrillic, Devanagari and Arabic) are never loaded, because `remotion-video/package.json` tells the bundler that only CSS files have side effects and it drops `import "./fonts"`. Captions use the machine's own fonts. Turning the import on stalled a browser tab in the E2E render on GitHub's runner, so it is left off until it can be tested there. Caveat and JetBrains Mono (the two new styles) are loaded only when their style is used.
 - Fixed: the letterbox check could report an impossible crop window (for example negative sizes on a video that starts black), which made FFmpeg fail on every clip that used the plain face crop: those clips were dropped silently. Such a window is now ignored, a clip cut that fails on the GPU encoder is retried once on the CPU, and any cut that still fails is reported.
 
 ## 0.7.8 (2026-11-13)
