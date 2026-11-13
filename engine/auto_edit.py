@@ -105,6 +105,17 @@ ANIMATIONS = {
 }
 ANIMATION_NAMES = tuple(ANIMATIONS)
 
+# Transitions between the background clips or photos of a video (Remotion's @remotion/transitions): photo reels and the idea-to-video modes.
+SEGMENT_TRANSITIONS = {
+    "fade": {"label": "Fade", "about": "A smooth crossfade between the clips or photos."},
+    "slide": {"label": "Slide", "about": "The next picture slides in and pushes the old one away."},
+    "wipe": {"label": "Wipe", "about": "The next picture is wiped in from the side."},
+    "flip": {"label": "Flip", "about": "The picture flips over to show the next one."},
+    "clock-wipe": {"label": "Clock wipe", "about": "A clock hand sweeps round and reveals the next picture."},
+    "iris": {"label": "Iris", "about": "A circle opens from the centre onto the next picture."},
+}
+SEGMENT_TRANSITION_NAMES = tuple(SEGMENT_TRANSITIONS)
+
 # ---- your own templates: a JSON file per template in ./templates/ (next to the program) or ~/.shortsflow/templates/
 # (or the folder in $SHORTSFLOW_TEMPLATES). The file name is the template's name. See docs/TEMPLATES.md.
 CAPTION_STYLES = ("HORMOZI", "GLOW_BOX", "BOUNCE", "MINIMAL", "KARAOKE", "NEON", "BAR")

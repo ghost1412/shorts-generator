@@ -2,6 +2,7 @@ import { emojiForWord, emojiFileName } from "./captionEmoji";
 import { zoomScaleAt } from "./autoZoom";
 import { TemplateLayer, templateTextSchema, VISUAL_TEMPLATES } from "./visualTemplates";
 import { TransitionLayer, TRANSITIONS } from "./transitions";
+import { SegmentTransitionSeries, SEGMENT_TRANSITIONS, canTransition } from "./segmentTransitions";
 import {
   Audio,
   OffthreadVideo,
@@ -166,6 +167,7 @@ export const shortFlowSchema = z.object({
   introAnimation: z.enum(TRANSITIONS).optional(), // --intro_animation: a cover that opens over the first second (src/transitions.tsx)
   outroAnimation: z.enum(TRANSITIONS).optional(), // --outro_animation: a cover that closes over the last second
   animationColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), // colour of that cover
+  segmentTransition: z.enum(SEGMENT_TRANSITIONS).optional(), // --segment_transition: how the background clips or photos join (@remotion/transitions); default = the plain crossfade
   reelStyle: reelStyleSchema.optional(), // PHOTO_REEL type look (flash / motion / colour grade / accent)
   zoomMoments: z.array(z.object({ start: z.number(), end: z.number(), scale: z.number(), rise: z.number() })).optional(), // --auto_zoom: picture-layer punch-ins (captions never zoom)
   extraFont: z.object({ family: z.string(), url: z.string() }).optional(), // per-render CJK subset font (static file path)
@@ -712,7 +714,8 @@ const BackgroundSegment: React.FC<{
   durationInFrames: number;
   isFirst: boolean;
   zoomMoments?: { start: number; end: number; scale: number; rise: number }[];
-}> = ({ bg, fps, durationInFrames, isFirst, zoomMoments }) => {
+  noFade?: boolean; // a transition between segments does the fading
+}> = ({ bg, fps, durationInFrames, isFirst, zoomMoments, noFade }) => {
   const frame = useCurrentFrame();
   
   // Smooth continuous camera zoom (Ken Burns)
@@ -759,7 +762,7 @@ const BackgroundSegment: React.FC<{
   );
 
   return (
-    <AbsoluteFill style={{ transform: `scale(${activeScale})`, transformOrigin: "center", opacity, backgroundColor: "#000" }}>
+    <AbsoluteFill style={{ transform: `scale(${activeScale})`, transformOrigin: "center", opacity: noFade ? 1 : opacity, backgroundColor: "#000" }}>
       {bg.type === "video" ? (
         clipFrames > 0 && clipFrames < durationInFrames ? (
           <Loop durationInFrames={clipFrames}>{videoEl}</Loop>
@@ -837,7 +840,8 @@ const PhotoReelSegment: React.FC<{
   segmentIndex: number;
   isFirst: boolean;
   reelStyle?: z.infer<typeof reelStyleSchema>;
-}> = ({ bg, fps, durationInFrames, segmentIndex, isFirst, reelStyle }) => {
+  noFade?: boolean;
+}> = ({ bg, fps, durationInFrames, segmentIndex, isFirst, reelStyle, noFade }) => {
   const frame = useCurrentFrame();
   const flashK = reelStyle?.flash ?? 1;
   const motionK = reelStyle?.motion ?? 1;
@@ -908,7 +912,7 @@ const PhotoReelSegment: React.FC<{
   const isPortrait = bg.orientation === "portrait";
 
   return (
-    <AbsoluteFill style={{ opacity, backgroundColor: "#060608" }}>
+    <AbsoluteFill style={{ opacity: noFade ? 1 : opacity, backgroundColor: "#060608" }}>
       {/* Background Ambient Blur Layer (for landscape photos) */}
       {!isPortrait && (
         <div style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0, overflow: "hidden" }}>
@@ -1271,6 +1275,7 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
   introAnimation,
   outroAnimation,
   animationColor,
+  segmentTransition,
   zoomMoments,
   reelStyle,
   extraFont,
@@ -1571,7 +1576,13 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
       ) : mode === "PHOTO_REEL" ? (
         // Pro Photo Reel Mode with Spring Physics & Flash Cut Transitions
         <div style={{ width: "100%", height: "100%", position: "relative" }}>
-          {backgrounds.map((bg, idx) => {
+          {segmentTransition && canTransition(backgrounds, fps) ? (
+            <SegmentTransitionSeries
+              items={backgrounds}
+              kind={segmentTransition}
+              render={(idx, dur) => <PhotoReelSegment bg={backgrounds[idx]} fps={fps} durationInFrames={dur} segmentIndex={idx} isFirst={idx === 0} reelStyle={reelStyle} noFade />}
+            />
+          ) : backgrounds.map((bg, idx) => {
             const startFrame = Math.round(bg.start * fps);
             const endFrame = Math.round(bg.end * fps);
             const isLast = idx === backgrounds.length - 1;
@@ -1598,7 +1609,13 @@ export const ShortFlow: React.FC<ShortFlowProps> = ({
       ) : (
         // Standard modes (FACTS, STORY, NEWS, RIDDLE) with background loops
         <div style={{ width: "100%", height: "100%", position: "relative" }}>
-          {backgrounds.map((bg, idx) => {
+          {segmentTransition && canTransition(backgrounds, fps) ? (
+            <SegmentTransitionSeries
+              items={backgrounds}
+              kind={segmentTransition}
+              render={(idx, dur) => <BackgroundSegment bg={backgrounds[idx]} fps={fps} durationInFrames={dur} isFirst={idx === 0} zoomMoments={zoomMoments} noFade />}
+            />
+          ) : backgrounds.map((bg, idx) => {
             const startFrame = Math.round(bg.start * fps);
             const endFrame = Math.round(bg.end * fps);
             const isLast = idx === backgrounds.length - 1;

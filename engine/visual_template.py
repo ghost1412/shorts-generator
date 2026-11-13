@@ -7,13 +7,14 @@ import json
 import os
 import re
 
-from engine.auto_edit import ANIMATIONS, ANIMATION_NAMES, VISUAL_TEMPLATE_NAMES, VISUAL_TEMPLATES
+from engine.auto_edit import ANIMATIONS, ANIMATION_NAMES, SEGMENT_TRANSITIONS, SEGMENT_TRANSITION_NAMES, VISUAL_TEMPLATE_NAMES, VISUAL_TEMPLATES
 
 TEXT_KEYS = ("show", "speaker", "role", "handle", "headline", "label", "cta")
 MAX_TEXT = 80
 ENV_NAME, ENV_TEXT, ENV_ACCENT = "SHORTSFLOW_VISUAL_TEMPLATE", "SHORTSFLOW_TEMPLATE_TEXT", "SHORTSFLOW_TEMPLATE_ACCENT"
 ENV_INTRO, ENV_OUTRO, ENV_ANIM_COLOR = "SHORTSFLOW_INTRO_ANIM", "SHORTSFLOW_OUTRO_ANIM", "SHORTSFLOW_ANIM_COLOR"
-ALL_ENV = (ENV_NAME, ENV_TEXT, ENV_ACCENT, ENV_INTRO, ENV_OUTRO, ENV_ANIM_COLOR)
+ENV_SEGMENT = "SHORTSFLOW_SEGMENT_TRANSITION"
+ALL_ENV = (ENV_NAME, ENV_TEXT, ENV_ACCENT, ENV_INTRO, ENV_OUTRO, ENV_ANIM_COLOR, ENV_SEGMENT)
 
 
 def parse_text(items):
@@ -71,10 +72,23 @@ def set_animation_env(intro=None, outro=None, color=None, environ=None):
         environ.pop(ENV_ANIM_COLOR, None)
 
 
+def set_segment_env(name=None, environ=None):
+    """Export the transition between background clips / photos. An empty name clears it."""
+    environ = os.environ if environ is None else environ
+    if name and name not in SEGMENT_TRANSITIONS:
+        raise ValueError(f"Unknown segment transition {name!r}. Choose one of: {', '.join(SEGMENT_TRANSITION_NAMES)}")
+    if name:
+        environ[ENV_SEGMENT] = name
+    else:
+        environ.pop(ENV_SEGMENT, None)
+
+
 def props_from_env(environ=None):
     """The Remotion props for the chosen template and transitions ({} when none is chosen)."""
     environ = os.environ if environ is None else environ
     props = {}
+    if environ.get(ENV_SEGMENT) in SEGMENT_TRANSITIONS:
+        props["segmentTransition"] = environ[ENV_SEGMENT]
     for env_key, prop in ((ENV_INTRO, "introAnimation"), (ENV_OUTRO, "outroAnimation")):
         if environ.get(env_key) in ANIMATIONS:
             props[prop] = environ[env_key]

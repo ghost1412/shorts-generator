@@ -84,6 +84,18 @@ shortsflow clip interview.mp4 --captions --visual_template neon-frame --intro_an
 
 A clip template of your own can set `"intro_animation"` and `"outro_animation"`. These are the start and end of each clip; effects between cuts inside a clip are not built yet. Previews: `python scripts/render_template_previews.py --animations`.
 
+## Transitions between background clips and photos (`--segment_transition`)
+
+For photo reels and the idea-to-video modes that use several background clips or photos, the joins can use Remotion's own transitions (the `@remotion/transitions` package). The default stays the plain crossfade. The cut times do not move, so captions and voice stay in step.
+
+`fade`, `slide` (the next picture pushes the old one away), `wipe`, `flip`, `clock-wipe`, `iris`.
+
+```bash
+python main.py --mode FACTS --category "space mysteries" --use_remotion --segment_transition slide
+```
+
+Vertical clips cut from a long video are one continuous picture, so this does not apply to them; use `--intro_animation` / `--outro_animation` there. The package also offers shader-based looks (cross-zoom, ripple, film burn and others); they need a newer browser feature and are not enabled.
+
 ## The highlights video (`--extract_mode long`)
 
 The compiled highlights video is 16:9 and is joined by FFmpeg, so it supports less than the vertical clips:

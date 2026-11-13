@@ -136,3 +136,20 @@ def test_files_the_tests_and_docs_rely_on_are_not_git_ignored():
     paths += [f"docs/templates/anim-{n}.mp4" for n in auto_edit.ANIMATION_NAMES]
     ignored = [p for p in paths if subprocess.run([git, "check-ignore", "-q", p], cwd=root).returncode == 0]
     assert not ignored, f"git-ignored: {ignored}"
+
+
+def test_segment_transition_env_and_names_agree_with_remotion():
+    env = {}
+    visual_template.set_segment_env("iris", env)
+    assert visual_template.props_from_env(env) == {"segmentTransition": "iris"}
+    visual_template.set_segment_env(None, env)
+    assert visual_template.props_from_env(env) == {}
+    with pytest.raises(ValueError, match="Unknown segment transition"):
+        visual_template.set_segment_env("explode", {})
+    root = os.path.join(os.path.dirname(auto_edit.__file__), "..", "remotion-video", "src")
+    tsx = open(os.path.join(root, "segmentTransitions.tsx"), encoding="utf-8").read()
+    listed = re.search(r"SEGMENT_TRANSITIONS = \[(.*?)\] as const", tsx, re.S).group(1)
+    assert tuple(re.findall(r'"([a-z-]+)"', listed)) == auto_edit.SEGMENT_TRANSITION_NAMES
+    pkg = open(os.path.join(root, "..", "package.json"), encoding="utf-8").read()
+    assert '"@remotion/transitions"' in pkg
+    assert all(auto_edit.SEGMENT_TRANSITIONS[n]["about"] for n in auto_edit.SEGMENT_TRANSITION_NAMES)

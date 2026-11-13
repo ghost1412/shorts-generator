@@ -115,6 +115,7 @@ def parse_args():
     parser.add_argument("--intro_animation", choices=list(_auto_edit.ANIMATION_NAMES), help="A cover that opens over the first second of each clip: tiles (a grid of tiles breaks apart and flies away), panels (two doors), iris (a circle), blinds (slats), fade. Needs --use_remotion (turned on for you). Previews: docs/templates/.")
     parser.add_argument("--outro_animation", choices=list(_auto_edit.ANIMATION_NAMES), help="A cover that closes over the last second of each clip (tiles fly in and join, doors close, ...). Same choices as --intro_animation.")
     parser.add_argument("--animation_color", help="Colour of the intro / outro cover as a hex code, e.g. #0B0C10 (default dark).")
+    parser.add_argument("--segment_transition", choices=list(_auto_edit.SEGMENT_TRANSITION_NAMES), help="How the background clips or photos of a video join (Remotion's transitions): fade, slide, wipe, flip, clock-wipe, iris. Applies to photo reels and the idea-to-video modes that use several backgrounds; default is the plain crossfade.")
     parser.add_argument("--hook_overlay", action="store_true", help="Show the clip's hook as a big title for the first ~3 seconds (clipping with --use_remotion).")
     parser.add_argument("--auto_zoom", action="store_true", help="Subtle punch-in / slow push-in on the picture at emphasised words and sentence starts (clipping with --use_remotion; not with --layout split_filler).")
     parser.add_argument("--brand", help="brand.json preset (logo, handle, end card) burned into finished clips.")
@@ -262,6 +263,12 @@ def parse_args():
         print(f"[Log] 🎞️ Transitions: intro {args.intro_animation or 'none'}, outro {args.outro_animation or 'none'}")
     elif args.animation_color:
         print("[Warning] --animation_color needs --intro_animation or --outro_animation; it is ignored.")
+    try:
+        _vt.set_segment_env(args.segment_transition)
+    except ValueError as e:
+        parser.error(str(e))
+    if args.segment_transition:
+        print(f"[Log] Segment transition: {args.segment_transition} (photo reels and idea-to-video modes with several backgrounds)")
     if args.stat_pops:
         os.environ["SHORTSFLOW_STAT_POPS"] = "1"
         if not args.use_remotion:
