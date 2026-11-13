@@ -5,7 +5,6 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 ## Unreleased
 
 - Clip templates: six new built-in `--auto_edit` styles (minimal, news, storytime, motivation, tutorial, cinematic) and your own as JSON files in `templates/` or `~/.shortsflow/templates/` (a template can start from another with `based_on`; a bad file is skipped with a warning). They show up in the command line and in the browser app's Auto-edit list. See docs/TEMPLATES.md.
-
 - Removed the hosted-dashboard job reporting (Supabase job status, per-user YouTube credentials, `--user_id`, `decrypt_secret`, the `cryptography` dependency). `--video_id` stays as an optional session-folder name. Supabase storage is still used only for Instagram Reel hosting (falls back to file.io).
 - The hook-cue bonus needs a short number, price or percent (a year no longer counts); "No. 5" is not a sentence end; a closing curly quote after "..." is recognised; a sliver at the end of a pause no longer cuts a quiet stretch short.
 - Browser app: a clip picked by the failsafe (analysis failed, fixed window) shows a warning on its card; `fallback: true` is written to the results file.
