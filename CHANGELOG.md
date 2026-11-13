@@ -2,6 +2,10 @@
 
 Release notes for the `shortsflow` package and the Windows installer. Newest first.
 
+## Unreleased
+
+- Fixed: the letterbox check could report an impossible crop window (for example negative sizes on a video that starts black), which made FFmpeg fail on every clip that used the plain face crop: those clips were dropped silently. Such a window is now ignored, a clip cut that fails on the GPU encoder is retried once on the CPU, and any cut that still fails is reported.
+
 ## 0.7.8 (2026-11-13)
 
 - Scheduled runs (the daily channel workflow) pick their mode by a weighted rotation, not by dice: every 4-hour slot gets the next mode, the weights are met exactly and the same mode never comes twice in a row. Random draws had given streaks (three "spot the lie" runs in a row). `SCHEDULED_MODE` still sets a fixed mode or your own weights.

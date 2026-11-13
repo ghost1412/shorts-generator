@@ -9,6 +9,21 @@ import numpy as np
 # VIDEO SOURCE INTELLIGENCE UTILITIES
 # ─────────────────────────────────────────────────────────────────────────────
 
+def usable_crop(crop, width=None, height=None):
+    """True when a cropdetect result 'crop=w:h:x:y' is a real window: positive size, not negative offsets, and (when the frame size is known)
+    inside the frame. cropdetect can report nonsense such as 'crop=-1264:-704:1274:714' on a video that starts black; such a filter
+    makes FFmpeg fail on every clip that uses it."""
+    try:
+        w, h, x, y = (int(v) for v in str(crop).replace("crop=", "").split(":")[:4])
+    except (TypeError, ValueError):
+        return False
+    if w < 16 or h < 16 or x < 0 or y < 0:
+        return False
+    if width and height and (x + w > width or y + h > height):
+        return False
+    return True
+
+
 def detect_letterbox(video_path):
     """
     Detects letterbox/pillarbox black bars using FFmpeg cropdetect.
@@ -36,6 +51,9 @@ def detect_letterbox(video_path):
         # Use the most common value (mode)
         from collections import Counter
         most_common = Counter(crop_values).most_common(1)[0][0]
+        if not usable_crop(most_common):
+            print(f"[Warning] Letterbox check ignored an impossible crop window ({most_common}); the picture is used as it is.")
+            return None
         # Check if this actually removes bars (skip if it's the full frame)
         try:
             parts = most_common.replace('crop=', '').split(':')
@@ -52,6 +70,9 @@ def detect_letterbox(video_path):
                         ow, oh = int(m.group(1)), int(m.group(2))
                         if cw >= ow * 0.98 and ch >= oh * 0.98:
                             return None  # No meaningful crop needed
+                        if not usable_crop(most_common, ow, oh):
+                            print(f"[Warning] Letterbox check ignored a crop window outside the {ow}x{oh} picture ({most_common}).")
+                            return None
                         break
         except Exception:
             pass

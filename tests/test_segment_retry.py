@@ -43,3 +43,11 @@ def test_a_failure_with_no_retry_is_reported_not_silent(tmp_path, capsys):
     final = str(tmp_path / "seg_1.mp4")
     video_gen.finish_segment_processes([(FailedProc(), str(tmp_path / "seg_1.part.mp4"), final)])
     assert "[Error] Segment seg_1.mp4" in capsys.readouterr().out and not os.path.exists(final)
+
+
+def test_usable_crop_rejects_impossible_cropdetect_windows():
+    from engine.analysis import usable_crop
+    assert not usable_crop("crop=-1264:-704:1274:714")                 # the real result that broke a whole run (negative size)
+    assert not usable_crop("crop=1280:720:-8:0") and not usable_crop("crop=0:0:0:0") and not usable_crop("crop=abc") and not usable_crop(None)
+    assert usable_crop("crop=1920:800:0:140") and usable_crop("crop=1920:800:0:140", 1920, 1080)
+    assert not usable_crop("crop=1920:800:0:400", 1920, 1080)          # runs off the bottom of the picture
