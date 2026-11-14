@@ -648,11 +648,13 @@ def _stream_clip(cmd, results, long_form, minutes, find, plan_only=False):
 
 def latest_plan(root):
     """The newest Start here session if it has a plan that was not rendered yet: {"session", "moments", "total"}, else None."""
+    import time
     from engine.plan import read_plan
     from shortsflow import word_edit
     for d in sorted(glob.glob(os.path.join(root, "sessions", "web_*")), reverse=True)[:1]:
         plan = read_plan(d)
-        if plan and not os.path.isfile(os.path.join(d, "results.json")):
+        recent = time.time() - os.path.getmtime(os.path.join(d, "plan.json")) < 24 * 3600 if plan else False    # an old plan does not come back
+        if plan and recent and not os.path.isfile(os.path.join(d, "results.json")) and not os.path.isfile(os.path.join(d, "plan_dismissed")):
             words = word_edit.load_words(d)
             ends = [m["end"] for m in plan["moments"]] + [w["end"] for w in words if w.get("end") is not None]
             source = plan.get("source_video") or ""
@@ -713,6 +715,16 @@ def render_plan(session, *values):
         cmd.append("--use_cache")                 # the transcript from the analysis is reused
     save_command(session, cmd)
     yield from _stream_clip(cmd, os.path.join(session, "results.json"), False, 4, "")
+
+
+def dismiss_plan_handler(session):
+    def run():
+        try:
+            open(os.path.join(session, "plan_dismissed"), "w").close()      # a marker, nothing is deleted
+        except OSError:
+            pass
+        return None
+    return run
 
 
 def render_plan_handler(session):
@@ -1106,7 +1118,9 @@ def build_ui():
                         t1s.append(t1)
                     own = gr.Textbox(label="Add your own moments (optional, one per line)", lines=2, placeholder="7:00-7:45",
                                      info="Rendered together with the ones kept above. Minutes:seconds, e.g. 7:00-7:45 or 1:01:40-1:02:30.")
-                    go_plan = gr.Button("🎬 Render these moments", variant="primary")
+                    dismiss = gr.Button("Discard this plan", size="sm")
+                    dismiss.click(dismiss_plan_handler(plan["session"]), None, q_plan)
+                    go_plan = gr.Button("Render these moments", variant="primary")
                     go_plan.click(render_plan_handler(plan["session"]), [*keeps, *t0s, *t1s, own], [q_status, q_log, q_cards]
                                   ).then(lambda: None, None, q_plan)
 
@@ -1129,8 +1143,9 @@ def build_ui():
                                 gr.Markdown(f"### {c['title']}\n**{score}**{dur}" + (f"  \n_{c['reason']}_" if c.get("reason") else "")
                                             + (f"  \n🎬 Edited: {c['edit_summary']}" if c.get("edit_summary") else "")
                                             + ("  \n⚠️ Fallback pick: the analysis failed, so this is a fixed window, not a chosen moment." if c.get("fallback") else ""))
-                                gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
-                                           placeholder="No title or description was written (it needs an AI key or Ollama).")
+                                with gr.Accordion("Title, description and tags (to copy)", open=False):
+                                    gr.Textbox(value=review.card_text(c), lines=6, interactive=False, show_label=False,
+                                               placeholder="No title or description was written (it needs an AI key or Ollama).")
                                 if c.get("title_variants"):
                                     with gr.Accordion("Other title ideas", open=False):
                                         gr.Textbox(value=review.variants_text(c), lines=3, interactive=False, show_label=False)
@@ -1261,7 +1276,7 @@ def build_ui():
                 demo.load(load_plan, None, q_plan)          # an unrendered plan comes back after a refresh
                 demo.load(lambda: reusable_update('clip'), None, q_reuse)
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
-                q_open.click(open_earlier, q_runs, [q_status, q_cards])
+                q_open.click(open_earlier, q_runs, [q_status, q_cards]).then(lambda: None, None, q_plan)
                 demo.load(earlier_runs, None, q_runs)
 
             with gr.Column(visible=False) as mode_col_clip:
