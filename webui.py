@@ -48,13 +48,23 @@ def _gradio_major():
         return 5
 
 
+def _app_theme():
+    """One calm, professional look: system fonts (nothing is fetched from the internet), slate neutrals, an orange accent, rounded cards."""
+    return gr.themes.Soft(primary_hue="orange", secondary_hue="orange", neutral_hue="slate",
+                          font=("system-ui", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"),
+                          radius_size=gr.themes.sizes.radius_lg, spacing_size=gr.themes.sizes.spacing_md).set(
+        block_label_background_fill="transparent", block_label_text_color="*body_text_color",     # plain labels, not coloured chips
+        block_label_border_width="0px", block_label_shadow="none", block_label_text_weight="600",
+        block_label_background_fill_dark="transparent", block_label_text_color_dark="*body_text_color", block_label_border_width_dark="0px")
+
+
 def _blocks_theme():
     """Gradio 5 takes the theme in gr.Blocks(); Gradio 6 moved it to launch()."""
-    return {} if _gradio_major() >= 6 else {"theme": gr.themes.Soft()}
+    return {} if _gradio_major() >= 6 else {"theme": _app_theme()}
 
 
 def _launch_theme():
-    return {"theme": gr.themes.Soft()} if _gradio_major() >= 6 else {}
+    return {"theme": _app_theme()} if _gradio_major() >= 6 else {}
 
 
 def _pipeline_cmd():
@@ -904,7 +914,21 @@ def _render_settings(with_aspect=True):
 
 
 # the word tick boxes of a long short are a long list: keep them in a box that scrolls
-WORDS_CSS = "<style>.sf-words { max-height: 230px; overflow-y: auto; }</style>"
+WORDS_CSS = """<style>
+.sf-words { max-height: 230px; overflow-y: auto; }
+.gradio-container { max-width: 980px !important; margin: 0 auto !important; padding: 0 20px !important; }
+.sf-hero { padding: 28px 0 8px; }
+.sf-hero h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+.sf-hero p { margin: 0; font-size: 15px; opacity: .7; }
+.sf-hero a { color: inherit; text-decoration: underline; }
+.block-info, .gradio-container .info { font-size: 12.5px !important; opacity: .65; line-height: 1.45; }
+.gradio-container label > span, .gradio-container .block-title { font-weight: 600; }
+.gradio-container h3 { font-size: 18px; margin: 18px 0 6px; font-weight: 650; }
+button.primary { height: 54px; font-size: 16px; font-weight: 650; border-radius: 12px; }
+.gradio-container .form { border-radius: 14px; }
+.gradio-container .accordion, .gradio-container details { border-radius: 14px; }
+.sf-section { margin-top: 18px; }
+</style>"""
 
 
 MODE_KEYS = ["shorts", "clip", "dub", "recap", "reel", "idea"]
@@ -919,11 +943,8 @@ def web_args_modes():
 def build_ui():
     tolerate_missing_ffprobe()
     with gr.Blocks(title="ShortsFlow AI Studio", **_blocks_theme()) as demo:
-        gr.Markdown(
-            "# ⚡ ShortsFlow AI Studio\n"
-            "Open-source, local-first Opus Clip alternative. "
-            "[GitHub](https://github.com/ghost1412/shortsflow) · ⭐ Star if it helps!"
-        )
+        gr.HTML('<div class="sf-hero"><h1>ShortsFlow</h1><p>Turn a long video into shorts. It runs on this PC and nothing leaves it unless you switch on an '
+                'online helper. <a href="https://github.com/ghost1412/shortsflow" target="_blank">GitHub</a></p></div>')
         gr.HTML(WORDS_CSS)
         from shortsflow.timeline import DRAG_JS
         demo.load(None, None, None, js=DRAG_JS)
@@ -931,8 +952,7 @@ def build_ui():
                              info="Pick one. Only the steps for that appear below.")
         with gr.Column():
             with gr.Column(visible=True) as mode_col_shorts:
-                gr.Markdown("### Make shorts from a video in one click\n"
-                            "No account or API key is needed for this. Paste a link or upload a video, then press the button.")
+                gr.Markdown("### Your video\nPaste a link or upload a file. No account or API key is needed.")
                 with gr.Row():
                     with gr.Column():
                         q_url = gr.Textbox(label="Video link (YouTube or other)", placeholder="https://www.youtube.com/watch?v=...")
@@ -941,20 +961,22 @@ def build_ui():
                         q_sample_note = gr.Markdown("")
                         q_mode = gr.Radio([("Short vertical clips (TikTok, Reels, Shorts)", "shorts"),
                                            ("One highlights video (long-form, landscape)", "long")],
-                                          value="shorts", label="What do you want?")
-                        q_count = gr.Number(value=3, minimum=1, precision=0, label="How many shorts?",
-                                            info="No limit. If the video does not have that many good moments you get fewer.")
-                        q_length = gr.Slider(15, 60, value=30, step=5, label="Length of each short (seconds)",
-                                             info="The aim for each short. Clips end at the end of a sentence, so they can be a few seconds longer or shorter.")
+                                          value="shorts", label="Format")
+                        with gr.Row():
+                            q_count = gr.Number(value=3, minimum=1, precision=0, label="How many shorts?",
+                                                info="No limit. If the video does not have that many good moments you get fewer.")
+                            q_length = gr.Slider(15, 60, value=30, step=5, label="Length of each short (seconds)",
+                                                 info="The aim for each short. Clips end at the end of a sentence, so they can be a few seconds longer or shorter.")
                         q_minutes = gr.Number(value=4, minimum=1, precision=0, label="Highlights video length (minutes)", visible=False,
                                               info="No limit, but never longer than your video. Long reels take longer to make and the file gets big (about 2 GB for 15 minutes).")
-                        q_kind = gr.Radio(kind_choices_with_none(), value="", label="What kind of video is it? (optional)",
-                                          info="Fills in the edit style, game mode, picture, template and captions in one go. You can change each one under Advanced.")
+                        with gr.Row():
+                            q_kind = gr.Dropdown(kind_choices_with_none(), value="", label="What kind of video is it? (optional)",
+                                              info="Fills in the edit style, game mode, picture, template and captions in one go. You can change each one under Advanced.")
+                            q_picture = gr.Dropdown([("Automatic", "auto"), ("Fill the screen (crop: the sides are cut off)", "crop"),
+                                                  ("Whole picture on a blurred background (fit: keeps everything in view)", "fit")],
+                                                 value="auto", label="Picture in the tall frame",
+                                                 info="Fit and crop are only about the picture. Templates (like Film bars) and edit styles are separate and are under Advanced.")
                         q_kind_note = gr.Markdown("")
-                        q_picture = gr.Radio([("Automatic", "auto"), ("Fill the screen (crop: the sides are cut off)", "crop"),
-                                              ("Whole picture on a blurred background (fit: keeps everything in view)", "fit")],
-                                             value="auto", label="Picture in the tall frame",
-                                             info="Fit and crop are only about the picture. Templates (like Film bars) and edit styles are separate and are under Advanced.")
                         with gr.Accordion("⚙️ Advanced: moments, languages, edit style, look, captions, extras, brand", open=False):
                             with gr.Accordion("Pick the moments (optional)", open=False):
                                 q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
@@ -1035,7 +1057,6 @@ def build_ui():
                                                    info="Finds the moments, then stops: you see each one on a timeline, adjust start and end or drop it, and only then it is rendered. Short clips only.")
                         q_btn = gr.Button("✨ Make my shorts", variant="primary")
                         q_stop = gr.Button("⏹ Stop", variant="stop")
-                    with gr.Column():
                         q_status = gr.Markdown("Waiting for a video...")
                 q_cards = gr.State([])
                 q_plan = gr.State(None)
@@ -1168,43 +1189,44 @@ def build_ui():
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
                     q_zip = gr.File(label="Your download", interactive=False, visible=False)
-                with gr.Accordion("Earlier runs: open, continue or reuse", open=False):
-                    with gr.Tabs():
-                        with gr.Tab("Open a finished run"):
-                            q_runs = gr.Dropdown(label="Earlier runs", choices=[], interactive=True)
-                            q_open = gr.Button("Open")
-                        with gr.Tab("Continue one that stopped"):
-                            gr.Markdown("A run that was stopped, closed or crashed carries on where it stopped: the analysis and the pieces "
-                                        "already cut are reused.")
-                            q_unfinished = gr.Dropdown(label="Unfinished runs", choices=[], interactive=True)
-                            q_continue = gr.Button("Continue")
-                        with gr.Tab("Run again, reusing its work"):
-                            gr.Markdown("Pick an earlier run, change any setting above (captions, brand, extras...) and press the start button. "
-                                        "The slow steps are skipped, so only the final rendering is done again, and you do not have to add the video again.")
-                            q_reuse = gr.Dropdown(label="Earlier run to reuse", choices=[], interactive=True, value=None)
-                            q_reuse_all = gr.Radio([("Skip transcription only (pick the moments again)", "transcript"),
-                                                    ("Skip everything already done (transcript, moments, cut pieces)", "all")],
-                                                   value="all", label="What to skip",
-                                                   info="Choose \"Skip transcription only\" when you change the clip count, length or layout.")
-                with gr.Accordion("Upload the finished videos to Google Drive (optional)", open=False):
-                    gr.Markdown("Paste a Drive folder link; the finished videos are uploaded when the run is done. The first time you sign in with Google "
-                                "(one-time set-up: see the top of `engine/drive_upload.py`). Nothing is uploaded unless you fill this in.")
-                    q_drive = gr.Textbox(label="Google Drive folder link", placeholder="https://drive.google.com/drive/folders/...")
-                with gr.Accordion("Is my computer ready?", open=False):
-                    q_check = gr.Markdown(setup_status())
-                    gr.Button("Check again").click(setup_status, None, q_check)
-                with gr.Accordion("Want AI-written titles and descriptions? (optional, free)", open=False):
-                    gr.Markdown("Pick any AI provider you have a key for. You can skip this; your shorts are made either way "
-                                "(with Ollama running on this PC no key is needed). The key is saved in your local `.env` file.")
-                    q_llm = _ai_provider_dropdown()
-                    q_key_provider = gr.Dropdown(web_args.LLM_KEY_CHOICES, value="groq", label="Provider")
-                    q_key_help = gr.Markdown(web_args.llm_key_help("groq"))
-                    q_key = gr.Textbox(label="API key", type="password")
-                    q_key_msg = gr.Markdown()
-                    q_key_provider.change(web_args.llm_key_help, q_key_provider, q_key_help)
-                    gr.Button("Save key").click(save_llm_key, [q_key_provider, q_key], q_key_msg)
-                with gr.Accordion("Technical details", open=False):
-                    q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
+                with gr.Accordion("🧰 Tools and settings: earlier runs, Google Drive, setup check, AI key, technical log", open=False):
+                    with gr.Accordion("Earlier runs: open, continue or reuse", open=False):
+                        with gr.Tabs():
+                            with gr.Tab("Open a finished run"):
+                                q_runs = gr.Dropdown(label="Earlier runs", choices=[], interactive=True)
+                                q_open = gr.Button("Open")
+                            with gr.Tab("Continue one that stopped"):
+                                gr.Markdown("A run that was stopped, closed or crashed carries on where it stopped: the analysis and the pieces "
+                                            "already cut are reused.")
+                                q_unfinished = gr.Dropdown(label="Unfinished runs", choices=[], interactive=True)
+                                q_continue = gr.Button("Continue")
+                            with gr.Tab("Run again, reusing its work"):
+                                gr.Markdown("Pick an earlier run, change any setting above (captions, brand, extras...) and press the start button. "
+                                            "The slow steps are skipped, so only the final rendering is done again, and you do not have to add the video again.")
+                                q_reuse = gr.Dropdown(label="Earlier run to reuse", choices=[], interactive=True, value=None)
+                                q_reuse_all = gr.Radio([("Skip transcription only (pick the moments again)", "transcript"),
+                                                        ("Skip everything already done (transcript, moments, cut pieces)", "all")],
+                                                       value="all", label="What to skip",
+                                                       info="Choose \"Skip transcription only\" when you change the clip count, length or layout.")
+                    with gr.Accordion("Upload the finished videos to Google Drive (optional)", open=False):
+                        gr.Markdown("Paste a Drive folder link; the finished videos are uploaded when the run is done. The first time you sign in with Google "
+                                    "(one-time set-up: see the top of `engine/drive_upload.py`). Nothing is uploaded unless you fill this in.")
+                        q_drive = gr.Textbox(label="Google Drive folder link", placeholder="https://drive.google.com/drive/folders/...")
+                    with gr.Accordion("Is my computer ready?", open=False):
+                        q_check = gr.Markdown(setup_status())
+                        gr.Button("Check again").click(setup_status, None, q_check)
+                    with gr.Accordion("Want AI-written titles and descriptions? (optional, free)", open=False):
+                        gr.Markdown("Pick any AI provider you have a key for. You can skip this; your shorts are made either way "
+                                    "(with Ollama running on this PC no key is needed). The key is saved in your local `.env` file.")
+                        q_llm = _ai_provider_dropdown()
+                        q_key_provider = gr.Dropdown(web_args.LLM_KEY_CHOICES, value="groq", label="Provider")
+                        q_key_help = gr.Markdown(web_args.llm_key_help("groq"))
+                        q_key = gr.Textbox(label="API key", type="password")
+                        q_key_msg = gr.Markdown()
+                        q_key_provider.change(web_args.llm_key_help, q_key_provider, q_key_help)
+                        gr.Button("Save key").click(save_llm_key, [q_key_provider, q_key], q_key_msg)
+                    with gr.Accordion("Technical details", open=False):
+                        q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 q_style.change(style_preview, q_style, q_style_img)
                 q_kind.change(apply_kind, q_kind, [q_edit, q_game, q_picture, q_look[0], q_style, q_kind_note])
                 q_mode.change(lambda m: (gr.update(visible=m == "shorts"), gr.update(visible=m == "shorts"), gr.update(visible=m == "long")),
