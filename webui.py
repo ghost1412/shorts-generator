@@ -184,6 +184,20 @@ def _count(value):
         return 3
 
 
+def kind_choices_with_none():
+    from shortsflow.ui import kinds
+    return [("No preset: my own settings", "")] + kinds.kind_choices()
+
+
+def apply_kind(kind):
+    """The values for (auto-edit style, game checkbox, picture, template, caption style, note) of a video kind; no change when empty."""
+    from shortsflow.ui import kinds
+    if not kind:
+        return [gr.update()] * 5 + [""]
+    k = kinds.settings_for(kind)
+    return k["edit"], k["game"], k["framing"], k["template"], k["captions"], "✔ " + kinds.describe(kind)
+
+
 def template_controls(prefix_info="", with_shape=True):
     """The look controls, shared by every flow (see shortsflow/ui/blocks.py). Returns the components in the order `clip_video` /
     `quick_clip` take them after their other options."""
@@ -455,7 +469,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default",
                game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto", llm_provider="auto",
                visual_template="none", intro_animation="none", outro_animation="none",
-               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta="", shape="9:16", plan_first=False, between=""):
+               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta="", shape="9:16", plan_first=False, between="", picture="auto"):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -469,7 +483,9 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     results = os.path.join(session, "results.json")
     os.makedirs(session, exist_ok=True)
     long_form = mode == "long"
-    layout = "split_filler" if filler else ("fit" if game and not long_form else "auto")   # game footage: keep the whole picture
+    if picture in ("fit", "crop") and game_framing == "auto":
+        game_framing = picture                      # the one plain "Picture" choice also steers game footage
+    layout = "split_filler" if filler else ("fit" if (game or picture == "fit") and not long_form else "auto")   # game footage: keep the whole picture
     lang_args = ["--language", (spoken or "auto")]
     if caption_lang:
         lang_args += ["--caption_lang", caption_lang]
@@ -921,81 +937,89 @@ def build_ui():
                                              info="The aim for each short. Clips end at the end of a sentence, so they can be a few seconds longer or shorter.")
                         q_minutes = gr.Number(value=4, minimum=1, precision=0, label="Highlights video length (minutes)", visible=False,
                                               info="No limit, but never longer than your video. Long reels take longer to make and the file gets big (about 2 GB for 15 minutes).")
-                        with gr.Accordion("Pick the moments (optional)", open=False):
-                            q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
-                                                info="Describe the part you want. Leave empty to let the AI pick the best moments.")
-                            q_between = gr.Textbox(label="Only look between (optional)", placeholder="30:00-60:00", max_lines=1,
-                                                   info="The tool still picks the moments, but only inside this part of the video, for example after the first 30 minutes. It listens to the whole video first, so it is not faster.")
-                            q_moments = gr.Textbox(label="Or give exact times (one per line)", lines=3, placeholder="7:00-7:45",
-                                                   info="Makes shorts from exactly these moments, like a cutscene you spotted. Use minutes:seconds, e.g. 7:00-7:45 or 1:01:40-1:02:30. Leave empty to let the AI choose.")
-                            q_about = gr.Textbox(label="What is this video about? (optional)", lines=2, placeholder="God of War 3 story playthrough",
-                                                info="Helps the AI judge which moments matter, for example when the speaker chats while the story happens on screen.")
-                            q_visual = gr.Checkbox(label="Look at the picture too (slower)", value=False,
-                                                   info="A vision model looks at a few frames of each candidate so the story on screen counts, not only the words. With a Gemini key in .env it uses Gemini (small frames are sent to Google); otherwise it needs a local one in Ollama (ollama pull gemma3:12b) and nothing leaves your PC.")
-                            q_cut = gr.Textbox(label="Cut these words or phrases out (one per line)", lines=3, placeholder="you know, so basically",
-                                               info="Every time it is said, that bit is removed from the short.")
-                        with gr.Accordion("Languages (optional)", open=False):
-                            q_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
-                            q_caption_lang = gr.Dropdown(CAPTION_LANG_CHOICES, value="", label="Captions in...",
-                                                         info="Translates the captions with AI (a free Groq key or Ollama is needed). "
-                                                              "Chinese, Japanese and Korean fonts download once, the first time you use them.")
-                        q_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style",
-                                             info="Edits like an editor: cuts pauses and ums, zooms, cutaways, a teaser opening, colour and sound effects, "
-                                                  "chosen for this kind of video. Turns on animated captions.")
-                        q_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
-                                                   info="Subtle keeps it quiet; Hyped uses everything.")
-                        q_look = template_controls(" For a highlights video the template shows at the start and end, and the covers on the first and last second.")
-                        q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
-                                                 info="Needs Node.js (nodejs.org). Untick if it is not installed.")
-                        q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
-                                           info="Only used when animated captions are on.")
-                        q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
-                        q_grade = gr.Dropdown(web_args.COLOR_GRADE_CHOICES, value="default", label="Colour filter",
-                                              info="A colour look for the whole short. Automatic uses the Auto-edit style's own look (Hype: vibrant action, "
-                                                   "Vlog: cinematic warm); pick one here to override it.")
-                        with gr.Accordion("Game footage and caption position (optional)", open=False):
-                            q_game = gr.Checkbox(label="This is game footage", value=False,
-                                                 info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay, even with nobody talking), and keeps the whole screen in frame so the minimap and the game's own subtitles are not cut off.")
-                            q_game_mix = gr.Dropdown(web_args.GAME_MIX_CHOICES, value="0.5", label="Story or action",
-                                                     info="How many of the shorts are story moments and how many are action. Only used for game footage.")
-                            q_game_frame = gr.Dropdown(web_args.GAME_FRAMING_CHOICES, value="auto", label="Framing for game footage",
-                                                       info="Automatic looks at frames of the chosen moments: a HUD or subtitles at the sides keep the whole picture over blurred bars, a clean picture gets a full-screen portrait crop.")
-                            with gr.Row():
-                                q_cap_pos = gr.Dropdown(web_args.CAPTION_POSITION_CHOICES, value="default", label="Caption position",
-                                                        info="Where the animated captions sit. Normal height is the default.")
-                                q_cap_size = gr.Dropdown(web_args.CAPTION_SIZE_CHOICES, value="default", label="Caption size",
-                                                         info="Size of the animated captions.")
-                        with gr.Accordion("Extras (optional)", open=False):
-                            q_clean = gr.Checkbox(label="Clean up the sound", info="Removes background noise and evens out the volume.")
-                            q_enhance = gr.Checkbox(label="Auto-enhance the picture", info="Like an editor: each short is measured and a dark clip is lifted, a colour cast reduced, a dull one given a little colour, plus light sharpening. Only what is off is corrected. On your PC; it cannot add detail that is not there.")
-                            q_hook = gr.Checkbox(label="Big title at the start", info="Shows the short's hook as a title for the first 3 seconds. Needs animated captions.")
-                            q_emoji = gr.Checkbox(label="Emoji next to key words in the captions", info="Needs animated captions.")
-                            q_filler = gr.Checkbox(label="Satisfying video underneath", info="Your clip on top, looping gameplay or satisfying footage below (shorts only). Without a file below, a video from assets/backgrounds/local or a free stock clip is used.")
-                            q_filler_file = gr.File(label="Footage for the bottom half (optional)", file_types=["video"], type="filepath")
-                            q_broll = gr.Checkbox(label="Stock cutaways on key words (B-roll)", info="A short stock clip over the upper part of the picture when a thing like \"money\" or \"car\" is said. Needs a free Pexels key (PEXELS_API_KEY) or clips in assets/backgrounds/local; otherwise nothing is added.")
-                            q_zoom = gr.Checkbox(label="Zoom in on key moments", info="A subtle punch-in on numbers and strong words. Needs animated captions; skipped with the satisfying-video layout.")
-                            q_cold = gr.Checkbox(label="Start with the best line (cold open)", info="The strongest sentence of each clip plays first as a 2-6 second teaser, then the clip starts from the beginning.")
-                            q_stats = gr.Checkbox(label="Show numbers big (pop-ups)", info="When a striking number like $200 or 73% is said, it appears big on screen. Needs animated captions.")
-                        with gr.Accordion("Your brand: logo, @handle, end card", open=False):
-                            q_brand_on = gr.Checkbox(value=True, label="Add my brand to the shorts")
-                            q_logo = gr.Image(label="Logo (PNG with a transparent background works best)", type="filepath",
-                                              height=140, sources=["upload"])
-                            with gr.Row():
-                                q_handle = gr.Textbox(label="@handle", placeholder="@mychannel")
-                                q_color = gr.ColorPicker(label="Accent colour", value="#FFEA00")
-                            with gr.Row():
-                                q_endcard = gr.Textbox(label="End card text (last 2 seconds)", placeholder="Follow for more")
-                                q_pos = gr.Dropdown(BRAND_POSITIONS, value="top-right", label="Logo position")
-                            q_brand_msg = gr.Markdown("No brand saved yet.")
-                            with gr.Row():
-                                q_brand_save = gr.Button("Save my brand", variant="secondary")
-                                q_brand_clear = gr.Button("Remove brand")
-                        with gr.Accordion("Save these settings as my template", open=False):
-                            gr.Markdown("Keeps the Auto-edit style, caption style, extras, colour grade, visual template and covers chosen above under a name, "
-                                        "so you can pick them again in one step (or use them on the command line).")
-                            q_tpl_name = gr.Textbox(label="Template name", placeholder="my-channel", max_lines=1)
-                            q_tpl_save = gr.Button("Save as a template", variant="secondary")
-                            q_tpl_msg = gr.Markdown("")
+                        q_kind = gr.Radio(kind_choices_with_none(), value="", label="What kind of video is it? (optional)",
+                                          info="Fills in the edit style, game mode, picture, template and captions in one go. You can change each one under Advanced.")
+                        q_kind_note = gr.Markdown("")
+                        q_picture = gr.Radio([("Automatic", "auto"), ("Fill the screen (crop: the sides are cut off)", "crop"),
+                                              ("Whole picture on a blurred background (fit: keeps everything in view)", "fit")],
+                                             value="auto", label="Picture in the tall frame",
+                                             info="Fit and crop are only about the picture. Templates (like Film bars) and edit styles are separate and are under Advanced.")
+                        with gr.Accordion("⚙️ Advanced: moments, languages, edit style, look, captions, extras, brand", open=False):
+                            with gr.Accordion("Pick the moments (optional)", open=False):
+                                q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
+                                                    info="Describe the part you want. Leave empty to let the AI pick the best moments.")
+                                q_between = gr.Textbox(label="Only look between (optional)", placeholder="30:00-60:00", max_lines=1,
+                                                       info="The tool still picks the moments, but only inside this part of the video, for example after the first 30 minutes. It listens to the whole video first, so it is not faster.")
+                                q_moments = gr.Textbox(label="Or give exact times (one per line)", lines=3, placeholder="7:00-7:45",
+                                                       info="Makes shorts from exactly these moments, like a cutscene you spotted. Use minutes:seconds, e.g. 7:00-7:45 or 1:01:40-1:02:30. Leave empty to let the AI choose.")
+                                q_about = gr.Textbox(label="What is this video about? (optional)", lines=2, placeholder="God of War 3 story playthrough",
+                                                    info="Helps the AI judge which moments matter, for example when the speaker chats while the story happens on screen.")
+                                q_visual = gr.Checkbox(label="Look at the picture too (slower)", value=False,
+                                                       info="A vision model looks at a few frames of each candidate so the story on screen counts, not only the words. With a Gemini key in .env it uses Gemini (small frames are sent to Google); otherwise it needs a local one in Ollama (ollama pull gemma3:12b) and nothing leaves your PC.")
+                                q_cut = gr.Textbox(label="Cut these words or phrases out (one per line)", lines=3, placeholder="you know, so basically",
+                                                   info="Every time it is said, that bit is removed from the short.")
+                            with gr.Accordion("Languages (optional)", open=False):
+                                q_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
+                                q_caption_lang = gr.Dropdown(CAPTION_LANG_CHOICES, value="", label="Captions in...",
+                                                             info="Translates the captions with AI (a free Groq key or Ollama is needed). "
+                                                                  "Chinese, Japanese and Korean fonts download once, the first time you use them.")
+                            q_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style",
+                                                 info="Edits like an editor: cuts pauses and ums, zooms, cutaways, a teaser opening, colour and sound effects, "
+                                                      "chosen for this kind of video. Turns on animated captions.")
+                            q_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
+                                                       info="Subtle keeps it quiet; Hyped uses everything.")
+                            q_look = template_controls(" For a highlights video the template shows at the start and end, and the covers on the first and last second.")
+                            q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
+                                                     info="Needs Node.js (nodejs.org). Untick if it is not installed.")
+                            q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
+                                               info="Only used when animated captions are on.")
+                            q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
+                            q_grade = gr.Dropdown(web_args.COLOR_GRADE_CHOICES, value="default", label="Colour filter",
+                                                  info="A colour look for the whole short. Automatic uses the Auto-edit style's own look (Hype: vibrant action, "
+                                                       "Vlog: cinematic warm); pick one here to override it.")
+                            with gr.Accordion("Game footage and caption position (optional)", open=False):
+                                q_game = gr.Checkbox(label="This is game footage", value=False,
+                                                     info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay, even with nobody talking), and keeps the whole screen in frame so the minimap and the game's own subtitles are not cut off.")
+                                q_game_mix = gr.Dropdown(web_args.GAME_MIX_CHOICES, value="0.5", label="Story or action",
+                                                         info="How many of the shorts are story moments and how many are action. Only used for game footage.")
+                                q_game_frame = gr.Dropdown(web_args.GAME_FRAMING_CHOICES, value="auto", label="Framing for game footage",
+                                                           info="Automatic looks at frames of the chosen moments: a HUD or subtitles at the sides keep the whole picture over blurred bars, a clean picture gets a full-screen portrait crop.")
+                                with gr.Row():
+                                    q_cap_pos = gr.Dropdown(web_args.CAPTION_POSITION_CHOICES, value="default", label="Caption position",
+                                                            info="Where the animated captions sit. Normal height is the default.")
+                                    q_cap_size = gr.Dropdown(web_args.CAPTION_SIZE_CHOICES, value="default", label="Caption size",
+                                                             info="Size of the animated captions.")
+                            with gr.Accordion("Extras (optional)", open=False):
+                                q_clean = gr.Checkbox(label="Clean up the sound", info="Removes background noise and evens out the volume.")
+                                q_enhance = gr.Checkbox(label="Auto-enhance the picture", info="Like an editor: each short is measured and a dark clip is lifted, a colour cast reduced, a dull one given a little colour, plus light sharpening. Only what is off is corrected. On your PC; it cannot add detail that is not there.")
+                                q_hook = gr.Checkbox(label="Big title at the start", info="Shows the short's hook as a title for the first 3 seconds. Needs animated captions.")
+                                q_emoji = gr.Checkbox(label="Emoji next to key words in the captions", info="Needs animated captions.")
+                                q_filler = gr.Checkbox(label="Satisfying video underneath", info="Your clip on top, looping gameplay or satisfying footage below (shorts only). Without a file below, a video from assets/backgrounds/local or a free stock clip is used.")
+                                q_filler_file = gr.File(label="Footage for the bottom half (optional)", file_types=["video"], type="filepath")
+                                q_broll = gr.Checkbox(label="Stock cutaways on key words (B-roll)", info="A short stock clip over the upper part of the picture when a thing like \"money\" or \"car\" is said. Needs a free Pexels key (PEXELS_API_KEY) or clips in assets/backgrounds/local; otherwise nothing is added.")
+                                q_zoom = gr.Checkbox(label="Zoom in on key moments", info="A subtle punch-in on numbers and strong words. Needs animated captions; skipped with the satisfying-video layout.")
+                                q_cold = gr.Checkbox(label="Start with the best line (cold open)", info="The strongest sentence of each clip plays first as a 2-6 second teaser, then the clip starts from the beginning.")
+                                q_stats = gr.Checkbox(label="Show numbers big (pop-ups)", info="When a striking number like $200 or 73% is said, it appears big on screen. Needs animated captions.")
+                            with gr.Accordion("Your brand: logo, @handle, end card", open=False):
+                                q_brand_on = gr.Checkbox(value=True, label="Add my brand to the shorts")
+                                q_logo = gr.Image(label="Logo (PNG with a transparent background works best)", type="filepath",
+                                                  height=140, sources=["upload"])
+                                with gr.Row():
+                                    q_handle = gr.Textbox(label="@handle", placeholder="@mychannel")
+                                    q_color = gr.ColorPicker(label="Accent colour", value="#FFEA00")
+                                with gr.Row():
+                                    q_endcard = gr.Textbox(label="End card text (last 2 seconds)", placeholder="Follow for more")
+                                    q_pos = gr.Dropdown(BRAND_POSITIONS, value="top-right", label="Logo position")
+                                q_brand_msg = gr.Markdown("No brand saved yet.")
+                                with gr.Row():
+                                    q_brand_save = gr.Button("Save my brand", variant="secondary")
+                                    q_brand_clear = gr.Button("Remove brand")
+                            with gr.Accordion("Save these settings as my template", open=False):
+                                gr.Markdown("Keeps the Auto-edit style, caption style, extras, colour grade, visual template and covers chosen above under a name, "
+                                            "so you can pick them again in one step (or use them on the command line).")
+                                q_tpl_name = gr.Textbox(label="Template name", placeholder="my-channel", max_lines=1)
+                                q_tpl_save = gr.Button("Save as a template", variant="secondary")
+                                q_tpl_msg = gr.Markdown("")
                         q_plan_first = gr.Checkbox(label="Let me review the moments first", value=False,
                                                    info="Finds the moments, then stops: you see each one on a timeline, adjust start and end or drop it, and only then it is rendered. Short clips only.")
                         q_btn = gr.Button("✨ Make my shorts", variant="primary")
@@ -1171,6 +1195,7 @@ def build_ui():
                 with gr.Accordion("Technical details", open=False):
                     q_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 q_style.change(style_preview, q_style, q_style_img)
+                q_kind.change(apply_kind, q_kind, [q_edit, q_game, q_picture, q_look[0], q_style, q_kind_note])
                 q_mode.change(lambda m: (gr.update(visible=m == "shorts"), gr.update(visible=m == "shorts"), gr.update(visible=m == "long")),
                               q_mode, [q_count, q_length, q_minutes])
                 brand_form = [q_handle, q_endcard, q_color, q_pos, q_logo, q_brand_msg]
@@ -1189,7 +1214,7 @@ def build_ui():
                                                   q_look[0], q_look[1], q_look[2]], [q_tpl_msg, q_edit])
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
-                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm, *q_look, q_plan_first, q_between],
+                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm, *q_look, q_plan_first, q_between, q_picture],
                             [q_status, q_log, q_cards]).then(load_plan, None, q_plan)
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)

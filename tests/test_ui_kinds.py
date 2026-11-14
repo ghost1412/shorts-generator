@@ -45,3 +45,11 @@ def test_gallery_pick_maps_a_click_to_a_template():
     names = ["podcast-card", "neon-frame"]
     assert gallery_pick(names, 1) == "neon-frame"
     assert gallery_pick(names, 5) == "none" and gallery_pick(names, None) == "none" and gallery_pick(names, -1) == "none"
+
+
+def test_picture_choice_reaches_the_command(monkeypatch):
+    """The plain 'Picture' choice: fit -> the fit layout, crop -> the game framing (only visible in the source, no gradio needed)."""
+    import os
+    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+    assert 'picture in ("fit", "crop") and game_framing == "auto"' in src
+    assert '(game or picture == "fit")' in src
