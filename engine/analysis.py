@@ -780,17 +780,25 @@ def transcribe_video(video_path, output_dir, keep_fillers=False, language="en"):
         except Exception:
             pass
 
-    import stable_whisper as whisper
     import torch
-        
-    print("[Log] Starting AI Transcription...")
-    start_time = time.time()
-    
+
     lang = None if str(language or "en").lower() in ("auto", "detect", "") else str(language).lower()  # None = Whisper detects it
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # 🟢 UPGRADE: 'medium' model provides significantly better punctuation and nuance
     from engine.speech_model import pick_model, download_notice
     model_name = pick_model(device)
+
+    # The same video was transcribed before (in another session folder): reuse it instead of minutes of GPU time
+    from engine import transcript_cache as _tc
+    cache_key = _tc.cache_key(video_path, language, keep_fillers, model_name) if _tc.enabled() else None
+    hit = _tc.lookup(cache_key)
+    if hit and _tc.restore(hit, transcript_path, video_path):
+        print(f"[Log] Using the saved transcript of this video (no need to listen to it again): {hit}")
+        return transcript_path
+
+    import stable_whisper as whisper
+    print("[Log] Starting AI Transcription...")
+    start_time = time.time()
     notice = download_notice(model_name)
     if notice:
         print(notice, flush=True)
@@ -815,7 +823,8 @@ def transcribe_video(video_path, output_dir, keep_fillers=False, language="en"):
         # Fallback if stable_whisper result is weird
         result.save_as_json(transcript_path)
     print("[Log] Transcript saved successfully.")
-    
+    _tc.store(cache_key, transcript_path)
+
     print(f"[Log] Transcription completed in {time.time() - start_time:.1f}s")
     return transcript_path
 
