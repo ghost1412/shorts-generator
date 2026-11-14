@@ -658,7 +658,8 @@ def latest_plan(root):
             source = plan.get("source_video") or ""
             for m in plan["moments"]:          # a small clip per moment, so it can be watched before rendering
                 from engine.plan import make_preview
-                m["preview"] = make_preview(source, m["start"], m["end"], os.path.join(d, "previews", f"m{m['index']}.mp4"))
+                pv = os.path.join(d, "previews", f"m{m['index']}.mp4")
+                m["preview"] = pv if os.path.isfile(pv) else make_preview(source, m["start"], m["end"], pv)
             return {"session": d, "source": source, "moments": plan["moments"], "total": max(ends) if ends else 0.0}
     return None
 
@@ -1069,7 +1070,7 @@ def build_ui():
                     if not plan or not plan.get("moments"):
                         return
                     from shortsflow import timeline as _tl
-                    gr.Markdown("### Review the moments\nNothing is rendered yet. Adjust the start and end, untick a moment to drop it, then render.")
+                    gr.Markdown(f"### Review the moments: {len(plan['moments'])} found\nNothing is rendered yet. Watch each one, adjust the start and end, untick a moment to drop it, then render.")
                     moms = plan["moments"]
                     total = plan.get("total") or 0.0
                     keeps, t0s, t1s = [], [], []
@@ -1080,23 +1081,26 @@ def build_ui():
                             keep = gr.Checkbox(value=True, label=f"{m['title']}{score}", interactive=True)
                             if m.get("reason"):
                                 gr.Markdown(f"_{m['reason']}_")
-                            vid = gr.Video(value=m.get("preview"), height=260, interactive=False, show_label=False,
-                                           label="Preview of this moment (small copy; the render is full quality)")
-                            with gr.Row():
-                                t0 = gr.Number(value=m["start"], label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
-                                t1 = gr.Number(value=m["end"], label="End (seconds)", precision=1, minimum=0, interactive=True)
-                            refresh = gr.Button("▶ Update the preview for these times", size="sm")
-                            refresh.click(preview_handler(plan["session"], plan.get("source"), m["index"]), [t0, t1], vid)
-                            strip = _tl.timeline_html(m["start"], m["end"], None, total, others)
-                            if strip:
-                                box = gr.HTML(strip)
-                                with gr.Row():
-                                    for lbl, d, is_start in (("Start -1 s", -1, True), ("Start +1 s", 1, True), ("End -1 s", -1, False), ("End +1 s", 1, False)):
-                                        b = gr.Button(lbl, size="sm")
-                                        b.click(lambda a, e, d=d, st=is_start, t=total, ot=others: _tl.nudge_view(a, e, d, st, t, None, ot),
-                                                [t0, t1], [t0, t1, box])
-                                for inp in (t0, t1):
-                                    inp.change(lambda a, e, t=total, ot=others: _tl.timeline_html(a, e, None, t, ot) or gr.update(), [t0, t1], box)
+                            with gr.Row(equal_height=False):
+                                with gr.Column(scale=2, min_width=240):
+                                    vid = gr.Video(value=m.get("preview"), height=230, interactive=False, show_label=False,
+                                                   label="Preview of this moment (small copy; the render is full quality)")
+                                with gr.Column(scale=3, min_width=300):
+                                    with gr.Row():
+                                        t0 = gr.Number(value=m["start"], label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
+                                        t1 = gr.Number(value=m["end"], label="End (seconds)", precision=1, minimum=0, interactive=True)
+                                    refresh = gr.Button("▶ Update the preview for these times", size="sm")
+                                    refresh.click(preview_handler(plan["session"], plan.get("source"), m["index"]), [t0, t1], vid)
+                                    strip = _tl.timeline_html(m["start"], m["end"], None, total, others)
+                                    if strip:
+                                        box = gr.HTML(strip)
+                                        with gr.Row():
+                                            for lbl, d, is_start in (("Start -1", -1, True), ("Start +1", 1, True), ("End -1", -1, False), ("End +1", 1, False)):
+                                                b = gr.Button(lbl, size="sm")
+                                                b.click(lambda a, e, d=d, st=is_start, t=total, ot=others: _tl.nudge_view(a, e, d, st, t, None, ot),
+                                                        [t0, t1], [t0, t1, box])
+                                        for inp in (t0, t1):
+                                            inp.change(lambda a, e, t=total, ot=others: _tl.timeline_html(a, e, None, t, ot) or gr.update(), [t0, t1], box)
                         keeps.append(keep)
                         t0s.append(t0)
                         t1s.append(t1)
@@ -1254,6 +1258,7 @@ def build_ui():
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
                 demo.load(unfinished_update, None, q_unfinished)
+                demo.load(load_plan, None, q_plan)          # an unrendered plan comes back after a refresh
                 demo.load(lambda: reusable_update('clip'), None, q_reuse)
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
