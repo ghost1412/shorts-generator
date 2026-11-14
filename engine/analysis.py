@@ -1673,12 +1673,16 @@ def clamp_highlights(highlights, duration, min_len=3.0):
     return out
 
 
-def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True, moments=None, visual_context=False, game=False, game_mix=0.5):
+def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, target_duration=None, min_duration=15, use_audio_detect=False, style=None, user_context=None, style_context=None, smart_crop=False, tighten=False, use_cache=False, chapters_path=None, use_llm_scoring=True, find_query=None, keep_fillers=False, language="en", snap=True, diversity=True, rerank=True, extra_signals=True, moments=None, visual_context=False, game=False, game_mix=0.5, window=None):
+    """`window` = (start, end) seconds: only moments inside it are returned (the picker over-requests, then keeps the best inside)."""
     if not os.path.exists(video_path):
         raise FileNotFoundError(f"Source video Not Found: {video_path}")
 
     from engine.timing import mark as _mark
     _mark("start of analysis")
+    wanted_count = clip_count
+    if window and not moments and mode == "shorts":
+        clip_count = min(max(clip_count * 6, 12), 40)       # the best moments of the whole video may lie outside the window
     transcript_path = transcribe_video(video_path, output_dir, keep_fillers=keep_fillers, language=language)
     _mark("transcription (cached or Whisper)")
 
@@ -1836,6 +1840,10 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
 
     highlights = order_for_mode(highlights, mode)  # scoring re-sorts best-first; a narrative reel plays in story order
     highlights = clamp_highlights(highlights, probe_duration(video_path))
+    if window and not moments and mode == "shorts":
+        inside = [h for h in highlights if h["start"] >= window[0] - 1 and h["end"] <= window[1] + 1]
+        print(f"[Log] Only looking between {window[0]:.0f}s and {window[1]:.0f}s: {len(inside)} of {len(highlights)} candidate(s) are inside; keeping {min(len(inside), wanted_count)}.")
+        highlights = inside[:wanted_count]
 
     _mark("snapping, clamping, ordering")
     interest_points_cache_path = os.path.join(output_dir, "interest_points.json")

@@ -79,6 +79,23 @@ def align_clips_with_highlights(highlights, files, extract_mode="shorts", mashup
     return [highlights[i] for i in kept], [by_index[i] for i in kept]
 
 
+def _window(text):
+    """(start, end) seconds from '30:00-60:00', None when empty. A bad text exits with a plain message."""
+    if not (text or "").strip():
+        return None
+    from engine.moments import parse_time
+    import re
+    m = re.fullmatch(r"(.+?)\s*[-–—]\s*(.+)", text.strip())
+    try:
+        a, b = (parse_time(m.group(1)), parse_time(m.group(2))) if m else (None, None)
+    except ValueError:
+        a = b = None
+    if a is None or b is None or b <= a:
+        print(f"[Error] --only_between needs a range like 30:00-60:00, got {text!r}.")
+        sys.exit(2)
+    return (a, b)
+
+
 def run(args, target_bitrate, target_preset):
     import time
     from engine.video_gen import extract_segments
@@ -163,6 +180,7 @@ def run(args, target_bitrate, target_preset):
         visual_context=getattr(args, 'visual_context', False),
         game=getattr(args, 'content', 'auto') == 'game',
         game_mix=getattr(args, 'game_mix', 0.5),
+        window=_window(getattr(args, 'only_between', None)),
     )
     
     timing.mark("analysis done (all of process_source_video)")
@@ -195,6 +213,12 @@ def run(args, target_bitrate, target_preset):
     # 🟢 Print the beautiful new score table
     print_clip_score_table(highlights)
     
+    if getattr(args, "plan_only", False):
+        from engine.plan import write_plan
+        path = write_plan(session_dir, highlights, args.source_video)
+        print(f"[Log] 📝 Plan written to {path}: {len(highlights)} moment(s). Nothing was rendered (--plan_only).")
+        sys.exit(0)
+
     # 🟢 Handle Preview Mode
     if args.preview:
         print("\n[Log] 🔍 PREVIEW MODE ENABLED: Rendering fast 3fps proxy instead of full extraction...")

@@ -187,9 +187,15 @@ def _count(value):
 def template_controls(prefix_info="", with_shape=True):
     """The look controls (visual template with preview, intro and outro covers, template text). Returns the components in the order that
     `clip_video` / `quick_clip` take them after their other options."""
-    with gr.Accordion("Look: template, covers and frame shape (optional)", open=False):
+    with gr.Accordion("🎨 Look: templates, covers and frame shape (optional: click to open)", open=False):
         tpl = gr.Dropdown(web_args.VISUAL_TEMPLATE_CHOICES, value="none", label="Visual template",
                           info="A designed look drawn over the picture. Turns on animated captions." + prefix_info)
+        shown = [(label, name) for label, name in web_args.VISUAL_TEMPLATE_CHOICES if web_args.template_preview(name)]
+        if shown:
+            gal = gr.Gallery([(web_args.template_preview(n), label) for label, n in shown], columns=5, height=240, allow_preview=False,
+                             show_label=False, interactive=False, elem_classes=["sf-tpl-gallery"])
+            gal.select(lambda evt: shown[evt.index][1] if isinstance(evt.index, int) and evt.index < len(shown) else "none", None, tpl)
+            gr.Markdown("_Click a picture to choose that template._")
         tpl_img = gr.Image(value=None, show_label=False, interactive=False, height=300, visible=False)
         with gr.Row():
             intro = gr.Dropdown(web_args.COVER_CHOICES, value="none", label="Intro cover",
@@ -451,13 +457,25 @@ def clear_brand():
     return "", "", brand.DEFAULT_COLOR, "top-right", None, "Brand removed."
 
 
+def _range_too_long(text):
+    """True when `text` is a start-end range longer than a short can be (the tool would silently cut it to a minute)."""
+    from engine.moments import parse_time, MAX_SHORT
+    m = re.fullmatch(r"(.+?)\s*[-–—]\s*(.+)", text.strip())
+    if not m:
+        return False
+    try:
+        return parse_time(m.group(2)) - parse_time(m.group(1)) > MAX_SHORT + 1
+    except ValueError:
+        return False
+
+
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
                auto_edit="none", edit_strength="medium", stat_pops=False, length=30, moments="", about="", visual=False, reuse="", reuse_all="all", drive="", enhance=False, grade="default",
                game=False, game_mix="0.5", caption_position="default", caption_size="default", game_framing="auto", llm_provider="auto",
                visual_template="none", intro_animation="none", outro_animation="none",
-               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta="", shape="9:16"):
+               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta="", shape="9:16", plan_first=False, between=""):
     """The beginner flow: a video in, shorts out, with plain-language progress instead of a raw log.
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
@@ -514,7 +532,13 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
                 parse_moments(moments)                                   # a typo is reported here, before the long analysis
             except ValueError as e:
                 raise gr.Error(f"Exact times: {e}")
+            too_long = [t.strip() for t in re.split(r"[\n,;]+", moments) if t.strip() and _range_too_long(t)]
+            if too_long:
+                raise gr.Error(f"Exact times: '{too_long[0]}' is longer than a short (about a minute). To search a part of the video, use "
+                               "'Only look between' instead: the tool then picks the best moments inside that range.")
             cmd += ["--moments", moments.strip()]
+        if (between or "").strip():
+            cmd += ["--only_between", between.strip()]
         for phrase in (cut or "").splitlines():
             if phrase.strip():
                 cmd += ["--cut", phrase.strip()]
@@ -531,8 +555,12 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
             if keep and "--use_cache" not in cmd:
                 cmd.append("--use_cache")
             print(f"[Log] Reusing {len(copied)} saved result(s) from the earlier run ({'transcript and all cache' if keep else 'transcript only'}).")
+    plan_first = bool(plan_first) and not long_form
+    if plan_first:
+        cmd.append("--plan_only")
     save_command(session, cmd)
-    yield from _with_drive(_stream_clip(cmd, results, long_form, minutes, find), drive)
+    stream = _stream_clip(cmd, results, long_form, minutes, find, plan_only=True) if plan_first else _stream_clip(cmd, results, long_form, minutes, find)
+    yield from _with_drive(stream, drive)
 
 def drive_upload_message(paths, folder):
     """Upload finished videos to a Google Drive folder; returns one plain-language line (never raises)."""
@@ -570,7 +598,7 @@ def save_command(session, cmd):
         pass
 
 
-def _stream_clip(cmd, results, long_form, minutes, find):
+def _stream_clip(cmd, results, long_form, minutes, find, plan_only=False):
     """Run the clipping pipeline and stream plain-language progress. Yields (status, log, cards)."""
     from shortsflow import onboarding, review
     progress, seen = onboarding.Progress(), 0
@@ -583,6 +611,15 @@ def _stream_clip(cmd, results, long_form, minutes, find):
             status = progress.feed(line)
         seen = len(lines)
         yield status, log, []
+    if plan_only:
+        from engine.plan import read_plan
+        plan = read_plan(os.path.dirname(results))
+        if plan and plan["moments"]:
+            yield (f"📝 Found {len(plan['moments'])} moment(s). Nothing is rendered yet: check and adjust them in the **Review the moments** "
+                   "section below, then press **Render these moments**."), log, []
+        else:
+            yield "❌ No moments were found. Open 'Technical details' below for the reason.", log, []
+        return
     if long_form:
         cards = _cards_from_videos([v for v in videos if os.path.basename(v).startswith(("highlight_reel", "mashup"))] or videos[:1])
         for c in cards:
@@ -603,12 +640,72 @@ def _stream_clip(cmd, results, long_form, minutes, find):
 
 
 
+def latest_plan(root):
+    """The newest Start here session if it has a plan that was not rendered yet: {"session", "moments", "total"}, else None."""
+    from engine.plan import read_plan
+    from shortsflow import word_edit
+    for d in sorted(glob.glob(os.path.join(root, "sessions", "web_*")), reverse=True)[:1]:
+        plan = read_plan(d)
+        if plan and not os.path.isfile(os.path.join(d, "results.json")):
+            words = word_edit.load_words(d)
+            ends = [m["end"] for m in plan["moments"]] + [w["end"] for w in words if w.get("end") is not None]
+            return {"session": d, "moments": plan["moments"], "total": max(ends) if ends else 0.0}
+    return None
+
+
+def load_plan():
+    return latest_plan(ROOT)
+
+
+def render_plan(session, *values):
+    """Render the reviewed moments: values = keep flags, then starts, then ends (one per moment, in plan order)."""
+    from engine.plan import read_plan, moments_text
+    from engine.moments import parse_moments
+    plan = read_plan(session)
+    if not plan:
+        raise gr.Error("That plan could not be read.")
+    n = len(plan["moments"])
+    keeps, starts, ends = values[:n], values[n:2 * n], values[2 * n:3 * n]
+    extra = values[3 * n] if len(values) > 3 * n else ""
+    chosen = [{"start": a, "end": b} for k, a, b in zip(keeps, starts, ends) if k and a is not None and b is not None]
+    try:
+        chosen += [{"start": m["start"], "end": m["end"]} for m in parse_moments(extra or "")]      # the user's own moments
+    except ValueError as e:
+        raise gr.Error(f"Your own moments: {e}")
+    if not chosen:
+        raise gr.Error("Keep at least one moment, or add your own.")
+    text = moments_text(chosen)
+    try:
+        parse_moments(text)
+    except ValueError as e:
+        raise gr.Error(f"Moments: {e}")
+    with open(os.path.join(session, "command.json"), encoding="utf-8") as f:
+        cmd = list(json.load(f)["cmd"])
+    while "--plan_only" in cmd:
+        cmd.remove("--plan_only")
+    if "--moments" in cmd:
+        i = cmd.index("--moments")
+        del cmd[i:i + 2]
+    cmd += ["--moments", text]
+    if "--use_cache" not in cmd:
+        cmd.append("--use_cache")                 # the transcript from the analysis is reused
+    save_command(session, cmd)
+    yield from _stream_clip(cmd, os.path.join(session, "results.json"), False, 4, "")
+
+
+def render_plan_handler(session):
+    """A generator function (Gradio only streams progress from a real generator function, not from a lambda that returns one)."""
+    def run(*values):
+        yield from render_plan(session, *values)
+    return run
+
+
 def unfinished_runs(root):
     """[(label, command.json path)] of the Start here runs that never produced results (stopped, crashed, closed), newest first."""
     out = []
     for d in sorted(glob.glob(os.path.join(root, "sessions", "web_*")), reverse=True)[:30]:
         cmd_file = os.path.join(d, "command.json")
-        if not os.path.isfile(cmd_file) or os.path.isfile(os.path.join(d, "results.json")):
+        if not os.path.isfile(cmd_file) or os.path.isfile(os.path.join(d, "results.json")) or os.path.isfile(os.path.join(d, "plan.json")):
             continue
         try:
             with open(cmd_file, "r", encoding="utf-8") as f:
@@ -832,6 +929,8 @@ def build_ui():
                         with gr.Accordion("Pick the moments (optional)", open=False):
                             q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
                                                 info="Describe the part you want. Leave empty to let the AI pick the best moments.")
+                            q_between = gr.Textbox(label="Only look between (optional)", placeholder="30:00-60:00", max_lines=1,
+                                                   info="The tool still picks the moments, but only inside this part of the video, for example after the first 30 minutes. It listens to the whole video first, so it is not faster.")
                             q_moments = gr.Textbox(label="Or give exact times (one per line)", lines=3, placeholder="7:00-7:45",
                                                    info="Makes shorts from exactly these moments, like a cutscene you spotted. Use minutes:seconds, e.g. 7:00-7:45 or 1:01:40-1:02:30. Leave empty to let the AI choose.")
                             q_about = gr.Textbox(label="What is this video about? (optional)", lines=2, placeholder="God of War 3 story playthrough",
@@ -902,11 +1001,53 @@ def build_ui():
                             q_tpl_name = gr.Textbox(label="Template name", placeholder="my-channel", max_lines=1)
                             q_tpl_save = gr.Button("Save as a template", variant="secondary")
                             q_tpl_msg = gr.Markdown("")
+                        q_plan_first = gr.Checkbox(label="Let me review the moments first", value=False,
+                                                   info="Finds the moments, then stops: you see each one on a timeline, adjust start and end or drop it, and only then it is rendered. Short clips only.")
                         q_btn = gr.Button("✨ Make my shorts", variant="primary")
                         q_stop = gr.Button("⏹ Stop", variant="stop")
                     with gr.Column():
                         q_status = gr.Markdown("Waiting for a video...")
                 q_cards = gr.State([])
+                q_plan = gr.State(None)
+
+                @gr.render(inputs=q_plan)
+                def show_plan(plan):
+                    """Before rendering: every chosen moment with a timeline, start/end boxes and a keep box."""
+                    if not plan or not plan.get("moments"):
+                        return
+                    from shortsflow import timeline as _tl
+                    gr.Markdown("### Review the moments\nNothing is rendered yet. Adjust the start and end, untick a moment to drop it, then render.")
+                    moms = plan["moments"]
+                    total = plan.get("total") or 0.0
+                    keeps, t0s, t1s = [], [], []
+                    for m in moms:
+                        others = [(o["start"], o["end"]) for o in moms if o["index"] != m["index"]]
+                        with gr.Group():
+                            score = f" · {int(m['score'])}/100" if isinstance(m.get("score"), (int, float)) else ""
+                            keep = gr.Checkbox(value=True, label=f"{m['title']}{score}", interactive=True)
+                            if m.get("reason"):
+                                gr.Markdown(f"_{m['reason']}_")
+                            with gr.Row():
+                                t0 = gr.Number(value=m["start"], label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
+                                t1 = gr.Number(value=m["end"], label="End (seconds)", precision=1, minimum=0, interactive=True)
+                            strip = _tl.timeline_html(m["start"], m["end"], None, total, others)
+                            if strip:
+                                box = gr.HTML(strip)
+                                with gr.Row():
+                                    for lbl, d, is_start in (("Start -1 s", -1, True), ("Start +1 s", 1, True), ("End -1 s", -1, False), ("End +1 s", 1, False)):
+                                        b = gr.Button(lbl, size="sm")
+                                        b.click(lambda a, e, d=d, st=is_start, t=total, ot=others: _tl.nudge_view(a, e, d, st, t, None, ot),
+                                                [t0, t1], [t0, t1, box])
+                                for inp in (t0, t1):
+                                    inp.change(lambda a, e, t=total, ot=others: _tl.timeline_html(a, e, None, t, ot) or gr.update(), [t0, t1], box)
+                        keeps.append(keep)
+                        t0s.append(t0)
+                        t1s.append(t1)
+                    own = gr.Textbox(label="Add your own moments (optional, one per line)", lines=2, placeholder="7:00-7:45",
+                                     info="Rendered together with the ones kept above. Minutes:seconds, e.g. 7:00-7:45 or 1:01:40-1:02:30.")
+                    go_plan = gr.Button("🎬 Render these moments", variant="primary")
+                    go_plan.click(render_plan_handler(plan["session"]), [*keeps, *t0s, *t1s, own], [q_status, q_log, q_cards]
+                                  ).then(lambda: None, None, q_plan)
 
                 @gr.render(inputs=q_cards)
                 def show_review(cards):
@@ -1049,8 +1190,8 @@ def build_ui():
                                                   q_look[0], q_look[1], q_look[2]], [q_tpl_msg, q_edit])
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
-                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm, *q_look],
-                            [q_status, q_log, q_cards])
+                             q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm, *q_look, q_plan_first, q_between],
+                            [q_status, q_log, q_cards]).then(load_plan, None, q_plan)
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
                 demo.load(unfinished_update, None, q_unfinished)
