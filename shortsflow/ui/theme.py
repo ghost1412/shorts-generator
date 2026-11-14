@@ -54,15 +54,16 @@ def mode_card_css():
 
 
 EXTRA_CSS = """
-.sf-hero { padding: 30px 0 10px; }
+.sf-hero { padding: 18px 0 0; }
 .sf-hero h1 { font-size: 34px; letter-spacing: -0.03em; background: linear-gradient(90deg, #fb923c, #ea580c 60%, #c2410c);
               -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent !important; color: transparent !important; width: fit-content; }
 .sf-hero p { max-width: 640px; }
 .gradio-container .block, .gradio-container .form { border-color: rgba(128,128,128,.22) !important; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
 .gradio-container button.primary { box-shadow: 0 6px 18px rgba(234,88,12,.28); transition: transform .12s, box-shadow .12s; }
-.gradio-container { overflow: visible !important; }          /* so the primary button can stay in view while the form scrolls */
+.gradio-container { overflow-x: clip !important; overflow-y: visible !important; }          /* so the primary button can stay in view while the form scrolls */
 .gradio-container button.primary { position: sticky; bottom: 14px; z-index: 30; }
 .gradio-container button.primary:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(234,88,12,.38); }
+@media (max-width: 640px) { .gradio-container { padding: 0 6px !important; } .gradio-container .main, .gradio-container .fillable { padding-left: 4px !important; padding-right: 4px !important; } .gradio-container .column, .gradio-container .block { min-width: 0 !important; } .gradio-container .row { flex-wrap: wrap !important; } }
 .sf-progress { padding: 14px 16px 12px; border-radius: 14px; border: 1px solid rgba(128,128,128,.25); background: rgba(128,128,128,.06); }
 .gradio-container .accordion > button, .gradio-container details > summary { font-weight: 600; }
 """ + mode_card_css()

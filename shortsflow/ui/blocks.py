@@ -21,7 +21,7 @@ def look_block(gr, web_args, prefix_info="", with_shape=True, open_=False, text_
                           info="A designed look drawn over the picture. Click a picture below or pick from this list. Turns on animated captions." + prefix_info)
         shown = [(label, name) for label, name in web_args.VISUAL_TEMPLATE_CHOICES if web_args.template_preview(name)]
         if shown:
-            gal = gr.Gallery([(web_args.template_preview(n), label) for label, n in shown], columns=5, height=260, allow_preview=False,
+            gal = gr.Gallery([(web_args.template_preview(n), label) for label, n in shown], columns=[2, 3, 4, 5, 5, 5], height=260, allow_preview=False,
                              show_label=False, interactive=False)
             names = [n for _, n in shown]
 

@@ -1322,7 +1322,7 @@ def build_ui():
 
                 q_proj_paths = gr.State([])
                 q_proj_title = gr.Markdown("### Your projects", visible=False)
-                q_projects = gr.Gallery(value=[], columns=4, rows=2, height="auto", allow_preview=False, show_label=False,
+                q_projects = gr.Gallery(value=[], columns=[2, 2, 3, 4, 4, 4], rows=2, height="auto", allow_preview=False, show_label=False,
                                         interactive=False, visible=False, object_fit="cover")
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")

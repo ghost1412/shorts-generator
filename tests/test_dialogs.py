@@ -63,3 +63,12 @@ def test_mode_cards_have_an_icon_and_a_description_for_every_mode():
     css = theme.mode_card_css()
     assert css.count("::before { -webkit-mask-image") == len(theme.MODES) and css.count("::after { content:") == len(theme.MODES)
     assert 'elem_id="sf-modes"' in src
+
+
+def test_galleries_are_responsive_so_a_phone_does_not_scroll_sideways():
+    import os
+    root = os.path.join(os.path.dirname(__file__), "..")
+    web = open(os.path.join(root, "webui.py"), encoding="utf-8").read()
+    blocks = open(os.path.join(root, "shortsflow", "ui", "blocks.py"), encoding="utf-8").read()
+    assert "columns=4" not in web and "columns=5" not in blocks          # fixed column counts forced a 544 px wide page on a 390 px phone
+    assert "columns=[2, 2, 3, 4, 4, 4]" in web and "columns=[2, 3, 4, 5, 5, 5]" in blocks
