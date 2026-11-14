@@ -1343,29 +1343,31 @@ def build_ui():
                         d_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
                         d_lang = gr.Dropdown(web_args.dub_languages(), value="es", label="Dub into")
                         d_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
-                        with gr.Row():
-                            d_voice = gr.Dropdown(web_args.DUB_VOICE_CHOICES, value="auto", label="Voice")
-                            d_tts = gr.Dropdown(web_args.DUB_PROVIDER_CHOICES, value="auto", label="Voice engine",
-                                                info="Automatic uses Edge online; Kokoro runs on this PC but only speaks English.")
-                        d_original = gr.Dropdown(web_args.DUB_ORIGINAL_CHOICES, value="music", label="The video's own sound",
-                                                 info="The first choice separates the voice from the music (needs 'pip install demucs'; about a minute per minute of video on the CPU) and removes only the voice. Without it the original is kept faintly.")
-                        d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
-                        with gr.Row():
-                            d_tone = gr.Dropdown(web_args.DUB_TONE_CHOICES, value="faithful", label="Tone of the translation",
-                                                 info="Faithful keeps the speaker's own tone. The others make the AI rewrite each line (funny, sarcastic...) and keep the meaning; it can change what is said, so check the saved .json before you publish.")
-                            d_delivery = gr.Dropdown(web_args.DUB_DELIVERY_CHOICES, value="neutral", label="How the voice speaks",
-                                                     info="Speed and pitch of the computer voice, not real emotions.")
-                        d_llm = _ai_provider_dropdown()
-                        with gr.Row():
-                            d_cap_size = gr.Dropdown(web_args.DUB_CAPTION_SIZE_CHOICES, value="default", label="Subtitle size",
-                                                     info="Only used when the subtitles are burned in.")
-                            d_cap_pos = gr.Dropdown(web_args.DUB_CAPTION_POSITION_CHOICES, value="bottom", label="Subtitle position",
-                                                    info="Pick Raised if the video already has its own subtitles at the bottom.")
-                        d_resume = gr.Dropdown(label="Continue an earlier dub that stopped (optional)", choices=[], value=None, interactive=True,
-                                               info="Pick it to finish where it stopped: the saved translation and finished voices are reused, so no AI text or voice service is called for them. The video, language and voice come from that run.")
-                        d_btn = gr.Button("🌍 Dub my video", variant="primary")
+                        with gr.Accordion("Voice and translation", open=False):
+                            with gr.Row():
+                                d_voice = gr.Dropdown(web_args.DUB_VOICE_CHOICES, value="auto", label="Voice")
+                                d_tts = gr.Dropdown(web_args.DUB_PROVIDER_CHOICES, value="auto", label="Voice engine",
+                                                    info="Automatic uses Edge online; Kokoro runs on this PC but only speaks English.")
+                            with gr.Row():
+                                d_tone = gr.Dropdown(web_args.DUB_TONE_CHOICES, value="faithful", label="Tone of the translation",
+                                                     info="Faithful keeps the speaker's own tone. The others make the AI rewrite each line (funny, sarcastic...) and keep the meaning; it can change what is said, so check the saved .json before you publish.")
+                                d_delivery = gr.Dropdown(web_args.DUB_DELIVERY_CHOICES, value="neutral", label="How the voice speaks",
+                                                         info="Speed and pitch of the computer voice, not real emotions.")
+                            d_llm = _ai_provider_dropdown()
+                        with gr.Accordion("Sound and subtitles", open=False):
+                            d_original = gr.Dropdown(web_args.DUB_ORIGINAL_CHOICES, value="music", label="The video's own sound",
+                                                     info="The first choice separates the voice from the music (needs 'pip install demucs'; about a minute per minute of video on the CPU) and removes only the voice. Without it the original is kept faintly.")
+                            d_burn = gr.Checkbox(label="Burn the translated subtitles into the video", info="Slower: the video is re-encoded. The .srt file is always made.")
+                            with gr.Row():
+                                d_cap_size = gr.Dropdown(web_args.DUB_CAPTION_SIZE_CHOICES, value="default", label="Subtitle size",
+                                                         info="Only used when the subtitles are burned in.")
+                                d_cap_pos = gr.Dropdown(web_args.DUB_CAPTION_POSITION_CHOICES, value="bottom", label="Subtitle position",
+                                                        info="Pick Raised if the video already has its own subtitles at the bottom.")
+                        with gr.Accordion("Continue an earlier dub that stopped (optional)", open=False):
+                            d_resume = gr.Dropdown(label="Continue an earlier dub that stopped (optional)", choices=[], value=None, interactive=True,
+                                                   info="Pick it to finish where it stopped: the saved translation and finished voices are reused, so no AI text or voice service is called for them. The video, language and voice come from that run.")
+                        d_btn = gr.Button("Dub my video", variant="primary")
                         d_stop = gr.Button("⏹ Stop", variant="stop")
-                    with gr.Column():
                         d_status = gr.Markdown("Waiting for a video...")
                         d_video = gr.Video(label="Dubbed video", interactive=False)
                         d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
@@ -1441,7 +1443,6 @@ def build_ui():
                                                  info="Needs a one-time Google sign-in; see the top of engine/drive_upload.py.")
                         t_btn = gr.Button("🧳 Make my recap", variant="primary")
                         t_stop = gr.Button("⏹ Stop", variant="stop")
-                    with gr.Column():
                         t_status = gr.Markdown("Waiting for your videos...")
                         t_video = gr.Video(label="Your recap", interactive=False)
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
@@ -1470,7 +1471,6 @@ def build_ui():
                         p_len = gr.Slider(10, 60, value=24, step=2, label="Length (seconds)")
                         p_btn = gr.Button("📸 Make my reel", variant="primary")
                         p_stop = gr.Button("⏹ Stop", variant="stop")
-                    with gr.Column():
                         p_status = gr.Markdown("Waiting for photos...")
                         p_video = gr.Video(label="Your reel", interactive=False)
                 with gr.Accordion("Technical details", open=False):
@@ -1492,9 +1492,9 @@ def build_ui():
                         gen_settings = _render_settings()
                         gen_btn = gr.Button("Generate short", variant="primary")
                         gen_stop = gr.Button("⏹ Stop", variant="stop")
-                    with gr.Column():
                         gen_videos = gr.Files(label="Rendered video")
-                        gen_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
+                        with gr.Accordion("Log", open=True):
+                            gen_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
                 gen_run = gen_btn.click(
                     generate_short,
                     [mode, category, prompt, script, vibe, voice, *gen_settings],
