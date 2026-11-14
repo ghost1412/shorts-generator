@@ -1032,8 +1032,33 @@ def pick_mode(mode):
     return [gr.update(visible=column == k) for k in MODE_KEYS] + [gr.update(value="long" if mode == "highlights" else "shorts")]
 
 
+def browse_video(current):
+    """Open the system's file dialog and put the chosen video's path in the box (the box is unchanged when cancelled)."""
+    from shortsflow.ui import dialogs
+    got = dialogs.pick("file", "Choose a video", dialogs.VIDEO_TYPES)
+    return got[0] if got else current
+
+
+def add_recap_folder(current):
+    from shortsflow.ui import dialogs
+    return dialogs.append_line(current, dialogs.pick("folder", "Choose a folder (one day of the trip)"))
+
+
+def add_recap_files(current):
+    from shortsflow.ui import dialogs
+    return dialogs.append_line(current, dialogs.pick("files", "Choose videos", dialogs.VIDEO_TYPES))
+
+
+def browse_photo_folder(current):
+    from shortsflow.ui import dialogs
+    got = dialogs.pick("folder", "Choose a photo folder")
+    return got[0] if got else current
+
+
 def build_ui():
     tolerate_missing_ffprobe()
+    from shortsflow.ui import dialogs as _dialogs
+    browse_ok = _dialogs.available()            # the Browse buttons only where a desktop dialog can be shown (not Docker, not remote)
     with gr.Blocks(title="ShortsFlow AI Studio", **_blocks_theme()) as demo:
         gr.HTML('<div class="sf-hero"><h1>ShortsFlow</h1><p>Turn a long video into shorts. It runs on this PC and nothing leaves it unless you switch on an '
                 'online helper. <a href="https://github.com/ghost1412/shortsflow" target="_blank">GitHub</a></p></div>')
@@ -1048,6 +1073,9 @@ def build_ui():
                 with gr.Row():
                     with gr.Column():
                         q_url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC: a path is used where it is, nothing is copied.", placeholder="https://www.youtube.com/watch?v=...")
+                        if browse_ok:
+                            q_browse = gr.Button("Browse for a video on this PC...", size="sm")
+                            q_browse.click(browse_video, q_url, q_url)
                         q_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
                         q_sample = gr.Button("🎬 No video handy? Try a 2-minute sample", size="sm")
                         q_sample_note = gr.Markdown("")
@@ -1369,6 +1397,9 @@ def build_ui():
                 with gr.Row():
                     with gr.Column():
                         url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC (used where it is, nothing is copied).", placeholder="https://www.youtube.com/watch?v=...")
+                        if browse_ok:
+                            clip_browse = gr.Button("Browse for a video on this PC...", size="sm")
+                            clip_browse.click(browse_video, url, url)
                         upload = gr.File(label="...or upload a video", file_types=["video"], type="filepath")
                         with gr.Row():
                             clip_count = gr.Number(value=3, minimum=1, precision=0, label="Number of clips", info="No limit.")
@@ -1428,6 +1459,9 @@ def build_ui():
                 with gr.Row():
                     with gr.Column():
                         d_url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC (used where it is, nothing is copied).", placeholder="https://www.youtube.com/watch?v=...")
+                        if browse_ok:
+                            d_browse = gr.Button("Browse for a video on this PC...", size="sm")
+                            d_browse.click(browse_video, d_url, d_url)
                         d_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
                         d_lang = gr.Dropdown(web_args.dub_languages(), value="es", label="Dub into")
                         d_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
@@ -1474,9 +1508,15 @@ def build_ui():
                         t_kind = gr.Dropdown(web_args.RECAP_KIND_CHOICES, value="trip", label="What kind of videos are these?",
                                              info="Changes the wording and the options below. Wedding, event and family recaps never look up places.")
                         t_files = gr.File(label="Your videos (in filming order)", file_count="multiple", file_types=["video"], type="filepath")
-                        t_paths = gr.Textbox(label="Or use videos already on this PC (no copying): paste folder paths", lines=2,
+                        t_paths = gr.Textbox(label="Or use videos already on this PC (no copying)", lines=2,
                                              placeholder="One folder or file path per line, in the order you filmed them",
-                                             info="One folder (or file) per line, in order. They are used where they are, so a big trip does not have to be copied into the app first. Used only when no videos are added above.")
+                                             info="Browse with the buttons below (they show when the app runs on your own PC), or type a path. One folder (or file) per line, in order. They are used where they are, so a big trip does not have to be copied into the app first. Used only when no videos are added above.")
+                        if browse_ok:
+                            with gr.Row():
+                                t_add_folder = gr.Button("Add a day folder...", size="sm")
+                                t_add_files = gr.Button("Add videos...", size="sm")
+                            t_add_folder.click(add_recap_folder, t_paths, t_paths)
+                            t_add_files.click(add_recap_files, t_paths, t_paths)
                         t_name = gr.Textbox(label="Trip name", placeholder="Northvale: Pinemere, Larkwater and Stonegate")
                         t_length = gr.Slider(30, web_args.MAX_RECAP_SECONDS, value=60, step=15, label="Recap length (seconds)",
                                              info="A trip: 60-120. A wedding or event film can be 10-30 minutes (600-1800). Longer recaps take longer to make.")
@@ -1562,6 +1602,9 @@ def build_ui():
                         p_folder = gr.Textbox(label="Or use a photo folder already on this PC (no copying)", max_lines=1,
                                               placeholder="The folder's full path",
                                               info="Used where it is, in file-name order. Only used when no photos are added above.")
+                        if browse_ok:
+                            p_browse = gr.Button("Choose a photo folder on this PC...", size="sm")
+                            p_browse.click(browse_photo_folder, p_folder, p_folder)
                         p_type = gr.Dropdown(type_labels(), value="memories", label="Reel type",
                                              info="Travel recap and Memories follow the photo dates; Countdown and Product follow the order you add them.")
                         p_name = gr.Textbox(label="Title or name (optional)", placeholder="Lisbon, Mia, the new bottle...")
