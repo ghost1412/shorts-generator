@@ -38,3 +38,10 @@ def test_caption_styles_exist_on_the_command_line():
     allowed = set(re.findall(r'"([A-Z_]+)"', line.split("choices=")[1].split("]")[0]))
     for key, s in kinds.KINDS.items():
         assert s["captions"] in allowed, key
+
+
+def test_gallery_pick_maps_a_click_to_a_template():
+    from shortsflow.ui.blocks import gallery_pick
+    names = ["podcast-card", "neon-frame"]
+    assert gallery_pick(names, 1) == "neon-frame"
+    assert gallery_pick(names, 5) == "none" and gallery_pick(names, None) == "none" and gallery_pick(names, -1) == "none"

@@ -33,3 +33,31 @@ def read_plan(session_dir):
 def moments_text(moments):
     """`--moments` text for the kept moments, in time order: '420.0-465.5, 600.0-640.0'."""
     return ", ".join(f"{float(m['start']):.2f}-{float(m['end']):.2f}" for m in sorted(moments, key=lambda m: float(m["start"])))
+
+
+def make_preview(source, start, end, out_path, height=360):
+    """A small, fast preview clip (low resolution) of source[start:end] for reviewing a moment. Returns out_path, None on failure.
+    The original video is only read."""
+    import shutil
+    import subprocess
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        try:
+            import imageio_ffmpeg
+            exe = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            return None
+    try:
+        start, end = float(start), float(end)
+    except (TypeError, ValueError):
+        return None
+    if end <= start or not os.path.isfile(str(source)):
+        return None
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    cmd = [exe, "-y", "-v", "error", "-ss", f"{start:.2f}", "-i", str(source), "-t", f"{end - start:.2f}",
+           "-vf", f"scale=-2:{height}", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-c:a", "aac", "-b:a", "96k", out_path]
+    try:
+        r = subprocess.run(cmd, capture_output=True, timeout=180)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out_path if r.returncode == 0 and os.path.isfile(out_path) else None

@@ -33,3 +33,26 @@ def test_only_between_window():
         _window("60:00-30:00")
     with pytest.raises(SystemExit):
         _window("nonsense")
+
+
+def test_make_preview_rejects_bad_input_and_leaves_source_alone(tmp_path):
+    assert plan.make_preview(str(tmp_path / "missing.mp4"), 1, 5, str(tmp_path / "p.mp4")) is None
+    src = tmp_path / "s.txt"
+    src.write_text("x")
+    assert plan.make_preview(str(src), 5, 1, str(tmp_path / "p.mp4")) is None
+    assert plan.make_preview(str(src), "a", 1, str(tmp_path / "p.mp4")) is None
+    assert src.read_text() == "x"
+
+
+def test_make_preview_cuts_a_real_clip(tmp_path):
+    import shutil
+    import subprocess
+    import pytest
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        pytest.skip("no ffmpeg")
+    src = tmp_path / "in.mp4"
+    subprocess.run([exe, "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=320x240:d=4", "-f", "lavfi", "-i", "sine=d=4",
+                    "-shortest", "-c:v", "libx264", str(src)], check=True)
+    out = plan.make_preview(str(src), 1, 3, str(tmp_path / "sub" / "p.mp4"), height=120)
+    assert out and (tmp_path / "sub" / "p.mp4").stat().st_size > 0

@@ -185,30 +185,10 @@ def _count(value):
 
 
 def template_controls(prefix_info="", with_shape=True):
-    """The look controls (visual template with preview, intro and outro covers, template text). Returns the components in the order that
-    `clip_video` / `quick_clip` take them after their other options."""
-    with gr.Accordion("🎨 Look: templates, covers and frame shape (optional: click to open)", open=False):
-        tpl = gr.Dropdown(web_args.VISUAL_TEMPLATE_CHOICES, value="none", label="Visual template",
-                          info="A designed look drawn over the picture. Turns on animated captions." + prefix_info)
-        shown = [(label, name) for label, name in web_args.VISUAL_TEMPLATE_CHOICES if web_args.template_preview(name)]
-        if shown:
-            gal = gr.Gallery([(web_args.template_preview(n), label) for label, n in shown], columns=5, height=240, allow_preview=False,
-                             show_label=False, interactive=False, elem_classes=["sf-tpl-gallery"])
-            gal.select(lambda evt: shown[evt.index][1] if isinstance(evt.index, int) and evt.index < len(shown) else "none", None, tpl)
-            gr.Markdown("_Click a picture to choose that template._")
-        tpl_img = gr.Image(value=None, show_label=False, interactive=False, height=300, visible=False)
-        with gr.Row():
-            intro = gr.Dropdown(web_args.COVER_CHOICES, value="none", label="Intro cover",
-                                info="Opens over the first second (tiles break apart, doors, iris, blinds, fade).")
-            outro = gr.Dropdown(web_args.COVER_CHOICES, value="none", label="Outro cover", info="Closes over the last second.")
-        with gr.Accordion("Text for the template (only what you type is drawn)", open=False):
-            texts = [gr.Textbox(label=label, placeholder=ph, max_lines=1) for label, ph in (
-                ("Speaker name", "Alex Morgan"), ("Role", "Host"), ("Show or channel", "My Show"), ("Handle", "@myshow"),
-                ("Headline", "A line for the top bar"), ("Closing line", "Follow @myshow for more"))]
-        shape = gr.Dropdown(web_args.SHAPE_CHOICES, value="9:16", label="Frame shape",
-                            info="For shorts cut from a video. The highlights video is always 16:9.") if with_shape else None
-        tpl.change(lambda name: gr.update(value=web_args.template_preview(name), visible=bool(web_args.template_preview(name))), tpl, tpl_img)
-    return [tpl, intro, outro, *texts] + ([shape] if shape is not None else [])
+    """The look controls, shared by every flow (see shortsflow/ui/blocks.py). Returns the components in the order `clip_video` /
+    `quick_clip` take them after their other options."""
+    from shortsflow.ui.blocks import look_block
+    return look_block(gr, web_args, prefix_info, with_shape)
 
 
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
@@ -649,8 +629,23 @@ def latest_plan(root):
         if plan and not os.path.isfile(os.path.join(d, "results.json")):
             words = word_edit.load_words(d)
             ends = [m["end"] for m in plan["moments"]] + [w["end"] for w in words if w.get("end") is not None]
-            return {"session": d, "moments": plan["moments"], "total": max(ends) if ends else 0.0}
+            source = plan.get("source_video") or ""
+            for m in plan["moments"]:          # a small clip per moment, so it can be watched before rendering
+                from engine.plan import make_preview
+                m["preview"] = make_preview(source, m["start"], m["end"], os.path.join(d, "previews", f"m{m['index']}.mp4"))
+            return {"session": d, "source": source, "moments": plan["moments"], "total": max(ends) if ends else 0.0}
     return None
+
+
+def preview_handler(session, source, index):
+    """Re-cut one moment's preview for the start and end currently in the boxes."""
+    def run(start, end):
+        from engine.plan import make_preview
+        path = make_preview(source, start, end, os.path.join(session, "previews", f"m{index}_{int(float(start or 0))}_{int(float(end or 0))}.mp4"))
+        if not path:
+            raise gr.Error("Could not make a preview for those times.")
+        return path
+    return run
 
 
 def load_plan():
@@ -1027,9 +1022,13 @@ def build_ui():
                             keep = gr.Checkbox(value=True, label=f"{m['title']}{score}", interactive=True)
                             if m.get("reason"):
                                 gr.Markdown(f"_{m['reason']}_")
+                            vid = gr.Video(value=m.get("preview"), height=260, interactive=False, show_label=False,
+                                           label="Preview of this moment (small copy; the render is full quality)")
                             with gr.Row():
                                 t0 = gr.Number(value=m["start"], label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
                                 t1 = gr.Number(value=m["end"], label="End (seconds)", precision=1, minimum=0, interactive=True)
+                            refresh = gr.Button("▶ Update the preview for these times", size="sm")
+                            refresh.click(preview_handler(plan["session"], plan.get("source"), m["index"]), [t0, t1], vid)
                             strip = _tl.timeline_html(m["start"], m["end"], None, total, others)
                             if strip:
                                 box = gr.HTML(strip)
