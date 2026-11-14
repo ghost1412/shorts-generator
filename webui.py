@@ -907,6 +907,15 @@ def _render_settings(with_aspect=True):
 WORDS_CSS = "<style>.sf-words { max-height: 230px; overflow-y: auto; }</style>"
 
 
+MODE_KEYS = ["shorts", "clip", "dub", "recap", "reel", "idea"]
+
+
+def web_args_modes():
+    """[(label, key)] of the things you can make: the first screen of the app."""
+    return [("🚀 Shorts or a highlights video", "shorts"), ("🌍 Dub into another language", "dub"), ("🎞 Recap (trip, wedding, event)", "recap"),
+            ("📸 Photo reel", "reel"), ("🪄 Video from an idea", "idea"), ("✂️ Clip tool (all options)", "clip")]
+
+
 def build_ui():
     tolerate_missing_ffprobe()
     with gr.Blocks(title="ShortsFlow AI Studio", **_blocks_theme()) as demo:
@@ -918,8 +927,10 @@ def build_ui():
         gr.HTML(WORDS_CSS)
         from shortsflow.timeline import DRAG_JS
         demo.load(None, None, None, js=DRAG_JS)
-        with gr.Tabs():
-            with gr.Tab("🚀 Start here"):
+        mode_card = gr.Radio(web_args_modes(), value="shorts", label="What do you want to make?",
+                             info="Pick one. Only the steps for that appear below.")
+        with gr.Column():
+            with gr.Column(visible=True) as mode_col_shorts:
                 gr.Markdown("### Make shorts from a video in one click\n"
                             "No account or API key is needed for this. Paste a link or upload a video, then press the button.")
                 with gr.Row():
@@ -1224,7 +1235,7 @@ def build_ui():
                 q_open.click(open_earlier, q_runs, [q_status, q_cards])
                 demo.load(earlier_runs, None, q_runs)
 
-            with gr.Tab("✂️ Clip (advanced)"):
+            with gr.Column(visible=False) as mode_col_clip:
                 with gr.Row():
                     with gr.Column():
                         url = gr.Textbox(label="YouTube / video URL", placeholder="https://www.youtube.com/watch?v=...")
@@ -1278,7 +1289,7 @@ def build_ui():
                 )
                 clip_stop.click(stop_jobs, None, clip_log, cancels=[clip_run])
 
-            with gr.Tab("🌍 Dub a video"):
+            with gr.Column(visible=False) as mode_col_dub:
                 gr.Markdown("### Re-voice a video in another language\n"
                             "Translates what is said and records it with a computer voice, over the original sound. "
                             "One voice for everyone, no lip-sync. Needs internet for the voice, and a free Groq key or Ollama for the translation.")
@@ -1320,7 +1331,7 @@ def build_ui():
                 d_stop.click(stop_jobs, None, d_status, cancels=[d_run])
                 demo.load(lambda: gr.update(choices=web_args.unfinished_dubs(ROOT)), None, d_resume)
 
-            with gr.Tab("🎞 Recap (trip, wedding, event)"):
+            with gr.Column(visible=False) as mode_col_recap:
                 gr.Markdown("### Turn many videos into one recap\n"
                             "Pick what the videos are. It opens with a hook over fast glimpses of the best shots, then shows everything part by part "
                             "(day by day for a trip) with a title card for each, and writes a summary. Add the videos in the order you filmed them.")
@@ -1398,7 +1409,7 @@ def build_ui():
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])
                 demo.load(lambda: reusable_update('trip'), None, t_reuse)
 
-            with gr.Tab("📸 Photo reel"):
+            with gr.Column(visible=False) as mode_col_reel:
                 from engine.photo_reel_types import type_labels
                 gr.Markdown("### Make a reel from your photos\n"
                             "Pick a type: it chooses the order, how long each photo stays, the captions, the title and the look. "
@@ -1423,7 +1434,7 @@ def build_ui():
                 p_run = p_btn.click(photo_reel, [p_files, p_type, p_name, p_texts, p_music, p_len], [p_status, p_log, p_video])
                 p_stop.click(stop_jobs, None, p_status, cancels=[p_run])
 
-            with gr.Tab("🪄 Generate from an idea"):
+            with gr.Column(visible=False) as mode_col_idea:
                 with gr.Row():
                     with gr.Column():
                         mode = gr.Dropdown(GENERATE_MODES, value="FACTS", label="Mode")
@@ -1451,6 +1462,8 @@ def build_ui():
                     "See `env.example`. Your video files stay on this PC. Only what you switch on goes out: transcript text to an AI text provider when a key is set, "
                     "small frames to Gemini for `--visual_context` when a key is set, text to the voice service in the dub and idea-to-video modes, "
                     "stock-footage search words to Pexels, place names looked up on OpenStreetMap in trip recaps (turn it off with `--recap_no_geocode`), and any upload you ask for.")
+        mode_cols = [mode_col_shorts, mode_col_clip, mode_col_dub, mode_col_recap, mode_col_reel, mode_col_idea]
+        mode_card.change(lambda m: [gr.update(visible=m == k) for k in MODE_KEYS], mode_card, mode_cols)
     return demo
 
 
