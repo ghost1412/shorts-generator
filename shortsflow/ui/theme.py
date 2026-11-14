@@ -32,14 +32,15 @@ def mode_card_css():
         "padding: 14px 16px !important; border-radius: 14px !important; border: 1px solid rgba(128,128,128,.30) !important; "
         "background: rgba(128,128,128,.07) !important; cursor: pointer; position: relative; transition: border-color .15s, background .15s, transform .15s; }",
         "#sf-modes label:hover { border-color: #ea580c !important; transform: translateY(-1px); }",
-        "#sf-modes label input { display: none !important; }",
+        "#sf-modes label input { display: block !important; position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }",
+        "#sf-modes label:focus-within { outline: 2px solid #ea580c; outline-offset: 2px; }",
         "#sf-modes label, #sf-modes label span, #sf-modes label.selected span { color: var(--body-text-color) !important; }",
         "#sf-modes label span { margin: 0 !important; padding: 0 !important; }",
         "#sf-modes label span { font-weight: 650; font-size: 14.5px; }",
         "#sf-modes label::before { content: ''; width: 26px; height: 26px; margin-bottom: 8px; background-color: currentColor; opacity: .85; "
         "-webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-size: contain; mask-size: contain; "
         "-webkit-mask-position: center; mask-position: center; }",
-        "#sf-modes label::after { font-size: 12px; opacity: .6; line-height: 1.35; font-weight: 400; }",
+        "#sf-modes label::after { font-size: 12px; opacity: .8; line-height: 1.35; font-weight: 400; }",
         "#sf-modes label.selected { border-color: #ea580c !important; background: rgba(234,88,12,.14) !important; "
         "box-shadow: 0 0 0 1px #ea580c inset; }",
         "#sf-modes label.selected::before { color: #ea580c; opacity: 1; }",
@@ -64,6 +65,11 @@ EXTRA_CSS = """
 .gradio-container button.primary { position: sticky; bottom: 14px; z-index: 30; }
 .gradio-container button.primary:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(234,88,12,.38); }
 @media (max-width: 640px) { .gradio-container { padding: 0 6px !important; } .gradio-container .main, .gradio-container .fillable { padding-left: 4px !important; padding-right: 4px !important; } .gradio-container .column, .gradio-container .block { min-width: 0 !important; } .gradio-container .row { flex-wrap: wrap !important; } }
+.info-text, .block-info, .gradio-container .info { opacity: 1 !important; color: var(--neutral-600, #475569) !important; }
+.dark .info-text, .dark .block-info, .dark .gradio-container .info { color: var(--neutral-400, #94a3b8) !important; }   /* readable hints (WCAG AA), not pale grey */
+.gradio-container :is(button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid #ea580c !important; outline-offset: 2px; }
+.gradio-container { padding-bottom: 96px !important; }          /* room under the last control, so the floating button never hides it */
+@media (prefers-reduced-motion: reduce) { .gradio-container *, .gradio-container *::before, .gradio-container *::after { transition: none !important; animation: none !important; } .gradio-container button:hover, #sf-modes label:hover { transform: none !important; } }
 .sf-progress { padding: 14px 16px 12px; border-radius: 14px; border: 1px solid rgba(128,128,128,.25); background: rgba(128,128,128,.06); }
 .gradio-container .accordion > button, .gradio-container details > summary { font-weight: 600; }
 """ + mode_card_css()

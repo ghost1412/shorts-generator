@@ -72,3 +72,12 @@ def test_galleries_are_responsive_so_a_phone_does_not_scroll_sideways():
     blocks = open(os.path.join(root, "shortsflow", "ui", "blocks.py"), encoding="utf-8").read()
     assert "columns=4" not in web and "columns=5" not in blocks          # fixed column counts forced a 544 px wide page on a 390 px phone
     assert "columns=[2, 2, 3, 4, 4, 4]" in web and "columns=[2, 3, 4, 5, 5, 5]" in blocks
+
+
+def test_theme_keeps_the_app_usable_by_keyboard_and_readable():
+    from shortsflow.ui import theme
+    css = theme.EXTRA_CSS
+    assert "#sf-modes label input { display: none" not in css              # a hidden radio cannot be reached with Tab
+    assert "#sf-modes label:focus-within" in css and ":focus-visible" in css  # a visible focus ring
+    assert "var(--neutral-600" in css                                      # hint text dark enough in light mode (7.6:1 measured)
+    assert "prefers-reduced-motion" in css
