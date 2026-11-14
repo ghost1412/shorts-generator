@@ -934,7 +934,8 @@ WORDS_CSS = """<style>
 .sf-hero h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
 .sf-hero p { margin: 0; font-size: 15px; opacity: .7; }
 .sf-hero a { color: inherit; text-decoration: underline; }
-.block-info, .gradio-container .info { font-size: 12.5px !important; opacity: .65; line-height: 1.45; }
+.block-info, .gradio-container .info { font-size: 12.5px !important; opacity: .65; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.block-info:hover, .gradio-container .info:hover, .block:focus-within .block-info { -webkit-line-clamp: unset; opacity: .9; }
 .gradio-container label > span, .gradio-container .block-title { font-weight: 600; }
 .gradio-container h3 { font-size: 18px; margin: 18px 0 6px; font-weight: 650; }
 button.primary { height: 54px; font-size: 16px; font-weight: 650; border-radius: 12px; }
@@ -944,13 +945,19 @@ button.primary { height: 54px; font-size: 16px; font-weight: 650; border-radius:
 </style>"""
 
 
-MODE_KEYS = ["shorts", "clip", "dub", "recap", "reel", "idea"]
+MODE_KEYS = ["shorts", "clip", "dub", "recap", "reel", "idea"]       # the columns; "highlights" shares the first one
 
 
 def web_args_modes():
     """[(label, key)] of the things you can make: the first screen of the app."""
-    return [("Shorts or a highlights video", "shorts"), ("Dub into another language", "dub"), ("Recap (trip, wedding, event)", "recap"),
+    return [("Shorts", "shorts"), ("Highlights video", "highlights"), ("Dub into another language", "dub"), ("Recap (trip, wedding, event)", "recap"),
             ("Photo reel", "reel"), ("Video from an idea", "idea"), ("Clip tool (all options)", "clip")]
+
+
+def pick_mode(mode):
+    """Show the column of the chosen mode (highlights uses the shorts column) and set the hidden format that the shorts form reads."""
+    column = "shorts" if mode == "highlights" else mode
+    return [gr.update(visible=column == k) for k in MODE_KEYS] + [gr.update(value="long" if mode == "highlights" else "shorts")]
 
 
 def build_ui():
@@ -974,7 +981,7 @@ def build_ui():
                         q_sample_note = gr.Markdown("")
                         q_mode = gr.Radio([("Short vertical clips (TikTok, Reels, Shorts)", "shorts"),
                                            ("One highlights video (long-form, landscape)", "long")],
-                                          value="shorts", label="Format")
+                                          value="shorts", label="Format", visible=False)
                         with gr.Row():
                             q_count = gr.Number(value=3, minimum=1, precision=0, label="How many shorts?",
                                                 info="No limit. If the video does not have that many good moments you get fewer.")
@@ -1287,8 +1294,11 @@ def build_ui():
                         with gr.Row():
                             clip_count = gr.Number(value=3, minimum=1, precision=0, label="Number of clips", info="No limit.")
                             target_duration = gr.Slider(15, 60, value=30, step=5, label="Target length (s)", info="Shorts are never longer than 60 seconds.")
-                        layout = gr.Radio(["single", "auto", "active", "split", "split_filler", "fit"], value="single", label="Framing",
-                                          info="split_filler = clip on top, looping satisfying/gameplay footage below (your own videos in assets/backgrounds/local, else Pexels); auto = picks per clip (two-person shot -> cut to whoever talks; no face on screen, as in slides or a screen recording -> the whole picture over a blurred copy; otherwise a tracked crop); active = always cut to the speaker")
+                        layout = gr.Radio([("One picture, face-tracked crop", "single"), ("Automatic: picks per clip", "auto"),
+                                           ("Always cut to whoever speaks", "active"), ("Two speakers, stacked", "split"),
+                                           ("Clip on top, satisfying video below", "split_filler"), ("Whole picture on a blurred background", "fit")],
+                                          value="single", label="Picture in the tall frame",
+                                          info="Pick how the picture fills the frame. Templates and edit styles are separate (under Extras).")
                         with gr.Row():
                             smart_crop = gr.Checkbox(value=True, label="Face-tracking 9:16 crop")
                             tighten = gr.Checkbox(value=True, label="Remove silences")
@@ -1300,7 +1310,7 @@ def build_ui():
                                                     info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay), and keeps the whole screen in frame (Framing \"single\" becomes \"fit\").")
                             clip_game_mix = gr.Dropdown(web_args.GAME_MIX_CHOICES, value="0.5", label="Story or action")
                             clip_game_frame = gr.Dropdown(web_args.GAME_FRAMING_CHOICES, value="auto", label="Framing for game footage",
-                                                          info="Automatic picks per video. Only used for game footage with Framing \"single\".")
+                                                          info="Automatic picks per video. Only used for game footage with the face-tracked crop picture.")
                             with gr.Row():
                                 clip_cap_pos = gr.Dropdown(web_args.CAPTION_POSITION_CHOICES, value="default", label="Caption position")
                                 clip_cap_size = gr.Dropdown(web_args.CAPTION_SIZE_CHOICES, value="default", label="Caption size")
@@ -1309,10 +1319,10 @@ def build_ui():
                                 clip_clean = gr.Checkbox(label="Clean audio", info="Noise reduction + loudness to about -14 LUFS")
                                 clip_hook = gr.Checkbox(label="Hook title overlay", info="Needs Remotion captions")
                                 clip_emoji = gr.Checkbox(label="Caption emoji", info="Needs Remotion captions")
-                                clip_zoom = gr.Checkbox(label="Auto zoom", info="Punch-in on key words; needs Remotion captions, skipped for split_filler")
+                                clip_zoom = gr.Checkbox(label="Auto zoom", info="Punch-in on key words; needs Remotion captions, skipped for the stacked satisfying-video picture")
                                 clip_cold = gr.Checkbox(label="Cold open", info="Strongest line first as a short teaser, then the clip")
                                 clip_stats = gr.Checkbox(label="Number pop-ups", info="Striking numbers shown big when said; needs Remotion captions")
-                            clip_filler = gr.File(label="Footage for the bottom half (Framing = split_filler)", file_types=["video"], type="filepath")
+                            clip_filler = gr.File(label="Footage for the bottom half (for the clip-on-top picture)", file_types=["video"], type="filepath")
                             clip_spoken = gr.Dropdown(SPOKEN_CHOICES, value="en", label="Language spoken in the video")
                             with gr.Row():
                                 clip_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style")
@@ -1320,9 +1330,8 @@ def build_ui():
                             clip_look = template_controls(with_shape=False)      # the Clip tab has the aspect ratio in its render settings
                         clip_btn = gr.Button("Find viral clips", variant="primary")
                         clip_stop = gr.Button("⏹ Stop", variant="stop")
-                    with gr.Column():
-                        clip_videos = gr.Files(label="Rendered clips")
-                        clip_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
+                        clip_videos = gr.Files(label="Rendered clips", height=110)
+                        clip_log = gr.Textbox(label="Log", lines=10, max_lines=10, autoscroll=True)
                 clip_run = clip_btn.click(
                     clip_video,
                     [url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt, *clip_settings,
@@ -1369,8 +1378,8 @@ def build_ui():
                         d_btn = gr.Button("Dub my video", variant="primary")
                         d_stop = gr.Button("⏹ Stop", variant="stop")
                         d_status = gr.Markdown("Waiting for a video...")
-                        d_video = gr.Video(label="Dubbed video", interactive=False)
-                        d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False)
+                        d_video = gr.Video(label="Dubbed video", interactive=False, height=220)
+                        d_srt = gr.File(label="Translated subtitles (.srt)", interactive=False, height=110)
                 with gr.Accordion("Technical details", open=False):
                     d_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 d_run = d_btn.click(dub_video, [d_upload, d_url, d_lang, d_spoken, d_burn, d_tts, d_voice, d_original, d_resume, d_tone, d_delivery, d_llm, d_cap_size, d_cap_pos], [d_status, d_log, d_video, d_srt])
@@ -1444,8 +1453,8 @@ def build_ui():
                         t_btn = gr.Button("🧳 Make my recap", variant="primary")
                         t_stop = gr.Button("⏹ Stop", variant="stop")
                         t_status = gr.Markdown("Waiting for your videos...")
-                        t_video = gr.Video(label="Your recap", interactive=False)
-                        t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False)
+                        t_video = gr.Video(label="Your recap", interactive=False, height=220)
+                        t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False, height=110)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max, t_lines, t_open_result, t_llm, t_steps],
@@ -1472,7 +1481,7 @@ def build_ui():
                         p_btn = gr.Button("📸 Make my reel", variant="primary")
                         p_stop = gr.Button("⏹ Stop", variant="stop")
                         p_status = gr.Markdown("Waiting for photos...")
-                        p_video = gr.Video(label="Your reel", interactive=False)
+                        p_video = gr.Video(label="Your reel", interactive=False, height=220)
                 with gr.Accordion("Technical details", open=False):
                     p_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
                 p_run = p_btn.click(photo_reel, [p_files, p_type, p_name, p_texts, p_music, p_len], [p_status, p_log, p_video])
@@ -1492,9 +1501,9 @@ def build_ui():
                         gen_settings = _render_settings()
                         gen_btn = gr.Button("Generate short", variant="primary")
                         gen_stop = gr.Button("⏹ Stop", variant="stop")
-                        gen_videos = gr.Files(label="Rendered video")
+                        gen_videos = gr.Files(label="Rendered video", height=110)
                         with gr.Accordion("Log", open=True):
-                            gen_log = gr.Textbox(label="Log", lines=22, max_lines=22, autoscroll=True)
+                            gen_log = gr.Textbox(label="Log", lines=10, max_lines=10, autoscroll=True)
                 gen_run = gen_btn.click(
                     generate_short,
                     [mode, category, prompt, script, vibe, voice, *gen_settings],
@@ -1507,7 +1516,7 @@ def build_ui():
                     "small frames to Gemini for `--visual_context` when a key is set, text to the voice service in the dub and idea-to-video modes, "
                     "stock-footage search words to Pexels, place names looked up on OpenStreetMap in trip recaps (turn it off with `--recap_no_geocode`), and any upload you ask for.")
         mode_cols = [mode_col_shorts, mode_col_clip, mode_col_dub, mode_col_recap, mode_col_reel, mode_col_idea]
-        mode_card.change(lambda m: [gr.update(visible=m == k) for k in MODE_KEYS], mode_card, mode_cols)
+        mode_card.change(pick_mode, mode_card, [*mode_cols, q_mode])
     return demo
 
 
