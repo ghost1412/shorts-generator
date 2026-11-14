@@ -86,3 +86,32 @@ def test_preview_has_the_shape_of_the_short(tmp_path):
     out = plan.make_preview(str(src), 0, 2, str(tmp_path / "full.mp4"))
     size = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", out]).decode().split()[0]
     assert size.endswith(",360")
+
+
+def test_automatic_game_framing_uses_the_tools_decision_once(tmp_path):
+    calls = []
+
+    def fake_choose(video, moments):
+        calls.append(len(moments))
+        return "fit", "2 of 6 moments have a HUD or subtitles at the sides"
+    cmd = ["main.py", "--content", "game", "--layout", "single"]
+    moments = [{"start": 10, "end": 40}, {"start": 50, "end": 80}]
+    first = plan.automatic_game_framing(cmd, "v.mp4", moments, str(tmp_path), choose=fake_choose)
+    assert first[0] == "fit" and "HUD" in first[1]
+    second = plan.automatic_game_framing(cmd, "v.mp4", moments, str(tmp_path), choose=fake_choose)
+    assert second == first and calls == [2]                       # looked at once, kept for the render
+
+
+def test_automatic_game_framing_leaves_explicit_choices_and_other_footage_alone(tmp_path):
+    never = lambda *a: (_ for _ in ()).throw(AssertionError("should not look"))
+    m = [{"start": 1, "end": 31}]
+    assert plan.automatic_game_framing(["--content", "game", "--game_framing", "crop"], "v", m, str(tmp_path), choose=never) is None
+    assert plan.automatic_game_framing(["--content", "game", "--layout", "fit"], "v", m, str(tmp_path), choose=never) is None
+    assert plan.automatic_game_framing(["--layout", "single"], "v", m, str(tmp_path), choose=never) is None
+
+
+def test_a_failed_look_falls_back_to_a_crop_preview(tmp_path):
+    def broken(video, moments):
+        raise RuntimeError("no frames")
+    out = plan.automatic_game_framing(["--content", "game"], "v", [{"start": 1, "end": 31}], str(tmp_path), choose=broken)
+    assert out[0] == "crop" and "could not look" in out[1]

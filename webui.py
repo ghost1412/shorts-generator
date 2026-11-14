@@ -670,12 +670,19 @@ def latest_plan(root):
             words = word_edit.load_words(d)
             ends = [m["end"] for m in plan["moments"]] + [w["end"] for w in words if w.get("end") is not None]
             source = plan.get("source_video") or ""
-            from engine.plan import make_preview, framing_from_command
-            framing, aspect = framing_from_command((_read_command(d) or {}).get("cmd"))
+            from engine.plan import make_preview, framing_from_command, automatic_game_framing
+            cmd_saved = (_read_command(d) or {}).get("cmd")
+            framing, aspect = framing_from_command(cmd_saved)
+            note = ""
+            decided = automatic_game_framing(cmd_saved, source, plan["moments"], d) if framing else None
+            if decided:                                  # game footage on Automatic: the tool's own decision, shown and used for the render
+                framing = decided[0]
+                note = (("Whole picture on a blurred background" if framing == "fit" else "Full-screen crop") + f" (decided automatically: {decided[1]}). "
+                        "To choose yourself, set \"Picture in the tall frame\" and run the search again.")
             for m in plan["moments"]:          # a small clip per moment, in the shape of the final short, so it can be watched before rendering
                 pv = os.path.join(d, "previews", f"m{m['index']}_{framing or 'full'}.mp4")
                 m["preview"] = pv if os.path.isfile(pv) else make_preview(source, m["start"], m["end"], pv, framing=framing, aspect=aspect)
-            return {"session": d, "source": source, "framing": framing, "aspect": aspect, "moments": plan["moments"],
+            return {"session": d, "source": source, "framing": framing, "aspect": aspect, "framing_note": note, "moments": plan["moments"],
                     "total": max(ends) if ends else 0.0}
     return None
 
@@ -734,6 +741,10 @@ def render_plan(session, *values):
         i = cmd.index("--moments")
         del cmd[i:i + 2]
     cmd += ["--moments", text]
+    from engine.plan import automatic_game_framing
+    decided = automatic_game_framing(cmd, plan.get("source_video"), plan["moments"], session)
+    if decided:
+        cmd += ["--game_framing", decided[0]]     # the framing the previews showed, so the render matches them
     if "--use_cache" not in cmd:
         cmd.append("--use_cache")                 # the transcript from the analysis is reused
     save_command(session, cmd)
@@ -1140,7 +1151,8 @@ def build_ui():
                     if not plan or not plan.get("moments"):
                         return
                     from shortsflow import timeline as _tl
-                    gr.Markdown(f"### Review the moments: {len(plan['moments'])} found\nNothing is rendered yet. Watch each one, adjust the start and end, untick a moment to drop it, then render.")
+                    gr.Markdown(f"### Review the moments: {len(plan['moments'])} found\nNothing is rendered yet. Watch each one, adjust the start and end, untick a moment to drop it, then render."
+                                + (f"\n\n**Picture:** {plan['framing_note']}" if plan.get("framing_note") else ""))
                     moms = plan["moments"]
                     total = plan.get("total") or 0.0
                     keeps, t0s, t1s = [], [], []

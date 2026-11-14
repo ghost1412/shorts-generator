@@ -90,3 +90,38 @@ def make_preview(source, start, end, out_path, height=360, framing=None, aspect=
     except (OSError, subprocess.SubprocessError):
         return None
     return out_path if r.returncode == 0 and os.path.isfile(out_path) else None
+
+
+def automatic_game_framing(cmd, source, moments, session_dir, choose=None):
+    """For a run on game footage with the picture left on Automatic: the tool's own decision, ("crop" | "fit", reason), so the review
+    previews and the render use the same framing. None when the run is not on game footage or the framing was already chosen.
+
+    The decision is looked at once per session (it samples frames of the moments) and kept in framing_decision.json, so the preview and
+    the final render cannot disagree."""
+    cmd = [str(x) for x in cmd or []]
+
+    def value(flag):
+        return cmd[cmd.index(flag) + 1] if flag in cmd and cmd.index(flag) + 1 < len(cmd) else None
+    if value("--content") != "game" or value("--game_framing") in ("fit", "crop") or value("--layout") == "fit":
+        return None
+    path = os.path.join(session_dir, "framing_decision.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            saved = json.load(f)
+        if saved.get("framing") in ("fit", "crop"):
+            return saved["framing"], saved.get("reason", "")
+    except (OSError, ValueError, AttributeError):
+        pass
+    if choose is None:
+        from engine.game_framing import choose
+    try:
+        framing, reason = choose(source, [{"start": m["start"], "end": m["end"]} for m in moments])
+    except Exception as e:                          # a failed look must not block the review: show a crop, as before
+        framing, reason = "crop", f"could not look at the picture ({e})"
+    framing = "fit" if framing == "fit" else "crop"
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"framing": framing, "reason": reason}, f)
+    except OSError:
+        pass
+    return framing, reason
