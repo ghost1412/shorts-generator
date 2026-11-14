@@ -41,6 +41,17 @@ SHAPE_CHOICES = [("Vertical 9:16 (Shorts, Reels, TikTok)", "9:16"), ("Square 1:1
 TEMPLATE_TEXT_SLOTS = ("speaker", "role", "show", "handle", "headline", "cta")
 
 
+def local_photo_folder(text, exts):
+    """The first existing folder in a box of pasted paths when it holds at least 3 photos (an image folder for a photo reel), else None.
+    The folder is used where it is: the photos are not copied."""
+    for line in str(text or "").splitlines():
+        p = line.strip().strip('"').strip("'")
+        if p and os.path.isdir(p):
+            n = sum(1 for f in os.listdir(p) if f.lower().endswith(tuple(exts)))
+            return p if n >= 3 else None
+    return None
+
+
 def local_paths(text):
     """Existing files and folders from a box of pasted paths (one per line, quotes and blanks ignored). A recap uses them where they are,
     with no copy: a folder is one day, or its sub-folders are the days."""

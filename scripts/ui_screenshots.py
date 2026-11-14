@@ -108,9 +108,9 @@ try:
         # the sample button fills the link box and shows the credit
         page.get_by_role("button", name="No video handy? Try a 2-minute sample").click()
         page.get_by_text("public domain").first.wait_for(timeout=15000)
-        assert "samples-v1/shortsflow_sample_nasa.mp4" in page.get_by_label("Video link (YouTube or other)").first.input_value()
+        assert "samples-v1/shortsflow_sample_nasa.mp4" in page.get_by_label("Video link or file path on this PC").first.input_value()
         page.screenshot(path=os.path.join(out_dir, "01a_sample.png"), full_page=False)
-        page.get_by_label("Video link (YouTube or other)").first.fill("")
+        page.get_by_label("Video link or file path on this PC").first.fill("")
 
         def open_advanced():
             """The Advanced section of Start here holds the moments, edit style, captions, extras and brand."""

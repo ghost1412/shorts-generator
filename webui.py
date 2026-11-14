@@ -348,16 +348,19 @@ def rate_clip(card, liked):
     return ("Thanks! " if liked else "Noted. ") + feedback.summary()
 
 
-def photo_reel(files, reel_type, name="", texts="", music=None, duration=24):
+def photo_reel(files, reel_type, name="", texts="", music=None, duration=24, folder=""):
     """Photo reel tab: photos in, a typed reel out. Yields (status, log, video)."""
     import time
     from shortsflow import onboarding
     from engine.photo_reel_types import PHOTO_EXTS
     photos = [f for f in (files or []) if str(getattr(f, "name", f)).lower().endswith(PHOTO_EXTS)]
-    if len(photos) < 3:
-        raise gr.Error("Add at least 3 photos (JPG, PNG or WebP).")
     session = os.path.join(ROOT, "sessions", time.strftime("reel_%Y%m%d_%H%M%S"))
-    folder = web_args.stage_photos(photos, os.path.join(session, "photos"))
+    local = web_args.local_photo_folder(folder, PHOTO_EXTS) if not photos else None       # a folder already on this PC: used where it is
+    if not photos and (folder or "").strip() and not local:
+        raise gr.Error("That folder does not exist or has fewer than 3 photos (JPG, PNG or WebP).")
+    if not local and len(photos) < 3:
+        raise gr.Error("Add at least 3 photos (JPG, PNG or WebP), or paste a folder path.")
+    folder = local or web_args.stage_photos(photos, os.path.join(session, "photos"))
     cmd = [*_pipeline_cmd(), *web_args.photo_reel_args(folder, reel_type, name, texts, music, duration, session)]
     progress, seen = onboarding.Progress(start="📸 Looking at your photos...", steps=onboarding.PHOTO_STEPS), 0
     status = progress.message
@@ -1044,7 +1047,7 @@ def build_ui():
                 gr.Markdown("### Your video\nPaste a link or upload a file. No account or API key is needed.")
                 with gr.Row():
                     with gr.Column():
-                        q_url = gr.Textbox(label="Video link (YouTube or other)", placeholder="https://www.youtube.com/watch?v=...")
+                        q_url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC: a path is used where it is, nothing is copied.", placeholder="https://www.youtube.com/watch?v=...")
                         q_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
                         q_sample = gr.Button("🎬 No video handy? Try a 2-minute sample", size="sm")
                         q_sample_note = gr.Markdown("")
@@ -1365,7 +1368,7 @@ def build_ui():
             with gr.Column(visible=False) as mode_col_clip:
                 with gr.Row():
                     with gr.Column():
-                        url = gr.Textbox(label="YouTube / video URL", placeholder="https://www.youtube.com/watch?v=...")
+                        url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC (used where it is, nothing is copied).", placeholder="https://www.youtube.com/watch?v=...")
                         upload = gr.File(label="...or upload a video", file_types=["video"], type="filepath")
                         with gr.Row():
                             clip_count = gr.Number(value=3, minimum=1, precision=0, label="Number of clips", info="No limit.")
@@ -1424,7 +1427,7 @@ def build_ui():
                             "One voice for everyone, no lip-sync. Needs internet for the voice, and a free Groq key or Ollama for the translation.")
                 with gr.Row():
                     with gr.Column():
-                        d_url = gr.Textbox(label="Video link (YouTube or other)", placeholder="https://www.youtube.com/watch?v=...")
+                        d_url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC (used where it is, nothing is copied).", placeholder="https://www.youtube.com/watch?v=...")
                         d_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
                         d_lang = gr.Dropdown(web_args.dub_languages(), value="es", label="Dub into")
                         d_spoken = gr.Dropdown(SPOKEN_CHOICES, value="auto", label="Language spoken in the video")
@@ -1556,6 +1559,9 @@ def build_ui():
                 with gr.Row():
                     with gr.Column():
                         p_files = gr.File(label="Your photos (3 or more)", file_count="multiple", file_types=["image"], type="filepath")
+                        p_folder = gr.Textbox(label="Or use a photo folder already on this PC (no copying)", max_lines=1,
+                                              placeholder="The folder's full path",
+                                              info="Used where it is, in file-name order. Only used when no photos are added above.")
                         p_type = gr.Dropdown(type_labels(), value="memories", label="Reel type",
                                              info="Travel recap and Memories follow the photo dates; Countdown and Product follow the order you add them.")
                         p_name = gr.Textbox(label="Title or name (optional)", placeholder="Lisbon, Mia, the new bottle...")
@@ -1569,7 +1575,7 @@ def build_ui():
                         p_video = gr.Video(label="Your reel", interactive=False, height=220)
                 with gr.Accordion("Technical details", open=False):
                     p_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                p_run = p_btn.click(photo_reel, [p_files, p_type, p_name, p_texts, p_music, p_len], [p_status, p_log, p_video])
+                p_run = p_btn.click(photo_reel, [p_files, p_type, p_name, p_texts, p_music, p_len, p_folder], [p_status, p_log, p_video])
                 p_stop.click(stop_jobs, None, p_status, cancels=[p_run])
 
             with gr.Column(visible=False) as mode_col_idea:

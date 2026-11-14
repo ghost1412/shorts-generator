@@ -126,3 +126,28 @@ def test_pasted_local_paths_are_used_in_place(tmp_path):
     text = f'  "{day1}"  \n\n{clip}\n{tmp_path / "missing"}\n{day1}\n'
     assert web_args.local_paths(text) == [str(day1), str(clip)]        # quotes and blanks ignored, missing skipped, no duplicates
     assert web_args.local_paths("") == [] and web_args.local_paths(None) == []
+
+
+def test_a_photo_folder_on_this_pc_is_used_in_place(tmp_path):
+    from shortsflow import web_args
+    exts = (".jpg", ".png")
+    few = tmp_path / "few"
+    few.mkdir()
+    (few / "a.jpg").write_bytes(b"x")
+    many = tmp_path / "many"
+    many.mkdir()
+    for n in "abc":
+        (many / f"{n}.JPG").write_bytes(b"x")
+    (many / "notes.txt").write_text("x")
+    assert web_args.local_photo_folder(str(many), exts) == str(many)      # upper-case extensions count, other files do not
+    assert web_args.local_photo_folder(f'  "{many}"  ', exts) == str(many)
+    assert web_args.local_photo_folder(str(few), exts) is None            # fewer than 3 photos
+    assert web_args.local_photo_folder(str(tmp_path / "missing"), exts) is None
+    assert web_args.local_photo_folder("", exts) is None
+
+
+def test_the_link_boxes_say_a_file_path_works():
+    import os
+    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+    assert src.count('label="Video link or file path on this PC"') == 3          # Start here, Clip tool and Dub
+    assert "Video link (YouTube or other)" not in src and "YouTube / video URL" not in src
