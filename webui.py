@@ -792,6 +792,25 @@ def continue_run(choice):
     find = cmd[cmd.index("--find") + 1] if "--find" in cmd and cmd.index("--find") + 1 < len(cmd) else ""
     yield from _stream_clip(cmd, os.path.join(session, "results.json"), long_form, minutes, find)
 
+def projects_update():
+    """(gallery items, results paths) for the 'Your projects' list."""
+    from shortsflow import review
+    tiles = review.project_tiles(ROOT)
+    return (gr.update(value=[(t["thumb"], t["caption"]) for t in tiles], visible=bool(tiles)), [t["results"] for t in tiles],
+            gr.update(visible=bool(tiles)))
+
+
+def open_project(paths, evt: gr.SelectData):
+    """A clicked project tile: load that run's shorts into the results area."""
+    from shortsflow import review
+    idx = evt.index if isinstance(evt.index, int) else (evt.index[0] if evt.index else 0)
+    path = paths[idx] if 0 <= idx < len(paths) else None
+    cards = review.load_results(path) if path else []
+    if not cards:
+        raise gr.Error("That project has no shorts left (the files may have been moved or deleted).")
+    return f"Opened a project: {len(cards)} short(s).", cards, None
+
+
 def open_earlier(choice):
     """Load an earlier run into the review screen."""
     from shortsflow import review
@@ -1223,6 +1242,10 @@ def build_ui():
                                             wfind_btn.click(tick_phrase_handler(c["index"]), [q_cards, wfind, wd], [wd, q_status])
                                             wgo.click(cut_words_handler(c["index"]), [q_cards, wd, st, t0, t1, cy], [q_cards, q_status])
 
+                q_proj_paths = gr.State([])
+                q_proj_title = gr.Markdown("### Your projects", visible=False)
+                q_projects = gr.Gallery(value=[], columns=4, rows=2, height="auto", allow_preview=False, show_label=False,
+                                        interactive=False, visible=False, object_fit="cover")
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
                     q_zip = gr.File(label="Your download", interactive=False, visible=False)
@@ -1285,11 +1308,13 @@ def build_ui():
                 q_run = q_btn.click(quick_clip, [q_url, q_upload, q_count, q_captions, q_style, q_brand_on, q_logo, q_handle, q_endcard, q_color, q_pos, q_mode, q_minutes, q_find, q_cut, q_spoken, q_caption_lang,
                              q_clean, q_hook, q_emoji, q_filler, q_filler_file, q_broll, q_zoom, q_cold, q_edit, q_edit_strength, q_stats, q_length, q_moments, q_about, q_visual, q_reuse, q_reuse_all, q_drive, q_enhance, q_grade,
                              q_game, q_game_mix, q_cap_pos, q_cap_size, q_game_frame, q_llm, *q_look, q_plan_first, q_between, q_picture],
-                            [q_status, q_log, q_cards]).then(load_plan, None, q_plan)
+                            [q_status, q_log, q_cards]).then(load_plan, None, q_plan).then(projects_update, None, [q_projects, q_proj_paths, q_proj_title])
                 q_cont_run = q_continue.click(continue_run, q_unfinished, [q_status, q_log, q_cards])
                 q_stop.click(stop_jobs, None, q_status, cancels=[q_run, q_cont_run]).then(unfinished_update, None, q_unfinished)
                 demo.load(unfinished_update, None, q_unfinished)
-                demo.load(load_plan, None, q_plan)          # an unrendered plan comes back after a refresh
+                demo.load(load_plan, None, q_plan)
+                demo.load(projects_update, None, [q_projects, q_proj_paths, q_proj_title])
+                q_projects.select(open_project, q_proj_paths, [q_status, q_cards, q_plan])          # an unrendered plan comes back after a refresh
                 demo.load(lambda: reusable_update('clip'), None, q_reuse)
                 q_zip_btn.click(zip_cards, q_cards, q_zip)
                 q_open.click(open_earlier, q_runs, [q_status, q_cards]).then(lambda: None, None, q_plan)

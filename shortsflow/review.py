@@ -147,3 +147,39 @@ def recent_runs(root, limit=15):
             out.append((os.path.getmtime(path), name, path))
     out.sort(reverse=True)
     return [(run_label(name, path), path) for _, name, path in out[:limit]]
+
+
+def _frame_thumbnail(video, out_path):
+    """A small picture from a video (one second in), for a project tile. Returns the path or None."""
+    import shutil
+    import subprocess
+    exe = shutil.which("ffmpeg")
+    if not exe or not video or not os.path.isfile(video):
+        return None
+    try:
+        r = subprocess.run([exe, "-y", "-v", "error", "-ss", "1", "-i", video, "-frames:v", "1", "-vf", "scale=-2:360", out_path],
+                           capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out_path if r.returncode == 0 and os.path.isfile(out_path) else None
+
+
+def project_tiles(root, limit=12):
+    """Tiles for the 'Your projects' list: [{"results", "thumb", "caption"}] of earlier runs that still have clips, newest first.
+
+    The picture is the run's first clip thumbnail (a frame is cut once and kept when there is none)."""
+    tiles = []
+    for label, path in recent_runs(root, limit * 2):
+        cards = load_results(path)
+        if not cards:
+            continue
+        first = cards[0]
+        thumb = first.get("thumbnail")
+        if not thumb:
+            thumb = _frame_thumbnail(first["video"], os.path.join(os.path.dirname(path), "project_thumb.jpg"))
+        if not thumb:
+            continue
+        tiles.append({"results": path, "thumb": thumb, "caption": f"{first['title'][:48]}\n{label}"})
+        if len(tiles) >= limit:
+            break
+    return tiles
