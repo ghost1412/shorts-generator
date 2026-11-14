@@ -374,6 +374,20 @@ def find_dub_outputs(session_dir):
     return (videos[-1] if videos else None, srts[-1] if srts else None)
 
 
+def is_local_host(host):
+    return str(host or "").strip().lower() in ("127.0.0.1", "localhost", "::1")
+
+
+def remote_access():
+    """True when the app was started so that other devices can open it (--host on the network, or --share). Then 'use this PC's files in place'
+    must be off: a path would point at the host PC's disk, and a Browse dialog would pop up on the host's screen, not the visitor's."""
+    return os.environ.get("SHORTSFLOW_REMOTE", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def is_web_link(text):
+    return str(text or "").strip().lower().startswith(("http://", "https://"))
+
+
 def resolve_auth(auth, share, host="127.0.0.1"):
     """(username, password) or None. A shared (public) link, or an app listening on the network, must never be open to anyone
     who finds the URL: it can process videos on this PC and the 'Save key' box writes to .env. So without --auth a

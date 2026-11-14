@@ -43,6 +43,8 @@ def available(env=None, platform=None):
         return False
     if env.get("SHORTSFLOW_DOCKER") or os.path.exists("/.dockerenv"):
         return False
+    if str(env.get("SHORTSFLOW_REMOTE", "")).strip().lower() in ("1", "true", "yes", "on"):
+        return False                        # other devices can open the app: a dialog would appear on the host's screen, not theirs
     if platform.startswith("linux") and not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")):
         return False
     try:

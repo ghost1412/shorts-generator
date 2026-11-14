@@ -70,6 +70,9 @@ EXTRA_CSS = """
 .gradio-container :is(button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid #ea580c !important; outline-offset: 2px; }
 .gradio-container { padding-bottom: 96px !important; }          /* room under the last control, so the floating button never hides it */
 @media (prefers-reduced-motion: reduce) { .gradio-container *, .gradio-container *::before, .gradio-container *::after { transition: none !important; animation: none !important; } .gradio-container button:hover, #sf-modes label:hover { transform: none !important; } }
+@media (max-width: 900px) { #sf-projects .grid-container, #sf-templates .grid-container { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
+@media (max-width: 560px) { #sf-projects .grid-container, #sf-templates .grid-container { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+#sf-projects .grid-container { max-height: 460px; overflow-y: auto; }          /* a long history scrolls inside its box instead of pushing the page down */
 .sf-progress { padding: 14px 16px 12px; border-radius: 14px; border: 1px solid rgba(128,128,128,.25); background: rgba(128,128,128,.06); }
 .gradio-container .accordion > button, .gradio-container details > summary { font-weight: 600; }
 """ + mode_card_css()

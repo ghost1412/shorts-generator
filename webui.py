@@ -223,6 +223,7 @@ def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tig
                visual_template="none", intro_animation="none", outro_animation="none",
                tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta=""):
     source = upload or (url or "").strip()
+    refuse_pc_path(source, upload)
     if not source:
         raise gr.Error("Paste a YouTube link or upload a video file.")
     cmd = [*_pipeline_cmd(), "--source_video", source, "--extract_mode", "shorts",
@@ -256,6 +257,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
         session = resume
     else:
         source = upload or (url or "").strip()
+        refuse_pc_path(source, upload)
         if not source:
             raise gr.Error("Paste a video link or upload a video file first.")
         if not target_lang:
@@ -291,6 +293,8 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
     from shortsflow import reuse as _reuse
     if reuse and not files:
         files = [v for v in _reuse.trip_videos_of(reuse) if os.path.exists(v)]      # the earlier recap's videos
+    if not files and (paths or "").strip() and web_args.remote_access():
+        raise gr.Error(PC_PATH_MESSAGE)
     if not files and (paths or "").strip():                 # videos already on this PC: used where they are, nothing is copied
         files = web_args.local_paths(paths)
         if not files:
@@ -355,6 +359,8 @@ def photo_reel(files, reel_type, name="", texts="", music=None, duration=24, fol
     from engine.photo_reel_types import PHOTO_EXTS
     photos = [f for f in (files or []) if str(getattr(f, "name", f)).lower().endswith(PHOTO_EXTS)]
     session = os.path.join(ROOT, "sessions", time.strftime("reel_%Y%m%d_%H%M%S"))
+    if not photos and (folder or "").strip() and web_args.remote_access():
+        raise gr.Error(PC_PATH_MESSAGE)
     local = web_args.local_photo_folder(folder, PHOTO_EXTS) if not photos else None       # a folder already on this PC: used where it is
     if not photos and (folder or "").strip() and not local:
         raise gr.Error("That folder does not exist or has fewer than 3 photos (JPG, PNG or WebP).")
@@ -506,6 +512,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     Yields (status, log, cards): `cards` feeds the review screen."""
     import time
     source = upload or (url or "").strip()
+    refuse_pc_path(source, upload)
     from shortsflow import reuse as _reuse
     if reuse and not source:
         source = _reuse.source_of(reuse)                  # the earlier run's video, so it does not have to be added again
@@ -1034,6 +1041,16 @@ def pick_mode(mode):
     return [gr.update(visible=column == k) for k in MODE_KEYS] + [gr.update(value="long" if mode == "highlights" else "shorts")]
 
 
+PC_PATH_MESSAGE = ("A file path (or Browse) only works when you open the app on the PC that runs it. "
+                   "From another device, add the files with the upload box, or paste a web link.")
+
+
+def refuse_pc_path(source, upload):
+    """Another device cannot use this PC's files in place: say so plainly (the upload box and web links still work)."""
+    if web_args.remote_access() and source and not upload and not web_args.is_web_link(source):
+        raise gr.Error(PC_PATH_MESSAGE)
+
+
 def browse_video(current):
     """Open the system's file dialog and put the chosen video's path in the box (the box is unchanged when cancelled)."""
     from shortsflow.ui import dialogs
@@ -1322,7 +1339,7 @@ def build_ui():
 
                 q_proj_paths = gr.State([])
                 q_proj_title = gr.Markdown("### Your projects", visible=False)
-                q_projects = gr.Gallery(value=[], columns=[2, 2, 3, 4, 4, 4], rows=2, height="auto", allow_preview=False, show_label=False,
+                q_projects = gr.Gallery(value=[], columns=4, rows=2, elem_id="sf-projects", height="auto", allow_preview=False, show_label=False,
                                         interactive=False, visible=False, object_fit="cover")
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
@@ -1679,6 +1696,8 @@ def main(argv=None):
     except Exception:
         pass
 
+    if cli.share or not web_args.is_local_host(cli.host):
+        os.environ["SHORTSFLOW_REMOTE"] = "1"      # other devices can open the app: no Browse dialogs, no paths on this PC
     creds = web_args.resolve_auth(cli.auth, cli.share, cli.host)
     if creds and not cli.auth:
         print(f"[Login] username: {creds[0]}   password: {creds[1]}   (new on every start; use --auth user:pass to choose your own)", flush=True)

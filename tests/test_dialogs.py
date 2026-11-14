@@ -65,13 +65,17 @@ def test_mode_cards_have_an_icon_and_a_description_for_every_mode():
     assert 'elem_id="sf-modes"' in src
 
 
-def test_galleries_are_responsive_so_a_phone_does_not_scroll_sideways():
+def test_galleries_get_their_phone_layout_from_css_not_from_a_columns_list():
+    """A list for `columns` collapsed the grid to ONE huge tile per row in Gradio 6 (860 px tiles); an int plus CSS media queries is safe."""
     import os
     root = os.path.join(os.path.dirname(__file__), "..")
     web = open(os.path.join(root, "webui.py"), encoding="utf-8").read()
     blocks = open(os.path.join(root, "shortsflow", "ui", "blocks.py"), encoding="utf-8").read()
-    assert "columns=4" not in web and "columns=5" not in blocks          # fixed column counts forced a 544 px wide page on a 390 px phone
-    assert "columns=[2, 2, 3, 4, 4, 4]" in web and "columns=[2, 3, 4, 5, 5, 5]" in blocks
+    assert "columns=[" not in web and "columns=[" not in blocks
+    assert 'elem_id="sf-projects"' in web and 'elem_id="sf-templates"' in blocks
+    from shortsflow.ui import theme
+    assert "#sf-projects .grid-container" in theme.EXTRA_CSS and "#sf-templates .grid-container" in theme.EXTRA_CSS
+    assert "max-width: 560px" in theme.EXTRA_CSS
 
 
 def test_theme_keeps_the_app_usable_by_keyboard_and_readable():
@@ -81,3 +85,15 @@ def test_theme_keeps_the_app_usable_by_keyboard_and_readable():
     assert "#sf-modes label:focus-within" in css and ":focus-visible" in css  # a visible focus ring
     assert "var(--neutral-600" in css                                      # hint text dark enough in light mode (7.6:1 measured)
     assert "prefers-reduced-motion" in css
+
+
+def test_other_devices_cannot_use_this_pcs_files_or_dialogs(monkeypatch):
+    from shortsflow import web_args
+    from shortsflow.ui import dialogs
+    assert web_args.is_local_host("127.0.0.1") and web_args.is_local_host("localhost") and not web_args.is_local_host("0.0.0.0")
+    assert web_args.is_web_link(" https://x.test/v ") and not web_args.is_web_link("C:/videos/a.mp4")
+    monkeypatch.delenv("SHORTSFLOW_REMOTE", raising=False)
+    assert web_args.remote_access() is False
+    monkeypatch.setenv("SHORTSFLOW_REMOTE", "1")
+    assert web_args.remote_access() is True
+    assert dialogs.available(env={"SHORTSFLOW_REMOTE": "1"}, platform="win32") is False       # no dialog on the host's screen for a visitor
