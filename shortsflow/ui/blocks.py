@@ -4,7 +4,15 @@
 """
 
 
-def look_block(gr, web_args, prefix_info="", with_shape=True, open_=False):
+# (label, placeholder) of the six template text boxes, in the order speaker, role, show, handle, headline, cta.
+DEFAULT_TEXT_LABELS = (("Speaker name", "Alex Morgan"), ("Role", "Host"), ("Show or channel", "My Show"), ("Handle", "@myshow"),
+                       ("Headline", "A line for the top bar"), ("Closing line", "Follow @myshow for more"))
+# The same boxes worded for a recap of a trip: "Trip name" feeds the slot a show name feeds on a clip.
+TRIP_TEXT_LABELS = (("Who travelled", "Alex and Sam"), ("Dates", "5 days in October"), ("Trip name", "Northvale"), ("Your handle", "@mytrip"),
+                    ("Place or headline", "Pinemere Lake"), ("Closing line", "Until next time"))
+
+
+def look_block(gr, web_args, prefix_info="", with_shape=True, open_=False, text_labels=None):
     """Template gallery (click a picture to choose), covers, template text and frame shape.
 
     Returns the components in the order [template, intro, outro, six text boxes] + [frame shape when `with_shape`]."""
@@ -25,9 +33,7 @@ def look_block(gr, web_args, prefix_info="", with_shape=True, open_=False):
                                 info="Opens over the first second (tiles break apart, doors, iris, blinds, fade).")
             outro = gr.Dropdown(web_args.COVER_CHOICES, value="none", label="Outro cover", info="Closes over the last second.")
         with gr.Accordion("Text for the template (only what you type is drawn)", open=False):
-            texts = [gr.Textbox(label=label, placeholder=ph, max_lines=1) for label, ph in (
-                ("Speaker name", "Alex Morgan"), ("Role", "Host"), ("Show or channel", "My Show"), ("Handle", "@myshow"),
-                ("Headline", "A line for the top bar"), ("Closing line", "Follow @myshow for more"))]
+            texts = [gr.Textbox(label=label, placeholder=ph, max_lines=1) for label, ph in (text_labels or DEFAULT_TEXT_LABELS)]
         shape = gr.Dropdown(web_args.SHAPE_CHOICES, value="9:16", label="Frame shape",
                             info="For shorts cut from a video. The highlights video is always 16:9.") if with_shape else None
     return [tpl, intro, outro, *texts] + ([shape] if shape is not None else [])

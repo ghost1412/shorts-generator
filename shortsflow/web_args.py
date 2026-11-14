@@ -41,6 +41,11 @@ SHAPE_CHOICES = [("Vertical 9:16 (Shorts, Reels, TikTok)", "9:16"), ("Square 1:1
 TEMPLATE_TEXT_SLOTS = ("speaker", "role", "show", "handle", "headline", "cta")
 
 
+def recap_template_show(show, trip_name):
+    """The template's "Trip name" text: what was typed in that box, else the recap's own trip name (so it only has to be typed once)."""
+    return " ".join(str(show or "").split()) or " ".join(str(trip_name or "").split())
+
+
 def template_args(template="none", intro="none", outro="none", speaker="", role="", show="", handle="", headline="", cta=""):
     """`--visual_template`, `--intro_animation`, `--outro_animation` and the `--template_text` slots for the chosen look (nothing when none is chosen)."""
     args = []

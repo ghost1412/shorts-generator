@@ -208,11 +208,11 @@ def apply_kind(kind):
     return k["edit"], k["game"], k["framing"], k["template"], k["captions"], "✔ " + kinds.describe(kind)
 
 
-def template_controls(prefix_info="", with_shape=True):
+def template_controls(prefix_info="", with_shape=True, text_labels=None):
     """The look controls, shared by every flow (see shortsflow/ui/blocks.py). Returns the components in the order `clip_video` /
     `quick_clip` take them after their other options."""
     from shortsflow.ui.blocks import look_block
-    return look_block(gr, web_args, prefix_info, with_shape)
+    return look_block(gr, web_args, prefix_info, with_shape, text_labels=text_labels)
 
 
 def clip_video(url, upload, clip_count, target_duration, layout, smart_crop, tighten, broll, srt,
@@ -302,7 +302,7 @@ def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", d
             f.write(steps)
     cmd = [*_pipeline_cmd(), *web_args.trip_args(files, session, name, stops, note, hook, length, style, music, look=look, both=both, name_places=name_places, enhance=enhance, kind=kind, keep_sound=keep_sound,
                                                             grade=grade, edit=edit, edit_strength=edit_strength, clean_sound=clean_sound, sample=sample, transitions=transitions, subject_look=subject_look, subject_color=subject_color, subject_max=subject_max, lines=lines, open_result=open_result, llm_provider=llm_provider, steps_file=steps_file, font=font),
-           *web_args.template_args(visual_template, intro_animation, outro_animation, tpl_speaker, tpl_role, tpl_show, tpl_handle, tpl_headline, tpl_cta)]
+           *web_args.template_args(visual_template, intro_animation, outro_animation, tpl_speaker, tpl_role, web_args.recap_template_show(tpl_show, name), tpl_handle, tpl_headline, tpl_cta)]
     if reuse:
         copied = _reuse.seed_session(os.path.dirname(reuse), session, kind="trip")
         if copied:
@@ -1488,7 +1488,9 @@ def build_ui():
                             t_font = gr.Dropdown([("Bold poster letters (default)", "default"), ("Handwritten", "handwritten")], value="default",
                                                  label="Text style of the titles and labels",
                                                  info="Handwritten uses a script face for the title cards and place names. Languages it has no letters for keep the normal font.")
-                            t_look_ctl = template_controls(" On a recap the template and covers show over the opening and the ending.", with_shape=False)
+                            from shortsflow.ui.blocks import TRIP_TEXT_LABELS
+                            t_look_ctl = template_controls(" On a recap the template and covers show over the opening and the ending.", with_shape=False,
+                                                           text_labels=TRIP_TEXT_LABELS)
                             t_open_result = gr.Checkbox(value=False, label="Open with the result first",
                                                         info="The opening shots come from the LAST part (the finished dish, the summit) before the story starts.")
                             t_style = gr.Radio([("Hook and glimpses first, then the whole trip", "hype"), ("Start at the first stop", "plain")],

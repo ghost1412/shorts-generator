@@ -98,3 +98,20 @@ def test_picture_layout_for_start_here_runs():
     assert f(False, False, "auto", "crop", False) == "auto"
     assert f(True, True, "crop", "crop", False) == "split_filler"
     assert f(False, True, "crop", "crop", True) == "auto"          # highlights video
+
+
+def test_trip_wording_for_the_template_text_boxes():
+    from shortsflow import web_args
+    from shortsflow.ui import blocks
+    assert len(blocks.TRIP_TEXT_LABELS) == len(blocks.DEFAULT_TEXT_LABELS) == len(web_args.TEMPLATE_TEXT_SLOTS)
+    slot = web_args.TEMPLATE_TEXT_SLOTS.index("show")
+    assert blocks.TRIP_TEXT_LABELS[slot][0] == "Trip name"          # the box that feeds the main title says what it is
+    assert "channel" not in " ".join(label for label, _ in blocks.TRIP_TEXT_LABELS).lower()
+    assert blocks.DEFAULT_TEXT_LABELS[slot][0] == "Show or channel"  # clips keep their wording
+
+
+def test_template_trip_name_falls_back_to_the_recaps_trip_name():
+    from shortsflow import web_args
+    assert web_args.recap_template_show("", "  Northvale  trip ") == "Northvale trip"
+    assert web_args.recap_template_show("My own", "Northvale") == "My own"
+    assert web_args.recap_template_show(None, None) == ""
