@@ -99,10 +99,10 @@ try:
         os.remove(tmp)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(channel=os.environ.get("SF_BROWSER_CHANNEL") or None)       # e.g. msedge on a PC without the playwright browser
         page = browser.new_page(viewport={"width": 1280, "height": 900})
         page.goto(f"http://127.0.0.1:{PORT}")
-        page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
+        page.wait_for_selector("text=Paste a link or upload a file", timeout=60000)
         page.wait_for_timeout(1500)
         page.screenshot(path=os.path.join(out_dir, "01_start_here.png"), full_page=True)
         # the sample button fills the link box and shows the credit
@@ -112,22 +112,32 @@ try:
         page.screenshot(path=os.path.join(out_dir, "01a_sample.png"), full_page=False)
         page.get_by_label("Video link (YouTube or other)").first.fill("")
 
-        # the new options: Extras on Start here, the Dub tab, and Extras on Clip (advanced)
+        def open_advanced():
+            """The Advanced section of Start here holds the moments, edit style, captions, extras and brand."""
+            if not page.get_by_text("Extras (optional)").first.is_visible():
+                page.get_by_text("Advanced: moments, languages").first.click()
+                page.get_by_text("Extras (optional)").first.wait_for(timeout=15000)
+
+        # the options: Extras (under Advanced) on Start here, the Dub mode, and Extras on the Clip tool
+        open_advanced()
         page.get_by_text("Extras (optional)").first.click()
         page.get_by_text("Clean up the sound").first.wait_for(timeout=15000)
         page.screenshot(path=os.path.join(out_dir, "01c_extras.png"), full_page=True)
         page.get_by_text("Extras (optional)").first.click()
-        page.get_by_role("tab", name="Dub a video").click()
+        page.get_by_text("Dub into another language", exact=True).first.click()
         page.get_by_text("Re-voice a video in another language").wait_for(timeout=15000)
+        page.get_by_text("Voice and translation").first.click()
+        page.wait_for_timeout(500)
         assert page.get_by_label("Voice engine").count() >= 1 and page.get_by_label("Voice", exact=True).count() >= 1
         page.screenshot(path=os.path.join(out_dir, "01d_dub_tab.png"), full_page=True)
-        page.get_by_role("tab", name="Clip (advanced)").click()
+        page.get_by_text("Clip tool (all options)", exact=True).first.click()
         page.locator("text=Extras >> visible=true").first.click()
         page.wait_for_timeout(600)
         page.screenshot(path=os.path.join(out_dir, "01e_clip_extras.png"), full_page=True)
-        page.get_by_role("tab", name="Start here").click()
+        page.get_by_text("Shorts", exact=True).first.click()
         page.wait_for_timeout(300)
 
+        page.get_by_text("Tools and settings").first.click()
         page.get_by_text("Earlier runs: open, continue or reuse").click()
         page.locator('input[aria-label="Earlier runs"]').click()     # the input itself: clicking the label does not open the list in Gradio 5
         page.wait_for_timeout(500)
@@ -212,11 +222,14 @@ try:
         draw.text((150, 150), "SF", fill=(255, 255, 255, 255), font=font, anchor="mm")
         mark.save(logo)
         page.goto(f"http://127.0.0.1:{PORT}")
-        page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
-        page.get_by_text("Pink glow box").click()
+        page.wait_for_selector("text=Paste a link or upload a file", timeout=60000)
+        open_advanced()
+        page.get_by_text("Captions", exact=True).locator("visible=true").first.click()
+        page.locator('input[aria-label="Caption style"]').locator("visible=true").first.click()
+        page.get_by_role("option", name="Pink glow box").click()
         page.wait_for_timeout(800)
         page.get_by_text("Your brand: logo, @handle, end card").click()
-        page.locator("input[type=file]").nth(1).set_input_files(logo)
+        page.locator("div.block").filter(has=page.get_by_text("Logo (PNG with a transparent background works best)")).last.locator("input[type=file]").set_input_files(logo)
         page.wait_for_timeout(1000)
         saved = os.path.join(home, "brand", "brand.json")
         for attempt in range(3):          # Gradio can miss a typed value if Save is clicked right away: type, leave the box, check, then save
@@ -246,7 +259,8 @@ try:
         got = json.load(open(saved, encoding="utf-8"))
         assert got.get("handle") == "@lightexplained", f"saved brand was {got}"
         page.reload()
-        page.wait_for_selector("text=Make shorts from a video in one click", timeout=60000)
+        page.wait_for_selector("text=Paste a link or upload a file", timeout=60000)
+        open_advanced()
         page.get_by_text("Your brand: logo, @handle, end card").click()
         page.wait_for_selector("text=Your brand is saved", timeout=30000)
         assert page.get_by_label("@handle").input_value() == "@lightexplained", "the saved handle was not reloaded"
