@@ -507,7 +507,8 @@ def extract_video_outline(transcript_path):
     text_sample = "\n".join(samples)
     prompt = f"Summarize this video content into a high-level outline (topics and themes):\n\n{text_sample}"
     try:
-        outline = get_llm_response(prompt, "You are a video analyst.")
+        # The outline is only optional context: do not let it hold the run (the default 300 s per call, per model, per retry did)
+        outline = get_llm_response(prompt, "You are a video analyst.", timeout=40)
     except Exception as e:
         print(f"[Warning] LLM Analysis for outline failed: {e}. Using fallback.")
         outline = "No outline available (LLM Offline)."

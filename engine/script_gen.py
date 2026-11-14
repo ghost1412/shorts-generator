@@ -391,6 +391,11 @@ def get_llm_response(
                         print(f"[Warning] Gemini API ({g_model}) stopped at its token limit; the reply may be cut off.")
                     print(f"[Log] Gemini API success with {g_model}!")
                     return content
+                except requests.exceptions.Timeout:
+                    # A model that did not answer in time will not answer on a retry: go to the next model (4 tries x 4 models x the
+                    # timeout used to hold a run for tens of minutes).
+                    print(f"[Warning] Gemini API ({g_model}) did not answer within {timeout}s; trying the next model.")
+                    break
                 except Exception as e:
                     err_msg = str(e)
                     if "404" in err_msg or "401" in err_msg or "403" in err_msg:
