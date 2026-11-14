@@ -285,12 +285,16 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
 def trip_recap(files, name, stops, note, hook, length, style, music, reuse="", drive="", look=False, both=False, name_places=True, enhance=False, kind="trip", keep_sound=False,
                grade="default", edit="none", edit_strength="medium", clean_sound=False, sample="auto", transitions="auto", subject_look="auto", subject_color="auto", subject_max=2, lines="", open_result=False, llm_provider="auto", steps="", font="default",
                visual_template="none", intro_animation="none", outro_animation="none",
-               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta=""):
+               tpl_speaker="", tpl_role="", tpl_show="", tpl_handle="", tpl_headline="", tpl_cta="", paths=""):
     """Recap tab (trip, wedding, event, family): several videos in filming order -> one recap with a hook, title cards and an itinerary."""
     import time
     from shortsflow import reuse as _reuse
     if reuse and not files:
         files = [v for v in _reuse.trip_videos_of(reuse) if os.path.exists(v)]      # the earlier recap's videos
+    if not files and (paths or "").strip():                 # videos already on this PC: used where they are, nothing is copied
+        files = web_args.local_paths(paths)
+        if not files:
+            raise gr.Error("None of those folders or files exist. Paste the full path of each folder or file, one per line.")
     if not files:
         raise gr.Error("Add your trip videos first (in the order you filmed them).")
     session = os.path.join(ROOT, "sessions", time.strftime("trip_%Y%m%d_%H%M%S"))
@@ -1467,6 +1471,9 @@ def build_ui():
                         t_kind = gr.Dropdown(web_args.RECAP_KIND_CHOICES, value="trip", label="What kind of videos are these?",
                                              info="Changes the wording and the options below. Wedding, event and family recaps never look up places.")
                         t_files = gr.File(label="Your videos (in filming order)", file_count="multiple", file_types=["video"], type="filepath")
+                        t_paths = gr.Textbox(label="Or use videos already on this PC (no copying): paste folder paths", lines=2,
+                                             placeholder="One folder or file path per line, in the order you filmed them",
+                                             info="One folder (or file) per line, in order. They are used where they are, so a big trip does not have to be copied into the app first. Used only when no videos are added above.")
                         t_name = gr.Textbox(label="Trip name", placeholder="Northvale: Pinemere, Larkwater and Stonegate")
                         t_length = gr.Slider(30, web_args.MAX_RECAP_SECONDS, value=60, step=15, label="Recap length (seconds)",
                                              info="A trip: 60-120. A wedding or event film can be 10-30 minutes (600-1800). Longer recaps take longer to make.")
@@ -1535,7 +1542,7 @@ def build_ui():
                         t_md = gr.File(label="Itinerary (.md) and all versions", file_count="multiple", interactive=False, height=110)
                 with gr.Accordion("Technical details", open=False):
                     t_log = gr.Textbox(label="Full log", lines=14, max_lines=14, autoscroll=True)
-                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max, t_lines, t_open_result, t_llm, t_steps, t_font, *t_look_ctl],
+                t_run = t_btn.click(trip_recap, [t_files, t_name, t_stops, t_note, t_hook, t_length, t_style, t_music, t_reuse, t_drive, t_look, t_both, t_places, t_enhance, t_kind, t_keep, t_grade, t_edit, t_edit_strength, t_clean, t_sample, t_trans, t_look_fx, t_look_color, t_subject_max, t_lines, t_open_result, t_llm, t_steps, t_font, *t_look_ctl, t_paths],
                                     [t_status, t_log, t_video, t_md])
                 t_kind.change(recap_kind_changed, t_kind, [t_name, t_stops, t_note, t_places, t_keep])
                 t_stop.click(stop_jobs, None, t_status, cancels=[t_run])

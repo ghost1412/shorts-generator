@@ -91,8 +91,8 @@ def test_recap_and_start_here_inputs_end_with_the_provider():
     import ast
     src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
     fns = {n.name: [a.arg for a in n.args.args] for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
-    assert fns["trip_recap"][-1] == "tpl_cta" and fns["trip_recap"][-10] == "font" and fns["trip_recap"][-11] == "steps" and fns["trip_recap"][-12] == "llm_provider" and fns["quick_clip"][-14] == "llm_provider" and fns["quick_clip"][-4] == "shape"
-    assert "t_lines, t_open_result, t_llm, t_steps, t_font, *t_look_ctl]" in src
+    assert fns["trip_recap"][-1] == "paths" and fns["trip_recap"][-2] == "tpl_cta" and fns["trip_recap"][-11] == "font" and fns["trip_recap"][-12] == "steps" and fns["trip_recap"][-13] == "llm_provider" and fns["quick_clip"][-14] == "llm_provider" and fns["quick_clip"][-4] == "shape"
+    assert "t_lines, t_open_result, t_llm, t_steps, t_font, *t_look_ctl, t_paths]" in src
 
 
 def test_filter_script_flag_follows_what_this_ffmpeg_understands(monkeypatch):

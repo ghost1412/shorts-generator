@@ -41,6 +41,17 @@ SHAPE_CHOICES = [("Vertical 9:16 (Shorts, Reels, TikTok)", "9:16"), ("Square 1:1
 TEMPLATE_TEXT_SLOTS = ("speaker", "role", "show", "handle", "headline", "cta")
 
 
+def local_paths(text):
+    """Existing files and folders from a box of pasted paths (one per line, quotes and blanks ignored). A recap uses them where they are,
+    with no copy: a folder is one day, or its sub-folders are the days."""
+    out = []
+    for line in str(text or "").splitlines():
+        p = line.strip().strip('"').strip("'")
+        if p and os.path.exists(p) and p not in out:
+            out.append(p)
+    return out
+
+
 def recap_template_show(show, trip_name):
     """The template's "Trip name" text: what was typed in that box, else the recap's own trip name (so it only has to be typed once)."""
     return " ".join(str(show or "").split()) or " ".join(str(trip_name or "").split())

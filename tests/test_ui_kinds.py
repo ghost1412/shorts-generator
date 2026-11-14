@@ -115,3 +115,14 @@ def test_template_trip_name_falls_back_to_the_recaps_trip_name():
     assert web_args.recap_template_show("", "  Northvale  trip ") == "Northvale trip"
     assert web_args.recap_template_show("My own", "Northvale") == "My own"
     assert web_args.recap_template_show(None, None) == ""
+
+
+def test_pasted_local_paths_are_used_in_place(tmp_path):
+    from shortsflow import web_args
+    day1 = tmp_path / "day1"
+    day1.mkdir()
+    clip = tmp_path / "a.mp4"
+    clip.write_bytes(b"x")
+    text = f'  "{day1}"  \n\n{clip}\n{tmp_path / "missing"}\n{day1}\n'
+    assert web_args.local_paths(text) == [str(day1), str(clip)]        # quotes and blanks ignored, missing skipped, no duplicates
+    assert web_args.local_paths("") == [] and web_args.local_paths(None) == []
