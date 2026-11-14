@@ -120,5 +120,5 @@ def test_the_web_recap_tab_can_make_a_step_by_step_video():
     import ast
     import os
     src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
-    assert [a.arg for a in next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "trip_recap").args.args][-1] == "steps"
-    assert "t_lines, t_open_result, t_llm, t_steps]" in src
+    assert [a.arg for a in next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "trip_recap").args.args][-11] == "steps"
+    assert "t_lines, t_open_result, t_llm, t_steps, t_font, *t_look_ctl]" in src

@@ -838,11 +838,27 @@ def itinerary_markdown(it, days, unit="Day"):
     return "\n".join(lines)
 
 
+TEXT_FONT = {"name": "default"}          # "handwritten" draws the recap's text in the bundled Caveat script (--recap_font)
+_NOT_CAVEAT = re.compile(r"[֐-ࣿऀ-෿　-鿿가-힯]")    # Hebrew, Arabic, Indic, CJK, Hangul: Caveat has no glyphs
+
+
+def set_text_font(name):
+    """Choose the font of the recap's title cards and labels: "default" or "handwritten"."""
+    TEXT_FONT["name"] = name if name in ("default", "handwritten") else "default"
+
+
+def _text_font_file(text=""):
+    """(file name, size factor) of the font for `text` under the current text style."""
+    if TEXT_FONT["name"] == "handwritten" and not _NOT_CAVEAT.search(text or ""):
+        return "Caveat.ttf", 1.3             # a script face looks small next to a poster face at the same point size
+    return ("NotoSansCyrillic.ttf" if re.search(r"[Ѐ-ӿ]", text or "") else "Anton-Regular.ttf"), 1.0
+
+
 def _font(size, text=""):
     from PIL import ImageFont
-    name = "NotoSansCyrillic.ttf" if re.search(r"[Ѐ-ӿ]", text) else "Anton-Regular.ttf"
+    name, factor = _text_font_file(text)
     try:
-        return ImageFont.truetype(os.path.join(FONT_DIR, name), size)
+        return ImageFont.truetype(os.path.join(FONT_DIR, name), max(12, int(size * factor)))
     except OSError:
         return ImageFont.load_default()
 
@@ -1008,8 +1024,11 @@ def cinematic_layers(path_base, title, line="", small="", look=None, index=0, qu
     anchor = "lm" if left else "mm"
 
     def font(size):
+        name, factor = _text_font_file(str(title))
+        if name == "Anton-Regular.ttf":
+            name = "NotoSansCyrillic.ttf"       # the animated title has always used this face for non-handwritten text
         try:
-            return ImageFont.truetype(os.path.join(FONT_DIR, "NotoSansCyrillic.ttf"), max(12, int(size * u)))
+            return ImageFont.truetype(os.path.join(FONT_DIR, name), max(12, int(size * u * factor)))
         except OSError:
             return ImageFont.load_default()
 
@@ -2035,7 +2054,29 @@ def _explicit_filter(args):
     return (getattr(args, "video_filter", "default") or "default") if given else "default"
 
 
+def apply_template_to_recaps(videos, props=None, apply=None):
+    """--visual_template / --intro_animation / --outro_animation on the finished recap videos (portrait and landscape): short transparent
+    pieces laid over the opening and the ending, as on the highlights video (engine/overlay.py). A template that fails leaves the video as it
+    was. Returns how many videos got it."""
+    from engine import overlay
+    if props is None:
+        from engine.visual_template import props_from_env
+        props = props_from_env()
+    if not overlay.wanted(props):
+        return 0
+    apply = apply or overlay.apply_to_video
+    done = 0
+    for v in videos:
+        try:
+            if apply(v, props):
+                done += 1
+        except Exception as e:                       # never lose a finished recap to a template
+            print(f"[Warning] Template skipped for {os.path.basename(v)}: {e}")
+    return done
+
+
 def run(args, target_bitrate=None, target_preset=None):
+    set_text_font(getattr(args, "recap_font", "default") or "default")
     try:
         from engine import steps_recap
         steps_recap.apply_steps(args)            # --steps_file: titles, captions, the needs card and the step-by-step defaults
@@ -2083,6 +2124,7 @@ def run(args, target_bitrate=None, target_preset=None):
         else:
             videos = [make_recap(paths, session_dir, style=style, aspect=getattr(args, "recap_aspect", None),
                                  orientation=getattr(args, "recap_orientation", "any") or "any", **common)["video"]]
+        apply_template_to_recaps(videos)
         drive = getattr(args, "upload_drive", None)
         if drive:
             from engine.drive_upload import upload

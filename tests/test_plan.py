@@ -115,3 +115,53 @@ def test_a_failed_look_falls_back_to_a_crop_preview(tmp_path):
         raise RuntimeError("no frames")
     out = plan.automatic_game_framing(["--content", "game"], "v", [{"start": 1, "end": 31}], str(tmp_path), choose=broken)
     assert out[0] == "crop" and "could not look" in out[1]
+
+
+def test_recap_handwritten_font_choice():
+    from engine import trip_recap as tr
+    tr.set_text_font("handwritten")
+    try:
+        assert tr._text_font_file("Kaindy Lake") == ("Caveat.ttf", 1.3)
+        assert tr._text_font_file("Привет")[0] == "Caveat.ttf"          # Caveat has Cyrillic
+        assert tr._text_font_file("مرحبا")[0] != "Caveat.ttf"           # scripts without glyphs keep the normal font
+        assert tr._text_font_file("你好")[0] != "Caveat.ttf"
+        tr.set_text_font("nonsense")
+        assert tr.TEXT_FONT["name"] == "default"
+    finally:
+        tr.set_text_font("default")
+    assert tr._text_font_file("Kaindy Lake") == ("Anton-Regular.ttf", 1.0)
+
+
+def test_handwritten_recap_reaches_the_command_and_the_cli():
+    import os
+    from shortsflow import web_args
+    assert web_args.trip_args(["a.mp4"], "s")[:2] == ["--mode", "TRIP"]
+    assert "--recap_font" not in web_args.trip_args(["a.mp4"], "s")
+    args = web_args.trip_args(["a.mp4"], "s", font="handwritten")
+    assert args[args.index("--recap_font") + 1] == "handwritten"
+    src = open(os.path.join(os.path.dirname(__file__), "..", "shortsflow", "_main.py"), encoding="utf-8").read()
+    assert '"--recap_font", choices=["default", "handwritten"]' in src
+
+
+def test_template_pieces_go_on_every_finished_recap():
+    from engine import trip_recap as tr
+    seen = []
+    props = {"visualTemplate": "story-progress"}
+    n = tr.apply_template_to_recaps(["a.mp4", "b.mp4"], props, apply=lambda v, p: seen.append(v) or True)
+    assert n == 2 and seen == ["a.mp4", "b.mp4"]
+    assert tr.apply_template_to_recaps(["a.mp4"], {}, apply=lambda v, p: 1 / 0) == 0          # nothing chosen: nothing drawn
+
+
+def test_a_failing_template_never_loses_a_recap():
+    from engine import trip_recap as tr
+
+    def boom(video, props):
+        raise RuntimeError("renderer missing")
+    assert tr.apply_template_to_recaps(["a.mp4"], {"introAnimation": "tiles"}, apply=boom) == 0
+
+
+def test_the_recap_form_passes_the_template_to_the_command():
+    from shortsflow import web_args
+    a = web_args.template_args("story-progress", "iris", "fade", show="Almaty")
+    assert a[a.index("--visual_template") + 1] == "story-progress" and "show=Almaty" in a
+    assert a[a.index("--intro_animation") + 1] == "iris"
