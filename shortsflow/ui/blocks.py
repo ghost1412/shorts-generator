@@ -8,7 +8,7 @@ def look_block(gr, web_args, prefix_info="", with_shape=True, open_=False):
     """Template gallery (click a picture to choose), covers, template text and frame shape.
 
     Returns the components in the order [template, intro, outro, six text boxes] + [frame shape when `with_shape`]."""
-    with gr.Accordion("🎨 Look: templates, covers and frame shape (click to open)", open=open_):
+    with gr.Accordion("Look: templates, covers and frame shape", open=open_):
         tpl = gr.Dropdown(web_args.VISUAL_TEMPLATE_CHOICES, value="none", label="Visual template",
                           info="A designed look drawn over the picture. Click a picture below or pick from this list. Turns on animated captions." + prefix_info)
         shown = [(label, name) for label, name in web_args.VISUAL_TEMPLATE_CHOICES if web_args.template_preview(name)]

@@ -53,7 +53,7 @@ def _app_theme():
     return gr.themes.Soft(primary_hue="orange", secondary_hue="orange", neutral_hue="slate",
                           font=("system-ui", "Segoe UI", "Helvetica Neue", "Arial", "sans-serif"),
                           radius_size=gr.themes.sizes.radius_lg, spacing_size=gr.themes.sizes.spacing_md).set(
-        block_label_background_fill="transparent", block_label_text_color="*body_text_color",     # plain labels, not coloured chips
+        block_label_background_fill="transparent", block_label_text_color="*body_text_color", block_title_text_color="*body_text_color",     # plain labels, not coloured chips
         block_label_border_width="0px", block_label_shadow="none", block_label_text_weight="600",
         block_label_background_fill_dark="transparent", block_label_text_color_dark="*body_text_color", block_label_border_width_dark="0px")
 
@@ -936,8 +936,8 @@ MODE_KEYS = ["shorts", "clip", "dub", "recap", "reel", "idea"]
 
 def web_args_modes():
     """[(label, key)] of the things you can make: the first screen of the app."""
-    return [("🚀 Shorts or a highlights video", "shorts"), ("🌍 Dub into another language", "dub"), ("🎞 Recap (trip, wedding, event)", "recap"),
-            ("📸 Photo reel", "reel"), ("🪄 Video from an idea", "idea"), ("✂️ Clip tool (all options)", "clip")]
+    return [("Shorts or a highlights video", "shorts"), ("Dub into another language", "dub"), ("Recap (trip, wedding, event)", "recap"),
+            ("Photo reel", "reel"), ("Video from an idea", "idea"), ("Clip tool (all options)", "clip")]
 
 
 def build_ui():
@@ -977,7 +977,7 @@ def build_ui():
                                                  value="auto", label="Picture in the tall frame",
                                                  info="Fit and crop are only about the picture. Templates (like Film bars) and edit styles are separate and are under Advanced.")
                         q_kind_note = gr.Markdown("")
-                        with gr.Accordion("⚙️ Advanced: moments, languages, edit style, look, captions, extras, brand", open=False):
+                        with gr.Accordion("Advanced: moments, languages, edit style, captions, extras, brand", open=False):
                             with gr.Accordion("Pick the moments (optional)", open=False):
                                 q_find = gr.Textbox(label="Only make shorts about...", placeholder="where they talk about pricing",
                                                     info="Describe the part you want. Leave empty to let the AI pick the best moments.")
@@ -996,20 +996,22 @@ def build_ui():
                                 q_caption_lang = gr.Dropdown(CAPTION_LANG_CHOICES, value="", label="Captions in...",
                                                              info="Translates the captions with AI (a free Groq key or Ollama is needed). "
                                                                   "Chinese, Japanese and Korean fonts download once, the first time you use them.")
-                            q_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style",
-                                                 info="Edits like an editor: cuts pauses and ums, zooms, cutaways, a teaser opening, colour and sound effects, "
-                                                      "chosen for this kind of video. Turns on animated captions.")
-                            q_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
-                                                       info="Subtle keeps it quiet; Hyped uses everything.")
-                            q_look = template_controls(" For a highlights video the template shows at the start and end, and the covers on the first and last second.")
-                            q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
-                                                     info="Needs Node.js (nodejs.org). Untick if it is not installed.")
-                            q_style = gr.Radio(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
-                                               info="Only used when animated captions are on.")
-                            q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
-                            q_grade = gr.Dropdown(web_args.COLOR_GRADE_CHOICES, value="default", label="Colour filter",
-                                                  info="A colour look for the whole short. Automatic uses the Auto-edit style's own look (Hype: vibrant action, "
-                                                       "Vlog: cinematic warm); pick one here to override it.")
+                            with gr.Accordion("Edit style and look", open=False):
+                                q_edit = gr.Dropdown(web_args.EDIT_STYLE_CHOICES, value="none", label="Auto-edit style",
+                                                     info="Edits like an editor: cuts pauses and ums, zooms, cutaways, a teaser opening, colour and sound effects, "
+                                                          "chosen for this kind of video. Turns on animated captions.")
+                                q_edit_strength = gr.Radio(web_args.EDIT_STRENGTH_CHOICES, value="medium", label="How much editing",
+                                                           info="Subtle keeps it quiet; Hyped uses everything.")
+                                q_look = template_controls(" For a highlights video the template shows at the start and end, and the covers on the first and last second.")
+                                q_grade = gr.Dropdown(web_args.COLOR_GRADE_CHOICES, value="default", label="Colour filter",
+                                                      info="A colour look for the whole short. Automatic uses the Auto-edit style's own look (Hype: vibrant action, "
+                                                           "Vlog: cinematic warm); pick one here to override it.")
+                            with gr.Accordion("Captions", open=False):
+                                q_captions = gr.Checkbox(value=bool(shutil.which("node")), label="Add animated captions",
+                                                         info="Needs Node.js (nodejs.org). Untick if it is not installed.")
+                                q_style = gr.Dropdown(CAPTION_CHOICES, value="HORMOZI", label="Caption style",
+                                                   info="Only used when animated captions are on.")
+                                q_style_img = gr.Image(value=style_preview("HORMOZI"), show_label=False, interactive=False, height=300)
                             with gr.Accordion("Game footage and caption position (optional)", open=False):
                                 q_game = gr.Checkbox(label="This is game footage", value=False,
                                                      info="Picks story moments (cutscenes, dialogue) AND action moments (fights, gameplay, even with nobody talking), and keeps the whole screen in frame so the minimap and the game's own subtitles are not cut off.")
@@ -1189,7 +1191,7 @@ def build_ui():
                 with gr.Row():
                     q_zip_btn = gr.Button("⬇ Download all as .zip")
                     q_zip = gr.File(label="Your download", interactive=False, visible=False)
-                with gr.Accordion("🧰 Tools and settings: earlier runs, Google Drive, setup check, AI key, technical log", open=False):
+                with gr.Accordion("Tools and settings: earlier runs, Google Drive, setup check, AI key, technical log", open=False):
                     with gr.Accordion("Earlier runs: open, continue or reuse", open=False):
                         with gr.Tabs():
                             with gr.Tab("Open a finished run"):
