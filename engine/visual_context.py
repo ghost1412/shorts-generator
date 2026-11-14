@@ -77,12 +77,12 @@ def clean_description(text):
     return re.sub(r"\s+", " ", " ".join(lines)).strip().strip("*").strip()[:420]
 
 
-def describe(frames, model, about="", base=None, timeout=300):
+def describe(frames, model, about="", base=None, timeout=300, prompt=None):
     """One description for these JPEG frames from the Ollama vision model, '' when it cannot be had."""
     if not frames or not model:
         return ""
     body = json.dumps({"model": model, "stream": False, "options": {"temperature": 0},
-                       "messages": [{"role": "user", "content": PROMPT.format(about=(f"The video is: {about}. " if about else "")),
+                       "messages": [{"role": "user", "content": (prompt or PROMPT.format(about=(f"The video is: {about}. " if about else ""))),
                                      "images": [base64.b64encode(f).decode() for f in frames]}]}).encode()
     req = urllib.request.Request(f"{base or ollama_base()}/api/chat", body, {"Content-Type": "application/json"})
     try:
@@ -108,12 +108,12 @@ def gemini_key():
     return (key or "").strip() or None
 
 
-def describe_gemini(frames, model, about="", timeout=90, key=None):
+def describe_gemini(frames, model, about="", timeout=90, key=None, prompt=None):
     """One description for these JPEG frames from Gemini, '' when it cannot be had."""
     key = key or gemini_key()
     if not frames or not key:
         return ""
-    parts = [{"text": PROMPT.format(about=(f"The video is: {about}. " if about else ""))}]
+    parts = [{"text": prompt or PROMPT.format(about=(f"The video is: {about}. " if about else ""))}]
     parts += [{"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(f).decode()}} for f in frames]
     body = json.dumps({"contents": [{"parts": parts}], "generationConfig": {"temperature": 0, "maxOutputTokens": 300}}).encode()
     last = ""
@@ -333,3 +333,35 @@ def describe_candidates(video, highlights, about="", cache_path=None, model=None
 def story_line(h):
     """What to hand to the title writer / ranking for one clip: the on-screen description, '' when there is none."""
     return str(h.get("visual") or "").strip()
+
+
+GAME_PROMPT = ("These are frames from one moment of a video that should be video-game footage (gameplay or a game cutscene). Answer with "
+               "ONE word: GAME if they show a video game (rendered graphics, game interface, a game character), REAL if they show real "
+               "filmed people, rooms or places (a vlog, a camera filming real life, a webcam chat), or UNSURE.")
+WARN_REAL = "this moment looks like real filmed footage, not the game (check it before rendering)"
+
+
+def flag_non_game(video, highlights, ask=None, model=None, grab=grab_frames, max_clips=12):
+    """Copies of the highlights; a moment that looks like real filmed footage gets `warning` set. Nothing is removed or re-ranked:
+    the person reviewing the plan decides. Highlights stay as they were when no vision backend is available or it does not answer."""
+    if not highlights:
+        return highlights
+    if ask is None:
+        found, ask, label = choose_backend()
+        model = model or found
+        if found:
+            print(f"[Log] Checking the moments for non-game footage with {label}.")
+    if not model or ask is None:
+        return highlights
+    out, flagged = [], 0
+    for i, h in enumerate(highlights):
+        h = dict(h)
+        if i < max_clips:
+            answer = str(ask(grab(video, h["start"], h["end"]), model, "", prompt=GAME_PROMPT) or "").strip().upper()
+            if answer.startswith("REAL"):
+                h["warning"] = WARN_REAL
+                flagged += 1
+        out.append(h)
+    if flagged:
+        print(f"[Log] {flagged} of {len(highlights)} moment(s) look like real filmed footage, not game footage (flagged, not removed).")
+    return out

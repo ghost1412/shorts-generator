@@ -12,7 +12,8 @@ def write_plan(session_dir, highlights, source_video):
         moments.append({
             "index": i, "start": round(float(h["start"]), 2), "end": round(float(h["end"]), 2),
             "title": str(h.get("title") or h.get("hook") or f"Moment {i}")[:120],
-            "score": h.get("final_score", h.get("viral_score")), "reason": str(h.get("reason") or "")[:300],
+            "score": h.get("final_score", h.get("viral_score")),
+            "reason": (str(h.get("warning") or "") + (" " if h.get("warning") and h.get("reason") else "") + str(h.get("reason") or ""))[:300],
         })
     path = os.path.join(session_dir, PLAN_FILE)
     with open(path, "w", encoding="utf-8") as f:

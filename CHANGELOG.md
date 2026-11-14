@@ -19,6 +19,7 @@ Release notes for the `shortsflow` package and the Windows installer. Newest fir
 - Fixed: ticking "game footage" forced the fit layout, so "Fill the screen (crop)" was ignored.
 - The transcript of a video is kept once on this PC (`~/.shortsflow/cache/transcripts`, `SHORTSFLOW_TRANSCRIPT_CACHE=off` turns it off), so the same video is not transcribed again in every new run.
 - Fixed: a Gemini model that did not answer in time was retried four times on each of four models (up to 300 s per try), which could hold a run for tens of minutes. A timeout now moves on to the next model, and the optional video outline waits at most 40 s per try.
+- Game footage with `--visual_context`: a moment that looks like real filmed footage (a just-chatting part of a stream recording, for example) is flagged in the plan and on the review card instead of passing as a story moment. It is only flagged, never removed.
 
 ## 0.7.8 (2026-11-13)
 

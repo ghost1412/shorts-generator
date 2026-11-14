@@ -1734,6 +1734,12 @@ def process_source_video(video_path, output_dir, mode="shorts", clip_count=5, ta
                     print(f"[Warning] Failed to cache game moments: {e}")
         if not highlights:
             raise RuntimeError("Game mode found no story or action moments (is the video very short or silent and still?).")
+        if visual_context:                  # opt-in (frames may leave the PC with Gemini): flag moments that are not game footage
+            try:
+                from engine.visual_context import flag_non_game
+                highlights = flag_non_game(video_path, highlights)
+            except Exception as e:
+                print(f"[Warning] Game footage check skipped: {e}")
     elif find_query:
         from engine.find_moments import find_moments, llm_ask
         with open(transcript_path, 'r', encoding='utf-8') as f:
