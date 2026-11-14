@@ -56,3 +56,33 @@ def test_make_preview_cuts_a_real_clip(tmp_path):
                     "-shortest", "-c:v", "libx264", str(src)], check=True)
     out = plan.make_preview(str(src), 1, 3, str(tmp_path / "sub" / "p.mp4"), height=120)
     assert out and (tmp_path / "sub" / "p.mp4").stat().st_size > 0
+
+
+def test_framing_from_command():
+    f = plan.framing_from_command
+    assert f(["main.py", "--layout", "single", "--game_framing", "crop"]) == ("crop", "9:16")
+    assert f(["main.py", "--layout", "fit"]) == ("fit", "9:16")
+    assert f(["main.py", "--layout", "single", "--game_framing", "fit"]) == ("fit", "9:16")
+    assert f(["main.py", "--extract_mode", "long"]) == (None, "9:16")
+    assert f(["main.py", "--aspect_ratio", "16:9"]) == (None, "16:9")
+    assert f(["main.py", "--aspect_ratio", "1:1"]) == ("crop", "1:1")
+    assert f(None) == ("crop", "9:16")
+
+
+def test_preview_has_the_shape_of_the_short(tmp_path):
+    import shutil
+    import subprocess
+    import pytest
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        pytest.skip("no ffmpeg")
+    src = tmp_path / "in.mp4"
+    subprocess.run([exe, "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=640x360:d=3", "-f", "lavfi", "-i", "sine=d=3",
+                    "-shortest", "-c:v", "libx264", str(src)], check=True)
+    for framing in ("crop", "fit"):
+        out = plan.make_preview(str(src), 0, 2, str(tmp_path / f"{framing}.mp4"), framing=framing)
+        size = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", out]).decode().split()[0]
+        assert size == "270,480", framing
+    out = plan.make_preview(str(src), 0, 2, str(tmp_path / "full.mp4"))
+    size = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", out]).decode().split()[0]
+    assert size.endswith(",360")

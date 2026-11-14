@@ -52,7 +52,7 @@ def test_picture_choice_reaches_the_command(monkeypatch):
     import os
     src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
     assert 'picture in ("fit", "crop") and game_framing == "auto"' in src
-    assert '(game or picture == "fit")' in src
+    assert 'layout = web_picture_layout(filler, game, game_framing, picture, long_form)' in src
 
 
 def test_progress_view_moves_forward_and_shows_detail():
@@ -80,3 +80,21 @@ def test_progress_model_download_stage_is_not_drawn_and_dub_has_its_own_stages()
     d = o.Progress(steps=o.DUB_STEPS)
     d.feed("Dubbing 12 spoken segments")
     assert "Dub" in d.display() and "Render" not in d.display()
+
+
+def test_picture_layout_for_start_here_runs():
+    """Regression: ticking game footage used to force `--layout fit`, so 'Fill the screen (crop)' was ignored."""
+    import os
+    import re
+    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+    body = re.search(r"def web_picture_layout\(.*?\n\n\n", src, re.S).group(0)
+    ns = {}
+    exec(body, ns)
+    f = ns["web_picture_layout"]
+    assert f(False, True, "crop", "crop", False) == "single"       # game + crop: no fit layout
+    assert f(False, True, "auto", "auto", False) == "single"       # game + automatic: the tool decides
+    assert f(False, True, "fit", "fit", False) == "fit"
+    assert f(False, False, "auto", "fit", False) == "fit"
+    assert f(False, False, "auto", "crop", False) == "auto"
+    assert f(True, True, "crop", "crop", False) == "split_filler"
+    assert f(False, True, "crop", "crop", True) == "auto"          # highlights video

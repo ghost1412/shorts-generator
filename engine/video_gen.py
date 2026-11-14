@@ -2750,6 +2750,40 @@ def _overlay_on_long_video(video, codec, quality_params):
         print(f"[Warning] Template / covers skipped for the highlights video: {e}")
 
 
+def segment_key(source_path, hi, **settings):
+    """What a cut piece (temp_segments/seg_N.mp4) was made from: the source file, the start and end, and the settings that change the
+    picture (layout, frame shape, ...). A cached piece is only reused when this matches, so a rerun with other moments or another
+    framing never picks up an old piece that happens to have the same number."""
+    import hashlib
+    try:
+        stat = os.stat(source_path)
+        ident = [os.path.abspath(source_path), stat.st_size]
+    except OSError:
+        ident = [str(source_path), 0]
+    parts = [ident, round(float(hi["start"]), 2), round(float(hi["end"]), 2), sorted((k, str(v)) for k, v in settings.items())]
+    return hashlib.sha1(repr(parts).encode("utf-8")).hexdigest()
+
+
+def segment_is_cached(path, key):
+    """True when `path` is a finished piece whose key file holds `key`. A piece without a key file (made by an older version, or copied
+    from another run) is not trusted: cutting it again costs seconds, a wrong piece costs a wrong video."""
+    try:
+        if os.path.getsize(path) <= 1000:
+            return False
+        with open(path + ".key", "r", encoding="utf-8") as f:
+            return f.read().strip() == key
+    except OSError:
+        return False
+
+
+def write_segment_key(path, key):
+    try:
+        with open(path + ".key", "w", encoding="utf-8") as f:
+            f.write(key)
+    except OSError:
+        pass
+
+
 def extract_segments(source_path, highlights, transcript_path, output_dir, mode="shorts", bitrate="12M", preset="slow", codec="libx264", is_challenge=False, use_hq=False, use_superres=False, editing_style=None, gif_dir=None, interest_points=None, silence_intervals=None, tighten_mode="cut", use_remotion=False, use_cache=False, mashup=False, mashup_mode="edit", orientation="landscape", letterbox_crop=None, caption_style="HORMOZI", subtitle_y_pos=1150, video_filter=None, user_context=None, max_workers=None, layout="single", remove_fillers=False, reel_captions=False, filler_video=None, enhance="off", enhance_strength="medium", transitions="none", aspect_ratio="9:16"):
     """Parallel extraction of segments using direct FFmpeg for performance."""
     if not os.path.exists(transcript_path):
@@ -2798,9 +2832,12 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
     single_crop_clips = set()
     fit_clips = set()           # clips the auto layout cut as "whole picture over a blurred copy" (no face on screen)
 
+    seg_keys = {}
     for i, hi in enumerate(highlights):
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
-        if use_cache and os.path.exists(target) and os.path.getsize(target) > 1000:
+        seg_keys[i] = segment_key(source_path, hi, mode=mode, layout=layout, aspect=aspect_ratio, orientation=orientation,
+                                  letterbox=letterbox_crop, filler=bool(filler_path), enhance=enhance, enhance_strength=enhance_strength)
+        if use_cache and segment_is_cached(target, seg_keys[i]):
             if mode == "shorts" and layout == "single" and not filler_path:
                 single_crop_clips.add(i)
             elif mode == "shorts" and layout == "auto" and not filler_path and no_face_clip(source_path, hi['start'], hi['end']):
@@ -2808,6 +2845,13 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             print(f"[Log] Segment {i} already exists at {target}. Skipping extraction.")
             continue
             
+        if os.path.exists(target):
+            if use_cache:
+                print(f"[Log] Segment {i} was cut from other moments or other settings: cutting it again.")
+            try:
+                os.remove(target)       # one named cache file: a failed new cut must not leave the old piece to be trusted
+            except OSError:
+                pass
         print(f"[Log] Queueing extraction for clip {i+1}/{len(highlights)}: {hi['start']:.2f}s - {hi['end']:.2f}s")
         duration = hi['end'] - hi['start']
         
@@ -2948,6 +2992,12 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
 
     finish_segment_processes(processes)
 
+    # Remember what every finished piece was cut from (see segment_key)
+    for i, hi in enumerate(highlights):
+        piece = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
+        if os.path.exists(piece) and os.path.getsize(piece) > 1000:
+            write_segment_key(piece, seg_keys[i])
+
     # Generate thumbnails for all extracted segments
     for i, hi in enumerate(highlights):
         target = os.path.join(output_dir, "temp_segments", f"seg_{i}.mp4")
@@ -3056,7 +3106,7 @@ def extract_segments(source_path, highlights, transcript_path, output_dir, mode=
             if not os.path.exists(task_path) or os.path.getsize(task_path) < 1000: return
             
             out = os.path.join(output_dir, f"video_clip_{i+1}.mp4")
-            if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000:
+            if use_cache and os.path.exists(out) and os.path.getsize(out) > 1000 and os.path.getmtime(out) >= os.path.getmtime(task_path):
                 print(f"[Log] Final clip {i+1} already exists at {out}. Skipping rendering.")
                 extracted_files.append(out)
                 return

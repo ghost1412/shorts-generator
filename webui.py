@@ -473,6 +473,18 @@ def _range_too_long(text):
         return False
 
 
+def web_picture_layout(filler, game, game_framing, picture, long_form):
+    """The --layout of a Start here run. Game footage keeps `single` so the game framing (auto / fit / crop) decides; an explicit
+    "whole picture on a blurred background" gives `fit`; everything else is `auto`."""
+    if filler:
+        return "split_filler"
+    if long_form:
+        return "auto"
+    if picture == "fit" or (game and game_framing == "fit"):
+        return "fit"
+    return "single" if game else "auto"
+
+
 def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_brand=True,
                logo=None, handle="", end_card="", color=None, position="top-right", mode="shorts", minutes=4, find="", cut="", spoken="auto", caption_lang="",
                clean_audio=False, hook_overlay=False, caption_emoji=False, filler=False, filler_video=None, broll=False, auto_zoom=False, cold_open=False,
@@ -495,7 +507,7 @@ def quick_clip(url, upload, clip_count, captions, caption_style="HORMOZI", use_b
     long_form = mode == "long"
     if picture in ("fit", "crop") and game_framing == "auto":
         game_framing = picture                      # the one plain "Picture" choice also steers game footage
-    layout = "split_filler" if filler else ("fit" if (game or picture == "fit") and not long_form else "auto")   # game footage: keep the whole picture
+    layout = web_picture_layout(filler, game, game_framing, picture, long_form)
     lang_args = ["--language", (spoken or "auto")]
     if caption_lang:
         lang_args += ["--caption_lang", caption_lang]
@@ -658,19 +670,30 @@ def latest_plan(root):
             words = word_edit.load_words(d)
             ends = [m["end"] for m in plan["moments"]] + [w["end"] for w in words if w.get("end") is not None]
             source = plan.get("source_video") or ""
-            for m in plan["moments"]:          # a small clip per moment, so it can be watched before rendering
-                from engine.plan import make_preview
-                pv = os.path.join(d, "previews", f"m{m['index']}.mp4")
-                m["preview"] = pv if os.path.isfile(pv) else make_preview(source, m["start"], m["end"], pv)
-            return {"session": d, "source": source, "moments": plan["moments"], "total": max(ends) if ends else 0.0}
+            from engine.plan import make_preview, framing_from_command
+            framing, aspect = framing_from_command((_read_command(d) or {}).get("cmd"))
+            for m in plan["moments"]:          # a small clip per moment, in the shape of the final short, so it can be watched before rendering
+                pv = os.path.join(d, "previews", f"m{m['index']}_{framing or 'full'}.mp4")
+                m["preview"] = pv if os.path.isfile(pv) else make_preview(source, m["start"], m["end"], pv, framing=framing, aspect=aspect)
+            return {"session": d, "source": source, "framing": framing, "aspect": aspect, "moments": plan["moments"],
+                    "total": max(ends) if ends else 0.0}
     return None
 
 
-def preview_handler(session, source, index):
+def _read_command(session):
+    try:
+        with open(os.path.join(session, "command.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def preview_handler(session, source, index, framing=None, aspect="9:16"):
     """Re-cut one moment's preview for the start and end currently in the boxes."""
     def run(start, end):
         from engine.plan import make_preview
-        path = make_preview(source, start, end, os.path.join(session, "previews", f"m{index}_{int(float(start or 0))}_{int(float(end or 0))}.mp4"))
+        path = make_preview(source, start, end, os.path.join(session, "previews", f"m{index}_{int(float(start or 0))}_{int(float(end or 0))}_{framing or 'full'}.mp4"),
+                            framing=framing, aspect=aspect)
         if not path:
             raise gr.Error("Could not make a preview for those times.")
         return path
@@ -1137,7 +1160,7 @@ def build_ui():
                                         t0 = gr.Number(value=m["start"], label="Start (seconds in the original video)", precision=1, minimum=0, interactive=True)
                                         t1 = gr.Number(value=m["end"], label="End (seconds)", precision=1, minimum=0, interactive=True)
                                     refresh = gr.Button("▶ Update the preview for these times", size="sm")
-                                    refresh.click(preview_handler(plan["session"], plan.get("source"), m["index"]), [t0, t1], vid)
+                                    refresh.click(preview_handler(plan["session"], plan.get("source"), m["index"], plan.get("framing"), plan.get("aspect") or "9:16"), [t0, t1], vid)
                                     strip = _tl.timeline_html(m["start"], m["end"], None, total, others)
                                     if strip:
                                         box = gr.HTML(strip)

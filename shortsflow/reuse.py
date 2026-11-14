@@ -100,7 +100,7 @@ def seed_session(old_dir, new_dir, keep_moments=True, kind="clip"):
             continue
         dirs[:] = [d for d in dirs if d not in ("recap_parts", "photos", "videos") and len(parts) < 1]       # root and one level
         for name in files:
-            if name in names or (in_segments and re.fullmatch(r"seg_\d+\.mp4", name)):
+            if name in names or (in_segments and re.fullmatch(r"seg_\d+\.mp4(\.key)?", name)):
                 rel = os.path.relpath(os.path.join(dirpath, name), old_dir)
                 _link_or_copy(os.path.join(dirpath, name), os.path.join(new_dir, rel), link=in_segments)
                 copied.append(rel)
