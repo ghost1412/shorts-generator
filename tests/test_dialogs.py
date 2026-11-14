@@ -50,3 +50,16 @@ def test_append_line_adds_without_duplicates():
     assert dialogs.append_line("", ["x"]) == "x"
     assert dialogs.append_line("a", []) == "a"
     assert dialogs.append_line(None, None) == ""
+
+
+def test_mode_cards_have_an_icon_and_a_description_for_every_mode():
+    from shortsflow.ui import theme
+    import os
+    src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
+    import re
+    labels = re.search(r"def web_args_modes\(\):.*?return \[(.*?)\]\n", src, re.S).group(1)
+    for label in re.findall(r'\("([^"]+)", "[a-z]+"\)', labels):
+        assert any(label == m[0] for m in theme.MODES), f"no card style for the mode {label!r}"
+    css = theme.mode_card_css()
+    assert css.count("::before { -webkit-mask-image") == len(theme.MODES) and css.count("::after { content:") == len(theme.MODES)
+    assert 'elem_id="sf-modes"' in src

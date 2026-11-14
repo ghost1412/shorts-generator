@@ -1015,6 +1015,8 @@ button.primary { height: 54px; font-size: 16px; font-weight: 650; border-radius:
 .sf-detail { font-size: 13.5px; margin-top: 8px; opacity: .85; }
 
 </style>"""
+from shortsflow.ui.theme import EXTRA_CSS as _EXTRA_CSS      # the mode cards, header and button look (CSS only)
+WORDS_CSS += "<style>" + _EXTRA_CSS + "</style>"
 
 
 MODE_KEYS = ["shorts", "clip", "dub", "recap", "reel", "idea"]       # the columns; "highlights" shares the first one
@@ -1066,19 +1068,22 @@ def build_ui():
         from shortsflow.timeline import DRAG_JS
         demo.load(None, None, None, js=DRAG_JS)
         mode_card = gr.Radio(web_args_modes(), value="shorts", label="What do you want to make?",
-                             info="Pick one. Only the steps for that appear below.")
+                             info="Pick one. Only the steps for that appear below.", elem_id="sf-modes")
         with gr.Column():
             with gr.Column(visible=True) as mode_col_shorts:
                 gr.Markdown("### Your video\nPaste a link or upload a file. No account or API key is needed.")
                 with gr.Row():
                     with gr.Column():
-                        q_url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC: a path is used where it is, nothing is copied.", placeholder="https://www.youtube.com/watch?v=...")
-                        if browse_ok:
-                            q_browse = gr.Button("Browse for a video on this PC...", size="sm")
-                            q_browse.click(browse_video, q_url, q_url)
-                        q_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath")
-                        q_sample = gr.Button("🎬 No video handy? Try a 2-minute sample", size="sm")
-                        q_sample_note = gr.Markdown("")
+                        with gr.Row(equal_height=True):
+                            with gr.Column(scale=3):
+                                q_url = gr.Textbox(label="Video link or file path on this PC", info="A web link, or the full path of a video on this PC: a path is used where it is, nothing is copied.", placeholder="https://www.youtube.com/watch?v=...")
+                                if browse_ok:
+                                    q_browse = gr.Button("Browse for a video on this PC...", size="sm")
+                                    q_browse.click(browse_video, q_url, q_url)
+                                q_sample = gr.Button("🎬 No video handy? Try a 2-minute sample", size="sm")
+                                q_sample_note = gr.Markdown("")
+                            with gr.Column(scale=2):
+                                q_upload = gr.File(label="...or upload a video from your computer", file_types=["video"], type="filepath", height=190)
                         q_mode = gr.Radio([("Short vertical clips (TikTok, Reels, Shorts)", "shorts"),
                                            ("One highlights video (long-form, landscape)", "long")],
                                           value="shorts", label="Format", visible=False)
