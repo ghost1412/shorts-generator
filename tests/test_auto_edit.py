@@ -194,3 +194,18 @@ def test_edit_style_choices_follow_the_current_templates():
     from shortsflow import web_args
     assert web_args.edit_style_choices()[0] == ("No auto-edit (pick my own options)", "none")
     assert [v for _, v in web_args.edit_style_choices()[1:]] == list(auto_edit.PRESETS)
+
+
+def test_choose_preset_by_keywords():
+    from engine.auto_edit import choose_preset
+    assert choose_preset("my_gameplay_clutch.mp4")["preset"] == "hype"
+    pick = choose_preset("lesson.mp4", None)
+    assert pick["preset"] == "educational" and "lesson" in pick["reason"]
+    assert choose_preset("x.mp4 how to bake, a step by step tutorial")["preset"] == "tutorial"
+
+
+def test_choose_preset_defaults_and_available():
+    from engine.auto_edit import choose_preset
+    assert choose_preset("clip.mp4")["preset"] == "podcast"
+    assert choose_preset("clip.mp4", 3600)["preset"] == "podcast"
+    assert choose_preset("gameplay.mp4", available=["podcast", "vlog"])["preset"] == "podcast"

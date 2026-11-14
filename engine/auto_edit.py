@@ -252,6 +252,44 @@ def preset_choices():
     return [(p["label"], k) for k, p in PRESETS.items()]
 
 
+# Words (in the file name, the page title or --user_context) that point at a template. Cheap and local: nothing is transcribed or sent anywhere.
+AUTO_KEYWORDS = {
+    "podcast": ("podcast", "interview", "episode", "conversation", "talk show", " ep "),
+    "hype": ("gameplay", "gaming", "game", "reaction", "react", "stream", "clutch", "highlights", "fortnite", "minecraft", "dota", "valorant"),
+    "educational": ("lecture", "lesson", "explained", "explainer", "course", "class", "science", "how does", "why "),
+    "vlog": ("vlog", "day in", "travel", "trip", "routine", "lifestyle", "grwm"),
+    "news": ("news", "breaking", "update", "analysis", "commentary", "report"),
+    "storytime": ("storytime", "story time", "confession", "my story", "true story", "happened to me"),
+    "motivation": ("motivation", "mindset", "discipline", "success", "speech", "inspir"),
+    "tutorial": ("tutorial", "how to", "how-to", "guide", "step by step", "walkthrough", "diy"),
+    "cinematic": ("cinematic", "film", "short film", "trailer", "4k"),
+}
+
+
+def choose_preset(text="", duration=None, available=None):
+    """Pick a template from cheap signals: keywords in `text` (file name, title, --user_context) and the video length.
+
+    Returns {"preset", "reason", "runner_up"}. No keyword hit -> "podcast" (the calm, clean default).
+    Only templates in `available` (default: all) can win."""
+    names = set(available or PRESETS)
+    low = " " + re.sub(r"[_\-.]+", " ", str(text or "").lower()) + " "
+    scores = {}
+    for name, words in AUTO_KEYWORDS.items():
+        if name in names:
+            hits = [w for w in words if w in low]
+            if hits:
+                scores[name] = hits
+    ranked = sorted(scores, key=lambda n: (-len(scores[n]), list(AUTO_KEYWORDS).index(n)))
+    if ranked:
+        best = ranked[0]
+        return {"preset": best, "reason": f"the text mentions {', '.join(repr(w.strip()) for w in scores[best])}",
+                "runner_up": ranked[1] if len(ranked) > 1 else None}
+    if duration and duration > 1200 and "podcast" in names:
+        return {"preset": "podcast", "reason": f"a long video ({duration / 60:.0f} min) with no other hint is usually a talk", "runner_up": None}
+    default = "podcast" if "podcast" in names else next(iter(names))
+    return {"preset": default, "reason": "no hint in the name or --user_context; the calm default", "runner_up": None}
+
+
 def _given(argv, flag):
     return any(a == flag or a.startswith(flag + "=") for a in (argv or []))
 

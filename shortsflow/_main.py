@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument("--target_duration", type=int, default=30)
     from engine import auto_edit as _auto_edit
     from engine import transitions as _transitions
-    parser.add_argument("--auto_edit", choices=_auto_edit.preset_names(), help="Edit like an editor (a template; add your own as JSON files, see docs/TEMPLATES.md): one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, teaser opening, colour and sound effects for this kind of video. Your own flags still win. Writes edit_plan.json.")
+    parser.add_argument("--auto_edit", choices=_auto_edit.preset_names() + ["auto"], help="auto = choose the template from the file name and --user_context (and the video length), print why and the runner-up. Edit like an editor (a template; add your own as JSON files, see docs/TEMPLATES.md): one choice turns on the right mix of pause/um cuts, captions, zooms, cutaways, teaser opening, colour and sound effects for this kind of video. Your own flags still win. Writes edit_plan.json.")
     parser.add_argument("--edit_strength", choices=["subtle", "medium", "hyped"], default="medium", help="With --auto_edit: how much of the edit shows (default medium).")
     parser.add_argument("--transitions", choices=["auto", "none", "dissolve", "mix", "punch", "whip", "flash", "glitch", "subject", *_transitions.REEL_ONLY], default="auto", help="--mode TRIP and the compiled highlight reel (--extract_mode long): a transition on every cut instead of a plain cut. iris, blinds, panels, wipe, radial, slice, pixelize and squeeze are FFmpeg effects for the highlight reel only (a recap gets plain cuts) (auto = follows --auto_edit: hype mix, vlog punch, others none): punch (fast push-in), whip (slide with motion blur), flash (white), glitch (RGB split), mix (a different one each time) or subject (the person stays in front while the background changes; needs torch + torchvision + opencv, a cut without a clear person gets another type). Length follows --edit_strength.")
     parser.add_argument("--subject_look", choices=["auto", "plain", "glow", "glow_sweep", "spotlight"], default="auto", help="--transitions subject: how the cut-out looks. plain = person stays; glow = a bright outline builds up round the person before the background changes; glow_sweep = outline + a light band + darker background; spotlight = dark background, soft outline; auto (default) = plain for now; the outline looks are experimental.")
@@ -235,7 +235,20 @@ def parse_args():
         os.environ["LLM_MODEL"] = args.llm_model      # was never read: only the LLM_MODEL env var worked
     args.auto_edit_plan = None
     if args.auto_edit and getattr(args, "source_video", None):
-        from engine.auto_edit import apply_preset
+        from engine.auto_edit import apply_preset, choose_preset
+        if args.auto_edit == "auto":
+            src = str(args.source_video)
+            duration = None
+            if os.path.isfile(src):
+                try:
+                    from engine.analysis import probe_duration
+                    duration = probe_duration(src)
+                except Exception:
+                    duration = None
+            pick = choose_preset(f"{os.path.basename(src)} {args.user_context or ''}", duration)
+            args.auto_edit = pick["preset"]
+            print(f"[Log] 🎬 Auto-edit auto: '{pick['preset']}' because {pick['reason']}"
+                  + (f" (runner-up: {pick['runner_up']})" if pick["runner_up"] else "") + ". Pass --auto_edit NAME to choose yourself.")
         args.auto_edit_plan = apply_preset(args, args.auto_edit, args.edit_strength, sys.argv[1:])
         on = [k for k, v in args.auto_edit_plan["flags"].items() if v is True and k != "use_remotion"]
         print(f"[Log] 🎬 Auto-edit '{args.auto_edit_plan['label']}' ({args.edit_strength}): {', '.join(on)}; captions {args.caption_style}"
