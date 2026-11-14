@@ -429,6 +429,11 @@ def run(args, target_bitrate, target_preset):
             except Exception as e:
                 print(f"[Warning] Branding failed for {os.path.basename(clip_file)}: {e}")
 
+    if getattr(args, "join_reel", False) and len(extracted_files) > 1 and args.extract_mode != "long":
+        from engine.reel_captions import join_clips
+        reel_out = join_clips(extracted_files, os.path.join(session_dir, "reel_joined.mp4"), transition=getattr(args, "transitions", "auto"))
+        print(f"[Log] Joined reel: {reel_out}" if reel_out else "[Warning] The shorts could not be joined into one reel (--join_reel); they are unchanged.")
+
     # Export SRT for each extracted file
     if getattr(args, 'srt', False) and extracted_files and os.path.exists(transcript_path):
         print(f"[Log] Exporting SRT files for {len(extracted_files)} clips...")

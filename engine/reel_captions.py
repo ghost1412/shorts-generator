@@ -174,3 +174,31 @@ def render_reel(paths, durations, out_path, xf=0.25, ass_path=None, codec="libx2
             "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", os.path.abspath(out_path)]
     r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     return r.returncode == 0 and os.path.exists(out_path) and os.path.getsize(out_path) > 1000
+
+
+def clip_seconds(path):
+    """Length of a video file in seconds (ffprobe), None when it cannot be read."""
+    exe = shutil.which("ffprobe")
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", os.path.abspath(path)],
+                           capture_output=True, text=True, timeout=60)
+        return float(r.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def join_clips(paths, out_path, transition="auto", codec="libx264", quality_params=None):
+    """One reel from finished clips of the same size (for example the vertical shorts of one run), joined with crossfades or the chosen
+    transition look. Returns out_path, None when fewer than two clips could be read or FFmpeg failed. The clips themselves are untouched."""
+    from engine.transitions import xfade_names
+    paths = [p for p in paths if p and os.path.isfile(p)]
+    durations = [clip_seconds(p) for p in paths]
+    keep = [(p, d) for p, d in zip(paths, durations) if d]
+    if len(keep) < 2:
+        return None
+    paths, durations = [k[0] for k in keep], [k[1] for k in keep]
+    ok = render_reel(paths, durations, out_path, codec=codec, quality_params=quality_params,
+                     workdir=os.path.dirname(os.path.abspath(out_path)), transitions=xfade_names(transition, len(paths) - 1))
+    return out_path if ok else None

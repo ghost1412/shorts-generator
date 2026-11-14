@@ -166,6 +166,7 @@ def parse_args():
     parser.add_argument("--show_banner", action="store_true", help="Overlay visual rounded header banner ('VIRAL MOMENT') on top of commentary intro clips.")
     
     # 🟢 Gap Closure Flags
+    parser.add_argument("--join_reel", action="store_true", help="Also join the finished shorts of this run into one video (reel_<name>.mp4 in the session folder) with crossfades, or the look chosen with --transitions. The shorts themselves stay as they are.")
     parser.add_argument("--srt", action="store_true", help="Export SRT subtitle file alongside each video.")
     parser.add_argument("--use_chapters", action="store_true", help="Boost scores for segments overlapping YouTube chapters.")
     parser.add_argument("--broll", action="store_true", help="Auto B-roll: short stock cutaways (about 2 s) over the upper part of the frame when a concrete noun is spoken. Needs PEXELS_API_KEY or clips in assets/backgrounds/local; skipped otherwise.")
