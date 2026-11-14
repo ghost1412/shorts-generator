@@ -53,3 +53,30 @@ def test_picture_choice_reaches_the_command(monkeypatch):
     src = open(os.path.join(os.path.dirname(__file__), "..", "webui.py"), encoding="utf-8").read()
     assert 'picture in ("fit", "crop") and game_framing == "auto"' in src
     assert '(game or picture == "fit")' in src
+
+
+def test_progress_view_moves_forward_and_shows_detail():
+    import re
+    from shortsflow import onboarding as o
+    p = o.Progress()
+    assert p.fraction() == 0.0
+    for line in ("--- Starting AI Extraction: x ---", "Transcribe:  45%|###"):
+        p.feed(line)
+    assert p.detail == "Listening 45%" and 0.2 < p.fraction() < 0.4
+    html = p.display()
+    assert re.findall(r'<span class="([^"]*)">([^<]*)', html)[:2] == [("done", "Get video"), ("now", "Listen")]
+    assert "Getting" not in html or "Listening" in html
+    for line in ("Compressing 3 fragments... outline", "Extracting 5 segments", "Rendered 40/80"):
+        p.feed(line)
+    assert p.detail == "Rendering 50%"
+    assert p.fraction() > 0.6
+    p.feed("SUCCESS! Extracted videos")
+    assert p.fraction() == 1.0 and 'class="now"' not in p.display()
+
+
+def test_progress_model_download_stage_is_not_drawn_and_dub_has_its_own_stages():
+    from shortsflow import onboarding as o
+    assert "Model" not in o.Progress().display()
+    d = o.Progress(steps=o.DUB_STEPS)
+    d.feed("Dubbing 12 spoken segments")
+    assert "Dub" in d.display() and "Render" not in d.display()

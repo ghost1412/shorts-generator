@@ -1,6 +1,7 @@
 """Helpers for the first-run experience (WebUI "Start here" tab, desktop GUI): plain-language progress, key saving, setup checklist."""
 import os
 import re
+import time
 
 # Ordered milestones: (regex, message). A tracker only ever moves forward through this list.
 _STEPS = [
@@ -26,6 +27,11 @@ PHOTO_STEPS = [
     (r"Rendering Photo Reel using Remotion", "🎬 Building your reel (about a minute)..."),
     (r"\[Success\].*Photo Reel rendered", "✅ Done! Your reel is ready below."),
 ]
+# Short names for the stage strip of the progress view (same order as the step lists above).
+# None = a stage that exists but is not drawn (the speech model download only happens the first time).
+_LABELS = {id(_STEPS): ["Get video", None, "Listen", "Find moments", "Render", "Titles", "Done"],
+           id(DUB_STEPS): ["Get video", None, "Listen", "Dub", "Done"],
+           id(PHOTO_STEPS): ["Plan", "Build", "Done"]}
 _WARN_WORDS = ("credits", "rejected the API key", "rate limiting", "Could not reach", "found speech in only")
 
 
@@ -42,10 +48,14 @@ def friendly_step(line, steps=None):
 
 
 class Progress:
-    """Turns a stream of log lines into one status message that only moves forward (warnings are shown as they come)."""
+    """Turns a stream of log lines into one status message that only moves forward (warnings are shown as they come).
+
+    `display()` is the same thing as a small progress view: the stages as a strip, a bar, the detail ("Rendering 40%") and the time."""
 
     def __init__(self, start="📥 Getting your video ready...", steps=None):
         self.rank, self.message, self.steps = 0, start, steps
+        self.labels = _LABELS.get(id(steps or _STEPS)) or []
+        self.t0, self.frac, self.detail = time.time(), 0.0, ""
 
     def feed(self, line):
         hit = friendly_step(line, self.steps)
@@ -54,8 +64,51 @@ class Progress:
             if rank == -1:
                 self.message = message
             elif rank >= self.rank:
+                if rank > self.rank:
+                    self.frac, self.detail = 0.0, ""
                 self.rank, self.message = rank, message
+        self._detail(line or "")
         return self.message
+
+    def _detail(self, line):
+        """Sub-progress inside a stage, from the speech model's percent and the renderer's frame counts."""
+        m = re.findall(r"Transcribe:\s+(\d+)%", line)
+        if m:
+            self.frac, self.detail = min(int(m[-1]), 100) / 100, f"Listening {m[-1]}%"
+            return
+        m = re.findall(r"Rendered (\d+)/(\d+)", line)
+        if m and int(m[-1][1]) > 0:
+            done, total = int(m[-1][0]), int(m[-1][1])
+            self.frac, self.detail = min(done / total, 1.0), f"Rendering {100 * done // total}%"
+
+    def _visible(self):
+        """[(rank, label)] of the stages that are drawn."""
+        return [(i, name) for i, name in enumerate(self.labels) if name]
+
+    def fraction(self):
+        """0..1 over the whole run (stage position plus the progress inside the stage)."""
+        vis = self._visible()
+        if len(vis) < 2:
+            return 0.0
+        if self.rank >= vis[-1][0]:
+            return 1.0
+        pos = max([k for k, (i, _) in enumerate(vis) if i <= self.rank] or [0])
+        return min((pos + self.frac) / (len(vis) - 1), 0.99)
+
+    def display(self):
+        """The progress view as HTML for a Markdown box: stage strip, bar, message, detail and elapsed time."""
+        secs = int(time.time() - self.t0)
+        clock = f"{secs // 60}:{secs % 60:02d}"
+        vis = self._visible()
+        last = vis[-1][0] if vis else 0
+        chips = ""
+        for i, name in vis:
+            nxt = next((j for j, _ in vis if j > i), None)
+            state = "done" if self.rank >= last or (nxt is not None and self.rank >= nxt) else ("now" if self.rank >= i else "")
+            chips += f'<span class="{state}">{name}</span>'
+        bar = f'<div class="sf-bar"><div style="width:{int(self.fraction() * 100)}%"></div></div>'
+        detail = f" · {self.detail}" if self.detail else ""
+        return f'<div class="sf-progress"><div class="sf-stages">{chips}</div>{bar}<div class="sf-detail">{self.message}{detail} · {clock}</div></div>'
 
 
 def save_env_key(env_path, name, value):

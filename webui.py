@@ -272,7 +272,7 @@ def dub_video(upload, url, target_lang, spoken="auto", burn_captions=False, tts_
         for line in lines[seen:]:
             status = progress.feed(line)
         seen = len(lines)
-        yield status, log, None, None
+        yield progress.display(), log, None, None
     video, srt = web_args.find_dub_outputs(session)
     if video:
         name = {code: n for n, code in web_args.dub_languages()}.get(target_lang, target_lang)
@@ -361,7 +361,7 @@ def photo_reel(files, reel_type, name="", texts="", music=None, duration=24):
         for line in lines[seen:]:
             status = progress.feed(line)
         seen = len(lines)
-        yield status, log, None
+        yield progress.display(), log, None
     video = web_args.find_photo_reel(session)
     if video:
         yield "✅ Done! Your reel is ready below.", log, video
@@ -616,7 +616,7 @@ def _stream_clip(cmd, results, long_form, minutes, find, plan_only=False):
         for line in lines[seen:]:
             status = progress.feed(line)
         seen = len(lines)
-        yield status, log, []
+        yield progress.display(), log, []
     if plan_only:
         from engine.plan import read_plan
         plan = read_plan(os.path.dirname(results))
@@ -942,6 +942,15 @@ button.primary { height: 54px; font-size: 16px; font-weight: 650; border-radius:
 .gradio-container .form { border-radius: 14px; }
 .gradio-container .accordion, .gradio-container details { border-radius: 14px; }
 .sf-section { margin-top: 18px; }
+.sf-progress { padding: 4px 0 10px; }
+.sf-stages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.sf-stages span { font-size: 12.5px; padding: 3px 11px; border-radius: 999px; border: 1px solid rgba(128,128,128,.35); opacity: .6; }
+.sf-stages span.done { opacity: .9; border-color: rgba(34,197,94,.6); }
+.sf-stages span.now { opacity: 1; font-weight: 600; border-color: #ea580c; background: rgba(234,88,12,.15); }
+.sf-bar { height: 8px; border-radius: 999px; background: rgba(128,128,128,.25); overflow: hidden; }
+.sf-bar > div { height: 100%; background: #ea580c; border-radius: 999px; transition: width .4s ease; }
+.sf-detail { font-size: 13.5px; margin-top: 8px; opacity: .85; }
+
 </style>"""
 
 
